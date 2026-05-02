@@ -29,6 +29,5 @@ jobs:
 
       - name: Run TITAN once
         run: |
-  run: |
   python -m data.historical_fetcher
   python -c "from main import run_once; run_once()"
