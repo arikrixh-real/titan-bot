@@ -1,4 +1,4 @@
-name: TITAN Auto Trading Bot
+name: TITAN Bot
 
 on:
   schedule:
@@ -6,21 +6,16 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-bot:
+  run:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+      - run: pip install -r requirements.txt
 
-      - name: Run TITAN Final Engine
-        run: python run_titan_final.py
+      - run: python run_titan_final.py
