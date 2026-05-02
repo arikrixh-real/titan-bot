@@ -3,7 +3,6 @@ name: TITAN Scheduler
 on:
   schedule:
     - cron: "*/5 * * * *"
-
   workflow_dispatch:
 
 jobs:
@@ -29,5 +28,5 @@ jobs:
 
       - name: Run TITAN once
         run: |
-  python -m data.historical_fetcher
-  python -c "from main import run_once; run_once()"
+          python -m data.historical_fetcher
+          python -c "from main import run_once; run_once()"
