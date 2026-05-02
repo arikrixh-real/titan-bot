@@ -2,7 +2,6 @@ name: TITAN Scheduler
 
 on:
   schedule:
-    # Every 5 minutes (best possible free)
     - cron: "*/5 * * * *"
 
   workflow_dispatch:
@@ -10,6 +9,11 @@ on:
 jobs:
   run-titan:
     runs-on: ubuntu-latest
+
+    env:
+      UPSTOX_ACCESS_TOKEN: ${{ secrets.UPSTOX_ACCESS_TOKEN }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     steps:
       - name: Checkout repo
