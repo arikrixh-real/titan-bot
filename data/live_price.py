@@ -1,6 +1,8 @@
 import requests
 
-from config.api_keys import UPSTOX_ACCESS_TOKEN
+import os
+
+UPSTOX_ACCESS_TOKEN = os.getenv("UPSTOX_ACCESS_TOKEN")
 from config.upstox_symbols import get_instrument_key
 from data.price_cache import get_cached_price, update_cached_price
 
