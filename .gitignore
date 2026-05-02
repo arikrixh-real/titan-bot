@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.env
+data/cache/
+data/live_price_cache.json
+logs/
