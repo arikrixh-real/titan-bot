@@ -10,11 +10,28 @@ from engines.time_filter import current_bot_mode
 
 SCAN_INTERVAL_SECONDS = 120
 last_alerts = {}
-premarket_sent = False
+
+
+def build_message(setup):
+    return (
+        f"📈 <b>TITAN SIGNAL</b>\n\n"
+        f"Stock: {setup['stock']}\n"
+        f"Side: {setup['side']}\n"
+        f"Status: {setup['status']}\n"
+        f"Source: {setup['source']}\n"
+        f"Price: {setup['price']}\n\n"
+        f"Entry: {setup['entry']}\n"
+        f"SL: {setup['sl']}\n"
+        f"T1: {setup['t1']}\n"
+        f"T2: {setup['t2']}\n\n"
+        f"RR: {setup['rr']}\n"
+        f"Score: {setup['score']}\n\n"
+        f"Reason: {setup['reason']}"
+    )
 
 
 def run_once():
-    global last_alerts, premarket_sent
+    global last_alerts
 
     mode = current_bot_mode()
 
@@ -31,51 +48,14 @@ def run_once():
     formatted = format_trade_output(setups)
     print(tabulate(formatted, headers="keys", tablefmt="grid"))
 
-    # 🔥 PRE-MARKET ALERT (only once)
-    if mode == "PRE_MARKET_MODE" and not premarket_sent:
-        msg = "📊 PRE-MARKET WATCHLIST\n\n"
-        for s in setups[:5]:
-            msg += f"{s['stock']} ({s['side']})\n"
-        send_telegram_message(msg)
-        premarket_sent = True
+    for setup in setups:
+        key = f"{setup['stock']}_{setup['side']}_{setup['status']}"
 
-    # 🔥 MARKET MODE ALERTS
-    if mode == "MARKET_MODE":
-        for setup in setups:
-            key = f"{setup['stock']}_{setup['side']}"
-            prev_status = last_alerts.get(key)
-            current_status = setup["status"]
-
-            if prev_status != current_status:
-                message = build_message(setup)
-                send_telegram_message(message)
-                last_alerts[key] = current_status
+        if key not in last_alerts:
+            send_telegram_message(build_message(setup))
+            last_alerts[key] = True
 
     print("Scan complete.")
-
-
-def build_message(setup):
-    if setup["status"] == "TRIGGERED":
-        return (
-            f"🚨 <b>TITAN TRIGGERED</b>\n\n"
-            f"Stock: {setup['stock']}\n"
-            f"Side: {setup['side']}\n"
-            f"Entry Hit: {setup['entry']}\n"
-            f"SL: {setup['sl']}\n"
-            f"T1: {setup['t1']}\n"
-            f"T2: {setup['t2']}"
-        )
-    else:
-        return (
-            f"📊 <b>TITAN SETUP</b>\n\n"
-            f"Stock: {setup['stock']}\n"
-            f"Side: {setup['side']}\n"
-            f"Status: {setup['status']}\n"
-            f"Entry: {setup['entry']}\n"
-            f"SL: {setup['sl']}\n"
-            f"T1: {setup['t1']}\n"
-            f"T2: {setup['t2']}"
-        )
 
 
 if __name__ == "__main__":
