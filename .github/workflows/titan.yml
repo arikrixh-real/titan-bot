@@ -28,4 +28,6 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run TITAN once
-        run: python -c "from main import run_once; run_once()"
+        run: |
+  python data/historical_fetcher.py
+  python -c "from main import run_once; run_once()"
