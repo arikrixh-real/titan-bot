@@ -4,3 +4,4 @@ __pycache__/
 data/cache/
 data/live_price_cache.json
 logs/
+config/api_keys.py
