@@ -4,3 +4,4 @@ yfinance
 ta
 requests
 tabulate
+feedparser
