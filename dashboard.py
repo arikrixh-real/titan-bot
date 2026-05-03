@@ -21,6 +21,7 @@ st.set_page_config(
 
 IST = timezone(timedelta(hours=5, minutes=30))
 AUTO_REFRESH_SECONDS = 10
+SCAN_BATCH_SIZE = 50
 
 
 # =========================================================
@@ -412,7 +413,6 @@ def status_html(status):
 
     return f"<span class='{css}'>{status}</span>"
 
-
 # =========================================================
 # GITHUB HELPERS
 # =========================================================
@@ -606,7 +606,11 @@ else:
 # Counts
 total_trades = count_any_table(["trade_journal", "trades"])
 news_gathered = count_any_table(["news_memory", "news", "news_journal"])
-stocks_scanned = count_any_table(["scan_journal", "scans"])
+
+# ✅ FIXED: Stocks Scanned = scan cycles × 50
+scan_cycles = count_any_table(["scan_journal", "scans"])
+stocks_scanned = scan_cycles * SCAN_BATCH_SIZE
+
 telegram_alerts = count_any_table(["telegram_alerts", "alerts", "signal_alerts"])
 
 # Passed stocks
@@ -622,7 +626,6 @@ losses = count_any_table(["losing_trades", "losses"])
 # Fallback if no separate win/loss tables exist
 if wins == 0 and losses == 0 and total_trades > 0:
     latest_trade_row = latest_any_table(["trade_journal", "trades"])
-    # Until outcome tracker is wired, keep unknown outcome as 0/0
     wins = 0
     losses = 0
 
@@ -640,7 +643,6 @@ trade_performance_percent = accuracy_percent
 rr_display = "1:2"
 
 # Supabase storage estimate
-# Free plan is commonly 500 MB DB storage; edit this value if needed.
 SUPABASE_STORAGE_LIMIT_MB = 500
 
 estimated_storage_mb = (
@@ -652,7 +654,10 @@ estimated_storage_mb = (
 
 supabase_storage_percent = int(min(100, (estimated_storage_mb / SUPABASE_STORAGE_LIMIT_MB) * 100))
 
-# Engine development progress
+# ✅ Engine development progress
+# Removed:
+# - Telegram Alert Engine
+# - Dashboard Engine
 engine_progress = {
     "Scan Engine": 90,
     "News Engine": 75,
@@ -660,8 +665,6 @@ engine_progress = {
     "Evolution Engine": 35,
     "Risk Engine": 80,
     "Market Regime Engine": 70,
-    "Telegram Alert Engine": 95,
-    "Dashboard Engine": 85,
 }
 
 # Engine live status
@@ -793,7 +796,7 @@ with m1:
     metric_card("News Gathered", f"{news_gathered:,}", "News memory collected")
 
 with m2:
-    metric_card("Stocks Scanned", f"{stocks_scanned:,}", "Total scan records")
+    metric_card("Stocks Scanned", f"{stocks_scanned:,}", "Scan cycles × 50 stocks")
 
 with m3:
     metric_card("Stocks Passed", f"{stocks_passed:,}", "Passed filters / signals")
