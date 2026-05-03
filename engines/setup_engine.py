@@ -1,11 +1,13 @@
 from data.loader import load_cached_stock_data
 from data.live_price import get_live_price
+
 from scanners.volume_scanner import volume_anomaly_score
 from scanners.strength_scanner import price_strength_score
 from scanners.compression_scanner import compression_score
+
 from engines.score_engine import final_signal_score
 from engines.trade_levels import calculate_trade_levels
-from engines.risk_engine import calculate_rr
+from engines.risk_engine import calculate_rr, position_sizing
 from engines.filter_engine import passes_quality_filters
 from engines.market_filter import market_regime_status
 from engines.trend_engine import trend_direction, trade_side_from_trend
@@ -17,112 +19,259 @@ from engines.reason_engine import build_reason
 from engines.trigger_engine import trigger_status
 from engines.structure_engine import structure_ok
 
+from journal.trade_journal import log_trade
+from journal.scan_journal import log_scan
+
+from titan_brain.db import (
+    insert_scan,
+    insert_scan_symbol,
+    insert_trade,
+    insert_setup
+)
+
 
 def scan_for_setups():
+    setups = []
+
+    scanned_symbols = []
+    setup_symbols = []
+    errors = []
+
     market_status = market_regime_status()
+    symbols = load_cached_stock_data()
+    total_symbols = len(symbols)
 
-    direction = market_status.get("direction", "UNKNOWN")
-    market_ok = market_status.get("market_ok", True)
+    scan_record = {
+        "total_symbols": total_symbols,
+        "scanned_count": 0,
+        "setup_count": 0,
+        "errors": []
+    }
 
-    if not market_ok:
-        print(f"Market filter blocked scan: {market_status.get('reason', '')}")
-        return []
+    scan_id = insert_scan(scan_record)
 
-    stock_data = load_cached_stock_data()
-    results = []
+    for symbol, data in symbols.items():
+        try:
+            scanned_symbols.append(symbol)
+            scan_record["scanned_count"] += 1
 
-    total_scanned = 0
-    qualified = 0
+            # ---------- DEFAULT ----------
+            live_price = get_live_price(symbol)
+            if live_price is None:
+                insert_scan_symbol(scan_id, {
+                    "symbol": symbol,
+                    "price": 0,
+                    "trend": "NA",
+                    "volume_score": 0,
+                    "strength_score": 0,
+                    "compression_score": 0,
+                    "final_score": 0,
+                    "passed": False,
+                    "reason": "NO_LIVE_PRICE"
+                })
+                continue
 
-    for stock, df in stock_data.items():
+            trend = trend_direction(data)
+            side = trade_side_from_trend(trend)
 
-        if stock == "NIFTYBEES":
+            if side is None:
+                insert_scan_symbol(scan_id, {
+                    "symbol": symbol,
+                    "price": live_price,
+                    "trend": trend,
+                    "volume_score": 0,
+                    "strength_score": 0,
+                    "compression_score": 0,
+                    "final_score": 0,
+                    "passed": False,
+                    "reason": "NO_VALID_TREND"
+                })
+                continue
+
+            volume_score = volume_anomaly_score(data)
+            strength_score = price_strength_score(data)
+            comp_score = compression_score(data)
+
+            final_score = final_signal_score(
+                volume_score,
+                strength_score,
+                comp_score
+            )
+
+            passed = False
+            fail_reason = "UNKNOWN"
+
+            if not structure_ok(data):
+                fail_reason = "STRUCTURE_FAIL"
+
+            elif not strong_momentum(data):
+                fail_reason = "MOMENTUM_FAIL"
+
+            elif not avoid_fake_breakout(data):
+                fail_reason = "FAKE_BREAKOUT"
+
+            elif not relative_strength_ok(symbol):
+                fail_reason = "RELATIVE_WEAK"
+
+            elif not breakout_ready(data):
+                fail_reason = "NOT_READY"
+
+            elif not passes_quality_filters(
+                final_score=final_score,
+                volume_score=volume_score,
+                strength_score=strength_score,
+                compression_score=comp_score
+            ):
+                fail_reason = "QUALITY_FAIL"
+
+            else:
+                passed = True
+                fail_reason = "PASSED"
+
+            insert_scan_symbol(scan_id, {
+                "symbol": symbol,
+                "price": live_price,
+                "trend": trend,
+                "volume_score": volume_score,
+                "strength_score": strength_score,
+                "compression_score": comp_score,
+                "final_score": final_score,
+                "passed": passed,
+                "reason": fail_reason
+            })
+
+            if not passed:
+                continue
+
+            # ---------- VALID SETUP ----------
+            levels = calculate_trade_levels(
+                symbol=symbol,
+                side=side,
+                entry_price=live_price,
+                data=data
+            )
+
+            if not levels:
+                continue
+
+            entry = levels["entry"]
+            stop_loss = levels["stop_loss"]
+            target = levels["target"]
+
+            rr = calculate_rr(entry, stop_loss, target, side)
+            if rr < 2:
+                continue
+
+            pos_data = position_sizing(entry, stop_loss)
+            position_size = pos_data.get("qty", 0)
+            risk_amount = pos_data.get("risk_amount", 0)
+
+            reason = build_reason(
+                symbol=symbol,
+                side=side,
+                volume_score=volume_score,
+                strength_score=strength_score,
+                compression_score=comp_score,
+                final_score=final_score,
+                trend=trend,
+                market_status=market_status
+            )
+
+            trigger = trigger_status(symbol, side, entry, live_price)
+
+            # ---------- TRADE ----------
+            trade_id = log_trade(
+                symbol=symbol,
+                side=side,
+                entry=entry,
+                stop_loss=stop_loss,
+                target=target,
+                position_size=position_size,
+                risk_amount=risk_amount,
+                rr=rr,
+                scores={
+                    "volume_score": volume_score,
+                    "strength_score": strength_score,
+                    "compression_score": comp_score,
+                    "final_score": final_score
+                },
+                market_context={
+                    "market_status": market_status,
+                    "trend": trend
+                },
+                setup_context={},
+                reason=reason,
+                trigger_status=trigger
+            )
+
+            # ---------- SETUP MEMORY ----------
+            insert_setup({
+                "trade_id": trade_id,
+                "symbol": symbol,
+                "side": side,
+                "entry": entry,
+                "stop_loss": stop_loss,
+                "target": target,
+                "rr": rr,
+                "position_size": position_size,
+                "risk_amount": risk_amount,
+                "scores": {
+                    "volume_score": volume_score,
+                    "strength_score": strength_score,
+                    "compression_score": comp_score,
+                    "final_score": final_score
+                },
+                "market_context": {
+                    "market_status": market_status,
+                    "trend": trend
+                },
+                "setup_context": {
+                    "structure_ok": True,
+                    "momentum_ok": True,
+                    "breakout_ready": True
+                },
+                "reason": reason,
+                "trigger_status": trigger,
+                "status": "OPEN"
+            })
+
+            # ---------- TRADE MEMORY ----------
+            insert_trade({
+                "trade_id": trade_id,
+                "symbol": symbol,
+                "side": side,
+                "entry": entry,
+                "stop_loss": stop_loss,
+                "target": target,
+                "rr": rr,
+                "position_size": position_size,
+                "risk_amount": risk_amount,
+                "scores": {
+                    "volume_score": volume_score,
+                    "strength_score": strength_score,
+                    "compression_score": comp_score,
+                    "final_score": final_score
+                },
+                "market_context": market_status,
+                "setup_context": {"trend": trend},
+                "reason": reason,
+                "trigger_status": trigger,
+                "status": "OPEN"
+            })
+
+            setups.append(symbol)
+            setup_symbols.append(symbol)
+            scan_record["setup_count"] += 1
+
+        except Exception as e:
+            errors.append(f"{symbol}: {e}")
             continue
 
-        total_scanned += 1
+    log_scan(
+        total_symbols=total_symbols,
+        scanned_symbols=scanned_symbols,
+        setup_symbols=setup_symbols,
+        errors=errors
+    )
 
-        trend = trend_direction(df)
-        side = trade_side_from_trend(trend)
-
-        if side is None:
-            continue
-
-        if direction == "BULLISH" and side != "LONG":
-            continue
-
-        if direction == "BEARISH" and side != "SHORT":
-            continue
-
-        if not structure_ok(df, side):
-            continue
-
-        if not strong_momentum(df, side):
-            continue
-
-        if not avoid_fake_breakout(df, side):
-            continue
-
-        if not relative_strength_ok(df, side):
-            continue
-
-        if not breakout_ready(df, side):
-            continue
-
-        volume_score = volume_anomaly_score(df)
-        strength_score = price_strength_score(df)
-        compression_value = compression_score(df)
-
-        if side == "SHORT":
-            strength_score = abs(strength_score)
-
-        final_score = final_signal_score(
-            volume_score,
-            strength_score,
-            compression_value
-        )
-
-        entry, sl, t1, t2 = calculate_trade_levels(df, side)
-        rr = calculate_rr(entry, sl, t1, side)
-
-        historical_close = round(float(df["Close"].iloc[-1]), 2)
-
-        symbol_ns = f"{stock}.NS"
-        live_price = get_live_price(symbol_ns)
-
-        if live_price is None:
-            latest_price = historical_close
-            price_source = "HIST"
-        else:
-            latest_price = live_price
-            price_source = "LIVE"
-
-        setup = {
-            "stock": stock,
-            "side": side,
-            "price": latest_price,
-            "entry": entry,
-            "sl": sl,
-            "t1": t1,
-            "t2": t2,
-            "rr": rr,
-            "volume_x": volume_score,
-            "strength_%": strength_score,
-            "compression": compression_value,
-            "score": final_score,
-            "source": price_source
-        }
-
-        if not passes_quality_filters(setup):
-            continue
-
-        setup["reason"] = build_reason(setup)
-        setup["status"] = trigger_status(latest_price, entry, side)
-
-        results.append(setup)
-        qualified += 1
-
-    results = sorted(results, key=lambda x: x["score"], reverse=True)
-
-    print(f"\nScanned: {total_scanned} stocks | Qualified: {qualified}")
-
-    return results
+    return setups

@@ -1,0 +1,2299 @@
+[
+    {
+        "time": "2026-05-03 00:58:20",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 80.0,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        }
+    },
+    {
+        "time": "2026-05-03 01:00:20",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 80.0,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        }
+    },
+    {
+        "time": "2026-05-03 01:02:21",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 80.0,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        }
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_010356",
+        "time": "2026-05-03 01:03:56",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 80.0,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_011052",
+        "time": "2026-05-03 01:10:52",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 80.0,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_011601",
+        "time": "2026-05-03 01:16:01",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 80.0,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_152445",
+        "time": "2026-05-03 15:24:45",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_152646",
+        "time": "2026-05-03 15:26:46",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_152847",
+        "time": "2026-05-03 15:28:47",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_153047",
+        "time": "2026-05-03 15:30:47",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_153247",
+        "time": "2026-05-03 15:32:47",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_153432",
+        "time": "2026-05-03 15:34:32",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_153632",
+        "time": "2026-05-03 15:36:32",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_153833",
+        "time": "2026-05-03 15:38:33",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_154033",
+        "time": "2026-05-03 15:40:33",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_154233",
+        "time": "2026-05-03 15:42:33",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_154823",
+        "time": "2026-05-03 15:48:23",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_155024",
+        "time": "2026-05-03 15:50:24",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_155224",
+        "time": "2026-05-03 15:52:24",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_155425",
+        "time": "2026-05-03 15:54:25",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_155625",
+        "time": "2026-05-03 15:56:25",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_155745",
+        "time": "2026-05-03 15:57:45",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_155945",
+        "time": "2026-05-03 15:59:45",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_160046",
+        "time": "2026-05-03 16:00:46",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_160411",
+        "time": "2026-05-03 16:04:11",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_160611",
+        "time": "2026-05-03 16:06:11",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_161650",
+        "time": "2026-05-03 16:16:50",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_161850",
+        "time": "2026-05-03 16:18:50",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_162417",
+        "time": "2026-05-03 16:24:17",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_162617",
+        "time": "2026-05-03 16:26:17",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_163350",
+        "time": "2026-05-03 16:33:50",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_163551",
+        "time": "2026-05-03 16:35:51",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_163914",
+        "time": "2026-05-03 16:39:14",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_164114",
+        "time": "2026-05-03 16:41:14",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2457.95,
+        "t2": 2482.17,
+        "rr": 1.5,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Acceptable risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_164537",
+        "time": "2026-05-03 16:45:37",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2470.06,
+        "t2": 2494.28,
+        "rr": 2.0,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 90,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Strong risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_164737",
+        "time": "2026-05-03 16:47:37",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2470.06,
+        "t2": 2494.28,
+        "rr": 2.0,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 90,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Strong risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_165306",
+        "time": "2026-05-03 16:53:06",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2470.06,
+        "t2": 2494.28,
+        "rr": 2.0,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 90,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Strong risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_165506",
+        "time": "2026-05-03 16:55:06",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2470.06,
+        "t2": 2494.28,
+        "rr": 2.0,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 90,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Strong risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_170043",
+        "time": "2026-05-03 17:00:43",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2470.06,
+        "t2": 2494.28,
+        "rr": 2.0,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 90,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Strong risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    },
+    {
+        "id": "ADANIENT_LONG_20260503_170244",
+        "time": "2026-05-03 17:02:44",
+        "stock": "ADANIENT",
+        "side": "LONG",
+        "status": "WAITING",
+        "price": 2408.4,
+        "entry": 2421.62,
+        "sl": 2397.4,
+        "t1": 2470.06,
+        "t2": 2494.28,
+        "rr": 2.0,
+        "setup_score": 70,
+        "setup_reason": "huge volume spike + tight compression + high score + trend aligned + relative strength confirmed + breakout ready",
+        "brain_score": 100,
+        "conviction": "HIGH",
+        "engines": {
+            "institutional": {
+                "score": 100,
+                "bias": "BULLISH",
+                "reason": "Good setup score, Volume activity detected (possible accumulation), Volume spike (strong participation), Price compression (institutional buildup), Breakout condition (possible expansion phase), Trend aligned, Relative strength confirmed"
+            },
+            "sector": {
+                "score": 80,
+                "bias": "BULLISH",
+                "reason": "Stock showing relative strength (sector likely strong), Trend aligned with broader move, Breakout suggests sector momentum"
+            },
+            "hedge_fund": {
+                "score": 90,
+                "bias": "BULLISH",
+                "reason": "Tight compression detected before move, Breakout ready condition detected, Volume participation supports move, Strong risk-reward setup"
+            },
+            "historical_event": {
+                "score": 60,
+                "bias": "BULLISH",
+                "reason": "Live market setup detected, Breakout behavior matches event reaction pattern, Volume confirms market reaction"
+            }
+        },
+        "knowledge": {
+            "institutional": [
+                "High volume with tight price compression may indicate accumulation.",
+                "Breakout with volume confirmation can indicate institutional participation."
+            ],
+            "sector": [
+                "Stocks from strong sectors have higher follow-through probability.",
+                "Sector leaders usually move before laggards."
+            ],
+            "hedge_fund": [
+                "Liquidity often exists above recent highs and below recent lows.",
+                "False breakout followed by rejection may indicate trap setup."
+            ],
+            "historical_event": [
+                "Positive news with volume confirmation can create continuation moves."
+            ]
+        },
+        "outcome": "PENDING",
+        "outcome_analysis": null,
+        "learning_applied": false
+    }
+]

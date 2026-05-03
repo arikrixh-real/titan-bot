@@ -1,68 +1,63 @@
-import time
-from datetime import datetime
-from tabulate import tabulate
+from titan_brain.news_memory_engine import run_news_memory_engine
+from titan_brain.market_condition_engine import store_market_condition
+from titan_brain.outcome_tracker import run_outcome_tracker
+from titan_brain.learning_engine import run_learning_engine
+from titan_brain.evolution_engine import run_evolution_engine
 
 from engines.setup_engine import scan_for_setups
-from utils.formatters import format_trade_output
-from alerts.telegram_alert import send_telegram_message
-from engines.time_filter import current_bot_mode
 
 
-SCAN_INTERVAL_SECONDS = 120
-last_alerts = {}
+def main():
+    print("===================================")
+    print("🚀 TITAN MASTER SYSTEM STARTED")
+    print("===================================")
 
+    try:
+        print("\n📰 Updating news memory...")
+        run_news_memory_engine()
+    except Exception as e:
+        print(f"[MAIN NEWS ERROR] {e}")
 
-def build_message(setup):
-    return (
-        f"📈 <b>TITAN SIGNAL</b>\n\n"
-        f"Stock: {setup['stock']}\n"
-        f"Side: {setup['side']}\n"
-        f"Status: {setup['status']}\n"
-        f"Source: {setup['source']}\n"
-        f"Price: {setup['price']}\n\n"
-        f"Entry: {setup['entry']}\n"
-        f"SL: {setup['sl']}\n"
-        f"T1: {setup['t1']}\n"
-        f"T2: {setup['t2']}\n\n"
-        f"RR: {setup['rr']}\n"
-        f"Score: {setup['score']}\n\n"
-        f"Reason: {setup['reason']}"
-    )
+    try:
+        print("\n📊 Storing market condition...")
+        store_market_condition()
+    except Exception as e:
+        print(f"[MAIN MARKET ERROR] {e}")
 
+    try:
+        print("\n🎯 Tracking trade outcomes...")
+        run_outcome_tracker()
+    except Exception as e:
+        print(f"[MAIN OUTCOME ERROR] {e}")
 
-def run_once():
-    global last_alerts
+    try:
+        print("\n📈 Scanning for setups...")
+        setups = scan_for_setups()
 
-    mode = current_bot_mode()
+        if setups:
+            print(f"✅ Setups found: {len(setups)}")
+            for setup in setups:
+                print(setup)
+        else:
+            print("No valid setups found.")
 
-    print("\n" + "=" * 80)
-    print(f"TITAN MODE: {mode} | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 80)
+    except Exception as e:
+        print(f"[MAIN SCAN ERROR] {e}")
 
-    setups = scan_for_setups()
+    try:
+        print("\n🧠 Running learning engine...")
+        run_learning_engine()
+    except Exception as e:
+        print(f"[MAIN LEARNING ERROR] {e}")
 
-    if not setups:
-        print("No setups found.")
-        return
+    try:
+        print("\n🧬 Running evolution engine...")
+        run_evolution_engine()
+    except Exception as e:
+        print(f"[MAIN EVOLUTION ERROR] {e}")
 
-    formatted = format_trade_output(setups)
-    print(tabulate(formatted, headers="keys", tablefmt="grid"))
-
-    for setup in setups:
-        key = f"{setup['stock']}_{setup['side']}_{setup['status']}"
-
-        if key not in last_alerts:
-            send_telegram_message(build_message(setup))
-            last_alerts[key] = True
-
-    print("Scan complete.")
+    print("\n✅ TITAN MASTER SYSTEM COMPLETED")
 
 
 if __name__ == "__main__":
-    print("=== TITAN SMART AUTO LOOP STARTED ===")
-    print(f"Scanning every {SCAN_INTERVAL_SECONDS} seconds.")
-    print("Press CTRL + C to stop.\n")
-
-    while True:
-        run_once()
-        time.sleep(SCAN_INTERVAL_SECONDS)
+    main()

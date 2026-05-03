@@ -1,3 +1,3 @@
-from intelligence.news_engine import build_news_summary
+from titan_brain.news_memory_engine import run_news_memory_engine
 
-print(build_news_summary())
+run_news_memory_engine()
