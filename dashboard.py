@@ -1,4 +1,5 @@
 import os
+import json
 import requests
 from datetime import datetime, timezone, timedelta
 
@@ -7,7 +8,6 @@ from supabase import create_client
 from streamlit_autorefresh import st_autorefresh
 
 
-# ================= CONFIG =================
 st.set_page_config(
     page_title="TITAN Dashboard",
     page_icon="🧠",
@@ -17,17 +17,14 @@ st.set_page_config(
 st_autorefresh(interval=5000, key="titan_live_refresh")
 
 
-# ================= SECRETS =================
 SUPABASE_URL = os.getenv("SUPABASE_URL") or st.secrets.get("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY") or st.secrets.get("SUPABASE_KEY")
 GITHUB_REPO = os.getenv("GITHUB_REPO") or st.secrets.get("GITHUB_REPO")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", "")
 
 
-# ================= TITLE =================
 st.title("🧠 TITAN Command Dashboard")
-st.caption("24/7 monitoring panel for GitHub runs, scans, news, learning, evolution and trade intelligence")
-
+st.caption("24/7 monitoring panel for GitHub, Supabase, scans, news, learning, evolution and trade intelligence")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     st.error("Supabase ENV missing. Check Streamlit secrets.")
@@ -36,7 +33,6 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-# ================= HELPERS =================
 def fetch_table(table_name, limit=1000):
     try:
         response = (
@@ -54,6 +50,14 @@ def percent(value, target):
     if target <= 0:
         return 0
     return min(int((value / target) * 100), 100)
+
+
+def estimate_size_mb(data):
+    try:
+        raw = json.dumps(data, default=str)
+        return len(raw.encode("utf-8")) / (1024 * 1024)
+    except Exception:
+        return 0
 
 
 def to_dt(value):
@@ -161,7 +165,6 @@ def github_status():
         }
 
 
-# ================= DATA =================
 scan_data = fetch_table("scan_symbols")
 trade_data = fetch_table("trade_results")
 news_data = fetch_table("news_memory")
@@ -172,6 +175,12 @@ trade_count = len(trade_data)
 news_count = len(news_data)
 learning_count = len(learning_data)
 total_data_points = scan_count + news_count + learning_count + trade_count
+
+scan_size = estimate_size_mb(scan_data)
+trade_size = estimate_size_mb(trade_data)
+news_size = estimate_size_mb(news_data)
+learning_size = estimate_size_mb(learning_data)
+total_estimated_size = scan_size + trade_size + news_size + learning_size
 
 latest_scan = latest_time(scan_data)
 latest_news = latest_time(news_data)
@@ -200,12 +209,12 @@ for t in trade_data:
 avg_rr = sum(rr_values) / len(rr_values) if rr_values else 0
 
 
-# ================= INTELLIGENCE CALC =================
 market_pct = percent(scan_count, 1000)
 news_pct = percent(news_count, 500)
 learn_pct = percent(learning_count, 100)
 accuracy_pct = int(win_rate)
 data_pct = percent(total_data_points, 1500)
+supabase_storage_pct = percent(total_estimated_size, 500)
 
 evolution_pct = min(int((learn_pct * 0.45) + (news_pct * 0.35) + (market_pct * 0.20)), 100)
 intelligence_pct = min(int((data_pct * 0.40) + (evolution_pct * 0.35) + (news_pct * 0.25)), 100)
@@ -215,7 +224,6 @@ scan_fresh = scan_age is not None and scan_age <= 10
 github_fresh = github["run_age"] is not None and github["run_age"] <= 10
 
 
-# ================= UI =================
 st.subheader("🚦 TITAN Live Status")
 
 a1, a2, a3, a4, a5 = st.columns(5)
@@ -227,6 +235,26 @@ a5.metric("Last Scan Age", f"{scan_age} min" if scan_age is not None else "N/A")
 
 st.caption(f"Latest GitHub Run: {format_ist(github['updated_at'])}")
 st.caption(f"Latest Scan Stored: {format_ist(latest_scan)}")
+
+st.divider()
+
+
+st.subheader("🗄️ Supabase Storage Details")
+
+db1, db2, db3, db4, db5 = st.columns(5)
+db1.metric("Supabase", "CONNECTED")
+db2.metric("Total Rows", total_data_points)
+db3.metric("Estimated Size", f"{total_estimated_size:.2f} MB")
+db4.metric("Tables Active", "4 / 4")
+db5.metric("Storage Load", f"{supabase_storage_pct}%")
+
+progress_bar("Supabase Data Load", supabase_storage_pct)
+
+t1, t2, t3, t4 = st.columns(4)
+t1.metric("scan_symbols", f"{scan_count} rows", f"{scan_size:.2f} MB")
+t2.metric("news_memory", f"{news_count} rows", f"{news_size:.2f} MB")
+t3.metric("learning_memory", f"{learning_count} rows", f"{learning_size:.2f} MB")
+t4.metric("trade_results", f"{trade_count} rows", f"{trade_size:.2f} MB")
 
 st.divider()
 
@@ -291,11 +319,12 @@ with e1:
     engine_card("Scan Engine", scan_fresh)
 
 with e2:
+    engine_card("Supabase Storage", total_data_points > 0)
     engine_card("News Engine", news_count > 0 and (news_age is None or news_age <= 1440))
-    engine_card("Trade Engine", trade_count > 0)
 
 with e3:
     engine_card("Learning Engine", learning_count > 0)
+    engine_card("Trade Engine", trade_count > 0)
     engine_card("Evolution Engine", learning_count > 0)
 
 st.divider()
