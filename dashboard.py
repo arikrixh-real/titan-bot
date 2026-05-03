@@ -2,31 +2,30 @@ import os
 import time
 from datetime import datetime, timezone, timedelta
 
-import pandas as pd
 import requests
 import streamlit as st
 from supabase import create_client, Client
 
 
-# =========================
-# PAGE CONFIG
-# =========================
+# =========================================================
+# TITAN DASHBOARD V2
+# Clean Command Center Dashboard
+# =========================================================
 
 st.set_page_config(
-    page_title="TITAN Control Dashboard",
+    page_title="TITAN Dashboard V2",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 IST = timezone(timedelta(hours=5, minutes=30))
-
-
-# =========================
-# AUTO REFRESH
-# =========================
-
 AUTO_REFRESH_SECONDS = 10
+
+
+# =========================================================
+# AUTO REFRESH
+# =========================================================
 
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = time.time()
@@ -36,15 +35,15 @@ if time.time() - st.session_state.last_refresh >= AUTO_REFRESH_SECONDS:
     st.rerun()
 
 
-# =========================
-# CUSTOM CSS
-# =========================
+# =========================================================
+# STYLE
+# =========================================================
 
 st.markdown(
     """
     <style>
-    .main {
-        background-color: #0b0f19;
+    .stApp {
+        background: #070b14;
         color: white;
     }
 
@@ -53,128 +52,193 @@ st.markdown(
         padding-bottom: 2rem;
     }
 
-    .section-card {
-        background: #111827;
-        border: 1px solid #1f2937;
-        border-radius: 18px;
-        padding: 22px;
-        margin-bottom: 20px;
-        box-shadow: 0 0 14px rgba(0,0,0,0.25);
-    }
-
-    .metric-card {
-        background: #0f172a;
-        border: 1px solid #253044;
-        border-radius: 16px;
-        padding: 18px;
-        text-align: center;
-        min-height: 120px;
-    }
-
-    .metric-title {
-        font-size: 14px;
-        color: #9ca3af;
-        margin-bottom: 8px;
-    }
-
-    .metric-value {
-        font-size: 28px;
-        font-weight: 800;
+    h1, h2, h3 {
         color: #ffffff;
     }
 
-    .metric-sub {
-        font-size: 13px;
+    .subtitle {
         color: #94a3b8;
+        font-size: 15px;
+        margin-bottom: 20px;
+    }
+
+    .section {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 22px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 0 22px rgba(0,0,0,0.22);
+    }
+
+    .section-title {
+        font-size: 22px;
+        font-weight: 900;
+        color: white;
+        margin-bottom: 18px;
+    }
+
+    .card {
+        background: #111827;
+        border: 1px solid #253044;
+        border-radius: 18px;
+        padding: 20px;
+        min-height: 130px;
+        text-align: center;
+    }
+
+    .card-title {
+        color: #94a3b8;
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .card-value {
+        color: #ffffff;
+        font-size: 32px;
+        font-weight: 900;
+        margin-top: 5px;
+    }
+
+    .card-sub {
+        color: #94a3b8;
+        font-size: 13px;
         margin-top: 6px;
     }
 
-    .green {
-        color: #22c55e;
-        font-weight: 800;
-    }
-
-    .red {
-        color: #ef4444;
-        font-weight: 800;
-    }
-
-    .yellow {
-        color: #facc15;
-        font-weight: 800;
-    }
-
-    .blue {
-        color: #38bdf8;
-        font-weight: 800;
-    }
-
-    .status-pill-green {
+    .pill-green {
+        display: inline-block;
         background: rgba(34,197,94,0.15);
+        border: 1px solid rgba(34,197,94,0.4);
         color: #22c55e;
-        border: 1px solid rgba(34,197,94,0.35);
-        padding: 8px 14px;
+        padding: 8px 15px;
         border-radius: 999px;
-        font-weight: 800;
-        display: inline-block;
+        font-weight: 900;
     }
 
-    .status-pill-red {
+    .pill-red {
+        display: inline-block;
         background: rgba(239,68,68,0.15);
+        border: 1px solid rgba(239,68,68,0.4);
         color: #ef4444;
-        border: 1px solid rgba(239,68,68,0.35);
-        padding: 8px 14px;
+        padding: 8px 15px;
         border-radius: 999px;
-        font-weight: 800;
-        display: inline-block;
+        font-weight: 900;
     }
 
-    .status-pill-yellow {
+    .pill-yellow {
+        display: inline-block;
         background: rgba(250,204,21,0.15);
+        border: 1px solid rgba(250,204,21,0.4);
         color: #facc15;
-        border: 1px solid rgba(250,204,21,0.35);
-        padding: 8px 14px;
+        padding: 8px 15px;
         border-radius: 999px;
-        font-weight: 800;
-        display: inline-block;
+        font-weight: 900;
     }
 
-    .big-bar {
-        height: 28px;
+    .circle-wrap {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-top: 8px;
+        margin-bottom: 12px;
+    }
+
+    .circle {
+        width: 135px;
+        height: 135px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+            radial-gradient(closest-side, #111827 73%, transparent 74% 100%),
+            conic-gradient(#22c55e var(--value), #1e293b 0);
+    }
+
+    .circle-blue {
+        background:
+            radial-gradient(closest-side, #111827 73%, transparent 74% 100%),
+            conic-gradient(#38bdf8 var(--value), #1e293b 0);
+    }
+
+    .circle-yellow {
+        background:
+            radial-gradient(closest-side, #111827 73%, transparent 74% 100%),
+            conic-gradient(#facc15 var(--value), #1e293b 0);
+    }
+
+    .circle-red {
+        background:
+            radial-gradient(closest-side, #111827 73%, transparent 74% 100%),
+            conic-gradient(#ef4444 var(--value), #1e293b 0);
+    }
+
+    .circle-number {
+        font-size: 27px;
+        font-weight: 950;
+        color: white;
+    }
+
+    .bar-box {
+        margin-top: 8px;
+        margin-bottom: 14px;
+    }
+
+    .bar-label-row {
+        display: flex;
+        justify-content: space-between;
+        color: #d1d5db;
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 7px;
+    }
+
+    .bar-bg {
+        height: 24px;
         background: #1e293b;
+        border: 1px solid #334155;
         border-radius: 999px;
         overflow: hidden;
-        margin-top: 10px;
-        margin-bottom: 8px;
-        border: 1px solid #334155;
     }
 
-    .big-bar-fill {
+    .bar-fill {
         height: 100%;
-        border-radius: 999px;
         background: linear-gradient(90deg, #22c55e, #38bdf8);
+        border-radius: 999px;
         text-align: right;
-        padding-right: 12px;
-        line-height: 28px;
+        padding-right: 10px;
+        line-height: 24px;
         color: white;
-        font-size: 13px;
+        font-size: 12px;
+        font-weight: 900;
+    }
+
+    .small-status-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #111827;
+        border: 1px solid #253044;
+        border-radius: 14px;
+        padding: 14px 16px;
+        margin-bottom: 10px;
+    }
+
+    .small-status-name {
+        font-size: 15px;
+        color: #e5e7eb;
         font-weight: 800;
     }
 
-    h1, h2, h3 {
-        color: white;
+    .small-status-sub {
+        font-size: 12px;
+        color: #94a3b8;
     }
 
-    div[data-testid="stMetric"] {
-        background-color: #0f172a;
-        padding: 18px;
-        border-radius: 16px;
-        border: 1px solid #253044;
-    }
-
-    .stDataFrame {
-        border-radius: 14px;
-        overflow: hidden;
+    hr {
+        border-color: #1e293b;
     }
     </style>
     """,
@@ -182,9 +246,9 @@ st.markdown(
 )
 
 
-# =========================
-# CONNECTION HELPERS
-# =========================
+# =========================================================
+# SECRETS
+# =========================================================
 
 def get_secret(key, default=None):
     try:
@@ -198,9 +262,12 @@ SUPABASE_KEY = get_secret("SUPABASE_KEY")
 
 GITHUB_OWNER = get_secret("GITHUB_OWNER")
 GITHUB_REPO = get_secret("GITHUB_REPO")
-GITHUB_WORKFLOW = get_secret("GITHUB_WORKFLOW", "titan.yml")
 GITHUB_TOKEN = get_secret("GITHUB_TOKEN")
 
+
+# =========================================================
+# CONNECTIONS
+# =========================================================
 
 @st.cache_resource
 def get_supabase_client():
@@ -212,11 +279,11 @@ def get_supabase_client():
 supabase: Client | None = get_supabase_client()
 
 
-# =========================
-# DATA HELPERS
-# =========================
+# =========================================================
+# SAFE SUPABASE HELPERS
+# =========================================================
 
-def safe_table_count(table_name):
+def table_count(table_name):
     try:
         if supabase is None:
             return 0
@@ -226,11 +293,10 @@ def safe_table_count(table_name):
         return 0
 
 
-def safe_latest_row(table_name, order_column="created_at"):
+def latest_row(table_name, order_column="created_at"):
     try:
         if supabase is None:
             return None
-
         result = (
             supabase.table(table_name)
             .select("*")
@@ -238,34 +304,30 @@ def safe_latest_row(table_name, order_column="created_at"):
             .limit(1)
             .execute()
         )
-
         if result.data:
             return result.data[0]
-
         return None
     except Exception:
         return None
 
 
-def safe_recent_rows(table_name, order_column="created_at", limit=20):
-    try:
-        if supabase is None:
-            return []
-
-        result = (
-            supabase.table(table_name)
-            .select("*")
-            .order(order_column, desc=True)
-            .limit(limit)
-            .execute()
-        )
-
-        return result.data or []
-    except Exception:
-        return []
+def count_any_table(table_names):
+    for name in table_names:
+        count = table_count(name)
+        if count > 0:
+            return count
+    return 0
 
 
-def parse_datetime(value):
+def latest_any_table(table_names):
+    for name in table_names:
+        row = latest_row(name)
+        if row:
+            return row
+    return None
+
+
+def parse_dt(value):
     if not value:
         return None
 
@@ -281,33 +343,30 @@ def parse_datetime(value):
         return None
 
 
-def get_best_timestamp(row):
+def row_time(row):
     if not row:
         return None
 
-    possible_keys = [
-        "created_at",
-        "timestamp",
-        "scan_time",
-        "updated_at",
-        "time",
-        "datetime",
-    ]
+    keys = ["created_at", "timestamp", "scan_time", "updated_at", "time", "datetime"]
 
-    for key in possible_keys:
+    for key in keys:
         if key in row and row[key]:
-            parsed = parse_datetime(row[key])
-            if parsed:
-                return parsed
+            dt = parse_dt(row[key])
+            if dt:
+                return dt
 
     return None
 
 
-def seconds_to_age(seconds):
-    if seconds is None:
-        return "No scan found"
+def age_text_from_dt(dt):
+    if not dt:
+        return "No scan yet"
 
-    seconds = int(seconds)
+    now = datetime.now(IST)
+    seconds = int((now - dt).total_seconds())
+
+    if seconds < 0:
+        seconds = 0
 
     if seconds < 60:
         return f"{seconds}s ago"
@@ -320,33 +379,52 @@ def seconds_to_age(seconds):
     hours = minutes // 60
 
     if hours < 24:
-        return f"{hours}h {minutes % 60}m ago"
+        return f"{hours}h ago"
 
     days = hours // 24
     return f"{days}d ago"
 
 
-def get_scan_status(latest_scan_row):
-    latest_time = get_best_timestamp(latest_scan_row)
+def scan_status_from_dt(dt):
+    if not dt:
+        return "UNKNOWN"
 
-    if latest_time is None:
-        return "UNKNOWN", None, "No scan timestamp found"
-
-    now = datetime.now(IST)
-    age_seconds = (now - latest_time).total_seconds()
+    age_seconds = (datetime.now(IST) - dt).total_seconds()
 
     if age_seconds <= 420:
-        return "ONLINE", age_seconds, "Scan engine active"
+        return "ONLINE"
 
     if age_seconds <= 900:
-        return "DELAYED", age_seconds, "Scan delayed but not dead"
+        return "DELAYED"
 
-    return "OFFLINE", age_seconds, "No fresh scan detected"
+    return "OFFLINE"
 
 
-def get_github_status():
+def status_html(status):
+    status = str(status).upper()
+
+    if status in ["ONLINE", "CONNECTED", "SUCCESS", "RUNNING", "ACTIVE"]:
+        css = "pill-green"
+    elif status in ["DELAYED", "UNKNOWN", "WAITING", "NOT CONFIGURED"]:
+        css = "pill-yellow"
+    else:
+        css = "pill-red"
+
+    return f"<span class='{css}'>{status}</span>"
+
+
+# =========================================================
+# GITHUB HELPERS
+# =========================================================
+
+def get_github_latest_run():
     if not GITHUB_OWNER or not GITHUB_REPO:
-        return "NOT CONFIGURED", "Add GitHub secrets", None
+        return {
+            "status": "NOT CONFIGURED",
+            "message": "Missing GitHub secrets",
+            "last_run_time": None,
+            "url": None,
+        }
 
     try:
         headers = {"Accept": "application/vnd.github+json"}
@@ -355,349 +433,424 @@ def get_github_status():
             headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
 
         url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/actions/runs?per_page=1"
-
         response = requests.get(url, headers=headers, timeout=10)
 
         if response.status_code != 200:
-            return "ERROR", f"GitHub API {response.status_code}", None
+            return {
+                "status": "ERROR",
+                "message": f"GitHub API {response.status_code}",
+                "last_run_time": None,
+                "url": None,
+            }
 
         data = response.json()
-
         runs = data.get("workflow_runs", [])
 
         if not runs:
-            return "NO RUNS", "No GitHub workflow runs found", None
+            return {
+                "status": "NO RUNS",
+                "message": "No workflow runs found",
+                "last_run_time": None,
+                "url": None,
+            }
 
         run = runs[0]
 
-        status = run.get("status", "unknown")
+        status = run.get("status")
         conclusion = run.get("conclusion")
-        created_at = run.get("created_at")
+        created_at = parse_dt(run.get("created_at"))
         html_url = run.get("html_url")
 
-        if status == "completed":
-            if conclusion == "success":
-                return "SUCCESS", "Latest workflow completed successfully", html_url
-            return "FAILED", f"Latest workflow ended with {conclusion}", html_url
+        if status == "completed" and conclusion == "success":
+            final_status = "SUCCESS"
+            message = "5-min runner working"
+        elif status == "completed":
+            final_status = "FAILED"
+            message = f"Latest run: {conclusion}"
+        else:
+            final_status = "RUNNING"
+            message = f"Runner: {status}"
 
-        return "RUNNING", f"Workflow status: {status}", html_url
+        return {
+            "status": final_status,
+            "message": message,
+            "last_run_time": created_at,
+            "url": html_url,
+        }
 
     except Exception as e:
-        return "ERROR", str(e), None
+        return {
+            "status": "ERROR",
+            "message": str(e),
+            "last_run_time": None,
+            "url": None,
+        }
 
 
-def big_progress_bar(label, value, total):
-    if total <= 0:
-        percent = 0
-    else:
-        percent = min(100, int((value / total) * 100))
+# =========================================================
+# VISUAL COMPONENTS
+# =========================================================
 
-    st.markdown(f"**{label}**")
+def metric_card(title, value, sub=""):
     st.markdown(
         f"""
-        <div class="big-bar">
-            <div class="big-bar-fill" style="width:{percent}%;">
-                {percent}%
+        <div class="card">
+            <div class="card-title">{title}</div>
+            <div class="card-value">{value}</div>
+            <div class="card-sub">{sub}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def status_card(title, status, sub=""):
+    st.markdown(
+        f"""
+        <div class="card">
+            <div class="card-title">{title}</div>
+            {status_html(status)}
+            <div class="card-sub">{sub}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def circular_graph(title, percent, sub="", color="green"):
+    percent = max(0, min(100, int(percent)))
+    css_class = "circle"
+
+    if color == "blue":
+        css_class = "circle circle-blue"
+    elif color == "yellow":
+        css_class = "circle circle-yellow"
+    elif color == "red":
+        css_class = "circle circle-red"
+
+    st.markdown(
+        f"""
+        <div class="card">
+            <div class="card-title">{title}</div>
+            <div class="circle-wrap">
+                <div class="{css_class}" style="--value:{percent}%;">
+                    <div class="circle-number">{percent}%</div>
+                </div>
+            </div>
+            <div class="card-sub">{sub}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def progress_bar(label, percent):
+    percent = max(0, min(100, int(percent)))
+
+    st.markdown(
+        f"""
+        <div class="bar-box">
+            <div class="bar-label-row">
+                <span>{label}</span>
+                <span>{percent}%</span>
+            </div>
+            <div class="bar-bg">
+                <div class="bar-fill" style="width:{percent}%;">
+                    {percent}%
+                </div>
             </div>
         </div>
-        <div style="color:#94a3b8; font-size:14px;">
-            {value:,} / {total:,}
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def small_status(name, status, sub=""):
+    st.markdown(
+        f"""
+        <div class="small-status-row">
+            <div>
+                <div class="small-status-name">{name}</div>
+                <div class="small-status-sub">{sub}</div>
+            </div>
+            <div>{status_html(status)}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-def status_pill(status):
-    if status in ["ONLINE", "SUCCESS", "RUNNING", "CONNECTED"]:
-        css = "status-pill-green"
-    elif status in ["DELAYED", "UNKNOWN", "NOT CONFIGURED", "NO RUNS"]:
-        css = "status-pill-yellow"
-    else:
-        css = "status-pill-red"
+# =========================================================
+# LOAD TITAN DATA
+# =========================================================
 
-    return f"<span class='{css}'>{status}</span>"
+latest_scan = latest_any_table(["scan_journal", "scans"])
+latest_scan_time = row_time(latest_scan)
+last_scan_age = age_text_from_dt(latest_scan_time)
+scan_status = scan_status_from_dt(latest_scan_time)
 
+github_data = get_github_latest_run()
+github_status = github_data["status"]
+github_age = age_text_from_dt(github_data["last_run_time"])
 
-# =========================
-# LOAD DATA
-# =========================
+supabase_status = "CONNECTED" if supabase is not None else "OFFLINE"
 
-latest_scan = safe_latest_row("scan_journal")
-if latest_scan is None:
-    latest_scan = safe_latest_row("scans")
-
-scan_status, scan_age_seconds, scan_message = get_scan_status(latest_scan)
-scan_age_text = seconds_to_age(scan_age_seconds)
-
-github_status, github_message, github_url = get_github_status()
-
-scan_count = safe_table_count("scan_journal")
-if scan_count == 0:
-    scan_count = safe_table_count("scans")
-
-trade_count = safe_table_count("trade_journal")
-if trade_count == 0:
-    trade_count = safe_table_count("trades")
-
-news_count = safe_table_count("news_memory")
-if news_count == 0:
-    news_count = safe_table_count("news")
-
-market_count = safe_table_count("market_memory")
-if market_count == 0:
-    market_count = safe_table_count("market_conditions")
-
-latest_scans = safe_recent_rows("scan_journal", limit=15)
-if not latest_scans:
-    latest_scans = safe_recent_rows("scans", limit=15)
-
-latest_trades = safe_recent_rows("trade_journal", limit=10)
-if not latest_trades:
-    latest_trades = safe_recent_rows("trades", limit=10)
-
-latest_news = safe_recent_rows("news_memory", limit=10)
-if not latest_news:
-    latest_news = safe_recent_rows("news", limit=10)
+if scan_status == "ONLINE" and supabase_status == "CONNECTED" and github_status in ["SUCCESS", "RUNNING"]:
+    titan_status = "ONLINE"
+elif scan_status == "DELAYED":
+    titan_status = "DELAYED"
+else:
+    titan_status = "OFFLINE"
 
 
-# =========================
+# Counts
+total_trades = count_any_table(["trade_journal", "trades"])
+news_gathered = count_any_table(["news_memory", "news", "news_journal"])
+stocks_scanned = count_any_table(["scan_journal", "scans"])
+telegram_alerts = count_any_table(["telegram_alerts", "alerts", "signal_alerts"])
+
+# Passed stocks
+stocks_passed = count_any_table(["passed_stocks", "passed_scans", "signals"])
+
+if stocks_passed == 0:
+    stocks_passed = telegram_alerts
+
+# Wins/Losses from optional tables
+wins = count_any_table(["winning_trades", "wins"])
+losses = count_any_table(["losing_trades", "losses"])
+
+# Fallback if no separate win/loss tables exist
+if wins == 0 and losses == 0 and total_trades > 0:
+    latest_trade_row = latest_any_table(["trade_journal", "trades"])
+    # Until outcome tracker is wired, keep unknown outcome as 0/0
+    wins = 0
+    losses = 0
+
+# Performance calculations
+closed_trades = wins + losses
+
+if closed_trades > 0:
+    accuracy_percent = int((wins / closed_trades) * 100)
+else:
+    accuracy_percent = 0
+
+trade_performance_percent = accuracy_percent
+
+# Fixed TITAN RR target
+rr_display = "1:2"
+
+# Supabase storage estimate
+# Free plan is commonly 500 MB DB storage; edit this value if needed.
+SUPABASE_STORAGE_LIMIT_MB = 500
+
+estimated_storage_mb = (
+    (stocks_scanned * 0.002)
+    + (news_gathered * 0.003)
+    + (total_trades * 0.002)
+    + (telegram_alerts * 0.001)
+)
+
+supabase_storage_percent = int(min(100, (estimated_storage_mb / SUPABASE_STORAGE_LIMIT_MB) * 100))
+
+# Engine development progress
+engine_progress = {
+    "Scan Engine": 90,
+    "News Engine": 75,
+    "Learning Engine": 45,
+    "Evolution Engine": 35,
+    "Risk Engine": 80,
+    "Market Regime Engine": 70,
+    "Telegram Alert Engine": 95,
+    "Dashboard Engine": 85,
+}
+
+# Engine live status
+news_status = "ACTIVE" if news_gathered > 0 else "WAITING"
+telegram_status = "ACTIVE" if telegram_alerts > 0 else "WAITING"
+learning_status = "ACTIVE" if stocks_scanned > 0 else "WAITING"
+evolution_status = "BUILDING"
+
+
+# =========================================================
 # HEADER
-# =========================
+# =========================================================
 
-now_ist = datetime.now(IST).strftime("%d %b %Y, %I:%M:%S %p IST")
+now_text = datetime.now(IST).strftime("%d %b %Y · %I:%M:%S %p IST")
 
-st.markdown("# ⚡ TITAN Control Dashboard")
-st.caption(f"Live system monitor · Auto refresh every {AUTO_REFRESH_SECONDS}s · Last updated: {now_ist}")
+st.markdown("# ⚡ TITAN Command Center")
+st.markdown(
+    f"<div class='subtitle'>Clean V2 dashboard · Auto refresh every {AUTO_REFRESH_SECONDS}s · {now_text}</div>",
+    unsafe_allow_html=True,
+)
 
-st.markdown("---")
+
+# =========================================================
+# 1. TOP STATUS
+# =========================================================
+
+st.markdown("<div class='section'>", unsafe_allow_html=True)
+st.markdown("<div class='section-title'>🧠 Top Control Status</div>", unsafe_allow_html=True)
+
+c1, c2, c3, c4 = st.columns(4)
+
+with c1:
+    status_card("TITAN Status", titan_status, "Overall bot condition")
+
+with c2:
+    status_card("GitHub 5-Min Runner", github_status, github_data["message"])
+
+with c3:
+    status_card("Supabase Status", supabase_status, "Memory database connection")
+
+with c4:
+    metric_card("Last Scan", last_scan_age, f"GitHub last run: {github_age}")
+
+if github_data["url"]:
+    st.markdown(f"[Open latest GitHub workflow run]({github_data['url']})")
+
+st.markdown("</div>", unsafe_allow_html=True)
 
 
-# =========================
-# SECTION 1: MAIN STATUS
-# =========================
+# =========================================================
+# 2. TRADING PERFORMANCE
+# =========================================================
 
-st.markdown("## 🧠 Core System Status")
+st.markdown("<div class='section'>", unsafe_allow_html=True)
+st.markdown("<div class='section-title'>📊 Trading Performance</div>", unsafe_allow_html=True)
 
-col1, col2, col3, col4 = st.columns(4)
+p1, p2, p3, p4 = st.columns(4)
 
-with col1:
-    st.markdown(
-        f"""
-        <div class="metric-card">
-            <div class="metric-title">Scan Engine</div>
-            {status_pill(scan_status)}
-            <div class="metric-sub">{scan_message}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+with p1:
+    metric_card("No. of Trades", f"{total_trades:,}", "Total trade records")
+
+with p2:
+    metric_card("No. of Wins", f"{wins:,}", "Winning trades")
+
+with p3:
+    metric_card("No. of Losses", f"{losses:,}", "Losing trades")
+
+with p4:
+    metric_card("RR", rr_display, "Current risk-reward model")
+
+g1, g2 = st.columns(2)
+
+with g1:
+    circular_graph(
+        "Overall Trade Performance",
+        trade_performance_percent,
+        "Based on closed wins/losses",
+        "blue",
     )
 
-with col2:
-    st.markdown(
-        f"""
-        <div class="metric-card">
-            <div class="metric-title">Scan Age</div>
-            <div class="metric-value">{scan_age_text}</div>
-            <div class="metric-sub">Updates live every refresh</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+with g2:
+    circular_graph(
+        "TITAN Overall Accuracy",
+        accuracy_percent,
+        "Accuracy becomes real after outcome tracker",
+        "green",
     )
 
-with col3:
-    supabase_status = "CONNECTED" if supabase is not None else "OFFLINE"
-    st.markdown(
-        f"""
-        <div class="metric-card">
-            <div class="metric-title">Supabase</div>
-            {status_pill(supabase_status)}
-            <div class="metric-sub">Database memory layer</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+st.markdown("</div>", unsafe_allow_html=True)
+
+
+# =========================================================
+# 3. SUPABASE STORAGE
+# =========================================================
+
+st.markdown("<div class='section'>", unsafe_allow_html=True)
+st.markdown("<div class='section-title'>🗄️ Supabase Storage</div>", unsafe_allow_html=True)
+
+s1, s2 = st.columns([1, 2])
+
+with s1:
+    circular_graph(
+        "Storage Used",
+        supabase_storage_percent,
+        f"Estimated usage of {SUPABASE_STORAGE_LIMIT_MB} MB limit",
+        "yellow",
     )
 
-with col4:
-    st.markdown(
-        f"""
-        <div class="metric-card">
-            <div class="metric-title">GitHub Runner</div>
-            {status_pill(github_status)}
-            <div class="metric-sub">{github_message}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+with s2:
+    st.markdown("### Storage Usage")
+    progress_bar("Supabase Overall Storage Used", supabase_storage_percent)
+    st.caption(
+        "Note: This is an estimated dashboard value because Supabase exact database storage is not directly available from the normal client API."
     )
 
-if github_url:
-    st.markdown(f"[Open latest GitHub workflow run]({github_url})")
+st.markdown("</div>", unsafe_allow_html=True)
 
 
-# =========================
-# SECTION 2: SUPABASE STORAGE
-# =========================
+# =========================================================
+# 4. MARKET ACTIVITY
+# =========================================================
 
-st.markdown("## 🗄️ Supabase Storage Monitor")
-
-storage_col1, storage_col2 = st.columns([1.4, 1])
-
-with storage_col1:
-    st.markdown("### Data Load Overview")
-
-    max_reference = max(scan_count, trade_count, news_count, market_count, 1)
-
-    big_progress_bar("Scan Memory Load", scan_count, max_reference)
-    big_progress_bar("Trade Journal Load", trade_count, max_reference)
-    big_progress_bar("News Memory Load", news_count, max_reference)
-    big_progress_bar("Market Condition Memory Load", market_count, max_reference)
-
-with storage_col2:
-    st.markdown("### Stored Records")
-
-    a, b = st.columns(2)
-
-    with a:
-        st.metric("Scans", f"{scan_count:,}")
-        st.metric("News", f"{news_count:,}")
-
-    with b:
-        st.metric("Trades", f"{trade_count:,}")
-        st.metric("Market Data", f"{market_count:,}")
-
-
-# =========================
-# SECTION 3: TITAN MODULES
-# =========================
-
-st.markdown("## ⚙️ TITAN Module Health")
+st.markdown("<div class='section'>", unsafe_allow_html=True)
+st.markdown("<div class='section-title'>📡 Market Activity</div>", unsafe_allow_html=True)
 
 m1, m2, m3, m4 = st.columns(4)
 
 with m1:
-    st.markdown(
-        """
-        <div class="metric-card">
-            <div class="metric-title">Technical Engine</div>
-            <span class="status-pill-green">ACTIVE</span>
-            <div class="metric-sub">Trend · Momentum · Structure</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    metric_card("News Gathered", f"{news_gathered:,}", "News memory collected")
 
 with m2:
-    news_status = "ACTIVE" if news_count > 0 else "WAITING"
-    st.markdown(
-        f"""
-        <div class="metric-card">
-            <div class="metric-title">News Engine</div>
-            {status_pill('ONLINE' if news_status == 'ACTIVE' else 'DELAYED')}
-            <div class="metric-sub">News records: {news_count:,}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    metric_card("Stocks Scanned", f"{stocks_scanned:,}", "Total scan records")
 
 with m3:
-    memory_status = "ONLINE" if scan_count > 0 else "DELAYED"
-    st.markdown(
-        f"""
-        <div class="metric-card">
-            <div class="metric-title">Memory Engine</div>
-            {status_pill(memory_status)}
-            <div class="metric-sub">Supabase learning storage</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    metric_card("Stocks Passed", f"{stocks_passed:,}", "Passed filters / signals")
 
 with m4:
-    st.markdown(
-        """
-        <div class="metric-card">
-            <div class="metric-title">Risk Engine</div>
-            <span class="status-pill-green">ACTIVE</span>
-            <div class="metric-sub">SL · TP · RR · Filters</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    metric_card("Telegram Alerts", f"{telegram_alerts:,}", "Alerts sent")
+
+st.markdown("</div>", unsafe_allow_html=True)
 
 
-# =========================
-# SECTION 4: EVOLUTION STAGE
-# =========================
+# =========================================================
+# 5. ENGINE DEVELOPMENT PROGRESS
+# =========================================================
 
-st.markdown("## 📈 TITAN Evolution Progress")
+st.markdown("<div class='section'>", unsafe_allow_html=True)
+st.markdown("<div class='section-title'>⚙️ Engine Development Progress</div>", unsafe_allow_html=True)
 
-evo_col1, evo_col2 = st.columns([1.3, 1])
+left, right = st.columns(2)
 
-with evo_col1:
-    evolution_score = min(100, int((scan_count / 500) * 40 + (trade_count / 100) * 30 + (news_count / 500) * 30))
-    big_progress_bar("Overall Evolution Stage", evolution_score, 100)
+engine_items = list(engine_progress.items())
+mid = len(engine_items) // 2
 
-    if evolution_score < 25:
-        stage = "Stage 1 · Data Collection"
-    elif evolution_score < 50:
-        stage = "Stage 2 · Pattern Building"
-    elif evolution_score < 75:
-        stage = "Stage 3 · Adaptive Learning"
-    else:
-        stage = "Stage 4 · Advanced Market Intelligence"
+with left:
+    for engine, percent in engine_items[:mid]:
+        progress_bar(engine, percent)
 
-    st.markdown(f"### Current Stage: `{stage}`")
+with right:
+    for engine, percent in engine_items[mid:]:
+        progress_bar(engine, percent)
 
-with evo_col2:
-    accuracy_proxy = min(100, int(50 + (trade_count * 0.2)))
-    st.metric("Estimated Learning Progress", f"{evolution_score}%")
-    st.metric("Accuracy Tracking Readiness", f"{accuracy_proxy}%")
-    st.caption("Accuracy becomes more meaningful after outcome tracking is connected.")
+st.markdown("</div>", unsafe_allow_html=True)
 
 
-# =========================
-# SECTION 5: LATEST SCAN
-# =========================
+# =========================================================
+# 6. ENGINE LIVE STATUS
+# =========================================================
 
-st.markdown("## 🔍 Latest Scan Details")
+st.markdown("<div class='section'>", unsafe_allow_html=True)
+st.markdown("<div class='section-title'>🟢 Engine Running Status</div>", unsafe_allow_html=True)
 
-if latest_scan:
-    scan_df = pd.DataFrame([latest_scan])
-    st.dataframe(scan_df, use_container_width=True, hide_index=True)
-else:
-    st.warning("No latest scan found in scan_journal or scans table.")
+r1, r2 = st.columns(2)
 
+with r1:
+    small_status("Scan Engine", scan_status, f"Last scan: {last_scan_age}")
+    small_status("GitHub 5-Min Runner", github_status, f"Last run: {github_age}")
+    small_status("Supabase Memory", supabase_status, "Database connection")
 
-# =========================
-# SECTION 6: RECENT ACTIVITY
-# =========================
+with r2:
+    small_status("News Engine", news_status, f"News gathered: {news_gathered:,}")
+    small_status("Telegram Alert Engine", telegram_status, f"Alerts sent: {telegram_alerts:,}")
+    small_status("Learning / Evolution", learning_status, "Learning data pipeline")
 
-st.markdown("## 🕒 Recent System Activity")
-
-tab1, tab2, tab3 = st.tabs(["Recent Scans", "Recent Trades", "Recent News"])
-
-with tab1:
-    if latest_scans:
-        st.dataframe(pd.DataFrame(latest_scans), use_container_width=True, hide_index=True)
-    else:
-        st.info("No recent scan records found.")
-
-with tab2:
-    if latest_trades:
-        st.dataframe(pd.DataFrame(latest_trades), use_container_width=True, hide_index=True)
-    else:
-        st.info("No recent trade records found.")
-
-with tab3:
-    if latest_news:
-        st.dataframe(pd.DataFrame(latest_news), use_container_width=True, hide_index=True)
-    else:
-        st.info("No recent news records found.")
+st.markdown("</div>", unsafe_allow_html=True)
 
 
-# =========================
+# =========================================================
 # FOOTER
-# =========================
+# =========================================================
 
-st.markdown("---")
-st.caption("TITAN Dashboard · Streamlit Cloud · Supabase Memory · GitHub Actions Monitor")
+st.caption("TITAN Dashboard V2 · Streamlit Cloud · GitHub Actions · Supabase Memory")
