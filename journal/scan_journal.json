@@ -1,0 +1,327 @@
+[
+    {
+        "timestamp": "2026-05-03T17:37:51.403046",
+        "total_symbols": 50,
+        "scanned_count": 50,
+        "rejected_count": 50,
+        "setup_count": 0,
+        "scanned_symbols": [
+            "ADANIENT",
+            "ADANIPORTS",
+            "APOLLOHOSP",
+            "ASIANPAINT",
+            "AXISBANK",
+            "BAJAJ-AUTO",
+            "BAJAJFINSV",
+            "BAJFINANCE",
+            "BEL",
+            "BHARTIARTL",
+            "BPCL",
+            "BRITANNIA",
+            "CIPLA",
+            "COALINDIA",
+            "DRREDDY",
+            "EICHERMOT",
+            "GRASIM",
+            "HCLTECH",
+            "HDFCBANK",
+            "HDFCLIFE",
+            "HEROMOTOCO",
+            "HINDALCO",
+            "HINDUNILVR",
+            "ICICIBANK",
+            "INDUSINDBK",
+            "INFY",
+            "ITC",
+            "JSWSTEEL",
+            "KOTAKBANK",
+            "LT",
+            "M&M",
+            "MARUTI",
+            "NESTLEIND",
+            "NIFTYBEES",
+            "NTPC",
+            "ONGC",
+            "POWERGRID",
+            "RELIANCE",
+            "SBILIFE",
+            "SBIN",
+            "SHRIRAMFIN",
+            "SUNPHARMA",
+            "TATACONSUM",
+            "TATASTEEL",
+            "TCS",
+            "TECHM",
+            "TITAN",
+            "ULTRACEMCO",
+            "WIPRO",
+            "^NSEI"
+        ],
+        "rejected_symbols": [
+            {
+                "symbol": "ADANIENT",
+                "reason": "Relative strength weak"
+            },
+            {
+                "symbol": "ADANIPORTS",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "APOLLOHOSP",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "ASIANPAINT",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "AXISBANK",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "BAJAJ-AUTO",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "BAJAJFINSV",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "BAJFINANCE",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "BEL",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "BHARTIARTL",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "BPCL",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "BRITANNIA",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "CIPLA",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "COALINDIA",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "DRREDDY",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "EICHERMOT",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "GRASIM",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "HCLTECH",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "HDFCBANK",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "HDFCLIFE",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "HEROMOTOCO",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "HINDALCO",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "HINDUNILVR",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "ICICIBANK",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "INDUSINDBK",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "INFY",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "ITC",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "JSWSTEEL",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "KOTAKBANK",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "LT",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "M&M",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "MARUTI",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "NESTLEIND",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "NIFTYBEES",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "NTPC",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "ONGC",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "POWERGRID",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "RELIANCE",
+                "reason": "Relative strength weak"
+            },
+            {
+                "symbol": "SBILIFE",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "SBIN",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "SHRIRAMFIN",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "SUNPHARMA",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "TATACONSUM",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "TATASTEEL",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "TCS",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "TECHM",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "TITAN",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "ULTRACEMCO",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "WIPRO",
+                "reason": "Live price unavailable"
+            },
+            {
+                "symbol": "^NSEI",
+                "reason": "Live price unavailable"
+            }
+        ],
+        "setup_symbols": [],
+        "errors": []
+    },
+    {
+        "timestamp": "2026-05-03T17:39:36.965973",
+        "total_symbols": 50,
+        "scanned_count": 50,
+        "rejected_count": 0,
+        "setup_count": 0,
+        "scanned_symbols": [
+            "ADANIENT",
+            "ADANIPORTS",
+            "APOLLOHOSP",
+            "ASIANPAINT",
+            "AXISBANK",
+            "BAJAJ-AUTO",
+            "BAJAJFINSV",
+            "BAJFINANCE",
+            "BEL",
+            "BHARTIARTL",
+            "BPCL",
+            "BRITANNIA",
+            "CIPLA",
+            "COALINDIA",
+            "DRREDDY",
+            "EICHERMOT",
+            "GRASIM",
+            "HCLTECH",
+            "HDFCBANK",
+            "HDFCLIFE",
+            "HEROMOTOCO",
+            "HINDALCO",
+            "HINDUNILVR",
+            "ICICIBANK",
+            "INDUSINDBK",
+            "INFY",
+            "ITC",
+            "JSWSTEEL",
+            "KOTAKBANK",
+            "LT",
+            "M&M",
+            "MARUTI",
+            "NESTLEIND",
+            "NIFTYBEES",
+            "NTPC",
+            "ONGC",
+            "POWERGRID",
+            "RELIANCE",
+            "SBILIFE",
+            "SBIN",
+            "SHRIRAMFIN",
+            "SUNPHARMA",
+            "TATACONSUM",
+            "TATASTEEL",
+            "TCS",
+            "TECHM",
+            "TITAN",
+            "ULTRACEMCO",
+            "WIPRO",
+            "^NSEI"
+        ],
+        "rejected_symbols": [],
+        "setup_symbols": [],
+        "errors": []
+    }
+]
