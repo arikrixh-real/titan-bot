@@ -1,19 +1,36 @@
-import requests
-from config.api_keys import UPSTOX_ACCESS_TOKEN
+from dotenv import load_dotenv
+load_dotenv()
 
-url = "https://api.upstox.com/v2/market-quote/ltp"
+from data.live_price import get_live_price
 
-headers = {
-    "accept": "application/json",
-    "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"
-}
+symbols = [
+    "RELIANCE",
+    "TATAMOTORS",
+    "TCS",
+    "INFY",
+    "HDFCBANK",
+    "ADANIENT",
+    "TATASTEEL",
+    "GRASIM",
+    "NTPC"
+]
 
-# ✅ Correct instrument key for ADANIENT
-params = {
-    "instrument_key": "NSE_EQ|INE423A01024"
-}
+print("🔍 TESTING UPSTOX LIVE PRICE - NO CACHE")
+print("=" * 50)
 
-response = requests.get(url, headers=headers, params=params)
+success = 0
+failed = 0
 
-print(response.status_code)
-print(response.json())
+for symbol in symbols:
+    price = get_live_price(symbol, use_cache=False, debug=True)
+
+    if price is None:
+        print(f"❌ {symbol}: NO LIVE PRICE")
+        failed += 1
+    else:
+        print(f"✅ {symbol}: {price}")
+        success += 1
+
+print("=" * 50)
+print(f"✅ Success: {success}")
+print(f"❌ Failed: {failed}")
