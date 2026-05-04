@@ -1,13 +1,15 @@
 """
 TITAN - Trade Journal Engine
 ----------------------------
-Journals ALL eligible setups, not only Telegram alerts.
+Stable trade lifecycle journal.
 
-IMPORTANT:
-- Every eligible setup is stored as an internal tracked trade idea.
-- Telegram alert status is only a flag.
-- This does NOT send alerts.
-- This does NOT limit scans.
+What this does:
+- Journals ALL eligible setups.
+- Opens internal tracked trades for ALL valid setups.
+- Telegram alert status is only a YES/NO flag.
+- Prevents duplicate OPEN trades with same symbol/side/entry/sl/target.
+- Does NOT send Telegram alerts.
+- Does NOT modify setup selection.
 """
 
 import csv
@@ -19,11 +21,13 @@ from zoneinfo import ZoneInfo
 IST = ZoneInfo("Asia/Kolkata")
 
 JOURNAL_DIR = Path("data/journals")
-CSV_FILE = JOURNAL_DIR / "trade_journal.csv"
-JSONL_FILE = JOURNAL_DIR / "trade_journal.jsonl"
 
-FIELDS = [
-    "trade_id",
+TRADE_JOURNAL_CSV = JOURNAL_DIR / "trade_journal.csv"
+TRADE_JOURNAL_JSONL = JOURNAL_DIR / "trade_journal.jsonl"
+
+ACTIVE_TRADES_CSV = JOURNAL_DIR / "active_trades.csv"
+
+JOURNAL_FIELDS = [
     "timestamp",
     "scan_id",
     "symbol",
@@ -38,8 +42,32 @@ FIELDS = [
     "reason",
     "alert_sent",
     "market_status",
-    "status",
 ]
+
+ACTIVE_FIELDS = [
+    "trade_id",
+    "opened_at",
+    "scan_id",
+    "symbol",
+    "side",
+    "entry",
+    "sl",
+    "target",
+    "rr",
+    "score",
+    "rank_score",
+    "alert_sent",
+    "market_status",
+    "status",
+    "last_checked_at",
+    "last_price",
+    "pnl_points",
+    "result_reason",
+]
+
+
+def _now():
+    return datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _safe_get(setup, *keys, default=""):
@@ -53,7 +81,7 @@ def _safe_get(setup, *keys, default=""):
     return default
 
 
-def _to_text(value):
+def _text(value):
     if value is None:
         return ""
 
@@ -66,79 +94,150 @@ def _to_text(value):
     return str(value)
 
 
-def _safe_float_text(value):
+def _float_text(value):
     try:
         if value is None or value == "":
             return ""
         return str(round(float(value), 4))
     except Exception:
-        return _to_text(value)
+        return _text(value)
 
 
-def ensure_journal_files():
+def _symbol(value):
+    value = str(value or "").upper().strip()
+    value = value.replace(".NS", "")
+    return value
+
+
+def _side(value):
+    return str(value or "").upper().strip()
+
+
+def _ensure_csv(path, fields):
     JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
 
-    if not CSV_FILE.exists():
-        with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=FIELDS)
+    if not path.exists() or path.stat().st_size == 0:
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fields)
             writer.writeheader()
 
-    if not JSONL_FILE.exists():
-        JSONL_FILE.touch()
+
+def ensure_files():
+    JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
+    _ensure_csv(TRADE_JOURNAL_CSV, JOURNAL_FIELDS)
+    _ensure_csv(ACTIVE_TRADES_CSV, ACTIVE_FIELDS)
+
+    if not TRADE_JOURNAL_JSONL.exists():
+        TRADE_JOURNAL_JSONL.touch()
 
 
-def build_trade_id(scan_id, symbol, side, entry, sl, target):
+def _active_key(row):
+    return "|".join([
+        _symbol(row.get("symbol", "")),
+        _side(row.get("side", "")),
+        _float_text(row.get("entry", "")),
+        _float_text(row.get("sl", "")),
+        _float_text(row.get("target", "")),
+    ])
+
+
+def _load_existing_open_keys():
+    ensure_files()
+
+    keys = set()
+
+    try:
+        with open(ACTIVE_TRADES_CSV, "r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+
+            for row in reader:
+                if str(row.get("status", "")).upper().strip() == "OPEN":
+                    keys.add(_active_key(row))
+
+    except Exception:
+        pass
+
+    return keys
+
+
+def _build_trade_id(scan_id, symbol, side, entry, sl, target):
     return f"{scan_id}|{symbol}|{side}|{entry}|{sl}|{target}"
 
 
-def build_journal_row(setup, scan_id=None, alert_sent=False, market_status=""):
-    now = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
+def _build_rows(setup, scan_id, alert_sent, market_status):
+    timestamp = _now()
 
-    symbol = _to_text(_safe_get(setup, "symbol", "stock", "ticker")).upper().strip()
-    side = _to_text(_safe_get(setup, "side", "direction")).upper().strip()
+    symbol = _symbol(_safe_get(setup, "symbol", "stock", "ticker"))
+    side = _side(_safe_get(setup, "side", "direction"))
 
-    entry = _safe_float_text(_safe_get(setup, "entry", "entry_price"))
-    sl = _safe_float_text(_safe_get(setup, "sl", "stop_loss", "stoploss"))
-    target = _safe_float_text(_safe_get(setup, "target", "tp", "t1", "target1"))
+    entry = _float_text(_safe_get(setup, "entry", "entry_price"))
+    sl = _float_text(_safe_get(setup, "sl", "stop_loss", "stoploss"))
+    target = _float_text(_safe_get(setup, "target", "tp", "t1", "target1"))
 
-    final_scan_id = scan_id or now.replace(" ", "_").replace(":", "-")
+    rr = _float_text(_safe_get(setup, "rr", "risk_reward"))
+    score = _float_text(_safe_get(setup, "score", "final_score"))
+    rank_score = _float_text(_safe_get(setup, "rank_score", "ranking_score"))
 
-    return {
-        "trade_id": build_trade_id(final_scan_id, symbol, side, entry, sl, target),
-        "timestamp": now,
-        "scan_id": final_scan_id,
+    confirmations = _text(_safe_get(setup, "confirmations", "signals", default=[]))
+    reason = _text(_safe_get(setup, "reason", "setup_reason", default=""))
+
+    alert_text = "YES" if alert_sent else "NO"
+    market_text = _text(market_status)
+
+    journal_row = {
+        "timestamp": timestamp,
+        "scan_id": scan_id,
         "symbol": symbol,
         "side": side,
         "entry": entry,
         "sl": sl,
         "target": target,
-        "rr": _safe_float_text(_safe_get(setup, "rr", "risk_reward")),
-        "score": _safe_float_text(_safe_get(setup, "score", "final_score")),
-        "rank_score": _safe_float_text(_safe_get(setup, "rank_score", "ranking_score")),
-        "confirmations": _to_text(_safe_get(setup, "confirmations", "signals", default=[])),
-        "reason": _to_text(_safe_get(setup, "reason", "setup_reason", default="")),
-        "alert_sent": "YES" if alert_sent else "NO",
-        "market_status": _to_text(market_status),
-        "status": "OPEN",
+        "rr": rr,
+        "score": score,
+        "rank_score": rank_score,
+        "confirmations": confirmations,
+        "reason": reason,
+        "alert_sent": alert_text,
+        "market_status": market_text,
     }
 
+    active_row = {
+        "trade_id": _build_trade_id(scan_id, symbol, side, entry, sl, target),
+        "opened_at": timestamp,
+        "scan_id": scan_id,
+        "symbol": symbol,
+        "side": side,
+        "entry": entry,
+        "sl": sl,
+        "target": target,
+        "rr": rr,
+        "score": score,
+        "rank_score": rank_score,
+        "alert_sent": alert_text,
+        "market_status": market_text,
+        "status": "OPEN",
+        "last_checked_at": "",
+        "last_price": "",
+        "pnl_points": "",
+        "result_reason": "New internal trade opened",
+    }
 
-def _load_existing_trade_ids():
-    ensure_journal_files()
+    return journal_row, active_row
 
-    existing = set()
 
-    try:
-        with open(CSV_FILE, "r", newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                trade_id = row.get("trade_id")
-                if trade_id:
-                    existing.add(trade_id)
-    except Exception:
-        pass
+def _valid_trade(row):
+    if row["symbol"] == "" or row["side"] not in ["LONG", "SHORT"]:
+        return False
 
-    return existing
+    for field in ["entry", "sl", "target"]:
+        try:
+            value = float(row[field])
+            if value <= 0:
+                return False
+        except Exception:
+            return False
+
+    return True
 
 
 def journal_eligible_setups(
@@ -148,51 +247,63 @@ def journal_eligible_setups(
     market_status="",
 ):
     """
-    Journals ALL eligible setups.
+    Called by setup_engine.py.
 
-    This is the main function called by setup_engine.py.
-    Every eligible setup becomes an OPEN internal tracked trade idea.
-    Telegram alerts remain only a YES/NO flag.
+    Every eligible setup:
+    - is written to trade_journal.csv
+    - becomes an OPEN active internal trade unless same trade is already OPEN
     """
 
-    ensure_journal_files()
+    ensure_files()
 
-    if eligible_setups is None:
-        eligible_setups = []
-
+    eligible_setups = eligible_setups or []
     alerted_symbols = set(alerted_symbols or [])
-    existing_trade_ids = _load_existing_trade_ids()
-    rows = []
+
+    if scan_id is None:
+        scan_id = datetime.now(IST).strftime("%Y%m%d_%H%M%S")
+
+    journal_rows = []
+    new_active_rows = []
+
+    existing_open_keys = _load_existing_open_keys()
 
     for setup in eligible_setups:
-        symbol = _to_text(_safe_get(setup, "symbol", "stock", "ticker")).upper().strip()
-        alert_sent = symbol in alerted_symbols
+        symbol = _symbol(_safe_get(setup, "symbol", "stock", "ticker"))
+        alert_sent = symbol in {_symbol(s) for s in alerted_symbols}
 
-        row = build_journal_row(
+        journal_row, active_row = _build_rows(
             setup=setup,
             scan_id=scan_id,
             alert_sent=alert_sent,
             market_status=market_status,
         )
 
-        # Avoid exact duplicate rows if same scan is re-run
-        if row["trade_id"] in existing_trade_ids:
+        if not _valid_trade(active_row):
             continue
 
-        rows.append(row)
-        existing_trade_ids.add(row["trade_id"])
+        journal_rows.append(journal_row)
 
-    if not rows:
-        print("ℹ️ No new eligible setups to journal.")
-        return 0
+        key = _active_key(active_row)
 
-    with open(CSV_FILE, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDS)
-        writer.writerows(rows)
+        if key not in existing_open_keys:
+            new_active_rows.append(active_row)
+            existing_open_keys.add(key)
 
-    with open(JSONL_FILE, "a", encoding="utf-8") as f:
-        for row in rows:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    if journal_rows:
+        with open(TRADE_JOURNAL_CSV, "a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=JOURNAL_FIELDS)
+            writer.writerows(journal_rows)
 
-    print(f"📘 Trade Journal Updated: {len(rows)} internal trades journaled")
-    return len(rows)
+        with open(TRADE_JOURNAL_JSONL, "a", encoding="utf-8") as f:
+            for row in journal_rows:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    if new_active_rows:
+        with open(ACTIVE_TRADES_CSV, "a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=ACTIVE_FIELDS)
+            writer.writerows(new_active_rows)
+
+    print(f"📘 Trade Journal Updated: {len(journal_rows)} setups journaled")
+    print(f"📌 Active Trades Added: {len(new_active_rows)} new OPEN trades")
+
+    return len(journal_rows)

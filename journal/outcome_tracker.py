@@ -1,14 +1,15 @@
 """
 TITAN - Outcome Tracker Engine
 ------------------------------
-Tracks whether journaled eligible setups hit TARGET or SL.
+Stable trade lifecycle tracker.
 
-IMPORTANT:
-- Reads ALL OPEN journaled setups.
-- Keeps checking OPEN trades every run.
-- Skips old/bad journal rows.
-- Writes final TARGET_HIT / SL_HIT only once.
-- Does NOT send Telegram alerts.
+What this does:
+- Reads data/journals/active_trades.csv
+- Checks OPEN trades every run
+- Keeps OPEN trades active until TP or SL hits
+- Writes final results to trade_outcomes.csv/jsonl
+- Updates open_trades.csv for dashboard
+- Does NOT send Telegram alerts
 """
 
 import csv
@@ -23,18 +24,18 @@ try:
 except Exception:
     get_live_price = None
 
-
 IST = ZoneInfo("Asia/Kolkata")
 
-JOURNAL_FILE = Path("data/journals/trade_journal.csv")
-OUTCOME_CSV = Path("data/journals/trade_outcomes.csv")
-OUTCOME_JSONL = Path("data/journals/trade_outcomes.jsonl")
-OPEN_TRADES_CSV = Path("data/journals/open_trades.csv")
+JOURNAL_DIR = Path("data/journals")
 
-OUTCOME_FIELDS = [
-    "checked_at",
+ACTIVE_TRADES_CSV = JOURNAL_DIR / "active_trades.csv"
+OPEN_TRADES_CSV = JOURNAL_DIR / "open_trades.csv"
+OUTCOME_CSV = JOURNAL_DIR / "trade_outcomes.csv"
+OUTCOME_JSONL = JOURNAL_DIR / "trade_outcomes.jsonl"
+
+ACTIVE_FIELDS = [
     "trade_id",
-    "timestamp",
+    "opened_at",
     "scan_id",
     "symbol",
     "side",
@@ -45,13 +46,37 @@ OUTCOME_FIELDS = [
     "score",
     "rank_score",
     "alert_sent",
-    "current_price",
+    "market_status",
+    "status",
+    "last_checked_at",
+    "last_price",
+    "pnl_points",
+    "result_reason",
+]
+
+OUTCOME_FIELDS = [
+    "closed_at",
+    "trade_id",
+    "opened_at",
+    "scan_id",
+    "symbol",
+    "side",
+    "entry",
+    "sl",
+    "target",
+    "rr",
+    "score",
+    "rank_score",
+    "alert_sent",
+    "exit_price",
     "outcome",
     "pnl_points",
     "result_reason",
 ]
 
-OPEN_FIELDS = OUTCOME_FIELDS
+
+def _now():
+    return datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def safe_float(value, default=None):
@@ -64,7 +89,7 @@ def safe_float(value, default=None):
 
 
 def clean_symbol(symbol):
-    symbol = str(symbol).upper().strip()
+    symbol = str(symbol or "").upper().strip()
     symbol = symbol.replace(".NS", "")
     return symbol
 
@@ -75,222 +100,209 @@ def is_valid_symbol(symbol):
     if not symbol:
         return False
 
-    # Blocks old broken rows like 20260504_211559
     if re.fullmatch(r"[0-9_:-]+", symbol):
         return False
 
-    if len(symbol) > 20:
+    if len(symbol) > 25:
         return False
 
     return True
 
 
-def ensure_outcome_files():
-    OUTCOME_CSV.parent.mkdir(parents=True, exist_ok=True)
+def _ensure_csv(path, fields):
+    JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
 
-    if not OUTCOME_CSV.exists():
-        with open(OUTCOME_CSV, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=OUTCOME_FIELDS)
+    if not path.exists() or path.stat().st_size == 0:
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fields)
             writer.writeheader()
+
+
+def ensure_files():
+    JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
+    _ensure_csv(ACTIVE_TRADES_CSV, ACTIVE_FIELDS)
+    _ensure_csv(OPEN_TRADES_CSV, ACTIVE_FIELDS)
+    _ensure_csv(OUTCOME_CSV, OUTCOME_FIELDS)
 
     if not OUTCOME_JSONL.exists():
         OUTCOME_JSONL.touch()
 
-    if not OPEN_TRADES_CSV.exists():
-        with open(OPEN_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=OPEN_FIELDS)
-            writer.writeheader()
 
-
-def make_key(row):
-    trade_id = row.get("trade_id")
-    if trade_id:
-        return str(trade_id)
-
-    return "|".join([
-        str(row.get("scan_id", "")),
-        str(row.get("symbol", "")),
-        str(row.get("side", "")),
-        str(row.get("entry", "")),
-        str(row.get("sl", "")),
-        str(row.get("target", "")),
-    ])
-
-
-def load_closed_trade_keys():
-    ensure_outcome_files()
-    closed = set()
-
-    with open(OUTCOME_CSV, "r", newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-
-        for row in reader:
-            if row.get("outcome") in ["TARGET_HIT", "SL_HIT"]:
-                closed.add(make_key(row))
-
-    return closed
-
-
-def get_current_price(symbol):
+def _get_price(symbol, fallback=None):
     symbol = clean_symbol(symbol)
 
     if not is_valid_symbol(symbol):
-        return None
+        return fallback
 
     if get_live_price is None:
-        return None
+        return fallback
 
     try:
-        return safe_float(get_live_price(symbol))
+        price = safe_float(get_live_price(symbol))
+        if price is not None and price > 0:
+            return price
     except Exception:
-        return None
+        pass
+
+    return fallback
 
 
-def evaluate_outcome(side, entry, sl, target, current_price):
-    side = str(side).upper().strip()
+def _evaluate(row, current_price):
+    side = str(row.get("side", "")).upper().strip()
+    entry = safe_float(row.get("entry"))
+    sl = safe_float(row.get("sl"))
+    target = safe_float(row.get("target"))
 
     if current_price is None:
-        return "OPEN", 0.0, "Live price unavailable"
+        return "OPEN", "", "Live price unavailable"
 
     if entry is None or sl is None or target is None:
-        return "OPEN", 0.0, "Invalid trade levels"
+        return "OPEN", "", "Invalid trade levels"
 
     if side == "LONG":
-        pnl_points = current_price - entry
+        pnl = round(current_price - entry, 2)
 
         if current_price >= target:
-            return "TARGET_HIT", round(pnl_points, 2), "LONG target reached"
+            return "TARGET_HIT", pnl, "LONG target reached"
 
         if current_price <= sl:
-            return "SL_HIT", round(pnl_points, 2), "LONG stop loss reached"
+            return "SL_HIT", pnl, "LONG stop loss reached"
 
-        return "OPEN", round(pnl_points, 2), "LONG trade still open"
+        return "OPEN", pnl, "LONG trade still open"
 
     if side == "SHORT":
-        pnl_points = entry - current_price
+        pnl = round(entry - current_price, 2)
 
         if current_price <= target:
-            return "TARGET_HIT", round(pnl_points, 2), "SHORT target reached"
+            return "TARGET_HIT", pnl, "SHORT target reached"
 
         if current_price >= sl:
-            return "SL_HIT", round(pnl_points, 2), "SHORT stop loss reached"
+            return "SL_HIT", pnl, "SHORT stop loss reached"
 
-        return "OPEN", round(pnl_points, 2), "SHORT trade still open"
+        return "OPEN", pnl, "SHORT trade still open"
 
-    return "OPEN", 0.0, "Invalid side"
+    return "OPEN", "", "Invalid side"
 
 
-def build_outcome_row(journal_row):
-    symbol = clean_symbol(journal_row.get("symbol", ""))
-    side = str(journal_row.get("side", "")).upper().strip()
-
-    entry = safe_float(journal_row.get("entry"))
-    sl = safe_float(journal_row.get("sl"))
-    target = safe_float(journal_row.get("target"))
-
-    current_price = get_current_price(symbol)
-
-    outcome, pnl_points, result_reason = evaluate_outcome(
-        side=side,
-        entry=entry,
-        sl=sl,
-        target=target,
-        current_price=current_price,
-    )
-
-    trade_id = journal_row.get("trade_id") or make_key(journal_row)
-
+def _outcome_row(row, exit_price, outcome, pnl_points, reason):
     return {
-        "checked_at": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S"),
-        "trade_id": trade_id,
-        "timestamp": journal_row.get("timestamp", ""),
-        "scan_id": journal_row.get("scan_id", ""),
-        "symbol": symbol,
-        "side": side,
-        "entry": journal_row.get("entry", ""),
-        "sl": journal_row.get("sl", ""),
-        "target": journal_row.get("target", ""),
-        "rr": journal_row.get("rr", ""),
-        "score": journal_row.get("score", ""),
-        "rank_score": journal_row.get("rank_score", ""),
-        "alert_sent": journal_row.get("alert_sent", ""),
-        "current_price": current_price if current_price is not None else "",
+        "closed_at": _now(),
+        "trade_id": row.get("trade_id", ""),
+        "opened_at": row.get("opened_at", ""),
+        "scan_id": row.get("scan_id", ""),
+        "symbol": row.get("symbol", ""),
+        "side": row.get("side", ""),
+        "entry": row.get("entry", ""),
+        "sl": row.get("sl", ""),
+        "target": row.get("target", ""),
+        "rr": row.get("rr", ""),
+        "score": row.get("score", ""),
+        "rank_score": row.get("rank_score", ""),
+        "alert_sent": row.get("alert_sent", ""),
+        "exit_price": exit_price if exit_price is not None else "",
         "outcome": outcome,
         "pnl_points": pnl_points,
-        "result_reason": result_reason,
+        "result_reason": reason,
     }
 
 
-def _write_open_trades(open_rows):
+def _write_active(rows):
+    with open(ACTIVE_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=ACTIVE_FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _write_open(rows):
+    open_rows = [
+        row for row in rows
+        if str(row.get("status", "")).upper().strip() == "OPEN"
+    ]
+
     with open(OPEN_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=OPEN_FIELDS)
+        writer = csv.DictWriter(f, fieldnames=ACTIVE_FIELDS)
         writer.writeheader()
         writer.writerows(open_rows)
 
 
-def _append_final_outcomes(final_rows):
-    if not final_rows:
+def _append_outcomes(rows):
+    if not rows:
         return
 
     with open(OUTCOME_CSV, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=OUTCOME_FIELDS)
-        writer.writerows(final_rows)
+        writer.writerows(rows)
 
     with open(OUTCOME_JSONL, "a", encoding="utf-8") as f:
-        for row in final_rows:
+        for row in rows:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 def track_trade_outcomes(limit=50):
-    ensure_outcome_files()
+    ensure_files()
 
-    if not JOURNAL_FILE.exists():
-        print("⚠️ Trade journal not found. Run setup engine first.")
-        return 0
+    with open(ACTIVE_TRADES_CSV, "r", newline="", encoding="utf-8") as f:
+        all_rows = list(csv.DictReader(f))
 
-    closed_trade_keys = load_closed_trade_keys()
-
-    with open(JOURNAL_FILE, "r", newline="", encoding="utf-8") as f:
-        journal_rows = list(csv.DictReader(f))
-
-    if limit is not None:
-        journal_rows = journal_rows[-int(limit):]
-
-    open_rows = []
+    updated_rows = []
     final_rows = []
+
     checked_count = 0
     skipped_bad_rows = 0
 
-    for journal_row in journal_rows:
-        symbol = journal_row.get("symbol", "")
-        side = str(journal_row.get("side", "")).upper().strip()
+    open_indices = [
+        i for i, row in enumerate(all_rows)
+        if str(row.get("status", "")).upper().strip() == "OPEN"
+    ]
 
-        if not is_valid_symbol(symbol) or side not in ["LONG", "SHORT"]:
+    if limit is not None:
+        open_indices_to_check = open_indices[:int(limit)]
+    else:
+        open_indices_to_check = open_indices
+
+    indices_to_check = set(open_indices_to_check)
+
+    for i, row in enumerate(all_rows):
+        symbol = clean_symbol(row.get("symbol", ""))
+        row["symbol"] = symbol
+
+        if not is_valid_symbol(symbol) or row.get("side", "").upper().strip() not in ["LONG", "SHORT"]:
             skipped_bad_rows += 1
             continue
 
-        trade_key = make_key(journal_row)
-
-        if trade_key in closed_trade_keys:
+        if i not in indices_to_check:
+            updated_rows.append(row)
             continue
 
-        outcome_row = build_outcome_row(journal_row)
+        fallback_price = safe_float(row.get("last_price"))
+        current_price = _get_price(symbol, fallback=fallback_price)
+
+        outcome, pnl_points, reason = _evaluate(row, current_price)
+
         checked_count += 1
 
-        if outcome_row["outcome"] in ["TARGET_HIT", "SL_HIT"]:
-            final_rows.append(outcome_row)
-            closed_trade_keys.add(trade_key)
-        else:
-            open_rows.append(outcome_row)
+        row["last_checked_at"] = _now()
+        row["last_price"] = current_price if current_price is not None else ""
+        row["pnl_points"] = pnl_points
+        row["result_reason"] = reason
 
-    _append_final_outcomes(final_rows)
-    _write_open_trades(open_rows)
+        if outcome in ["TARGET_HIT", "SL_HIT"]:
+            row["status"] = outcome
+            final_rows.append(_outcome_row(row, current_price, outcome, pnl_points, reason))
+        else:
+            row["status"] = "OPEN"
+
+        updated_rows.append(row)
+
+    _write_active(updated_rows)
+    _write_open(updated_rows)
+    _append_outcomes(final_rows)
 
     print(f"📊 Outcome Tracker Checked: {checked_count} open/internal trades")
     print(f"🧹 Skipped bad old rows: {skipped_bad_rows}")
     print(f"✅ Newly closed targets: {sum(1 for row in final_rows if row['outcome'] == 'TARGET_HIT')}")
     print(f"❌ Newly closed SLs: {sum(1 for row in final_rows if row['outcome'] == 'SL_HIT')}")
-    print(f"⏳ Still open: {len(open_rows)}")
+    print(f"⏳ Still open: {sum(1 for row in updated_rows if row.get('status') == 'OPEN')}")
 
     return checked_count
 
