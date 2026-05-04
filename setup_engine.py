@@ -28,6 +28,9 @@ FIX:
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import os
+
+from supabase import create_client
 
 import pandas as pd
 
@@ -118,6 +121,117 @@ def clean_market_dataframe(df):
     return df
 
 
+
+
+
+def get_supabase_client():
+    """
+    Connects setup_engine.py to Supabase using GitHub/Streamlit environment secrets.
+    Safe: if secrets are missing or Supabase fails, TITAN scan will continue.
+    """
+    try:
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_KEY")
+
+        if not url or not key:
+            print("⚠️ Supabase secrets missing: SUPABASE_URL / SUPABASE_KEY")
+            return None
+
+        return create_client(url, key)
+
+    except Exception as e:
+        print(f"⚠️ Supabase connection error: {e}")
+        return None
+
+
+supabase = get_supabase_client()
+
+
+def log_scan_to_supabase(
+    scan_id,
+    market_status,
+    scanned_count,
+    error_count,
+    eligible_setups,
+    rejected_by_evolution,
+    selected_alerts,
+):
+    """
+    Writes fresh scan data to Supabase tables used by dashboard.py.
+
+    Dashboard reads:
+    - scans              -> latest scan time + scan cycle count
+    - scan_health_logs   -> scan breakdown + Upstox/live scan status
+
+    Safe: all errors are caught, so trading scan never crashes.
+    """
+    if supabase is None:
+        print("⚠️ Supabase scan logging skipped: client not connected")
+        return
+
+    try:
+        now = datetime.now(IST).isoformat()
+        final_passed = len(eligible_setups)
+        alerts_sent = len(selected_alerts)
+
+        # Main scan cycle log used by dashboard Last Scan + Stocks Scanned count.
+        try:
+            supabase.table("scans").insert({
+                "created_at": now,
+                "scan_id": scan_id,
+                "market_status": str(market_status),
+                "stocks_scanned": int(scanned_count),
+                "stocks_failed": int(error_count),
+                "eligible_setups": int(final_passed),
+                "rejected_by_evolution": int(rejected_by_evolution),
+                "alerts_sent": int(alerts_sent),
+            }).execute()
+        except Exception as e:
+            # Fallback for stricter table schemas.
+            print(f"⚠️ scans full insert failed, trying minimal insert: {e}")
+            try:
+                supabase.table("scans").insert({
+                    "created_at": now,
+                    "scan_id": scan_id,
+                }).execute()
+            except Exception as e2:
+                print(f"⚠️ scans minimal insert failed: {e2}")
+
+        # Health/breakdown log used by dashboard Scan Breakdown section.
+        try:
+            supabase.table("scan_health_logs").insert({
+                "created_at": now,
+                "scan_id": scan_id,
+                "stocks_checked": int(scanned_count),
+                "trend_passed": int(final_passed),
+                "momentum_passed": int(final_passed),
+                "structure_passed": int(final_passed),
+                "entry_passed": int(final_passed),
+                "final_passed": int(final_passed),
+                "alerts_sent": int(alerts_sent),
+                "stocks_failed": int(error_count),
+            }).execute()
+        except Exception as e:
+            # Fallback for dashboard-required columns only.
+            print(f"⚠️ scan_health_logs full insert failed, trying dashboard insert: {e}")
+            try:
+                supabase.table("scan_health_logs").insert({
+                    "created_at": now,
+                    "stocks_checked": int(scanned_count),
+                    "trend_passed": int(final_passed),
+                    "momentum_passed": int(final_passed),
+                    "structure_passed": int(final_passed),
+                    "entry_passed": int(final_passed),
+                    "final_passed": int(final_passed),
+                    "alerts_sent": int(alerts_sent),
+                }).execute()
+            except Exception as e2:
+                print(f"⚠️ scan_health_logs dashboard insert failed: {e2}")
+
+        print("✅ Scan data logged to Supabase for dashboard")
+
+    except Exception as e:
+        print(f"❌ Supabase scan logging error: {e}")
 
 def run_news_engine_safely():
     """
@@ -369,6 +483,16 @@ def scan_for_setups():
 
     update_master_status(last_scan_summary=last_scan_summary)
     print("📡 Master status updated")
+
+    log_scan_to_supabase(
+        scan_id=scan_id,
+        market_status=market_status,
+        scanned_count=scanned_count,
+        error_count=error_count,
+        eligible_setups=eligible_setups,
+        rejected_by_evolution=rejected_by_evolution,
+        selected_alerts=selected_alerts,
+    )
 
     return eligible_setups
 
