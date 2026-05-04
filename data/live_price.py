@@ -13,12 +13,15 @@ def safe_float(value):
         return None
 
 
-def _extract_ltp(data, instrument_key):
-    """
-    Upstox LTP response keys can vary.
-    This safely searches inside data["data"] for last_price / ltp.
-    """
+def clean_symbol(symbol):
+    symbol = str(symbol).upper().strip()
+    symbol = symbol.replace(".NS", "")
+    symbol = symbol.replace("NSE:", "")
+    symbol = symbol.strip()
+    return symbol
 
+
+def _extract_ltp(data, instrument_key):
     if not isinstance(data, dict):
         return None
 
@@ -35,6 +38,7 @@ def _extract_ltp(data, instrument_key):
 
     for key in possible_keys:
         item = payload.get(key)
+
         if isinstance(item, dict):
             return (
                 item.get("last_price")
@@ -42,7 +46,6 @@ def _extract_ltp(data, instrument_key):
                 or item.get("lastPrice")
             )
 
-    # fallback: check first object inside data
     for item in payload.values():
         if isinstance(item, dict):
             price = (
@@ -50,6 +53,7 @@ def _extract_ltp(data, instrument_key):
                 or item.get("ltp")
                 or item.get("lastPrice")
             )
+
             if price is not None:
                 return price
 
@@ -58,6 +62,7 @@ def _extract_ltp(data, instrument_key):
 
 def fetch_price_from_upstox(symbol):
     try:
+        symbol = clean_symbol(symbol)
         instrument_key = get_instrument_key(symbol)
 
         if not instrument_key:
@@ -106,6 +111,11 @@ def fetch_price_from_upstox(symbol):
 
 
 def get_live_price(symbol):
-    clean_symbol = str(symbol).replace(".NS", "").upper().strip()
-price = fetch_price_from_upstox(clean_symbol)
-    return safe_float(price)
+    try:
+        symbol = clean_symbol(symbol)
+        price = fetch_price_from_upstox(symbol)
+        return safe_float(price)
+
+    except Exception as e:
+        print(f"Live price error {symbol}: {e}")
+        return None
