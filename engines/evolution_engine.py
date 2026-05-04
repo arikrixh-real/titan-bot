@@ -1,326 +1,645 @@
-from datetime import datetime, timedelta
-from collections import Counter, defaultdict
+"""
+TITAN Evolution Engine
+======================
 
-from titan_brain.supabase_client import supabase
-from titan_brain.db import insert_learning, insert_strategy_weights
+Purpose:
+- Learns from completed trade outcomes.
+- Auto-improves scoring, ranking, and filtering weights.
+- Does NOT send Telegram alerts.
+- Does NOT change the 3 alerts/day cap.
+- Does NOT modify existing journal/outcome files.
+- Safe to run every 5 minutes after Outcome Tracker.
+
+Expected flow:
+Scan -> Journal -> Outcome -> Learning -> Evolution
+
+Main public functions:
+- run_evolution_engine()
+- get_evolution_state()
+- apply_evolution_score(symbol, base_score, setup_data)
+
+This file is defensive:
+It works even if some CSV columns are missing.
+It creates required folders/files automatically.
+"""
+
+from __future__ import annotations
+
+import csv
+import json
+import math
+import os
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 
-LOOKBACK_DAYS = 30
-MIN_CONFIDENCE_TRADES = 20
+# =========================
+# PATH CONFIG
+# =========================
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+DATA_DIR = PROJECT_ROOT / "data"
+MEMORY_DIR = DATA_DIR / "memory"
+REPORTS_DIR = PROJECT_ROOT / "reports"
+
+TRADE_JOURNAL_PATH = DATA_DIR / "trade_journal.csv"
+SCAN_JOURNAL_PATH = DATA_DIR / "scan_journal.csv"
+
+EVOLUTION_STATE_PATH = MEMORY_DIR / "evolution_state.json"
+EVOLUTION_REPORT_PATH = REPORTS_DIR / "evolution_report.txt"
+
+MIN_CLOSED_TRADES_TO_EVOLVE = 5
+
+MAX_WEIGHT = 1.35
+MIN_WEIGHT = 0.70
+
+DEFAULT_STATE: Dict[str, Any] = {
+    "version": "1.0",
+    "last_updated": None,
+    "total_closed_trades": 0,
+    "total_wins": 0,
+    "total_losses": 0,
+    "win_rate": 0.0,
+    "avg_rr": 0.0,
+    "avg_score_winners": 0.0,
+    "avg_score_losers": 0.0,
+    "score_boost": 1.0,
+    "filter_strictness": 1.0,
+    "ranking_confidence": 1.0,
+    "symbol_memory": {},
+    "side_memory": {
+        "LONG": {"trades": 0, "wins": 0, "losses": 0, "win_rate": 0.0, "weight": 1.0},
+        "SHORT": {"trades": 0, "wins": 0, "losses": 0, "win_rate": 0.0, "weight": 1.0},
+    },
+    "reason_memory": {},
+    "evolution_notes": [],
+}
 
 
-def fetch_table(table_name, limit=1000):
+# =========================
+# BASIC UTILS
+# =========================
+
+def _now_iso() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
-        result = (
-            supabase
-            .table(table_name)
-            .select("*")
-            .order("created_at", desc=True)
-            .limit(limit)
-            .execute()
-        )
-        return result.data or []
-    except Exception as e:
-        print(f"[EVOLUTION FETCH ERROR - {table_name}] {e}")
+        if value is None:
+            return default
+        text = str(value).strip()
+        if text == "":
+            return default
+        return float(text)
+    except Exception:
+        return default
+
+
+def _safe_upper(value: Any) -> str:
+    return str(value or "").strip().upper()
+
+
+def _clamp(value: float, low: float, high: float) -> float:
+    return max(low, min(high, value))
+
+
+def _ensure_dirs() -> None:
+    MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _load_json(path: Path, default: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        if not path.exists():
+            return json.loads(json.dumps(default))
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        merged = json.loads(json.dumps(default))
+        merged.update(data)
+        return merged
+    except Exception:
+        return json.loads(json.dumps(default))
+
+
+def _save_json(path: Path, data: Dict[str, Any]) -> None:
+    _ensure_dirs()
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def _read_csv_rows(path: Path) -> List[Dict[str, Any]]:
+    if not path.exists():
         return []
 
+    rows: List[Dict[str, Any]] = []
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                rows.append(dict(row))
+    except Exception:
+        return []
 
-def avg(values):
-    values = [v for v in values if v is not None]
-    if not values:
-        return 0
-    return sum(values) / len(values)
-
-
-def analyze_scan_symbols(scan_symbols):
-    if not scan_symbols:
-        return {}
-
-    top_symbols = sorted(
-        scan_symbols,
-        key=lambda x: x.get("final_score") or 0,
-        reverse=True
-    )[:10]
-
-    fail_reasons = Counter(
-        row.get("reason", "UNKNOWN")
-        for row in scan_symbols
-    )
-
-    passed = [s for s in scan_symbols if s.get("passed") is True]
-
-    return {
-        "top_symbols": [
-            {
-                "symbol": s.get("symbol"),
-                "final_score": s.get("final_score"),
-                "trend": s.get("trend")
-            }
-            for s in top_symbols
-        ],
-        "common_fail_reasons": dict(fail_reasons.most_common(10)),
-        "passed_count": len(passed),
-        "total_scanned": len(scan_symbols)
-    }
+    return rows
 
 
-def analyze_news(news_items):
-    if not news_items:
-        return {}
+# =========================
+# OUTCOME DETECTION
+# =========================
 
-    sentiment_counter = Counter(
-        n.get("sentiment", "NEUTRAL")
-        for n in news_items
-    )
+def _get_symbol(row: Dict[str, Any]) -> str:
+    for key in ["symbol", "stock", "ticker", "Stock", "SYMBOL"]:
+        if row.get(key):
+            return str(row.get(key)).strip().upper()
+    return "UNKNOWN"
 
-    impact_counter = Counter(
-        n.get("impact_type", "UNKNOWN")
-        for n in news_items
-    )
 
-    important_news = [
-        n for n in news_items
-        if (n.get("importance") or 0) >= 70
+def _get_side(row: Dict[str, Any]) -> str:
+    for key in ["side", "direction", "trade_side", "Side", "SIDE"]:
+        val = _safe_upper(row.get(key))
+        if val in {"LONG", "BUY"}:
+            return "LONG"
+        if val in {"SHORT", "SELL"}:
+            return "SHORT"
+    return "LONG"
+
+
+def _get_score(row: Dict[str, Any]) -> float:
+    for key in ["score", "final_score", "signal_score", "setup_score", "Score", "SCORE"]:
+        if key in row:
+            return _safe_float(row.get(key), 0.0)
+    return 0.0
+
+
+def _get_rr(row: Dict[str, Any]) -> float:
+    for key in ["rr", "risk_reward", "risk_reward_ratio", "RR", "RiskReward"]:
+        if key in row:
+            return _safe_float(row.get(key), 0.0)
+    return 0.0
+
+
+def _get_reason(row: Dict[str, Any]) -> str:
+    for key in ["reason", "setup_reason", "Reason", "REASON"]:
+        if row.get(key):
+            return str(row.get(key)).strip()
+    return ""
+
+
+def _get_outcome(row: Dict[str, Any]) -> Optional[str]:
+    """
+    Returns:
+    - WIN
+    - LOSS
+    - None for open/pending/unknown trades
+    """
+
+    possible_keys = [
+        "outcome",
+        "result",
+        "status",
+        "trade_result",
+        "Outcome",
+        "Result",
+        "STATUS",
     ]
 
-    return {
-        "sentiment_distribution": dict(sentiment_counter),
-        "impact_distribution": dict(impact_counter),
-        "high_importance_count": len(important_news),
-        "top_important_news": [
-            {
-                "symbol": n.get("symbol"),
-                "headline": n.get("headline"),
-                "sentiment": n.get("sentiment"),
-                "importance": n.get("importance")
-            }
-            for n in important_news[:10]
-        ]
+    raw = ""
+    for key in possible_keys:
+        if row.get(key):
+            raw = _safe_upper(row.get(key))
+            break
+
+    if raw in {"WIN", "WON", "TP", "TARGET", "TARGET_HIT", "T1", "T2", "PROFIT", "SUCCESS"}:
+        return "WIN"
+
+    if raw in {"LOSS", "LOST", "SL", "STOPLOSS", "STOP_LOSS", "SL_HIT", "FAILED"}:
+        return "LOSS"
+
+    return None
+
+
+def _closed_trades_from_journal() -> List[Dict[str, Any]]:
+    """
+    Reads trade_journal first.
+    If no closed trades found there, tries scan_journal as fallback.
+    """
+
+    rows = _read_csv_rows(TRADE_JOURNAL_PATH)
+    closed = [r for r in rows if _get_outcome(r) in {"WIN", "LOSS"}]
+
+    if closed:
+        return closed
+
+    fallback_rows = _read_csv_rows(SCAN_JOURNAL_PATH)
+    return [r for r in fallback_rows if _get_outcome(r) in {"WIN", "LOSS"}]
+
+
+# =========================
+# LEARNING CALCULATIONS
+# =========================
+
+def _calc_weight(win_rate: float, trades: int) -> float:
+    """
+    Conservative auto-weighting.
+
+    Small sample = smaller adjustment.
+    Bigger sample = stronger adjustment.
+    """
+
+    if trades <= 0:
+        return 1.0
+
+    confidence = min(1.0, trades / 30.0)
+    edge = win_rate - 0.50
+    raw_weight = 1.0 + (edge * 0.70 * confidence)
+    return round(_clamp(raw_weight, MIN_WEIGHT, MAX_WEIGHT), 4)
+
+
+def _extract_reason_tags(reason: str) -> List[str]:
+    """
+    Converts reason text into stable learning tags.
+    This avoids overfitting to the full sentence.
+    """
+
+    reason_l = reason.lower()
+    tags = []
+
+    keywords = {
+        "breakout": ["breakout", "resistance break", "range break"],
+        "volume": ["volume", "vol spike", "volume spike"],
+        "momentum": ["momentum", "rsi", "strength"],
+        "trend": ["trend", "ema", "moving average"],
+        "relative_strength": ["relative strength", "rs", "stronger than market"],
+        "trap_avoidance": ["trap", "fakeout", "fake breakout"],
+        "compression": ["compression", "squeeze", "tight range"],
+        "news": ["news", "event", "result", "earnings", "announcement"],
+        "market_regime": ["market regime", "nifty", "index", "market filter"],
     }
 
+    for tag, words in keywords.items():
+        if any(w in reason_l for w in words):
+            tags.append(tag)
 
-def analyze_market_conditions(market_rows):
-    if not market_rows:
-        return {}
-
-    direction_counter = Counter(
-        m.get("direction", "UNKNOWN")
-        for m in market_rows
-    )
-
-    regime_counter = Counter(
-        m.get("regime", "UNKNOWN")
-        for m in market_rows
-    )
-
-    volatility_counter = Counter(
-        m.get("volatility", "UNKNOWN")
-        for m in market_rows
-    )
-
-    return {
-        "direction_distribution": dict(direction_counter),
-        "regime_distribution": dict(regime_counter),
-        "volatility_distribution": dict(volatility_counter)
-    }
+    return tags or ["general"]
 
 
-def analyze_trade_results(trades, results):
-    if not trades or not results:
-        return {
-            "message": "Not enough trade data yet"
-        }
+def _build_memory_bucket() -> Dict[str, Any]:
+    return {"trades": 0, "wins": 0, "losses": 0, "win_rate": 0.0, "weight": 1.0}
 
-    trade_map = {t.get("trade_id"): t for t in trades}
-    merged = []
 
-    for r in results:
-        trade = trade_map.get(r.get("trade_id"))
-        if trade:
-            merged.append({
-                "trade": trade,
-                "result": r
-            })
+def _update_bucket(bucket: Dict[str, Any], outcome: str) -> Dict[str, Any]:
+    bucket["trades"] = int(bucket.get("trades", 0)) + 1
 
-    if not merged:
-        return {
-            "message": "No matched trade/result pairs"
-        }
+    if outcome == "WIN":
+        bucket["wins"] = int(bucket.get("wins", 0)) + 1
+    elif outcome == "LOSS":
+        bucket["losses"] = int(bucket.get("losses", 0)) + 1
 
-    wins = [m for m in merged if m["result"].get("result") == "WIN"]
-    losses = [m for m in merged if m["result"].get("result") == "LOSS"]
+    trades = max(1, int(bucket.get("trades", 0)))
+    wins = int(bucket.get("wins", 0))
 
-    total = len(merged)
-    win_rate = (len(wins) / total) * 100 if total else 0
+    bucket["win_rate"] = round(wins / trades, 4)
+    bucket["weight"] = _calc_weight(bucket["win_rate"], trades)
 
-    score_keys = [
-        "volume_score",
-        "strength_score",
-        "compression_score",
-        "final_score"
-    ]
+    return bucket
 
-    score_learning = {}
 
-    for key in score_keys:
-        win_vals = [
-            m["trade"].get("scores", {}).get(key)
-            for m in wins
-            if m["trade"].get("scores", {}).get(key) is not None
+def _calculate_global_controls(
+    win_rate: float,
+    avg_score_winners: float,
+    avg_score_losers: float,
+    total_closed: int,
+) -> Tuple[float, float, float, List[str]]:
+    """
+    Produces global evolution controls.
+
+    score_boost:
+    - Slightly boosts or reduces final score.
+
+    filter_strictness:
+    - Above 1.0 = stricter.
+    - Below 1.0 = looser.
+
+    ranking_confidence:
+    - Used to sort stronger setups above weaker setups.
+    """
+
+    notes: List[str] = []
+
+    if total_closed < MIN_CLOSED_TRADES_TO_EVOLVE:
+        return 1.0, 1.0, 1.0, [
+            f"Waiting for more closed trades. Need at least {MIN_CLOSED_TRADES_TO_EVOLVE}, found {total_closed}."
         ]
 
-        loss_vals = [
-            m["trade"].get("scores", {}).get(key)
-            for m in losses
-            if m["trade"].get("scores", {}).get(key) is not None
-        ]
+    if win_rate >= 0.60:
+        score_boost = 1.05
+        filter_strictness = 0.98
+        ranking_confidence = 1.08
+        notes.append("Win rate is strong. Slight boost applied to ranking confidence.")
+    elif win_rate >= 0.50:
+        score_boost = 1.02
+        filter_strictness = 1.00
+        ranking_confidence = 1.03
+        notes.append("Win rate is stable. Mild score boost applied.")
+    elif win_rate >= 0.40:
+        score_boost = 0.98
+        filter_strictness = 1.05
+        ranking_confidence = 1.00
+        notes.append("Win rate is weak. Filters made slightly stricter.")
+    else:
+        score_boost = 0.95
+        filter_strictness = 1.10
+        ranking_confidence = 0.97
+        notes.append("Win rate is poor. Strict filtering mode enabled.")
 
-        score_learning[key] = {
-            "win_avg": round(avg(win_vals), 2),
-            "loss_avg": round(avg(loss_vals), 2),
-            "edge": round(avg(win_vals) - avg(loss_vals), 2)
-        }
+    if avg_score_losers > avg_score_winners and avg_score_losers > 0:
+        filter_strictness += 0.05
+        score_boost -= 0.02
+        notes.append("Losing trades had higher/equal scores than winners. Score model made stricter.")
 
-    return {
-        "total_closed_trades": total,
-        "wins": len(wins),
-        "losses": len(losses),
-        "win_rate": round(win_rate, 2),
-        "score_learning": score_learning
+    return (
+        round(_clamp(score_boost, 0.85, 1.15), 4),
+        round(_clamp(filter_strictness, 0.90, 1.20), 4),
+        round(_clamp(ranking_confidence, 0.90, 1.20), 4),
+        notes,
+    )
+
+
+# =========================
+# PUBLIC ENGINE
+# =========================
+
+def run_evolution_engine() -> Dict[str, Any]:
+    """
+    Run this every 5 minutes after Outcome Tracker.
+
+    It reads completed outcomes and updates:
+    - evolution_state.json
+    - evolution_report.txt
+    """
+
+    _ensure_dirs()
+
+    closed_trades = _closed_trades_from_journal()
+
+    state = json.loads(json.dumps(DEFAULT_STATE))
+    old_state = _load_json(EVOLUTION_STATE_PATH, DEFAULT_STATE)
+
+    total_closed = len(closed_trades)
+    wins = 0
+    losses = 0
+    rr_values: List[float] = []
+
+    winner_scores: List[float] = []
+    loser_scores: List[float] = []
+
+    symbol_memory: Dict[str, Any] = {}
+    side_memory: Dict[str, Any] = {
+        "LONG": _build_memory_bucket(),
+        "SHORT": _build_memory_bucket(),
     }
+    reason_memory: Dict[str, Any] = {}
+
+    for row in closed_trades:
+        outcome = _get_outcome(row)
+        if outcome not in {"WIN", "LOSS"}:
+            continue
+
+        symbol = _get_symbol(row)
+        side = _get_side(row)
+        score = _get_score(row)
+        rr = _get_rr(row)
+        reason = _get_reason(row)
+
+        if outcome == "WIN":
+            wins += 1
+            winner_scores.append(score)
+        else:
+            losses += 1
+            loser_scores.append(score)
+
+        if rr > 0:
+            rr_values.append(rr)
+
+        if symbol not in symbol_memory:
+            symbol_memory[symbol] = _build_memory_bucket()
+        symbol_memory[symbol] = _update_bucket(symbol_memory[symbol], outcome)
+
+        if side not in side_memory:
+            side_memory[side] = _build_memory_bucket()
+        side_memory[side] = _update_bucket(side_memory[side], outcome)
+
+        for tag in _extract_reason_tags(reason):
+            if tag not in reason_memory:
+                reason_memory[tag] = _build_memory_bucket()
+            reason_memory[tag] = _update_bucket(reason_memory[tag], outcome)
+
+    win_rate = round(wins / total_closed, 4) if total_closed else 0.0
+    avg_rr = round(sum(rr_values) / len(rr_values), 4) if rr_values else 0.0
+    avg_score_winners = round(sum(winner_scores) / len(winner_scores), 4) if winner_scores else 0.0
+    avg_score_losers = round(sum(loser_scores) / len(loser_scores), 4) if loser_scores else 0.0
+
+    score_boost, filter_strictness, ranking_confidence, notes = _calculate_global_controls(
+        win_rate=win_rate,
+        avg_score_winners=avg_score_winners,
+        avg_score_losers=avg_score_losers,
+        total_closed=total_closed,
+    )
+
+    state.update(
+        {
+            "version": DEFAULT_STATE["version"],
+            "last_updated": _now_iso(),
+            "total_closed_trades": total_closed,
+            "total_wins": wins,
+            "total_losses": losses,
+            "win_rate": win_rate,
+            "avg_rr": avg_rr,
+            "avg_score_winners": avg_score_winners,
+            "avg_score_losers": avg_score_losers,
+            "score_boost": score_boost,
+            "filter_strictness": filter_strictness,
+            "ranking_confidence": ranking_confidence,
+            "symbol_memory": symbol_memory,
+            "side_memory": side_memory,
+            "reason_memory": reason_memory,
+            "evolution_notes": notes,
+        }
+    )
+
+    _save_json(EVOLUTION_STATE_PATH, state)
+    _write_evolution_report(state, old_state)
+
+    return state
 
 
-def create_evolution_insight(scan_analysis, news_analysis, market_analysis, trade_analysis):
-    insights = []
+def get_evolution_state() -> Dict[str, Any]:
+    """
+    Safe reader for dashboard/setup engine.
+    """
 
-    if scan_analysis:
-        fail_reasons = scan_analysis.get("common_fail_reasons", {})
-        if fail_reasons:
-            top_fail = max(fail_reasons, key=fail_reasons.get)
-            insights.append(f"Most common rejection reason is {top_fail}.")
+    _ensure_dirs()
+    return _load_json(EVOLUTION_STATE_PATH, DEFAULT_STATE)
 
-        passed_count = scan_analysis.get("passed_count", 0)
-        total_scanned = scan_analysis.get("total_scanned", 0)
 
-        if total_scanned:
-            pass_rate = (passed_count / total_scanned) * 100
-            insights.append(f"Current scan pass rate is {round(pass_rate, 2)}%.")
+def apply_evolution_score(
+    symbol: str,
+    base_score: float,
+    setup_data: Optional[Dict[str, Any]] = None,
+) -> float:
+    """
+    Use this later inside setup ranking.
 
-    if news_analysis:
-        sentiment = news_analysis.get("sentiment_distribution", {})
-        if sentiment:
-            dominant_sentiment = max(sentiment, key=sentiment.get)
-            insights.append(f"Dominant news sentiment is {dominant_sentiment}.")
+    It adjusts score using:
+    - global score boost
+    - symbol performance memory
+    - side performance memory
+    - reason tag performance memory
 
-    if market_analysis:
-        direction = market_analysis.get("direction_distribution", {})
-        if direction:
-            dominant_direction = max(direction, key=direction.get)
-            insights.append(f"Dominant market direction memory is {dominant_direction}.")
+    This function is safe:
+    If evolution memory is missing, it returns base_score.
+    """
 
-    if trade_analysis and "win_rate" in trade_analysis:
-        insights.append(
-            f"Closed trade win rate is {trade_analysis.get('win_rate')}%."
+    setup_data = setup_data or {}
+    state = get_evolution_state()
+
+    score = _safe_float(base_score, 0.0)
+    symbol_key = str(symbol or "UNKNOWN").upper()
+    side = _get_side(setup_data)
+    reason = _get_reason(setup_data)
+
+    score *= _safe_float(state.get("score_boost"), 1.0)
+
+    symbol_bucket = state.get("symbol_memory", {}).get(symbol_key)
+    if symbol_bucket:
+        score *= _safe_float(symbol_bucket.get("weight"), 1.0)
+
+    side_bucket = state.get("side_memory", {}).get(side)
+    if side_bucket:
+        score *= _safe_float(side_bucket.get("weight"), 1.0)
+
+    reason_tags = _extract_reason_tags(reason)
+    reason_weights = []
+    for tag in reason_tags:
+        bucket = state.get("reason_memory", {}).get(tag)
+        if bucket:
+            reason_weights.append(_safe_float(bucket.get("weight"), 1.0))
+
+    if reason_weights:
+        score *= sum(reason_weights) / len(reason_weights)
+
+    score *= _safe_float(state.get("ranking_confidence"), 1.0)
+
+    return round(_clamp(score, 0.0, 100.0), 2)
+
+
+def get_evolution_filter_threshold(base_threshold: float = 70.0) -> float:
+    """
+    Use this later for adaptive filtering.
+
+    Higher filter_strictness means threshold goes up.
+    Example:
+    base 70 and strictness 1.10 = threshold 77.
+    """
+
+    state = get_evolution_state()
+    strictness = _safe_float(state.get("filter_strictness"), 1.0)
+    return round(_clamp(base_threshold * strictness, 50.0, 95.0), 2)
+
+
+# =========================
+# REPORT
+# =========================
+
+def _top_items(memory: Dict[str, Any], limit: int = 10) -> List[Tuple[str, Dict[str, Any]]]:
+    items = list(memory.items())
+    items.sort(
+        key=lambda x: (
+            int(x[1].get("trades", 0)),
+            float(x[1].get("win_rate", 0.0)),
+            float(x[1].get("weight", 1.0)),
+        ),
+        reverse=True,
+    )
+    return items[:limit]
+
+
+def _write_evolution_report(state: Dict[str, Any], old_state: Dict[str, Any]) -> None:
+    _ensure_dirs()
+
+    lines: List[str] = []
+    lines.append("TITAN EVOLUTION REPORT")
+    lines.append("=" * 60)
+    lines.append(f"Updated: {state.get('last_updated')}")
+    lines.append("")
+    lines.append("GLOBAL PERFORMANCE")
+    lines.append("-" * 60)
+    lines.append(f"Closed trades      : {state.get('total_closed_trades')}")
+    lines.append(f"Wins               : {state.get('total_wins')}")
+    lines.append(f"Losses             : {state.get('total_losses')}")
+    lines.append(f"Win rate           : {round(float(state.get('win_rate', 0)) * 100, 2)}%")
+    lines.append(f"Average RR         : {state.get('avg_rr')}")
+    lines.append(f"Avg score winners  : {state.get('avg_score_winners')}")
+    lines.append(f"Avg score losers   : {state.get('avg_score_losers')}")
+    lines.append("")
+    lines.append("EVOLUTION CONTROLS")
+    lines.append("-" * 60)
+    lines.append(f"Score boost        : {state.get('score_boost')}  | old: {old_state.get('score_boost')}")
+    lines.append(f"Filter strictness  : {state.get('filter_strictness')}  | old: {old_state.get('filter_strictness')}")
+    lines.append(f"Ranking confidence : {state.get('ranking_confidence')}  | old: {old_state.get('ranking_confidence')}")
+    lines.append("")
+    lines.append("NOTES")
+    lines.append("-" * 60)
+
+    for note in state.get("evolution_notes", []):
+        lines.append(f"- {note}")
+
+    lines.append("")
+    lines.append("TOP SYMBOL MEMORY")
+    lines.append("-" * 60)
+    for symbol, bucket in _top_items(state.get("symbol_memory", {}), 10):
+        lines.append(
+            f"{symbol}: trades={bucket.get('trades')}, wins={bucket.get('wins')}, "
+            f"losses={bucket.get('losses')}, win_rate={round(float(bucket.get('win_rate', 0)) * 100, 2)}%, "
+            f"weight={bucket.get('weight')}"
         )
 
-    if not insights:
-        insights.append("TITAN is still collecting data. No strong evolution insight yet.")
+    lines.append("")
+    lines.append("SIDE MEMORY")
+    lines.append("-" * 60)
+    for side, bucket in state.get("side_memory", {}).items():
+        lines.append(
+            f"{side}: trades={bucket.get('trades')}, wins={bucket.get('wins')}, "
+            f"losses={bucket.get('losses')}, win_rate={round(float(bucket.get('win_rate', 0)) * 100, 2)}%, "
+            f"weight={bucket.get('weight')}"
+        )
 
-    return insights
+    lines.append("")
+    lines.append("REASON / SETUP TAG MEMORY")
+    lines.append("-" * 60)
+    for tag, bucket in _top_items(state.get("reason_memory", {}), 20):
+        lines.append(
+            f"{tag}: trades={bucket.get('trades')}, wins={bucket.get('wins')}, "
+            f"losses={bucket.get('losses')}, win_rate={round(float(bucket.get('win_rate', 0)) * 100, 2)}%, "
+            f"weight={bucket.get('weight')}"
+        )
 
-
-def generate_strategy_weights_from_trade_analysis(trade_analysis):
-    if not trade_analysis or "score_learning" not in trade_analysis:
-        return None
-
-    total_trades = trade_analysis.get("total_closed_trades", 0)
-
-    if total_trades < 2:
-        return None
-
-    score_learning = trade_analysis["score_learning"]
-
-    def safe_weight(edge):
-        base = 1.0 + (edge / 10)
-
-        if base < 0.5:
-            return 0.5
-
-        if base > 2.0:
-            return 2.0
-
-        return round(base, 2)
-
-    return {
-        "version": f"evo_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-        "volume_weight": safe_weight(score_learning.get("volume_score", {}).get("edge", 0)),
-        "strength_weight": safe_weight(score_learning.get("strength_score", {}).get("edge", 0)),
-        "compression_weight": safe_weight(score_learning.get("compression_score", {}).get("edge", 0)),
-        "structure_weight": 1.0,
-        "momentum_weight": 1.0,
-        "relative_strength_weight": 1.0,
-        "market_regime_weight": 1.0,
-        "notes": "Auto-generated by TITAN Evolution Engine",
-        "active": True
-    }
+    EVOLUTION_REPORT_PATH.write_text("\n".join(lines), encoding="utf-8")
 
 
-def run_evolution_engine():
-    print("🧬 TITAN Evolution Engine Started")
+# =========================
+# CLI TEST
+# =========================
 
-    scan_symbols = fetch_table("scan_symbols", limit=1000)
-    news_items = fetch_table("news_memory", limit=500)
-    market_rows = fetch_table("market_conditions", limit=300)
-    trades = fetch_table("trades", limit=500)
-    results = fetch_table("trade_results", limit=500)
-
-    scan_analysis = analyze_scan_symbols(scan_symbols)
-    news_analysis = analyze_news(news_items)
-    market_analysis = analyze_market_conditions(market_rows)
-    trade_analysis = analyze_trade_results(trades, results)
-
-    insights = create_evolution_insight(
-        scan_analysis=scan_analysis,
-        news_analysis=news_analysis,
-        market_analysis=market_analysis,
-        trade_analysis=trade_analysis
-    )
-
-    evidence = {
-        "scan_analysis": scan_analysis,
-        "news_analysis": news_analysis,
-        "market_analysis": market_analysis,
-        "trade_analysis": trade_analysis,
-        "insights": insights
-    }
-
-    confidence = 0.2
-
-    if trade_analysis and trade_analysis.get("total_closed_trades"):
-        confidence = min(trade_analysis.get("total_closed_trades") / MIN_CONFIDENCE_TRADES, 1)
-
-    insert_learning({
-        "learning_type": "EVOLUTION_ANALYSIS",
-        "symbol": "ALL",
-        "insight": " | ".join(insights),
-        "confidence": confidence,
-        "evidence": evidence,
-        "action_taken": "Stored evolution insight and optional strategy weights",
-        "active": True
-    })
-
-    weights = generate_strategy_weights_from_trade_analysis(trade_analysis)
-
-    if weights:
-        insert_strategy_weights(weights)
-        print("✅ Evolution weights stored.")
-    else:
-        print("ℹ️ Not enough closed trade data for evolution weights yet.")
-
-    print("✅ TITAN evolution analysis completed.")
-
-    return {
-        "insights": insights,
-        "weights": weights,
-        "confidence": confidence
-    }
+if __name__ == "__main__":
+    result = run_evolution_engine()
+    print("✅ TITAN Evolution Engine completed")
+    print(f"Closed trades: {result.get('total_closed_trades')}")
+    print(f"Win rate: {round(float(result.get('win_rate', 0)) * 100, 2)}%")
+    print(f"Score boost: {result.get('score_boost')}")
+    print(f"Filter strictness: {result.get('filter_strictness')}")
+    print(f"Ranking confidence: {result.get('ranking_confidence')}")
+    print(f"Report: {EVOLUTION_REPORT_PATH}")
