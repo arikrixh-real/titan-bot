@@ -1,14 +1,18 @@
 import pandas as pd
 
 
-def relative_strength_ok(stock_df, side="LONG"):
+def relative_strength_ok(stock_df, side=None):
+    """
+    Adaptive relative strength check.
+    If side is not provided, accepts either relative strength or relative weakness.
+    """
+
     try:
         market_df = pd.read_csv("data/cache/NIFTYBEES.csv")
 
         for df in [stock_df, market_df]:
-            for col in ["Close"]:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors="coerce")
+            if "Close" in df.columns:
+                df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
 
         stock_df = stock_df.dropna(subset=["Close"])
         market_df = market_df.dropna(subset=["Close"])
@@ -24,13 +28,16 @@ def relative_strength_ok(stock_df, side="LONG"):
 
         relative_score = stock_change - market_change
 
+        long_ok = relative_score > -0.25
+        short_ok = relative_score < 0.25
+
         if side == "LONG":
-            return relative_score > 0.5
+            return long_ok
 
         if side == "SHORT":
-            return relative_score < -0.5
+            return short_ok
 
-        return False
+        return long_ok or short_ok
 
     except Exception:
         return False
