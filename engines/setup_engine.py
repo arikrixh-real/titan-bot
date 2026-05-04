@@ -35,6 +35,25 @@ from titan_brain.db import (
 )
 
 
+# =========================================================
+# TITAN SETUP ENGINE - STABLE CONFLUENCE VERSION
+# =========================================================
+# Permanent logic:
+# 1. Live price required, with fallback to latest cached close.
+# 2. Trend decides LONG/SHORT.
+# 3. Engines are not treated as all-or-nothing gates.
+# 4. A setup passes only when:
+#    - Entry is ready
+#    - Quality filter passes
+#    - At least 3 confirmations are true
+#    - Trade levels exist
+#    - RR >= 1.5
+# =========================================================
+
+MIN_CONFIRMATIONS = 3
+MIN_RR = 1.5
+
+
 def save_scan_health_log(
     stocks_checked,
     trend_passed,
@@ -66,13 +85,28 @@ def save_scan_health_log(
             "alerts_sent": alerts_sent,
             "market_status": str(market_status),
             "status": "COMPLETED",
-            "note": "Scan health log saved successfully"
+            "note": "Stable confluence scan health saved"
         }).execute()
 
         print("✅ Scan health saved")
 
     except Exception as e:
         print(f"❌ Scan health save failed: {e}")
+
+
+def side_for_engines(side):
+    if side == "LONG":
+        return "LONG"
+    if side == "SHORT":
+        return "SHORT"
+    return None
+
+
+def safe_latest_close(data):
+    try:
+        return round(float(data["Close"].iloc[-1]), 2)
+    except Exception:
+        return None
 
 
 def scan_for_setups():
@@ -94,22 +128,27 @@ def scan_for_setups():
     alerts_sent = 0
 
     # =========================
-    # DEBUG FAILURE COUNTERS
+    # FAILURE BREAKDOWN
     # =========================
-    no_live_price_count = 0
-    no_valid_trend_count = 0
-    structure_fail_count = 0
-    momentum_fail_count = 0
-    fake_breakout_count = 0
-    relative_weak_count = 0
-    not_ready_count = 0
-    quality_fail_count = 0
-    levels_fail_count = 0
-    rr_fail_count = 0
+    no_live_price = 0
+    no_valid_trend = 0
+    structure_fail = 0
+    momentum_fail = 0
+    fake_breakout_fail = 0
+    relative_weak = 0
+    not_ready = 0
+    quality_fail = 0
+    confluence_fail = 0
+    levels_fail = 0
+    rr_fail = 0
 
     market_status = market_regime_status()
     symbols = load_cached_stock_data()
     total_symbols = len(symbols)
+
+    print("========== SETUP ENGINE ACTIVE ==========")
+    print(f"Market Status: {market_status}")
+    print(f"Symbols received from loader: {total_symbols}")
 
     scan_record = {
         "total_symbols": total_symbols,
@@ -120,10 +159,6 @@ def scan_for_setups():
 
     scan_id = insert_scan(scan_record)
 
-    print("🧪 SETUP ENGINE DEBUG ACTIVE")
-    print(f"Market Status: {market_status}")
-    print(f"Symbols received from loader: {total_symbols}")
-
     for symbol, data in symbols.items():
         try:
             scanned_symbols.append(symbol)
@@ -131,24 +166,13 @@ def scan_for_setups():
             stocks_checked += 1
 
             live_price = get_live_price(symbol)
-            price_source = "UPSTOX_LIVE"
+            live_source = "UPSTOX"
 
             if live_price is None:
-                try:
-                    live_price = round(float(data["Close"].iloc[-1]), 2)
-                    price_source = "CSV_FALLBACK"
-                    print(
-                        f"SCAN DEBUG → {symbol} | "
-                        f"live_price=None | fallback_price={live_price} | SOURCE=CSV_FALLBACK"
-                    )
-                except Exception:
-                    no_live_price_count += 1
-
-                    print(
-                        f"SCAN DEBUG → {symbol} | "
-                        f"live_price=None | fallback_failed=True | BLOCKED=NO_LIVE_PRICE"
-                    )
-
+                fallback_price = safe_latest_close(data)
+                if fallback_price is None:
+                    no_live_price += 1
+                    print(f"SCAN DEBUG → {symbol} | BLOCKED=NO_PRICE")
                     insert_scan_symbol(scan_id, {
                         "symbol": symbol,
                         "price": 0,
@@ -158,22 +182,20 @@ def scan_for_setups():
                         "compression_score": 0,
                         "final_score": 0,
                         "passed": False,
-                        "reason": "NO_LIVE_PRICE"
+                        "reason": "NO_PRICE"
                     })
                     continue
 
+                live_price = fallback_price
+                live_source = "CACHE_CLOSE"
+
             trend = trend_direction(data)
             side = trade_side_from_trend(trend)
+            engine_side = side_for_engines(side)
 
             if side is None:
-                no_valid_trend_count += 1
-
-                print(
-                    f"SCAN DEBUG → {symbol} | "
-                    f"price={live_price} | source={price_source} | trend={trend} | side=None | "
-                    f"BLOCKED=NO_VALID_TREND"
-                )
-
+                no_valid_trend += 1
+                print(f"SCAN DEBUG → {symbol} | price={live_price} | source={live_source} | BLOCKED=NO_VALID_TREND | trend={trend}")
                 insert_scan_symbol(scan_id, {
                     "symbol": symbol,
                     "price": live_price,
@@ -199,84 +221,85 @@ def scan_for_setups():
                 comp_score
             )
 
-            passed = False
-            fail_reason = "UNKNOWN"
-
-            structure_result = structure_ok(data)
-            momentum_result = strong_momentum(data)
+            structure_result = structure_ok(data, side=engine_side)
+            momentum_result = strong_momentum(data, side=engine_side)
             fake_breakout_ok = avoid_fake_breakout(data)
-            relative_strength_result = relative_strength_ok(symbol)
-            breakout_result = breakout_ready(data)
-
-            if structure_result:
-                structure_passed += 1
-
-            if momentum_result:
-                momentum_passed += 1
-
-            if breakout_result:
-                entry_passed += 1
-
-            print(
-                f"ENTRY DEBUG → {symbol} | "
-                f"price={live_price} | source={price_source} | trend={trend} | side={side} | "
-                f"volume={volume_score} | strength={strength_score} | "
-                f"compression={comp_score} | final_score={final_score} | "
-                f"structure={structure_result} | momentum={momentum_result} | "
-                f"fake_breakout_ok={fake_breakout_ok} | "
-                f"relative_strength={relative_strength_result} | "
-                f"entry={breakout_result}"
-            )
-
-            if not structure_result:
-                fail_reason = "STRUCTURE_FAIL"
-                structure_fail_count += 1
-
-            elif not momentum_result:
-                fail_reason = "MOMENTUM_FAIL"
-                momentum_fail_count += 1
-
-            elif not fake_breakout_ok:
-                fail_reason = "FAKE_BREAKOUT"
-                fake_breakout_count += 1
-
-            elif not relative_strength_result:
-                fail_reason = "RELATIVE_WEAK"
-                relative_weak_count += 1
-
-            elif not breakout_result:
-                fail_reason = "NOT_READY"
-                not_ready_count += 1
-
-            elif not passes_quality_filters(
+            relative_strength_result = relative_strength_ok(data, side=engine_side)
+            entry_result = breakout_ready(data)
+            quality_result = passes_quality_filters(
                 final_score=final_score,
                 volume_score=volume_score,
                 strength_score=strength_score,
                 compression_score=comp_score
-            ):
-                fail_reason = "QUALITY_FAIL"
-                quality_fail_count += 1
+            )
 
+            if structure_result:
+                structure_passed += 1
+            if momentum_result:
+                momentum_passed += 1
+            if entry_result:
+                entry_passed += 1
+
+            confirmations = [
+                structure_result,
+                momentum_result,
+                fake_breakout_ok,
+                relative_strength_result,
+                entry_result,
+            ]
+            confirmation_count = sum(1 for item in confirmations if item)
+
+            print(
+                f"ENTRY DEBUG → {symbol} | price={live_price} | source={live_source} | "
+                f"trend={trend} | side={side} | volume={volume_score} | strength={strength_score} | "
+                f"compression={comp_score} | final_score={final_score} | "
+                f"structure={structure_result} | momentum={momentum_result} | "
+                f"fake_breakout_ok={fake_breakout_ok} | relative_strength={relative_strength_result} | "
+                f"entry={entry_result} | quality={quality_result} | confirmations={confirmation_count}"
+            )
+
+            fail_reason = "UNKNOWN"
+            passed = False
+
+            # Primary failure reason for clean breakdown.
+            if not structure_result:
+                structure_fail += 1
+                fail_reason = "STRUCTURE_FAIL"
+            elif not momentum_result:
+                momentum_fail += 1
+                fail_reason = "MOMENTUM_FAIL"
+            elif not fake_breakout_ok:
+                fake_breakout_fail += 1
+                fail_reason = "FAKE_BREAKOUT"
+            elif not relative_strength_result:
+                relative_weak += 1
+                fail_reason = "RELATIVE_WEAK"
+            elif not entry_result:
+                not_ready += 1
+                fail_reason = "NOT_READY"
+            elif not quality_result:
+                quality_fail += 1
+                fail_reason = "QUALITY_FAIL"
+            elif confirmation_count < MIN_CONFIRMATIONS:
+                confluence_fail += 1
+                fail_reason = "CONFLUENCE_FAIL"
             else:
                 passed = True
-                fail_reason = "PASSED"
-                final_passed += 1
-
-            print(f"FILTER RESULT → {symbol} | {fail_reason}")
-
-            insert_scan_symbol(scan_id, {
-                "symbol": symbol,
-                "price": live_price,
-                "trend": trend,
-                "volume_score": volume_score,
-                "strength_score": strength_score,
-                "compression_score": comp_score,
-                "final_score": final_score,
-                "passed": passed,
-                "reason": fail_reason
-            })
+                fail_reason = "CANDIDATE_PASSED"
 
             if not passed:
+                print(f"FILTER RESULT → {symbol} | {fail_reason}")
+                insert_scan_symbol(scan_id, {
+                    "symbol": symbol,
+                    "price": live_price,
+                    "trend": trend,
+                    "volume_score": volume_score,
+                    "strength_score": strength_score,
+                    "compression_score": comp_score,
+                    "final_score": final_score,
+                    "passed": False,
+                    "reason": fail_reason
+                })
                 continue
 
             levels = calculate_trade_levels(
@@ -287,8 +310,19 @@ def scan_for_setups():
             )
 
             if not levels:
-                levels_fail_count += 1
-                print(f"SETUP BLOCKED → {symbol} | LEVELS_FAIL")
+                levels_fail += 1
+                print(f"FILTER RESULT → {symbol} | LEVELS_FAIL")
+                insert_scan_symbol(scan_id, {
+                    "symbol": symbol,
+                    "price": live_price,
+                    "trend": trend,
+                    "volume_score": volume_score,
+                    "strength_score": strength_score,
+                    "compression_score": comp_score,
+                    "final_score": final_score,
+                    "passed": False,
+                    "reason": "LEVELS_FAIL"
+                })
                 continue
 
             entry = levels["entry"]
@@ -297,17 +331,24 @@ def scan_for_setups():
 
             rr = calculate_rr(entry, stop_loss, target, side)
 
-            if rr < 1.5:
-                rr_fail_count += 1
-                print(
-                    f"SETUP BLOCKED → {symbol} | RR_FAIL | "
-                    f"entry={entry} | sl={stop_loss} | target={target} | rr={rr}"
-                )
+            if rr < MIN_RR:
+                rr_fail += 1
+                print(f"FILTER RESULT → {symbol} | RR_FAIL | rr={rr}")
+                insert_scan_symbol(scan_id, {
+                    "symbol": symbol,
+                    "price": live_price,
+                    "trend": trend,
+                    "volume_score": volume_score,
+                    "strength_score": strength_score,
+                    "compression_score": comp_score,
+                    "final_score": final_score,
+                    "passed": False,
+                    "reason": "RR_FAIL"
+                })
                 continue
 
-            pos_data = position_sizing(entry, stop_loss)
-            position_size = pos_data.get("qty", 0)
-            risk_amount = pos_data.get("risk_amount", 0)
+            final_passed += 1
+            fail_reason = "PASSED"
 
             reason = build_reason(
                 symbol=symbol,
@@ -328,8 +369,8 @@ def scan_for_setups():
                 entry=entry,
                 stop_loss=stop_loss,
                 target=target,
-                position_size=position_size,
-                risk_amount=risk_amount,
+                position_size=position_sizing(entry, stop_loss).get("qty", 0),
+                risk_amount=position_sizing(entry, stop_loss).get("risk_amount", 0),
                 rr=rr,
                 scores={
                     "volume_score": volume_score,
@@ -341,10 +382,20 @@ def scan_for_setups():
                     "market_status": market_status,
                     "trend": trend
                 },
-                setup_context={},
+                setup_context={
+                    "structure_ok": structure_result,
+                    "momentum_ok": momentum_result,
+                    "breakout_ready": entry_result,
+                    "relative_strength_ok": relative_strength_result,
+                    "confirmation_count": confirmation_count
+                },
                 reason=reason,
                 trigger_status=trigger
             )
+
+            pos_data = position_sizing(entry, stop_loss)
+            position_size = pos_data.get("qty", 0)
+            risk_amount = pos_data.get("risk_amount", 0)
 
             insert_setup({
                 "trade_id": trade_id,
@@ -367,9 +418,11 @@ def scan_for_setups():
                     "trend": trend
                 },
                 "setup_context": {
-                    "structure_ok": True,
-                    "momentum_ok": True,
-                    "breakout_ready": True
+                    "structure_ok": structure_result,
+                    "momentum_ok": momentum_result,
+                    "breakout_ready": entry_result,
+                    "relative_strength_ok": relative_strength_result,
+                    "confirmation_count": confirmation_count
                 },
                 "reason": reason,
                 "trigger_status": trigger,
@@ -393,35 +446,50 @@ def scan_for_setups():
                     "final_score": final_score
                 },
                 "market_context": market_status,
-                "setup_context": {"trend": trend},
+                "setup_context": {"trend": trend, "confirmation_count": confirmation_count},
                 "reason": reason,
                 "trigger_status": trigger,
                 "status": "OPEN"
+            })
+
+            insert_scan_symbol(scan_id, {
+                "symbol": symbol,
+                "price": live_price,
+                "trend": trend,
+                "volume_score": volume_score,
+                "strength_score": strength_score,
+                "compression_score": comp_score,
+                "final_score": final_score,
+                "passed": True,
+                "reason": "PASSED"
             })
 
             setups.append(symbol)
             setup_symbols.append(symbol)
             scan_record["setup_count"] += 1
 
+            print(f"✅ VALID SETUP → {symbol} | side={side} | entry={entry} | sl={stop_loss} | target={target} | rr={rr}")
+
         except Exception as e:
             errors.append(f"{symbol}: {e}")
-            print(f"❌ SYMBOL ERROR → {symbol}: {e}")
+            print(f"❌ ERROR → {symbol}: {e}")
             continue
 
     print("========== SCAN FAILURE BREAKDOWN ==========")
     print(f"Stocks Checked: {stocks_checked}")
-    print(f"No Live Price: {no_live_price_count}")
-    print(f"No Valid Trend: {no_valid_trend_count}")
-    print(f"Structure Fail: {structure_fail_count}")
-    print(f"Momentum Fail: {momentum_fail_count}")
-    print(f"Fake Breakout: {fake_breakout_count}")
-    print(f"Relative Weak: {relative_weak_count}")
-    print(f"Not Ready: {not_ready_count}")
-    print(f"Quality Fail: {quality_fail_count}")
-    print(f"Levels Fail: {levels_fail_count}")
-    print(f"RR Fail: {rr_fail_count}")
+    print(f"No Live Price: {no_live_price}")
+    print(f"No Valid Trend: {no_valid_trend}")
+    print(f"Structure Fail: {structure_fail}")
+    print(f"Momentum Fail: {momentum_fail}")
+    print(f"Fake Breakout: {fake_breakout_fail}")
+    print(f"Relative Weak: {relative_weak}")
+    print(f"Not Ready: {not_ready}")
+    print(f"Quality Fail: {quality_fail}")
+    print(f"Confluence Fail: {confluence_fail}")
+    print(f"Levels Fail: {levels_fail}")
+    print(f"RR Fail: {rr_fail}")
     print(f"Final Passed: {final_passed}")
-    print("===========================================")
+    print("============================================")
 
     log_scan(
         total_symbols=total_symbols,
@@ -440,5 +508,10 @@ def scan_for_setups():
         alerts_sent=alerts_sent,
         market_status=market_status
     )
+
+    if setups:
+        print(f"✅ Valid setups found: {setups}")
+    else:
+        print("No valid setups found.")
 
     return setups
