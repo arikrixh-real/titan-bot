@@ -1,7 +1,6 @@
 def calculate_trade_levels(df, side="LONG"):
     """
-    Clean trade level calculation
-    NO extra arguments like 'symbol'
+    Improved levels → ensures good RR
     """
 
     try:
@@ -10,12 +9,12 @@ def calculate_trade_levels(df, side="LONG"):
         price = last["Close"]
 
         if side == "LONG":
-            sl = price * 0.98
-            target = price * 1.02
+            sl = price * 0.99      # tight SL
+            target = price * 1.03  # bigger target
 
         elif side == "SHORT":
-            sl = price * 1.02
-            target = price * 0.98
+            sl = price * 1.01
+            target = price * 0.97
 
         else:
             return None
