@@ -1,18 +1,20 @@
 """
-TITAN Trade Execution Layer - CLEAN FINAL VERSION
--------------------------------------------------
+TITAN Trade Execution Layer - DEDUP FINAL
+-----------------------------------------
 Purpose:
-1. Converts all eligible good setups into OPEN live/internal trades.
-2. Keeps Telegram top 3 separate using telegram_alerted=YES.
-3. Stores active trades in local active_trades.csv.
-4. Stores trade rows safely in Supabase trades table for dashboard count.
-5. Tracks TP/SL every run.
-6. No repeated Supabase schema warnings.
+1. Converts all eligible good setups into OPEN internal/live trades.
+2. Telegram top 3 are marked telegram_alerted=YES.
+3. Remaining good setups are also stored as internal live trades.
+4. Prevents duplicate OPEN trades:
+   - local active_trades.csv duplicate check
+   - Supabase trades table duplicate check using symbol + side + status='OPEN'
+5. Stores proper trade details in Supabase trades table.
+6. Does NOT insert missing columns like result into trades table.
+7. Tracks TP/SL locally every run.
 
 Important:
-- Does NOT place broker orders.
-- Does NOT change Telegram alert limit.
-- Supabase insert uses safe minimal row to avoid schema mismatch errors.
+- This does NOT place real broker orders.
+- This does NOT change Telegram alert limit.
 """
 
 import os
@@ -144,34 +146,91 @@ def _get_supabase():
         return None
 
 
-def _insert_trade_to_supabase_minimal():
+def _supabase_open_trade_exists(client, symbol, side):
     """
-    Safe dashboard insert.
-    Your current Supabase trades table accepts created_at.
-    Dashboard can count rows from trades table.
-    This avoids schema mismatch warnings completely.
+    Checks if same symbol+side is already OPEN in Supabase.
+    Prevents duplicate open trades across GitHub runs.
+    """
+    try:
+        result = (
+            client.table("trades")
+            .select("id")
+            .eq("symbol", symbol)
+            .eq("side", side)
+            .eq("status", "OPEN")
+            .limit(1)
+            .execute()
+        )
+
+        return bool(result.data)
+
+    except Exception as e:
+        print(f"⚠️ Supabase duplicate check skipped for {symbol} {side}: {e}")
+        return False
+
+
+def _insert_trade_to_supabase(row):
+    """
+    Inserts only columns that exist in your current Supabase trades table.
+    Does not insert 'result' because your trades table does not have result column.
     """
     client = _get_supabase()
 
     if client is None:
         return False
 
+    symbol = str(row.get("symbol", "")).strip().upper()
+    side = str(row.get("side", "")).strip().upper()
+
+    if not symbol or not side:
+        return False
+
+    if _supabase_open_trade_exists(client, symbol, side):
+        return False
+
+    payload = {
+        "trade_id": str(row.get("trade_id", "")),
+        "symbol": symbol,
+        "side": side,
+        "entry": _safe_float(row.get("entry")),
+        "sl": _safe_float(row.get("sl")),
+        "target": _safe_float(row.get("target")),
+        "rr": _safe_float(row.get("rr")),
+        "reason": str(row.get("reason", ""))[:500],
+        "trigger_status": "INTERNAL_TRADE",
+        "status": "OPEN",
+        "created_at": _now_iso(),
+    }
+
+    # Optional JSON columns available in your table
+    payload["scores"] = {
+        "score": _safe_float(row.get("score")),
+        "rank_score": _safe_float(row.get("rank_score")),
+    }
+
+    payload["market_context"] = {
+        "market_status": str(row.get("market_status", "")),
+    }
+
+    payload["setup_context"] = {
+        "scan_id": str(row.get("scan_id", "")),
+        "telegram_alerted": str(row.get("telegram_alerted", "NO")),
+        "opened_at": str(row.get("opened_at", "")),
+    }
+
     try:
-        client.table("trades").insert({
-            "created_at": _now_iso()
-        }).execute()
+        client.table("trades").insert(payload).execute()
         return True
 
     except Exception as e:
-        print(f"⚠️ Supabase trade insert skipped: {e}")
+        print(f"⚠️ Supabase trade insert skipped for {symbol} {side}: {e}")
         return False
 
 
 def _insert_result_to_supabase_minimal():
     """
     Safe result insert.
-    Uses created_at only to avoid schema mismatch.
-    Detailed result remains stored in trade_results.csv.
+    If trade_results schema is limited, no crash.
     """
     client = _get_supabase()
 
@@ -228,10 +287,9 @@ def add_good_setups_as_live_trades(
     """
     Converts good setups into OPEN live/internal trades.
 
-    Telegram logic:
-    - Top 3 selected symbols are marked telegram_alerted=YES.
-    - Remaining good setups are marked telegram_alerted=NO.
-    - All good setups become internal live trades.
+    Duplicate protection:
+    - Skips if same symbol+side already OPEN in local CSV.
+    - Skips if same symbol+side already OPEN in Supabase.
     """
     alerted_symbols = set(alerted_symbols or [])
 
@@ -252,10 +310,11 @@ def add_good_setups_as_live_trades(
 
     new_rows = []
     supabase_added = 0
-    added = 0
+    local_added = 0
+    duplicate_skipped = 0
 
     for setup in eligible_setups or []:
-        if max_new_trades is not None and added >= max_new_trades:
+        if max_new_trades is not None and local_added >= max_new_trades:
             break
 
         symbol = str(setup.get("symbol", "")).strip().upper()
@@ -267,6 +326,7 @@ def add_good_setups_as_live_trades(
         key = f"{symbol}|{side}"
 
         if key in existing_open_keys:
+            duplicate_skipped += 1
             continue
 
         entry = _safe_float(setup.get("entry"))
@@ -307,12 +367,17 @@ def add_good_setups_as_live_trades(
             "reason": str(setup.get("reason", ""))[:500],
         }
 
+        # Insert to Supabase first. If duplicate exists there, it returns False.
+        inserted_to_supabase = _insert_trade_to_supabase(row)
+
+        if not inserted_to_supabase:
+            duplicate_skipped += 1
+            continue
+
         new_rows.append(row)
         existing_open_keys.add(key)
-        added += 1
-
-        if _insert_trade_to_supabase_minimal():
-            supabase_added += 1
+        local_added += 1
+        supabase_added += 1
 
     if new_rows:
         active_df = pd.concat([active_df, pd.DataFrame(new_rows)], ignore_index=True)
@@ -321,6 +386,7 @@ def add_good_setups_as_live_trades(
 
     print(f"📌 Active Trades Added: {len(new_rows)} new OPEN trades")
     print(f"☁️ Supabase Trades Stored: {supabase_added}")
+    print(f"♻️ Duplicate OPEN trades skipped: {duplicate_skipped}")
 
     return len(new_rows)
 
