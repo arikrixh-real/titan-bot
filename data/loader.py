@@ -1,14 +1,18 @@
 import os
+import random
 import pandas as pd
 
 
-def load_cached_stock_data():
+SCAN_LIMIT = 50
+
+
+def load_cached_stock_data(limit=SCAN_LIMIT):
     cache_dir = "data/cache"
-    stock_data = {}
+    all_stock_data = {}
 
     if not os.path.exists(cache_dir):
         print("No cache folder found. Run main.py first to download data.")
-        return stock_data
+        return {}
 
     for file in os.listdir(cache_dir):
         if not file.endswith(".csv"):
@@ -31,9 +35,25 @@ def load_cached_stock_data():
 
             df = df.dropna(subset=["Close", "Volume"])
 
-            stock_data[stock_name] = df
+            if not df.empty:
+                all_stock_data[stock_name] = df
 
         except Exception as e:
             print(f"Error loading {file}: {e}")
 
-    return stock_data
+    all_symbols = list(all_stock_data.keys())
+
+    if len(all_symbols) <= limit:
+        selected_symbols = all_symbols
+    else:
+        selected_symbols = random.sample(all_symbols, limit)
+
+    print("DYNAMIC MODE ACTIVE")
+    print(f"Total cached stocks: {len(all_symbols)}")
+    print(f"Selected for this scan: {len(selected_symbols)}")
+    print(f"Selected stocks: {selected_symbols}")
+
+    return {
+        symbol: all_stock_data[symbol]
+        for symbol in selected_symbols
+    }
