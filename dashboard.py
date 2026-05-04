@@ -2,6 +2,7 @@ import os
 import time
 from datetime import datetime, timezone, timedelta
 
+import pandas as pd
 import requests
 import streamlit as st
 from supabase import create_client, Client
@@ -381,6 +382,13 @@ def row_time(row):
     return None
 
 
+def latest_dt(*values):
+    clean = [v for v in values if v is not None]
+    if not clean:
+        return None
+    return max(clean)
+
+
 def age_text_from_dt(dt):
     if not dt:
         return "No scan yet"
@@ -435,6 +443,50 @@ def status_html(status):
 
     return f"<span class='{css}'>{status}</span>"
 
+
+# =========================================================
+# ACTIVE TRADES CSV HELPER
+# =========================================================
+
+def get_live_trades_count():
+    possible_paths = [
+        "active_trades.csv",
+        "data/active_trades.csv",
+        "journals/active_trades.csv",
+        "journal/active_trades.csv",
+        "trades/active_trades.csv",
+    ]
+
+    for path in possible_paths:
+        try:
+            if not os.path.exists(path):
+                continue
+
+            df = pd.read_csv(path)
+
+            if df.empty:
+                return 0
+
+            status_columns = ["status", "trade_status", "outcome", "state"]
+
+            for col in status_columns:
+                if col in df.columns:
+                    live_df = df[
+                        df[col]
+                        .astype(str)
+                        .str.upper()
+                        .isin(["ACTIVE", "OPEN", "LIVE", "RUNNING"])
+                    ]
+                    return len(live_df)
+
+            return len(df)
+
+        except Exception:
+            continue
+
+    return 0
+
+
 # =========================================================
 # GITHUB HELPERS
 # =========================================================
@@ -449,12 +501,15 @@ def get_github_latest_run():
         }
 
     try:
-        headers = {"Accept": "application/vnd.github+json"}
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Cache-Control": "no-cache",
+        }
 
         if GITHUB_TOKEN:
             headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
 
-        url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/actions/runs?per_page=1"
+        url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/actions/runs?per_page=1&t={int(time.time())}"
         response = requests.get(url, headers=headers, timeout=10)
 
         if response.status_code != 200:
@@ -481,7 +536,10 @@ def get_github_latest_run():
         status = run.get("status")
         conclusion = run.get("conclusion")
         created_at = parse_dt(run.get("created_at"))
+        updated_at = parse_dt(run.get("updated_at"))
         html_url = run.get("html_url")
+
+        run_time = latest_dt(created_at, updated_at)
 
         if status == "completed" and conclusion == "success":
             final_status = "SUCCESS"
@@ -496,7 +554,7 @@ def get_github_latest_run():
         return {
             "status": final_status,
             "message": message,
-            "last_run_time": created_at,
+            "last_run_time": run_time,
             "url": html_url,
         }
 
@@ -608,9 +666,14 @@ def small_status(name, status, sub=""):
 
 latest_scan = latest_any_table(["scan_journal", "scans"])
 scan_health = get_latest_scan_health()
+
 latest_scan_time = row_time(latest_scan)
-last_scan_age = age_text_from_dt(latest_scan_time)
-scan_status = scan_status_from_dt(latest_scan_time)
+latest_scan_health_time = row_time(scan_health)
+
+real_latest_scan_time = latest_dt(latest_scan_time, latest_scan_health_time)
+
+last_scan_age = age_text_from_dt(real_latest_scan_time)
+scan_status = scan_status_from_dt(real_latest_scan_time)
 
 github_data = get_github_latest_run()
 github_status = github_data["status"]
@@ -630,29 +693,26 @@ else:
 total_trades = count_any_table(["trade_journal", "trades"])
 news_gathered = count_any_table(["news_memory", "news", "news_journal"])
 
-# ✅ FIXED: Stocks Scanned = scan cycles × 50
 scan_cycles = count_any_table(["scan_journal", "scans"])
 stocks_scanned = scan_cycles * SCAN_BATCH_SIZE
 
 telegram_alerts = count_any_table(["telegram_alerts", "alerts", "signal_alerts"])
 
-# Passed stocks
 stocks_passed = count_any_table(["passed_stocks", "passed_scans", "signals"])
 
 if stocks_passed == 0:
     stocks_passed = telegram_alerts
 
-# Wins/Losses from optional tables
+live_trades_count = get_live_trades_count()
+
 wins = count_any_table(["winning_trades", "wins"])
 losses = count_any_table(["losing_trades", "losses"])
 
-# Fallback if no separate win/loss tables exist
 if wins == 0 and losses == 0 and total_trades > 0:
     latest_trade_row = latest_any_table(["trade_journal", "trades"])
     wins = 0
     losses = 0
 
-# Performance calculations
 closed_trades = wins + losses
 
 if closed_trades > 0:
@@ -662,10 +722,8 @@ else:
 
 trade_performance_percent = accuracy_percent
 
-# Fixed TITAN RR target
 rr_display = "1:2"
 
-# Supabase storage estimate
 SUPABASE_STORAGE_LIMIT_MB = 500
 
 estimated_storage_mb = (
@@ -677,10 +735,6 @@ estimated_storage_mb = (
 
 supabase_storage_percent = int(min(100, (estimated_storage_mb / SUPABASE_STORAGE_LIMIT_MB) * 100))
 
-# ✅ Engine development progress
-# Removed:
-# - Telegram Alert Engine
-# - Dashboard Engine
 engine_progress = {
     "Scan Engine": 90,
     "News Engine": 75,
@@ -690,13 +744,11 @@ engine_progress = {
     "Market Regime Engine": 70,
 }
 
-# Engine live status
 news_status = "ACTIVE" if news_gathered > 0 else "WAITING"
 telegram_status = "ACTIVE" if telegram_alerts > 0 else "WAITING"
 learning_status = "ACTIVE" if stocks_scanned > 0 else "WAITING"
 evolution_status = "BUILDING"
 
-# Scan breakdown values
 if scan_health:
     latest_stocks_checked = int(scan_health.get("stocks_checked") or 0)
     latest_trend_passed = int(scan_health.get("trend_passed") or 0)
@@ -705,7 +757,6 @@ if scan_health:
     latest_entry_passed = int(scan_health.get("entry_passed") or 0)
     latest_final_passed = int(scan_health.get("final_passed") or 0)
     latest_health_alerts = int(scan_health.get("alerts_sent") or 0)
-    latest_scan_health_time = row_time(scan_health)
     latest_scan_health_age = age_text_from_dt(latest_scan_health_time)
 
     if latest_scan_health_time and latest_stocks_checked > 0:
@@ -950,10 +1001,7 @@ if scan_health:
         metric_card("Alerts This Scan", f"{latest_health_alerts:,}", "Real alerts only")
 
     with h3:
-        if latest_final_passed == 0:
-            status_card("Alert Reason", "WAITING", "No final setup passed yet")
-        else:
-            status_card("Alert Reason", "ACTIVE", f"{latest_final_passed} setup(s) passed")
+        metric_card("Live Trades Count", f"{live_trades_count:,}", "From active_trades.csv")
 
 else:
     st.info("No scan breakdown data yet. Wait for the next GitHub 5-minute scan after scan health logging is pushed.")
