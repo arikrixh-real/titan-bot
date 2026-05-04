@@ -1,30 +1,45 @@
-def strong_momentum(df, side="LONG"):
-    if len(df) < 3:
+def strong_momentum(df, side=None):
+    """
+    Adaptive momentum check.
+    If side is not provided, accepts either LONG or SHORT momentum.
+    """
+
+    if df is None or len(df) < 3:
         return False
 
-    last = df.iloc[-1]
-    prev = df.iloc[-2]
+    try:
+        last = df.iloc[-1]
+        prev = df.iloc[-2]
 
-    body = abs(last["Close"] - last["Open"])
-    range_candle = last["High"] - last["Low"]
+        body = abs(last["Close"] - last["Open"])
+        range_candle = last["High"] - last["Low"]
 
-    if range_candle == 0:
+        if range_candle == 0:
+            return False
+
+        body_ratio = body / range_candle
+
+        long_momentum = (
+            last["Close"] > last["Open"]
+            and last["Close"] >= (last["Low"] + range_candle * 0.50)
+            and last["Close"] >= prev["Close"]
+            and body_ratio >= 0.25
+        )
+
+        short_momentum = (
+            last["Close"] < last["Open"]
+            and last["Close"] <= (last["High"] - range_candle * 0.50)
+            and last["Close"] <= prev["Close"]
+            and body_ratio >= 0.25
+        )
+
+        if side == "LONG":
+            return long_momentum
+
+        if side == "SHORT":
+            return short_momentum
+
+        return long_momentum or short_momentum
+
+    except Exception:
         return False
-
-    body_ratio = body / range_candle
-
-    if side == "LONG":
-        bullish_close = last["Close"] > last["Open"]
-        close_near_high = last["Close"] >= (last["Low"] + range_candle * 0.55)
-        close_above_prev = last["Close"] > prev["Close"]
-
-        return bullish_close and close_near_high and close_above_prev and body_ratio > 0.35
-
-    if side == "SHORT":
-        bearish_close = last["Close"] < last["Open"]
-        close_near_low = last["Close"] <= (last["High"] - range_candle * 0.55)
-        close_below_prev = last["Close"] < prev["Close"]
-
-        return bearish_close and close_near_low and close_below_prev and body_ratio > 0.35
-
-    return False
