@@ -323,7 +323,7 @@ def scan_for_setups():
 
     print("📘 Journal updated")
 
-    track_trade_outcomes(limit=200)
+    track_trade_outcomes(limit=50)
     print("📊 Outcome tracker completed")
 
     run_evolution_engine()

@@ -275,4 +275,4 @@ def track_trade_outcomes(limit=None):
 
 
 if __name__ == "__main__":
-    track_trade_outcomes(limit=500)
+    track_trade_outcomes(limit=50)
