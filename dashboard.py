@@ -328,6 +328,28 @@ def latest_any_table(table_names):
     return None
 
 
+def get_latest_scan_health():
+    try:
+        if supabase is None:
+            return None
+
+        result = (
+            supabase.table("scan_health_logs")
+            .select("*")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if result.data:
+            return result.data[0]
+
+        return None
+
+    except Exception:
+        return None
+
+
 def parse_dt(value):
     if not value:
         return None
@@ -585,6 +607,7 @@ def small_status(name, status, sub=""):
 # =========================================================
 
 latest_scan = latest_any_table(["scan_journal", "scans"])
+scan_health = get_latest_scan_health()
 latest_scan_time = row_time(latest_scan)
 last_scan_age = age_text_from_dt(latest_scan_time)
 scan_status = scan_status_from_dt(latest_scan_time)
@@ -672,6 +695,26 @@ news_status = "ACTIVE" if news_gathered > 0 else "WAITING"
 telegram_status = "ACTIVE" if telegram_alerts > 0 else "WAITING"
 learning_status = "ACTIVE" if stocks_scanned > 0 else "WAITING"
 evolution_status = "BUILDING"
+
+# Scan breakdown values
+if scan_health:
+    latest_stocks_checked = int(scan_health.get("stocks_checked") or 0)
+    latest_trend_passed = int(scan_health.get("trend_passed") or 0)
+    latest_momentum_passed = int(scan_health.get("momentum_passed") or 0)
+    latest_structure_passed = int(scan_health.get("structure_passed") or 0)
+    latest_entry_passed = int(scan_health.get("entry_passed") or 0)
+    latest_final_passed = int(scan_health.get("final_passed") or 0)
+    latest_health_alerts = int(scan_health.get("alerts_sent") or 0)
+    latest_market_status = scan_health.get("market_status") or "UNKNOWN"
+else:
+    latest_stocks_checked = 0
+    latest_trend_passed = 0
+    latest_momentum_passed = 0
+    latest_structure_passed = 0
+    latest_entry_passed = 0
+    latest_final_passed = 0
+    latest_health_alerts = 0
+    latest_market_status = "UNKNOWN"
 
 
 # =========================================================
@@ -848,6 +891,56 @@ with r2:
     small_status("News Engine", news_status, f"News gathered: {news_gathered:,}")
     small_status("Telegram Alert Engine", telegram_status, f"Alerts sent: {telegram_alerts:,}")
     small_status("Learning / Evolution", learning_status, "Learning data pipeline")
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+
+# =========================================================
+# 7. SCAN BREAKDOWN
+# =========================================================
+
+st.markdown("<div class='section'>", unsafe_allow_html=True)
+st.markdown("<div class='section-title'>🔍 Scan Breakdown · Why No Alerts?</div>", unsafe_allow_html=True)
+
+if scan_health:
+    b1, b2, b3, b4, b5, b6 = st.columns(6)
+
+    with b1:
+        metric_card("Stocks Checked", f"{latest_stocks_checked:,}", "Latest scan cycle")
+
+    with b2:
+        metric_card("Trend Passed", f"{latest_trend_passed:,}", "Valid trend / side")
+
+    with b3:
+        metric_card("Momentum Passed", f"{latest_momentum_passed:,}", "Strong momentum")
+
+    with b4:
+        metric_card("Structure Passed", f"{latest_structure_passed:,}", "Clean structure")
+
+    with b5:
+        metric_card("Entry Passed", f"{latest_entry_passed:,}", "Breakout ready")
+
+    with b6:
+        metric_card("Final Passed", f"{latest_final_passed:,}", "Quality filter passed")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    h1, h2, h3 = st.columns(3)
+
+    with h1:
+        status_card("Market Status", latest_market_status, "Latest scan market regime")
+
+    with h2:
+        metric_card("Alerts This Scan", f"{latest_health_alerts:,}", "Real alerts only")
+
+    with h3:
+        if latest_final_passed == 0:
+            status_card("Alert Reason", "WAITING", "No final setup passed yet")
+        else:
+            status_card("Alert Reason", "ACTIVE", f"{latest_final_passed} setup(s) passed")
+
+else:
+    st.info("No scan breakdown data yet. Wait for the next GitHub 5-minute scan after scan health logging is pushed.")
 
 st.markdown("</div>", unsafe_allow_html=True)
 
