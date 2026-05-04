@@ -1,32 +1,27 @@
-def trend_direction(df, lookback=20):
-    if df is None or len(df) < lookback:
+def trend_direction(df):
+    if df is None or len(df) < 50:
         return "SIDEWAYS"
 
     try:
         close = df["Close"]
 
-        recent = close.iloc[-lookback:]
-        start = recent.iloc[0]
-        end = recent.iloc[-1]
-
-        change = ((end - start) / start) * 100
-
         ema20 = close.ewm(span=20).mean().iloc[-1]
         ema50 = close.ewm(span=50).mean().iloc[-1]
+
         price = close.iloc[-1]
 
         # Strong trend
-        if change > 2:
+        if price > ema20 > ema50:
             return "UP"
 
-        if change < -2:
+        if price < ema20 < ema50:
             return "DOWN"
 
-        # Moderate trend support
-        if price > ema20 and ema20 > ema50 and change > 0.5:
+        # Weak / early trend
+        if price > ema50:
             return "UP"
 
-        if price < ema20 and ema20 < ema50 and change < -0.5:
+        if price < ema50:
             return "DOWN"
 
         return "SIDEWAYS"
