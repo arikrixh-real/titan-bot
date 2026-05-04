@@ -8,3 +8,4 @@ feedparser
 supabase
 streamlit
 streamlit-autorefresh
+python-dotenv
