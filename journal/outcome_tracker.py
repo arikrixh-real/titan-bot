@@ -3,17 +3,13 @@ TITAN - Outcome Tracker Engine
 ------------------------------
 Tracks whether journaled eligible setups hit TARGET or SL.
 
-Input:
-- data/journals/trade_journal.csv
-
-Output:
-- data/journals/trade_outcomes.csv
-- data/journals/trade_outcomes.jsonl
-
-This file does NOT:
-- Send Telegram alerts
-- Change daily alert cap
-- Change scan/filter logic
+IMPORTANT:
+- Reads ALL OPEN journaled setups.
+- Keeps checking OPEN trades every run.
+- Writes final TARGET_HIT / SL_HIT only once.
+- Also writes latest OPEN snapshot so dashboard can see active trades.
+- Does NOT send Telegram alerts.
+- Does NOT change daily alert cap.
 """
 
 import csv
@@ -33,9 +29,11 @@ IST = ZoneInfo("Asia/Kolkata")
 JOURNAL_FILE = Path("data/journals/trade_journal.csv")
 OUTCOME_CSV = Path("data/journals/trade_outcomes.csv")
 OUTCOME_JSONL = Path("data/journals/trade_outcomes.jsonl")
+OPEN_TRADES_CSV = Path("data/journals/open_trades.csv")
 
 OUTCOME_FIELDS = [
     "checked_at",
+    "trade_id",
     "timestamp",
     "scan_id",
     "symbol",
@@ -52,6 +50,8 @@ OUTCOME_FIELDS = [
     "pnl_points",
     "result_reason",
 ]
+
+OPEN_FIELDS = OUTCOME_FIELDS
 
 
 def safe_float(value, default=None):
@@ -74,40 +74,48 @@ def ensure_outcome_files():
     if not OUTCOME_JSONL.exists():
         OUTCOME_JSONL.touch()
 
+    if not OPEN_TRADES_CSV.exists():
+        with open(OPEN_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=OPEN_FIELDS)
+            writer.writeheader()
 
-def load_existing_keys():
+
+def make_key(row):
+    trade_id = row.get("trade_id")
+    if trade_id:
+        return str(trade_id)
+
+    return "|".join([
+        str(row.get("scan_id", "")),
+        str(row.get("symbol", "")),
+        str(row.get("side", "")),
+        str(row.get("entry", "")),
+        str(row.get("sl", "")),
+        str(row.get("target", "")),
+    ])
+
+
+def load_closed_trade_keys():
     """
-    Prevent duplicate outcome rows for same setup.
-    Key = scan_id + symbol + side + entry
+    Only final TARGET_HIT / SL_HIT rows close a trade.
+    OPEN rows must NOT block future checks.
     """
+
     ensure_outcome_files()
 
-    keys = set()
+    closed = set()
 
     with open(OUTCOME_CSV, "r", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
 
         for row in reader:
-            key = make_key(row)
-            keys.add(key)
+            if row.get("outcome") in ["TARGET_HIT", "SL_HIT"]:
+                closed.add(make_key(row))
 
-    return keys
-
-
-def make_key(row):
-    return (
-        str(row.get("scan_id", "")),
-        str(row.get("symbol", "")),
-        str(row.get("side", "")),
-        str(row.get("entry", "")),
-    )
+    return closed
 
 
 def get_current_price(symbol):
-    """
-    Uses existing TITAN live price engine.
-    If unavailable, returns None safely.
-    """
     if get_live_price is None:
         return None
 
@@ -118,18 +126,6 @@ def get_current_price(symbol):
 
 
 def evaluate_outcome(side, entry, sl, target, current_price):
-    """
-    Evaluates current outcome.
-
-    LONG:
-    - target hit if current_price >= target
-    - SL hit if current_price <= sl
-
-    SHORT:
-    - target hit if current_price <= target
-    - SL hit if current_price >= sl
-    """
-
     side = str(side).upper().strip()
 
     if current_price is None:
@@ -164,8 +160,8 @@ def evaluate_outcome(side, entry, sl, target, current_price):
 
 
 def build_outcome_row(journal_row):
-    symbol = journal_row.get("symbol", "")
-    side = journal_row.get("side", "")
+    symbol = str(journal_row.get("symbol", "")).upper().strip()
+    side = str(journal_row.get("side", "")).upper().strip()
 
     entry = safe_float(journal_row.get("entry"))
     sl = safe_float(journal_row.get("sl"))
@@ -181,8 +177,11 @@ def build_outcome_row(journal_row):
         current_price=current_price,
     )
 
+    trade_id = journal_row.get("trade_id") or make_key(journal_row)
+
     return {
         "checked_at": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S"),
+        "trade_id": trade_id,
         "timestamp": journal_row.get("timestamp", ""),
         "scan_id": journal_row.get("scan_id", ""),
         "symbol": symbol,
@@ -201,10 +200,33 @@ def build_outcome_row(journal_row):
     }
 
 
+def _write_open_trades(open_rows):
+    with open(OPEN_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=OPEN_FIELDS)
+        writer.writeheader()
+        writer.writerows(open_rows)
+
+
+def _append_final_outcomes(final_rows):
+    if not final_rows:
+        return
+
+    with open(OUTCOME_CSV, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=OUTCOME_FIELDS)
+        writer.writerows(final_rows)
+
+    with open(OUTCOME_JSONL, "a", encoding="utf-8") as f:
+        for row in final_rows:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
 def track_trade_outcomes(limit=None):
     """
     Main function.
-    Reads trade journal and writes outcome rows.
+
+    Reads journaled trades.
+    Keeps checking OPEN trades every 5-min run.
+    Saves final outcome once TP/SL is hit.
     """
 
     ensure_outcome_files()
@@ -213,49 +235,44 @@ def track_trade_outcomes(limit=None):
         print("⚠️ Trade journal not found. Run setup engine first.")
         return 0
 
-    existing_keys = load_existing_keys()
-    new_rows = []
+    closed_trade_keys = load_closed_trade_keys()
 
     with open(JOURNAL_FILE, "r", newline="", encoding="utf-8") as f:
-        reader = list(csv.DictReader(f))
+        journal_rows = list(csv.DictReader(f))
 
     if limit is not None:
-        reader = reader[-int(limit):]
+        journal_rows = journal_rows[-int(limit):]
 
-    for journal_row in reader:
-        key = make_key(journal_row)
+    open_rows = []
+    final_rows = []
+    checked_count = 0
 
-        if key in existing_keys:
+    for journal_row in journal_rows:
+        trade_key = make_key(journal_row)
+
+        # Already closed previously
+        if trade_key in closed_trade_keys:
             continue
 
         outcome_row = build_outcome_row(journal_row)
-        new_rows.append(outcome_row)
-        existing_keys.add(key)
+        checked_count += 1
 
-    if not new_rows:
-        print("ℹ️ No new trades to track.")
-        return 0
+        if outcome_row["outcome"] in ["TARGET_HIT", "SL_HIT"]:
+            final_rows.append(outcome_row)
+            closed_trade_keys.add(trade_key)
+        else:
+            open_rows.append(outcome_row)
 
-    with open(OUTCOME_CSV, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=OUTCOME_FIELDS)
-        writer.writerows(new_rows)
+    _append_final_outcomes(final_rows)
+    _write_open_trades(open_rows)
 
-    with open(OUTCOME_JSONL, "a", encoding="utf-8") as f:
-        for row in new_rows:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    print(f"📊 Outcome Tracker Checked: {checked_count} open/internal trades")
+    print(f"✅ Newly closed targets: {sum(1 for row in final_rows if row['outcome'] == 'TARGET_HIT')}")
+    print(f"❌ Newly closed SLs: {sum(1 for row in final_rows if row['outcome'] == 'SL_HIT')}")
+    print(f"⏳ Still open: {len(open_rows)}")
 
-    print(f"📊 Outcome Tracker Updated: {len(new_rows)} trades checked")
-
-    target_hits = sum(1 for row in new_rows if row["outcome"] == "TARGET_HIT")
-    sl_hits = sum(1 for row in new_rows if row["outcome"] == "SL_HIT")
-    open_trades = sum(1 for row in new_rows if row["outcome"] == "OPEN")
-
-    print(f"✅ Target hits: {target_hits}")
-    print(f"❌ SL hits: {sl_hits}")
-    print(f"⏳ Open trades: {open_trades}")
-
-    return len(new_rows)
+    return checked_count
 
 
 if __name__ == "__main__":
-    track_trade_outcomes(limit=200)
+    track_trade_outcomes(limit=500)
