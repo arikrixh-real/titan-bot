@@ -1,27 +1,21 @@
 """
-TITAN - Setup Engine
---------------------
-Flow:
-Scan
-→ Quality Filter
-→ Evolution Score
-→ Adaptive Score
-→ Pattern Intelligence
-→ Market Regime Intelligence
-→ Evolution Filter
-→ Elite Trade Selection
-→ Journal
-→ Trade Execution Layer
-→ Outcome
-→ Evolution
-→ Master Status
-→ Dashboard Supabase Logging
+TITAN - Setup Engine FINAL
+--------------------------
+Final stable version with:
+1. Full 5-min scan flow
+2. News engine safe run
+3. Real scan-stage counters for dashboard
+4. Supabase scan_health_logs update with real values
+5. Trade journal
+6. Trade execution layer
+7. Outcome tracker
+8. Evolution engine
+9. Master status update
 
 IMPORTANT:
-- Telegram limit remains controlled by your alert system.
-- Top 3 setups are flagged as telegram_alerted.
-- All eligible good setups are saved as OPEN live/internal trades with Entry, SL, Target.
-- Duplicate open trades for same symbol+side are blocked.
+- Telegram 3/day logic remains untouched.
+- Trade execution layer handles duplicate open trades.
+- This file does NOT place broker orders.
 """
 
 from datetime import datetime
@@ -50,7 +44,6 @@ from engines.trap_engine import avoid_fake_breakout
 from engines.relative_strength_engine import relative_strength_ok
 from engines.entry_engine import breakout_ready
 from engines.reason_engine import build_reason
-from engines.trigger_engine import trigger_status
 from engines.structure_engine import structure_ok
 
 from engines.evolution_adapter import evolve_setup, passes_evolution_filter
@@ -68,13 +61,15 @@ from engines.master_status import update_master_status
 from journal.trade_journal import journal_eligible_setups
 from journal.outcome_tracker import track_trade_outcomes
 
-# ✅ NEW: Trade Execution Layer
-from journal.trade_execution_layer import (
-    add_good_setups_as_live_trades,
-    update_live_trade_outcomes,
-)
+try:
+    from journal.trade_execution_layer import (
+        add_good_setups_as_live_trades,
+        update_live_trade_outcomes,
+    )
+except Exception:
+    add_good_setups_as_live_trades = None
+    update_live_trade_outcomes = None
 
-# ✅ Optional News Engine import
 try:
     from intelligence.news_engine import run_news_engine
 except Exception:
@@ -90,16 +85,19 @@ OHLCV_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 
 
 # =========================================================
-# SUPABASE SAFE DASHBOARD LOGGING
+# SUPABASE
 # =========================================================
 
 def get_supabase():
     try:
         url = os.getenv("SUPABASE_URL")
         key = os.getenv("SUPABASE_KEY")
+
         if not url or not key:
             return None
+
         return create_client(url, key)
+
     except Exception:
         return None
 
@@ -107,38 +105,71 @@ def get_supabase():
 supabase = get_supabase()
 
 
-def log_scan_to_supabase(scan_summary, scanned_count, eligible_setups):
+def log_scan_to_supabase(
+    scan_id,
+    scanned_count,
+    trend_passed,
+    momentum_passed,
+    structure_passed,
+    entry_passed,
+    final_passed,
+    alerts_sent,
+):
     """
-    Safe dashboard logging.
-    Uses only columns already confirmed working:
-    scans.created_at
-    scan_health_logs.created_at, stocks_checked, final_passed
+    Logs real scan health counters to Supabase.
+    Matches your scan_health_logs table columns:
+    - created_at
+    - scan_cycle_id
+    - stocks_checked
+    - trend_passed
+    - momentum_passed
+    - structure_passed
+    - entry_passed
+    - final_passed
+    - alerts_sent
     """
     if supabase is None:
-        print("⚠️ Supabase not connected")
+        print("⚠️ Supabase not connected for scan logging")
         return
 
-    try:
-        now = datetime.now(IST).isoformat()
+    now_iso = datetime.now(IST).isoformat()
 
+    try:
+        # Minimal scans table update for dashboard last scan time
         supabase.table("scans").insert({
-            "created_at": now
+            "created_at": now_iso
         }).execute()
 
+    except Exception as e:
+        print(f"⚠️ scans table log skipped: {e}")
+
+    try:
         supabase.table("scan_health_logs").insert({
-            "created_at": now,
-            "stocks_checked": scanned_count,
-            "final_passed": len(eligible_setups)
+            "created_at": now_iso,
+            "scan_cycle_id": scan_id,
+            "stocks_checked": int(scanned_count),
+            "trend_passed": int(trend_passed),
+            "momentum_passed": int(momentum_passed),
+            "structure_passed": int(structure_passed),
+            "entry_passed": int(entry_passed),
+            "final_passed": int(final_passed),
+            "alerts_sent": int(alerts_sent),
         }).execute()
 
         print("✅ Scan data logged to Supabase for dashboard")
+        print(
+            f"📊 Scan Health Logged | checked={scanned_count} | "
+            f"trend={trend_passed} | momentum={momentum_passed} | "
+            f"structure={structure_passed} | entry={entry_passed} | "
+            f"final={final_passed} | alerts={alerts_sent}"
+        )
 
     except Exception as e:
-        print(f"❌ Supabase logging error: {e}")
+        print(f"❌ scan_health_logs insert failed: {e}")
 
 
 # =========================================================
-# SAFE HELPERS
+# HELPERS
 # =========================================================
 
 def safe_float(value, default=None):
@@ -151,6 +182,10 @@ def safe_float(value, default=None):
 
 
 def clean_market_dataframe(df):
+    """
+    Converts OHLCV columns to numeric.
+    Prevents string/int comparison errors in engines.
+    """
     if df is None or df.empty:
         return df
 
@@ -161,6 +196,7 @@ def clean_market_dataframe(df):
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
     available_cols = [col for col in OHLCV_COLUMNS if col in df.columns]
+
     if available_cols:
         df = df.dropna(subset=available_cols)
 
@@ -231,6 +267,12 @@ def scan_for_setups():
     scanned_count = 0
     error_count = 0
 
+    # ✅ REAL DASHBOARD STAGE COUNTERS
+    trend_passed_count = 0
+    structure_passed_count = 0
+    momentum_passed_count = 0
+    entry_passed_count = 0
+
     for symbol in NSE_STOCKS:
         try:
             df = load_cached_stock_data(symbol)
@@ -255,11 +297,18 @@ def scan_for_setups():
             if side not in ["LONG", "SHORT"]:
                 continue
 
+            # ✅ Trend passed means a valid trade side was identified
+            trend_passed_count += 1
+
             if not structure_ok(df, side):
                 continue
 
+            structure_passed_count += 1
+
             if not strong_momentum(df, side):
                 continue
+
+            momentum_passed_count += 1
 
             if not avoid_fake_breakout(df, side):
                 continue
@@ -269,6 +318,8 @@ def scan_for_setups():
 
             if not breakout_ready(df, side):
                 continue
+
+            entry_passed_count += 1
 
             volume_score = safe_float(volume_anomaly_score(df), 0.0)
             strength_score = safe_float(price_strength_score(df), 0.0)
@@ -377,7 +428,7 @@ def scan_for_setups():
     print(f"🧠 Rejected by Evolution Filter: {rejected_by_evolution}")
 
     selected_alerts = eligible_setups[:3]
-    alerted_symbols = [s["symbol"] for s in selected_alerts]
+    alerted_symbols = [s.get("symbol") for s in selected_alerts if s.get("symbol")]
 
     if selected_alerts:
         print("🏆 Top 3 elite setups:")
@@ -389,7 +440,7 @@ def scan_for_setups():
                 f"Elite: {setup.get('elite_probability_score')}"
             )
 
-    # ✅ Your original setup journal remains untouched.
+    # Journal all eligible setups
     journal_eligible_setups(
         eligible_setups=eligible_setups,
         scan_id=scan_id,
@@ -399,44 +450,74 @@ def scan_for_setups():
 
     print("📘 Journal updated")
 
-    # ✅ NEW: Convert all good eligible setups into live/internal trades.
-    # Top 3 are marked telegram_alerted=YES, remaining setups are NO.
-    add_good_setups_as_live_trades(
-        eligible_setups=eligible_setups,
-        scan_id=scan_id,
-        alerted_symbols=alerted_symbols,
-        market_status=market_status,
-    )
+    # Good setups become internal live trades; duplicate protection lives in trade_execution_layer.py
+    if add_good_setups_as_live_trades is not None:
+        try:
+            add_good_setups_as_live_trades(
+                eligible_setups=eligible_setups,
+                scan_id=scan_id,
+                alerted_symbols=alerted_symbols,
+                market_status=market_status,
+            )
+        except Exception as e:
+            print(f"⚠️ Trade execution add error: {e}")
+    else:
+        print("⚠️ Trade execution layer not connected")
 
-    # ✅ NEW: Check active live/internal trades for TP/SL.
-    update_live_trade_outcomes()
+    # Track internal live trades for TP/SL
+    if update_live_trade_outcomes is not None:
+        try:
+            update_live_trade_outcomes()
+        except Exception as e:
+            print(f"⚠️ Trade execution outcome error: {e}")
+    else:
+        print("⚠️ Trade execution outcome layer not connected")
 
-    # ✅ Existing outcome tracker remains active.
-    track_trade_outcomes(limit=50)
-    print("📊 Outcome tracker completed")
+    # Existing outcome tracker remains active
+    try:
+        track_trade_outcomes(limit=50)
+        print("📊 Outcome tracker completed")
+    except Exception as e:
+        print(f"⚠️ Outcome tracker error: {e}")
 
-    run_evolution_engine()
-    print("🧠 Evolution updated")
+    try:
+        run_evolution_engine()
+        print("🧠 Evolution updated")
+    except Exception as e:
+        print(f"⚠️ Evolution engine error: {e}")
 
     last_scan_summary = {
         "scan_id": scan_id,
         "market_status": market_status,
         "stocks_scanned": scanned_count,
         "stocks_failed": error_count,
+        "trend_passed": trend_passed_count,
+        "momentum_passed": momentum_passed_count,
+        "structure_passed": structure_passed_count,
+        "entry_passed": entry_passed_count,
         "eligible_setups": len(eligible_setups),
+        "alerts_sent": len(selected_alerts),
         "rejected_by_evolution": rejected_by_evolution,
         "top_3_symbols": alerted_symbols,
         "closed_trades_at_scan_start": closed_trades,
         "timestamp": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S"),
     }
 
-    update_master_status(last_scan_summary=last_scan_summary)
-    print("📡 Master status updated")
+    try:
+        update_master_status(last_scan_summary=last_scan_summary)
+        print("📡 Master status updated")
+    except Exception as e:
+        print(f"⚠️ Master status update error: {e}")
 
     log_scan_to_supabase(
-        scan_summary=last_scan_summary,
+        scan_id=scan_id,
         scanned_count=scanned_count,
-        eligible_setups=eligible_setups,
+        trend_passed=trend_passed_count,
+        momentum_passed=momentum_passed_count,
+        structure_passed=structure_passed_count,
+        entry_passed=entry_passed_count,
+        final_passed=len(eligible_setups),
+        alerts_sent=len(selected_alerts),
     )
 
     return eligible_setups
