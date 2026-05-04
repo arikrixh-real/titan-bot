@@ -1,10 +1,7 @@
-def structure_ok(df, side="LONG", lookback=8):
+def structure_ok(df, side=None, lookback=8):
     """
-    Checks whether price structure is acceptable.
-    Balanced version:
-    - Not too strict
-    - Allows clean pullbacks
-    - Still avoids messy sideways structure
+    Adaptive structure check.
+    If side is not provided, accepts either LONG-like or SHORT-like structure.
     """
 
     if df is None or len(df) < lookback:
@@ -23,25 +20,19 @@ def structure_ok(df, side="LONG", lookback=8):
         recent_high = max(highs[:-1])
         recent_low = min(lows[:-1])
 
-        # LONG structure:
-        # Either price breaks above recent high
-        # OR price is recovering with higher close
+        long_breakout = current_close > recent_high
+        long_recovery = current_close > previous_close and lows[-1] >= min(lows[-3:])
+
+        short_breakdown = current_close < recent_low
+        short_weakness = current_close < previous_close and highs[-1] <= max(highs[-3:])
+
         if side == "LONG":
-            breakout_structure = current_close > recent_high
-            recovery_structure = current_close > previous_close and lows[-1] >= min(lows[-3:])
+            return long_breakout or long_recovery
 
-            return breakout_structure or recovery_structure
-
-        # SHORT structure:
-        # Either price breaks below recent low
-        # OR price is weakening with lower close
         if side == "SHORT":
-            breakdown_structure = current_close < recent_low
-            weakness_structure = current_close < previous_close and highs[-1] <= max(highs[-3:])
+            return short_breakdown or short_weakness
 
-            return breakdown_structure or weakness_structure
-
-        return False
+        return long_breakout or long_recovery or short_breakdown or short_weakness
 
     except Exception:
         return False
