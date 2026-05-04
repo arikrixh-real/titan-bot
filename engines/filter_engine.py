@@ -14,7 +14,7 @@ def passes_quality_filters(
     if final_score < 2:
         return False
 
-    if volume_score < 0:
+    if volume_score < -1:
         return False
 
     if strength_score < -2:
