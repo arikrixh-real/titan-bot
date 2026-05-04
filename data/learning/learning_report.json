@@ -1,0 +1,189 @@
+{
+  "generated_at": "2026-05-04 16:57:42",
+  "summary": {
+    "total_tracked": 72,
+    "closed_trades": 0,
+    "target_hits": 0,
+    "sl_hits": 0,
+    "open_trades": 72,
+    "win_rate_closed_percent": 0.0,
+    "avg_score": 2.75,
+    "avg_rr": 2.0,
+    "avg_rank_score": 23.15
+  },
+  "by_side": {
+    "LONG": {
+      "total_tracked": 34,
+      "closed_trades": 0,
+      "target_hits": 0,
+      "sl_hits": 0,
+      "open_trades": 34,
+      "win_rate_closed_percent": 0.0,
+      "avg_score": 2.8,
+      "avg_rr": 2.0,
+      "avg_rank_score": 23.22
+    },
+    "SHORT": {
+      "total_tracked": 38,
+      "closed_trades": 0,
+      "target_hits": 0,
+      "sl_hits": 0,
+      "open_trades": 38,
+      "win_rate_closed_percent": 0.0,
+      "avg_score": 2.71,
+      "avg_rr": 2.0,
+      "avg_rank_score": 23.1
+    }
+  },
+  "by_alert_sent": {
+    "True": {
+      "total_tracked": 6,
+      "closed_trades": 0,
+      "target_hits": 0,
+      "sl_hits": 0,
+      "open_trades": 6,
+      "win_rate_closed_percent": 0.0,
+      "avg_score": 3.23,
+      "avg_rr": 2.0,
+      "avg_rank_score": 23.75
+    },
+    "False": {
+      "total_tracked": 66,
+      "closed_trades": 0,
+      "target_hits": 0,
+      "sl_hits": 0,
+      "open_trades": 66,
+      "win_rate_closed_percent": 0.0,
+      "avg_score": 2.71,
+      "avg_rr": 2.0,
+      "avg_rank_score": 23.1
+    }
+  },
+  "top_symbols": [
+    {
+      "symbol": "RELIANCE.NS",
+      "total_tracked": 2,
+      "closed_trades": 0,
+      "target_hits": 0,
+      "sl_hits": 0,
+      "open_trades": 2,
+      "win_rate_closed_percent": 0.0,
+      "avg_score": 3.29,
+      "avg_rr": 2.0,
+      "avg_rank_score": 23.84
+    },
+    {
+      "symbol": "ONGC.NS",
+      "total_tracked": 2,
+      "closed_trades": 0,
+      "target_hits": 0,
+      "sl_hits": 0,
+      "open_trades": 2,
+      "win_rate_closed_percent": 0.0,
+      "avg_score": 3.23,
+      "avg_rr": 2.0,
+      "avg_rank_score": 23.73
+    },
+    {
+      "symbol": "PFC.NS",
+      "total_tracked": 2,
+      "closed_trades": 0,
+      "target_hits": 0,
+      "sl_hits": 0,
+      "open_trades": 2,
+      "win_rate_closed_percent": 0.0,
+      "avg_score": 3.17,
+      "avg_rr": 2.0,
+      "avg_rank_score": 23.66
+    },
+    {
+      "symbol": "HAVELLS.NS",
+      "total_tracked": 2,
+      "closed_trades": 0,
+      "target_hits": 0,
+      "sl_hits": 0,
+      "open_trades": 2,
+      "win_rate_closed_percent": 0.0,
+      "avg_score": 3.1,
+      "avg_rr": 2.0,
+      "avg_rank_score": 23.59
+    },
+    {
+      "symbol": "MARICO.NS",
+      "total_tracked": 2,
+      "closed_trades": 0,
+      "target_hits": 0,
+      "sl_hits": 0,
+      "open_trades": 2,
+      "win_rate_closed_percent": 0.0,
+      "avg_score": 3.12,
+      "avg_rr": 2.0,
+      "avg_rank_score": 23.59
+    },
+    {
+      "symbol": "HAL.NS",
+      "total_tracked": 2,
+      "closed_trades": 0,
+      "target_hits": 0,
+      "sl_hits": 0,
+      "open_trades": 2,
+      "win_rate_closed_percent": 0.0,
+      "avg_score": 3.04,
+      "avg_rr": 2.0,
+      "avg_rank_score": 23.55
+    },
+    {
+      "symbol": "APOLLOHOSP.NS",
+      "total_tracked": 2,
+      "closed_trades": 0,
+      "target_hits": 0,
+      "sl_hits": 0,
+      "open_trades": 2,
+      "win_rate_closed_percent": 0.0,
+      "avg_score": 3.1,
+      "avg_rr": 2.0,
+      "avg_rank_score": 23.56
+    },
+    {
+      "symbol": "BAJFINANCE.NS",
+      "total_tracked": 2,
+      "closed_trades": 0,
+      "target_hits": 0,
+      "sl_hits": 0,
+      "open_trades": 2,
+      "win_rate_closed_percent": 0.0,
+      "avg_score": 3.04,
+      "avg_rr": 2.0,
+      "avg_rank_score": 23.52
+    },
+    {
+      "symbol": "DABUR.NS",
+      "total_tracked": 2,
+      "closed_trades": 0,
+      "target_hits": 0,
+      "sl_hits": 0,
+      "open_trades": 2,
+      "win_rate_closed_percent": 0.0,
+      "avg_score": 3.08,
+      "avg_rr": 2.0,
+      "avg_rank_score": 23.54
+    },
+    {
+      "symbol": "RECLTD.NS",
+      "total_tracked": 2,
+      "closed_trades": 0,
+      "target_hits": 0,
+      "sl_hits": 0,
+      "open_trades": 2,
+      "win_rate_closed_percent": 0.0,
+      "avg_score": 3.04,
+      "avg_rr": 2.0,
+      "avg_rank_score": 23.5
+    }
+  ],
+  "learning_notes": [
+    "Not enough closed trades yet. Titan should keep collecting outcome data before changing strategy.",
+    "LONG and SHORT setups are performing similarly so far.",
+    "Alerted and non-alerted setups are performing similarly so far."
+  ]
+}

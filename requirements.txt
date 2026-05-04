@@ -1,0 +1,11 @@
+pandas
+numpy
+yfinance
+ta
+requests
+tabulate
+feedparser
+supabase
+streamlit
+streamlit-autorefresh
+python-dotenv

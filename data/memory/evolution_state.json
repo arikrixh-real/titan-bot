@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-05-04 19:29:30",
+  "total_closed_trades": 0,
+  "total_wins": 0,
+  "total_losses": 0,
+  "win_rate": 0.0,
+  "avg_rr": 0.0,
+  "avg_score_winners": 0.0,
+  "avg_score_losers": 0.0,
+  "score_boost": 1.0,
+  "filter_strictness": 1.0,
+  "ranking_confidence": 1.0,
+  "symbol_memory": {},
+  "side_memory": {
+    "LONG": {
+      "trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": 0.0,
+      "weight": 1.0
+    },
+    "SHORT": {
+      "trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": 0.0,
+      "weight": 1.0
+    }
+  },
+  "reason_memory": {},
+  "evolution_notes": [
+    "Waiting for more closed trades. Need at least 5, found 0."
+  ]
+}

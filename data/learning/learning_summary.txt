@@ -1,0 +1,30 @@
+TITAN LEARNING SUMMARY
+==============================
+Generated At: 2026-05-04 16:57:42
+
+Total Tracked: 72
+Closed Trades: 0
+Target Hits: 0
+SL Hits: 0
+Open Trades: 72
+Win Rate Closed: 0.0%
+Average Score: 2.75
+Average RR: 2.0
+Average Rank Score: 23.15
+
+Learning Notes:
+- Not enough closed trades yet. Titan should keep collecting outcome data before changing strategy.
+- LONG and SHORT setups are performing similarly so far.
+- Alerted and non-alerted setups are performing similarly so far.
+
+Top Symbols:
+- RELIANCE.NS: tracked=2, closed=0, wins=0, losses=0, win_rate=0.0%
+- ONGC.NS: tracked=2, closed=0, wins=0, losses=0, win_rate=0.0%
+- PFC.NS: tracked=2, closed=0, wins=0, losses=0, win_rate=0.0%
+- HAVELLS.NS: tracked=2, closed=0, wins=0, losses=0, win_rate=0.0%
+- MARICO.NS: tracked=2, closed=0, wins=0, losses=0, win_rate=0.0%
+- HAL.NS: tracked=2, closed=0, wins=0, losses=0, win_rate=0.0%
+- APOLLOHOSP.NS: tracked=2, closed=0, wins=0, losses=0, win_rate=0.0%
+- BAJFINANCE.NS: tracked=2, closed=0, wins=0, losses=0, win_rate=0.0%
+- DABUR.NS: tracked=2, closed=0, wins=0, losses=0, win_rate=0.0%
+- RECLTD.NS: tracked=2, closed=0, wins=0, losses=0, win_rate=0.0%

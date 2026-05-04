@@ -1,0 +1,66 @@
+{
+  "updated_at": "2026-05-04 19:29:30",
+  "system_name": "TITAN",
+  "system_flow": "Scan → Journal → Outcome → Learning → Evolution → Adaptive Scoring → Pattern Intelligence → Regime Intelligence → Elite Selection",
+  "last_scan_summary": {
+    "scan_id": "20260504_192856",
+    "market_status": {
+      "market_ok": true,
+      "reason": "Level 1 market filter active"
+    },
+    "eligible_setups": 36,
+    "rejected_by_evolution": 0,
+    "top_3_symbols": [
+      "RELIANCE.NS",
+      "ONGC.NS",
+      "PFC.NS"
+    ],
+    "closed_trades_at_scan_start": 0,
+    "timestamp": "2026-05-04 19:29:30"
+  },
+  "journal": {
+    "total_journal_rows": 36,
+    "closed_trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "open_trades": 36,
+    "accuracy_percent": 0.0,
+    "trade_journal_exists": true,
+    "scan_journal_exists": false
+  },
+  "evolution": {
+    "total_closed_trades": 0,
+    "total_wins": 0,
+    "total_losses": 0,
+    "win_rate_percent": 0.0,
+    "score_boost": 1.0,
+    "filter_strictness": 1.0,
+    "ranking_confidence": 1.0,
+    "last_updated": "2026-05-04 19:29:30",
+    "notes": [
+      "Waiting for more closed trades. Need at least 5, found 0."
+    ]
+  },
+  "intelligence_stage": {
+    "stage": "LEARNING_PHASE",
+    "stage_percent": 0.0,
+    "description": "Collecting first outcomes. Evolution filter and adaptive scoring remain protected."
+  },
+  "engines": {
+    "scan_engine": "ACTIVE",
+    "journal_engine": "ACTIVE",
+    "outcome_tracker": "ACTIVE",
+    "learning_engine": "ACTIVE",
+    "evolution_engine": "ACTIVE_WAITING_FOR_DATA",
+    "adaptive_scoring": "NEUTRAL_LEARNING_PHASE",
+    "pattern_intelligence": "NEUTRAL_LEARNING_PHASE",
+    "regime_intelligence": "ACTIVE",
+    "elite_selection": "ACTIVE",
+    "telegram_cap": "PROTECTED_3_PER_DAY",
+    "dashboard_ready": "YES"
+  },
+  "next_activation": {
+    "closed_trades_needed_for_active_evolution": 10,
+    "active_after_closed_trades": 10
+  }
+}

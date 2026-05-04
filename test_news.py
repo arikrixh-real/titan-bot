@@ -1,0 +1,3 @@
+from titan_brain.news_memory_engine import run_news_memory_engine
+
+run_news_memory_engine()

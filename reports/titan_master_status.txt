@@ -1,0 +1,45 @@
+TITAN MASTER STATUS
+============================================================
+Updated At: 2026-05-04 19:29:30
+Flow: Scan → Journal → Outcome → Learning → Evolution → Adaptive Scoring → Pattern Intelligence → Regime Intelligence → Elite Selection
+
+INTELLIGENCE STAGE
+------------------------------------------------------------
+Stage: LEARNING_PHASE
+Progress: 0.0%
+Description: Collecting first outcomes. Evolution filter and adaptive scoring remain protected.
+
+TRADE / JOURNAL STATUS
+------------------------------------------------------------
+Total journal rows: 36
+Closed trades: 0
+Wins: 0
+Losses: 0
+Open trades: 36
+Accuracy: 0.0%
+
+EVOLUTION STATUS
+------------------------------------------------------------
+Closed trades used: 0
+Win rate: 0.0%
+Score boost: 1.0
+Filter strictness: 1.0
+Ranking confidence: 1.0
+
+ENGINE STATUS
+------------------------------------------------------------
+scan_engine: ACTIVE
+journal_engine: ACTIVE
+outcome_tracker: ACTIVE
+learning_engine: ACTIVE
+evolution_engine: ACTIVE_WAITING_FOR_DATA
+adaptive_scoring: NEUTRAL_LEARNING_PHASE
+pattern_intelligence: NEUTRAL_LEARNING_PHASE
+regime_intelligence: ACTIVE
+elite_selection: ACTIVE
+telegram_cap: PROTECTED_3_PER_DAY
+dashboard_ready: YES
+
+NEXT ACTIVATION
+------------------------------------------------------------
+Closed trades needed for active evolution: 10
