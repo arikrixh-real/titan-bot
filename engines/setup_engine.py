@@ -93,6 +93,20 @@ def scan_for_setups():
     final_passed = 0
     alerts_sent = 0
 
+    # =========================
+    # DEBUG FAILURE COUNTERS
+    # =========================
+    no_live_price_count = 0
+    no_valid_trend_count = 0
+    structure_fail_count = 0
+    momentum_fail_count = 0
+    fake_breakout_count = 0
+    relative_weak_count = 0
+    not_ready_count = 0
+    quality_fail_count = 0
+    levels_fail_count = 0
+    rr_fail_count = 0
+
     market_status = market_regime_status()
     symbols = load_cached_stock_data()
     total_symbols = len(symbols)
@@ -106,6 +120,10 @@ def scan_for_setups():
 
     scan_id = insert_scan(scan_record)
 
+    print("🧪 SETUP ENGINE DEBUG ACTIVE")
+    print(f"Market Status: {market_status}")
+    print(f"Symbols received from loader: {total_symbols}")
+
     for symbol, data in symbols.items():
         try:
             scanned_symbols.append(symbol)
@@ -115,6 +133,13 @@ def scan_for_setups():
             live_price = get_live_price(symbol)
 
             if live_price is None:
+                no_live_price_count += 1
+
+                print(
+                    f"SCAN DEBUG → {symbol} | "
+                    f"live_price=None | BLOCKED=NO_LIVE_PRICE"
+                )
+
                 insert_scan_symbol(scan_id, {
                     "symbol": symbol,
                     "price": 0,
@@ -132,6 +157,14 @@ def scan_for_setups():
             side = trade_side_from_trend(trend)
 
             if side is None:
+                no_valid_trend_count += 1
+
+                print(
+                    f"SCAN DEBUG → {symbol} | "
+                    f"price={live_price} | trend={trend} | side=None | "
+                    f"BLOCKED=NO_VALID_TREND"
+                )
+
                 insert_scan_symbol(scan_id, {
                     "symbol": symbol,
                     "price": live_price,
@@ -162,6 +195,8 @@ def scan_for_setups():
 
             structure_result = structure_ok(data)
             momentum_result = strong_momentum(data)
+            fake_breakout_ok = avoid_fake_breakout(data)
+            relative_strength_result = relative_strength_ok(symbol)
             breakout_result = breakout_ready(data)
 
             if structure_result:
@@ -173,20 +208,36 @@ def scan_for_setups():
             if breakout_result:
                 entry_passed += 1
 
+            print(
+                f"ENTRY DEBUG → {symbol} | "
+                f"price={live_price} | trend={trend} | side={side} | "
+                f"volume={volume_score} | strength={strength_score} | "
+                f"compression={comp_score} | final_score={final_score} | "
+                f"structure={structure_result} | momentum={momentum_result} | "
+                f"fake_breakout_ok={fake_breakout_ok} | "
+                f"relative_strength={relative_strength_result} | "
+                f"entry={breakout_result}"
+            )
+
             if not structure_result:
                 fail_reason = "STRUCTURE_FAIL"
+                structure_fail_count += 1
 
             elif not momentum_result:
                 fail_reason = "MOMENTUM_FAIL"
+                momentum_fail_count += 1
 
-            elif not avoid_fake_breakout(data):
+            elif not fake_breakout_ok:
                 fail_reason = "FAKE_BREAKOUT"
+                fake_breakout_count += 1
 
-            elif not relative_strength_ok(symbol):
+            elif not relative_strength_result:
                 fail_reason = "RELATIVE_WEAK"
+                relative_weak_count += 1
 
             elif not breakout_result:
                 fail_reason = "NOT_READY"
+                not_ready_count += 1
 
             elif not passes_quality_filters(
                 final_score=final_score,
@@ -195,11 +246,14 @@ def scan_for_setups():
                 compression_score=comp_score
             ):
                 fail_reason = "QUALITY_FAIL"
+                quality_fail_count += 1
 
             else:
                 passed = True
                 fail_reason = "PASSED"
                 final_passed += 1
+
+            print(f"FILTER RESULT → {symbol} | {fail_reason}")
 
             insert_scan_symbol(scan_id, {
                 "symbol": symbol,
@@ -224,6 +278,8 @@ def scan_for_setups():
             )
 
             if not levels:
+                levels_fail_count += 1
+                print(f"SETUP BLOCKED → {symbol} | LEVELS_FAIL")
                 continue
 
             entry = levels["entry"]
@@ -233,6 +289,11 @@ def scan_for_setups():
             rr = calculate_rr(entry, stop_loss, target, side)
 
             if rr < 2:
+                rr_fail_count += 1
+                print(
+                    f"SETUP BLOCKED → {symbol} | RR_FAIL | "
+                    f"entry={entry} | sl={stop_loss} | target={target} | rr={rr}"
+                )
                 continue
 
             pos_data = position_sizing(entry, stop_loss)
@@ -335,7 +396,23 @@ def scan_for_setups():
 
         except Exception as e:
             errors.append(f"{symbol}: {e}")
+            print(f"❌ SYMBOL ERROR → {symbol}: {e}")
             continue
+
+    print("========== SCAN FAILURE BREAKDOWN ==========")
+    print(f"Stocks Checked: {stocks_checked}")
+    print(f"No Live Price: {no_live_price_count}")
+    print(f"No Valid Trend: {no_valid_trend_count}")
+    print(f"Structure Fail: {structure_fail_count}")
+    print(f"Momentum Fail: {momentum_fail_count}")
+    print(f"Fake Breakout: {fake_breakout_count}")
+    print(f"Relative Weak: {relative_weak_count}")
+    print(f"Not Ready: {not_ready_count}")
+    print(f"Quality Fail: {quality_fail_count}")
+    print(f"Levels Fail: {levels_fail_count}")
+    print(f"RR Fail: {rr_fail_count}")
+    print(f"Final Passed: {final_passed}")
+    print("===========================================")
 
     log_scan(
         total_symbols=total_symbols,
