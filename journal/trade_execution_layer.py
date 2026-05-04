@@ -1,20 +1,25 @@
 """
-TITAN Trade Execution Layer - DEDUP FINAL
------------------------------------------
-Purpose:
-1. Converts all eligible good setups into OPEN internal/live trades.
-2. Telegram top 3 are marked telegram_alerted=YES.
-3. Remaining good setups are also stored as internal live trades.
-4. Prevents duplicate OPEN trades:
-   - local active_trades.csv duplicate check
-   - Supabase trades table duplicate check using symbol + side + status='OPEN'
-5. Stores proper trade details in Supabase trades table.
-6. Does NOT insert missing columns like result into trades table.
-7. Tracks TP/SL locally every run.
+TITAN Trade Execution Layer - DEDUP SAFE SCHEMA FINAL
+-----------------------------------------------------
+This version fixes the Supabase 'sl column missing' problem.
 
-Important:
-- This does NOT place real broker orders.
-- This does NOT change Telegram alert limit.
+What it does:
+1. Good setups become OPEN internal/live trades.
+2. Telegram top 3 are marked telegram_alerted=YES in local CSV.
+3. Duplicate OPEN trades are prevented using:
+   - local active_trades.csv
+   - Supabase symbol + side + status check
+4. Supabase insert uses ONLY safe columns:
+   - trade_id
+   - symbol
+   - side
+   - status
+   - created_at
+   - reason
+   - trigger_status
+5. It does NOT insert sl/entry/target/rr into Supabase, because your schema/cache is rejecting sl.
+6. Full Entry/SL/Target/RR are still saved in active_trades.csv and tracked for TP/SL.
+7. No real broker orders are placed.
 """
 
 import os
@@ -147,10 +152,6 @@ def _get_supabase():
 
 
 def _supabase_open_trade_exists(client, symbol, side):
-    """
-    Checks if same symbol+side is already OPEN in Supabase.
-    Prevents duplicate open trades across GitHub runs.
-    """
     try:
         result = (
             client.table("trades")
@@ -171,8 +172,9 @@ def _supabase_open_trade_exists(client, symbol, side):
 
 def _insert_trade_to_supabase(row):
     """
-    Inserts only columns that exist in your current Supabase trades table.
-    Does not insert 'result' because your trades table does not have result column.
+    Safe Supabase insert.
+    Uses only columns that are safe for your trades table.
+    Detailed trade values are still kept in active_trades.csv.
     """
     client = _get_supabase()
 
@@ -192,30 +194,10 @@ def _insert_trade_to_supabase(row):
         "trade_id": str(row.get("trade_id", "")),
         "symbol": symbol,
         "side": side,
-        "entry": _safe_float(row.get("entry")),
-        "sl": _safe_float(row.get("sl")),
-        "target": _safe_float(row.get("target")),
-        "rr": _safe_float(row.get("rr")),
+        "status": "OPEN",
         "reason": str(row.get("reason", ""))[:500],
         "trigger_status": "INTERNAL_TRADE",
-        "status": "OPEN",
         "created_at": _now_iso(),
-    }
-
-    # Optional JSON columns available in your table
-    payload["scores"] = {
-        "score": _safe_float(row.get("score")),
-        "rank_score": _safe_float(row.get("rank_score")),
-    }
-
-    payload["market_context"] = {
-        "market_status": str(row.get("market_status", "")),
-    }
-
-    payload["setup_context"] = {
-        "scan_id": str(row.get("scan_id", "")),
-        "telegram_alerted": str(row.get("telegram_alerted", "NO")),
-        "opened_at": str(row.get("opened_at", "")),
     }
 
     try:
@@ -223,15 +205,11 @@ def _insert_trade_to_supabase(row):
         return True
 
     except Exception as e:
-        print(f"⚠️ Supabase trade insert skipped for {symbol} {side}: {e}")
+        print(f"⚠️ Supabase safe trade insert skipped for {symbol} {side}: {e}")
         return False
 
 
 def _insert_result_to_supabase_minimal():
-    """
-    Safe result insert.
-    If trade_results schema is limited, no crash.
-    """
     client = _get_supabase()
 
     if client is None:
@@ -284,13 +262,6 @@ def add_good_setups_as_live_trades(
     market_status="",
     max_new_trades=None,
 ):
-    """
-    Converts good setups into OPEN live/internal trades.
-
-    Duplicate protection:
-    - Skips if same symbol+side already OPEN in local CSV.
-    - Skips if same symbol+side already OPEN in Supabase.
-    """
     alerted_symbols = set(alerted_symbols or [])
 
     active_df = _read_csv(ACTIVE_TRADES_FILE, ACTIVE_COLUMNS)
@@ -367,7 +338,6 @@ def add_good_setups_as_live_trades(
             "reason": str(setup.get("reason", ""))[:500],
         }
 
-        # Insert to Supabase first. If duplicate exists there, it returns False.
         inserted_to_supabase = _insert_trade_to_supabase(row)
 
         if not inserted_to_supabase:
@@ -392,9 +362,6 @@ def add_good_setups_as_live_trades(
 
 
 def update_live_trade_outcomes():
-    """
-    Checks active_trades.csv and closes trades when SL/TP is hit.
-    """
     active_df = _read_csv(ACTIVE_TRADES_FILE, ACTIVE_COLUMNS)
     results_df = _read_csv(TRADE_RESULTS_FILE, RESULT_COLUMNS)
 
