@@ -297,7 +297,7 @@ def scan_for_setups():
 
             rr = calculate_rr(entry, stop_loss, target, side)
 
-            if rr < 2:
+            if rr < 1.5:
                 rr_fail_count += 1
                 print(
                     f"SETUP BLOCKED → {symbol} | RR_FAIL | "
