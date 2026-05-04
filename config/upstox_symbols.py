@@ -9,8 +9,6 @@ UPSTOX_ACCESS_TOKEN = os.getenv("UPSTOX_ACCESS_TOKEN")
 _cached_map = {}
 
 
-# ✅ Manual fallback map for important NSE stocks
-# This avoids search API mismatch problems.
 MANUAL_INSTRUMENT_KEYS = {
     "RELIANCE": "NSE_EQ|INE002A01018",
     "TCS": "NSE_EQ|INE467B01029",
@@ -31,11 +29,27 @@ MANUAL_INSTRUMENT_KEYS = {
     "ADANIPORTS": "NSE_EQ|INE742F01042",
     "GRASIM": "NSE_EQ|INE047A01021",
     "NTPC": "NSE_EQ|INE733E01010",
+    "ONGC": "NSE_EQ|INE213A01029",
+    "PFC": "NSE_EQ|INE134E01011",
 }
 
 
-def get_instrument_key(stock):
+def normalize_symbol(stock):
     stock = str(stock).upper().strip()
+
+    # yfinance NSE format cleanup
+    if stock.endswith(".NS"):
+        stock = stock[:-3]
+
+    # general cleanup
+    stock = stock.replace("NSE:", "").replace("NSE_EQ:", "").replace("NSE_EQ|", "")
+    stock = stock.strip()
+
+    return stock
+
+
+def get_instrument_key(stock):
+    stock = normalize_symbol(stock)
 
     if stock in _cached_map:
         return _cached_map[stock]
@@ -52,28 +66,39 @@ def get_instrument_key(stock):
 
         headers = {
             "accept": "application/json",
-            "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"
+            "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
         }
 
         params = {
             "query": stock
         }
 
-        response = requests.get(url, headers=headers, params=params, timeout=10)
-        data = response.json()
+        response = requests.get(url, headers=headers, params=params, timeout=8)
+
+        try:
+            data = response.json()
+        except Exception:
+            print(f"Upstox instrument search error for {stock}: non-json response")
+            return None
+
+        if response.status_code != 200:
+            print(f"Upstox instrument search error for {stock}: HTTP {response.status_code} {data}")
+            return None
 
         results = data.get("data", [])
 
+        if isinstance(results, dict):
+            results = list(results.values())
+
         for item in results:
-            exchange = item.get("exchange")
-            trading_symbol = item.get("trading_symbol")
+            if not isinstance(item, dict):
+                continue
+
+            exchange = str(item.get("exchange", "")).upper()
+            trading_symbol = str(item.get("trading_symbol", "")).upper().strip()
             instrument_key = item.get("instrument_key")
 
-            if (
-                exchange in ["NSE", "NSE_EQ"]
-                and str(trading_symbol).upper().strip() == stock
-                and instrument_key
-            ):
+            if exchange in ["NSE", "NSE_EQ"] and trading_symbol == stock and instrument_key:
                 _cached_map[stock] = instrument_key
                 return instrument_key
 
