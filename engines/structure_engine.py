@@ -1,20 +1,47 @@
-def structure_ok(df, side="LONG", lookback=6):
-    if len(df) < lookback:
+def structure_ok(df, side="LONG", lookback=8):
+    """
+    Checks whether price structure is acceptable.
+    Balanced version:
+    - Not too strict
+    - Allows clean pullbacks
+    - Still avoids messy sideways structure
+    """
+
+    if df is None or len(df) < lookback:
         return False
 
-    recent = df.iloc[-lookback:]
+    try:
+        recent = df.iloc[-lookback:]
 
-    highs = list(recent["High"])
-    lows = list(recent["Low"])
+        highs = list(recent["High"])
+        lows = list(recent["Low"])
+        closes = list(recent["Close"])
 
-    if side == "LONG":
-        recent_highs_rising = highs[-1] > highs[-3]
-        recent_lows_rising = lows[-1] > lows[-3]
-        return recent_highs_rising and recent_lows_rising
+        current_close = closes[-1]
+        previous_close = closes[-2]
 
-    if side == "SHORT":
-        recent_highs_falling = highs[-1] < highs[-3]
-        recent_lows_falling = lows[-1] < lows[-3]
-        return recent_highs_falling and recent_lows_falling
+        recent_high = max(highs[:-1])
+        recent_low = min(lows[:-1])
 
-    return False
+        # LONG structure:
+        # Either price breaks above recent high
+        # OR price is recovering with higher close
+        if side == "LONG":
+            breakout_structure = current_close > recent_high
+            recovery_structure = current_close > previous_close and lows[-1] >= min(lows[-3:])
+
+            return breakout_structure or recovery_structure
+
+        # SHORT structure:
+        # Either price breaks below recent low
+        # OR price is weakening with lower close
+        if side == "SHORT":
+            breakdown_structure = current_close < recent_low
+            weakness_structure = current_close < previous_close and highs[-1] <= max(highs[-3:])
+
+            return breakdown_structure or weakness_structure
+
+        return False
+
+    except Exception:
+        return False
