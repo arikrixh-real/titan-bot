@@ -1,24 +1,30 @@
 def calculate_trade_levels(df, side="LONG"):
-    latest = df.iloc[-1]
+    """
+    Clean trade level calculation
+    NO extra arguments like 'symbol'
+    """
 
-    high = latest["High"]
-    low = latest["Low"]
+    try:
+        last = df.iloc[-1]
 
-    if side == "LONG":
-        entry = round(high * 1.001, 2)
-        sl = round(low * 0.999, 2)
-        risk = entry - sl
-        t1 = round(entry + (risk * 1.5), 2)
-        t2 = round(entry + (risk * 2.5), 2)
+        price = last["Close"]
 
-    elif side == "SHORT":
-        entry = round(low * 0.999, 2)
-        sl = round(high * 1.001, 2)
-        risk = sl - entry
-        t1 = round(entry - (risk * 1.5), 2)
-        t2 = round(entry - (risk * 2.5), 2)
+        if side == "LONG":
+            sl = price * 0.98
+            target = price * 1.02
 
-    else:
+        elif side == "SHORT":
+            sl = price * 1.02
+            target = price * 0.98
+
+        else:
+            return None
+
+        return {
+            "entry": price,
+            "sl": sl,
+            "target": target
+        }
+
+    except Exception:
         return None
-
-    return entry, sl, t1, t2
