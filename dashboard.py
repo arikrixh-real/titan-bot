@@ -705,7 +705,18 @@ if scan_health:
     latest_entry_passed = int(scan_health.get("entry_passed") or 0)
     latest_final_passed = int(scan_health.get("final_passed") or 0)
     latest_health_alerts = int(scan_health.get("alerts_sent") or 0)
-    latest_market_status = scan_health.get("market_status") or "UNKNOWN"
+    latest_scan_health_time = row_time(scan_health)
+    latest_scan_health_age = age_text_from_dt(latest_scan_health_time)
+
+    if latest_scan_health_time and latest_stocks_checked > 0:
+        health_age_seconds = (datetime.now(IST) - latest_scan_health_time).total_seconds()
+
+        if health_age_seconds <= 900:
+            upstox_live_price_status = "ACTIVE"
+        else:
+            upstox_live_price_status = "INACTIVE"
+    else:
+        upstox_live_price_status = "INACTIVE"
 else:
     latest_stocks_checked = 0
     latest_trend_passed = 0
@@ -714,7 +725,8 @@ else:
     latest_entry_passed = 0
     latest_final_passed = 0
     latest_health_alerts = 0
-    latest_market_status = "UNKNOWN"
+    latest_scan_health_age = "No live price scan yet"
+    upstox_live_price_status = "INACTIVE"
 
 
 # =========================================================
@@ -928,7 +940,11 @@ if scan_health:
     h1, h2, h3 = st.columns(3)
 
     with h1:
-        status_card("Market Status", latest_market_status, "Latest scan market regime")
+        status_card(
+            "Upstox Live Price",
+            upstox_live_price_status,
+            f"Live price scan: {latest_stocks_checked}/50 · {latest_scan_health_age}"
+        )
 
     with h2:
         metric_card("Alerts This Scan", f"{latest_health_alerts:,}", "Real alerts only")
