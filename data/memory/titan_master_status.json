@@ -1,9 +1,9 @@
 {
-  "updated_at": "2026-05-04 19:17:41",
+  "updated_at": "2026-05-04 19:22:56",
   "system_name": "TITAN",
   "system_flow": "Scan → Journal → Outcome → Learning → Evolution → Adaptive Scoring → Pattern Intelligence → Regime Intelligence → Elite Selection",
   "last_scan_summary": {
-    "scan_id": "20260505_004700",
+    "scan_id": "20260505_005220",
     "market_status": {
       "market_ok": true,
       "reason": "Level 1 market filter active"
@@ -23,7 +23,7 @@
       "PFC.NS"
     ],
     "closed_trades_at_scan_start": 0,
-    "timestamp": "2026-05-05 00:47:41"
+    "timestamp": "2026-05-05 00:52:56"
   },
   "journal": {
     "total_journal_rows": 293,
@@ -43,7 +43,7 @@
     "score_boost": 1.0,
     "filter_strictness": 1.0,
     "ranking_confidence": 1.0,
-    "last_updated": "2026-05-04 19:17:41",
+    "last_updated": "2026-05-04 19:22:56",
     "notes": [
       "Waiting for more closed trades. Need at least 5, found 0."
     ]
