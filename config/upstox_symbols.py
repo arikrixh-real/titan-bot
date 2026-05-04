@@ -1,10 +1,13 @@
-import os
-import requests
-from dotenv import load_dotenv
+"""
+TITAN - Upstox Instrument Map
+-----------------------------
+Manual safe map.
 
-load_dotenv()
-
-UPSTOX_ACCESS_TOKEN = os.getenv("UPSTOX_ACCESS_TOKEN")
+IMPORTANT:
+- No Upstox search API here.
+- Unknown symbols return None silently.
+- setup_engine.py falls back to cached price.
+"""
 
 _cached_map = {}
 
@@ -31,18 +34,40 @@ MANUAL_INSTRUMENT_KEYS = {
     "NTPC": "NSE_EQ|INE733E01010",
     "ONGC": "NSE_EQ|INE213A01029",
     "PFC": "NSE_EQ|INE134E01011",
+    "COALINDIA": "NSE_EQ|INE522F01014",
+    "POWERGRID": "NSE_EQ|INE752E01010",
+    "SUNPHARMA": "NSE_EQ|INE044A01036",
+    "HCLTECH": "NSE_EQ|INE860A01027",
+    "TECHM": "NSE_EQ|INE669C01036",
+    "WIPRO": "NSE_EQ|INE075A01022",
+    "ULTRACEMCO": "NSE_EQ|INE481G01011",
+    "BAJAJ-AUTO": "NSE_EQ|INE917I01010",
+    "BAJFINANCE": "NSE_EQ|INE296A01024",
+    "BAJAJFINSV": "NSE_EQ|INE918I01026",
+    "BRITANNIA": "NSE_EQ|INE216A01030",
+    "CIPLA": "NSE_EQ|INE059A01026",
+    "DRREDDY": "NSE_EQ|INE089A01023",
+    "EICHERMOT": "NSE_EQ|INE066A01021",
+    "HEROMOTOCO": "NSE_EQ|INE158A01026",
+    "HINDALCO": "NSE_EQ|INE038A01020",
+    "INDUSINDBK": "NSE_EQ|INE095A01012",
+    "JSWSTEEL": "NSE_EQ|INE019A01038",
+    "M&M": "NSE_EQ|INE101A01026",
+    "NESTLEIND": "NSE_EQ|INE239A01024",
+    "TITAN": "NSE_EQ|INE280A01028",
+    "UPL": "NSE_EQ|INE628A01036",
 }
 
 
 def normalize_symbol(stock):
     stock = str(stock).upper().strip()
 
-    # yfinance NSE format cleanup
     if stock.endswith(".NS"):
         stock = stock[:-3]
 
-    # general cleanup
-    stock = stock.replace("NSE:", "").replace("NSE_EQ:", "").replace("NSE_EQ|", "")
+    stock = stock.replace("NSE:", "")
+    stock = stock.replace("NSE_EQ:", "")
+    stock = stock.replace("NSE_EQ|", "")
     stock = stock.strip()
 
     return stock
@@ -54,56 +79,10 @@ def get_instrument_key(stock):
     if stock in _cached_map:
         return _cached_map[stock]
 
-    if stock in MANUAL_INSTRUMENT_KEYS:
-        _cached_map[stock] = MANUAL_INSTRUMENT_KEYS[stock]
-        return MANUAL_INSTRUMENT_KEYS[stock]
+    key = MANUAL_INSTRUMENT_KEYS.get(stock)
 
-    if not UPSTOX_ACCESS_TOKEN:
-        return None
-
-    try:
-        url = "https://api.upstox.com/v2/search/instruments"
-
-        headers = {
-            "accept": "application/json",
-            "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
-        }
-
-        params = {
-            "query": stock
-        }
-
-        response = requests.get(url, headers=headers, params=params, timeout=8)
-
-        try:
-            data = response.json()
-        except Exception:
-            print(f"Upstox instrument search error for {stock}: non-json response")
-            return None
-
-        if response.status_code != 200:
-            print(f"Upstox instrument search error for {stock}: HTTP {response.status_code} {data}")
-            return None
-
-        results = data.get("data", [])
-
-        if isinstance(results, dict):
-            results = list(results.values())
-
-        for item in results:
-            if not isinstance(item, dict):
-                continue
-
-            exchange = str(item.get("exchange", "")).upper()
-            trading_symbol = str(item.get("trading_symbol", "")).upper().strip()
-            instrument_key = item.get("instrument_key")
-
-            if exchange in ["NSE", "NSE_EQ"] and trading_symbol == stock and instrument_key:
-                _cached_map[stock] = instrument_key
-                return instrument_key
-
-    except Exception as e:
-        print(f"Upstox instrument search error for {stock}: {e}")
-        return None
+    if key:
+        _cached_map[stock] = key
+        return key
 
     return None

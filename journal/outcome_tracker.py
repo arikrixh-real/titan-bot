@@ -6,14 +6,14 @@ Tracks whether journaled eligible setups hit TARGET or SL.
 IMPORTANT:
 - Reads ALL OPEN journaled setups.
 - Keeps checking OPEN trades every run.
+- Skips old/bad journal rows.
 - Writes final TARGET_HIT / SL_HIT only once.
-- Also writes latest OPEN snapshot so dashboard can see active trades.
 - Does NOT send Telegram alerts.
-- Does NOT change daily alert cap.
 """
 
 import csv
 import json
+import re
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -63,6 +63,28 @@ def safe_float(value, default=None):
         return default
 
 
+def clean_symbol(symbol):
+    symbol = str(symbol).upper().strip()
+    symbol = symbol.replace(".NS", "")
+    return symbol
+
+
+def is_valid_symbol(symbol):
+    symbol = clean_symbol(symbol)
+
+    if not symbol:
+        return False
+
+    # Blocks old broken rows like 20260504_211559
+    if re.fullmatch(r"[0-9_:-]+", symbol):
+        return False
+
+    if len(symbol) > 20:
+        return False
+
+    return True
+
+
 def ensure_outcome_files():
     OUTCOME_CSV.parent.mkdir(parents=True, exist_ok=True)
 
@@ -96,13 +118,7 @@ def make_key(row):
 
 
 def load_closed_trade_keys():
-    """
-    Only final TARGET_HIT / SL_HIT rows close a trade.
-    OPEN rows must NOT block future checks.
-    """
-
     ensure_outcome_files()
-
     closed = set()
 
     with open(OUTCOME_CSV, "r", newline="", encoding="utf-8") as f:
@@ -116,6 +132,11 @@ def load_closed_trade_keys():
 
 
 def get_current_price(symbol):
+    symbol = clean_symbol(symbol)
+
+    if not is_valid_symbol(symbol):
+        return None
+
     if get_live_price is None:
         return None
 
@@ -160,7 +181,7 @@ def evaluate_outcome(side, entry, sl, target, current_price):
 
 
 def build_outcome_row(journal_row):
-    symbol = str(journal_row.get("symbol", "")).upper().strip()
+    symbol = clean_symbol(journal_row.get("symbol", ""))
     side = str(journal_row.get("side", "")).upper().strip()
 
     entry = safe_float(journal_row.get("entry"))
@@ -220,15 +241,7 @@ def _append_final_outcomes(final_rows):
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def track_trade_outcomes(limit=None):
-    """
-    Main function.
-
-    Reads journaled trades.
-    Keeps checking OPEN trades every 5-min run.
-    Saves final outcome once TP/SL is hit.
-    """
-
+def track_trade_outcomes(limit=50):
     ensure_outcome_files()
 
     if not JOURNAL_FILE.exists():
@@ -246,11 +259,18 @@ def track_trade_outcomes(limit=None):
     open_rows = []
     final_rows = []
     checked_count = 0
+    skipped_bad_rows = 0
 
     for journal_row in journal_rows:
+        symbol = journal_row.get("symbol", "")
+        side = str(journal_row.get("side", "")).upper().strip()
+
+        if not is_valid_symbol(symbol) or side not in ["LONG", "SHORT"]:
+            skipped_bad_rows += 1
+            continue
+
         trade_key = make_key(journal_row)
 
-        # Already closed previously
         if trade_key in closed_trade_keys:
             continue
 
@@ -267,6 +287,7 @@ def track_trade_outcomes(limit=None):
     _write_open_trades(open_rows)
 
     print(f"📊 Outcome Tracker Checked: {checked_count} open/internal trades")
+    print(f"🧹 Skipped bad old rows: {skipped_bad_rows}")
     print(f"✅ Newly closed targets: {sum(1 for row in final_rows if row['outcome'] == 'TARGET_HIT')}")
     print(f"❌ Newly closed SLs: {sum(1 for row in final_rows if row['outcome'] == 'SL_HIT')}")
     print(f"⏳ Still open: {len(open_rows)}")

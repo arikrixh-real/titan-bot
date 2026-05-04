@@ -1,7 +1,19 @@
+"""
+TITAN - Live Price Engine
+-------------------------
+Safe Upstox LTP fetcher.
+
+IMPORTANT:
+- Does NOT spam Upstox search API.
+- Uses only known instrument keys from config/upstox_symbols.py.
+- If symbol is not mapped, returns None silently.
+- setup_engine.py will fallback to cached Close price.
+"""
+
 import requests
 
 from config.api_keys import UPSTOX_ACCESS_TOKEN
-from config.upstox_symbols import get_instrument_key
+from config.upstox_symbols import get_instrument_key, normalize_symbol
 
 
 def safe_float(value):
@@ -11,14 +23,6 @@ def safe_float(value):
         return float(value)
     except Exception:
         return None
-
-
-def clean_symbol(symbol):
-    symbol = str(symbol).upper().strip()
-    symbol = symbol.replace(".NS", "")
-    symbol = symbol.replace("NSE:", "")
-    symbol = symbol.strip()
-    return symbol
 
 
 def _extract_ltp(data, instrument_key):
@@ -38,7 +42,6 @@ def _extract_ltp(data, instrument_key):
 
     for key in possible_keys:
         item = payload.get(key)
-
         if isinstance(item, dict):
             return (
                 item.get("last_price")
@@ -53,7 +56,6 @@ def _extract_ltp(data, instrument_key):
                 or item.get("ltp")
                 or item.get("lastPrice")
             )
-
             if price is not None:
                 return price
 
@@ -61,18 +63,19 @@ def _extract_ltp(data, instrument_key):
 
 
 def fetch_price_from_upstox(symbol):
+    symbol = normalize_symbol(symbol)
+
+    instrument_key = get_instrument_key(symbol)
+
+    # No spam. Cached data fallback will be used.
+    if not instrument_key:
+        return None
+
+    if not UPSTOX_ACCESS_TOKEN:
+        print("Upstox skipped: UPSTOX_ACCESS_TOKEN missing")
+        return None
+
     try:
-        symbol = clean_symbol(symbol)
-        instrument_key = get_instrument_key(symbol)
-
-        if not instrument_key:
-            print(f"Upstox fetch skipped {symbol}: instrument key not found")
-            return None
-
-        if not UPSTOX_ACCESS_TOKEN:
-            print(f"Upstox fetch skipped {symbol}: UPSTOX_ACCESS_TOKEN missing")
-            return None
-
         url = "https://api.upstox.com/v2/market-quote/ltp"
 
         headers = {
@@ -89,33 +92,22 @@ def fetch_price_from_upstox(symbol):
         try:
             data = response.json()
         except Exception:
-            print(f"Upstox fetch error {symbol}: non-json response {response.status_code}")
             return None
 
         if response.status_code != 200:
-            print(f"Upstox fetch error {symbol}: HTTP {response.status_code} {data}")
+            message = str(data)
+
+            # Print token problem clearly, but don't spam every symbol
+            if "Invalid token" in message or response.status_code == 401:
+                print("Upstox token invalid/expired. Update UPSTOX_ACCESS_TOKEN.")
             return None
 
         ltp = _extract_ltp(data, instrument_key)
-        ltp = safe_float(ltp)
+        return safe_float(ltp)
 
-        if ltp is None:
-            print(f"Upstox fetch error {symbol}: LTP not found in response")
-            return None
-
-        return ltp
-
-    except Exception as e:
-        print(f"Upstox fetch error {symbol}: {e}")
+    except Exception:
         return None
 
 
 def get_live_price(symbol):
-    try:
-        symbol = clean_symbol(symbol)
-        price = fetch_price_from_upstox(symbol)
-        return safe_float(price)
-
-    except Exception as e:
-        print(f"Live price error {symbol}: {e}")
-        return None
+    return fetch_price_from_upstox(symbol)
