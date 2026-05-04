@@ -1,5 +1,7 @@
 import feedparser
 import re
+import json
+from pathlib import Path
 from datetime import datetime
 
 
@@ -35,9 +37,11 @@ NEWS_FEEDS = [
     "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
 ]
 
+NEWS_MEMORY_FILE = Path("titan_brain/memory/news_batch_state.json")
+
 
 def clean_text(text):
-    text = text.lower()
+    text = str(text or "").lower()
     text = re.sub(r"[^a-z0-9& ]", " ", text)
     text = re.sub(r"\s+", " ", text)
     return f" {text.strip()} "
@@ -94,6 +98,35 @@ def get_stock_news():
     return [item for item in news if item["detected_symbols"]]
 
 
+def run_news_engine():
+    """
+    Main function called by setup_engine.py.
+    Fetches stock-related news and stores latest batch safely.
+    """
+    try:
+        stock_news = get_stock_news()
+
+        NEWS_MEMORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+        memory_data = {
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "news_count": len(stock_news),
+            "news": stock_news[:50],
+        }
+
+        with open(NEWS_MEMORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(memory_data, f, indent=2, ensure_ascii=False)
+
+        print(f"📰 News Engine: collected {len(stock_news)} stock-related news items")
+        print(f"🧠 News memory updated: {NEWS_MEMORY_FILE}")
+
+        return stock_news
+
+    except Exception as e:
+        print(f"⚠️ News Engine Error: {e}")
+        return []
+
+
 if __name__ == "__main__":
     print("Testing TITAN News Engine...")
 
@@ -104,7 +137,7 @@ if __name__ == "__main__":
     print("Test 5:", detect_stock_from_news("Air India enters codeshare pact with Japan airline"))
 
     print("\nFetching live stock-related news...")
-    stock_news = get_stock_news()
+    stock_news = run_news_engine()
 
     for news in stock_news[:10]:
         print("\n-------------------------")
