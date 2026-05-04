@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas numpy requests beautifulsoup4 yfinance ta tabulate
+          pip install pandas numpy requests beautifulsoup4 yfinance ta tabulate python-dotenv
 
       - name: Verify files
         run: |
