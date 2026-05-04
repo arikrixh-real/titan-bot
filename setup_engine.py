@@ -1,11 +1,36 @@
-# ===================== IMPORTS =====================
+"""
+TITAN - Setup Engine
+--------------------
+Flow:
+Scan
+→ Quality Filter
+→ Evolution Score
+→ Adaptive Score
+→ Pattern Intelligence
+→ Market Regime Intelligence
+→ Evolution Filter
+→ Elite Trade Selection
+→ Journal
+→ Trade Execution Layer
+→ Outcome
+→ Evolution
+→ Master Status
+→ Dashboard Supabase Logging
+
+IMPORTANT:
+- Telegram limit remains controlled by your alert system.
+- Top 3 setups are flagged as telegram_alerted.
+- All eligible good setups are saved as OPEN live/internal trades with Entry, SL, Target.
+- Duplicate open trades for same symbol+side are blocked.
+"""
+
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import os
+
 import pandas as pd
 from supabase import create_client
 
-# ===================== EXISTING IMPORTS =====================
 from config.universe import NSE_STOCKS
 from data.loader import load_cached_stock_data
 from data.live_price import get_live_price
@@ -25,6 +50,7 @@ from engines.trap_engine import avoid_fake_breakout
 from engines.relative_strength_engine import relative_strength_ok
 from engines.entry_engine import breakout_ready
 from engines.reason_engine import build_reason
+from engines.trigger_engine import trigger_status
 from engines.structure_engine import structure_ok
 
 from engines.evolution_adapter import evolve_setup, passes_evolution_filter
@@ -42,16 +68,31 @@ from engines.master_status import update_master_status
 from journal.trade_journal import journal_eligible_setups
 from journal.outcome_tracker import track_trade_outcomes
 
-# ===================== NEWS ENGINE SAFE =====================
+# ✅ NEW: Trade Execution Layer
+from journal.trade_execution_layer import (
+    add_good_setups_as_live_trades,
+    update_live_trade_outcomes,
+)
+
+# ✅ Optional News Engine import
 try:
     from intelligence.news_engine import run_news_engine
-except:
+except Exception:
     run_news_engine = None
 
-# ===================== CONSTANTS =====================
+
 IST = ZoneInfo("Asia/Kolkata")
 
-# ===================== SUPABASE =====================
+BASE_EVOLUTION_THRESHOLD = 60.0
+MIN_CLOSED_TRADES_FOR_EVOLUTION_FILTER = 10
+
+OHLCV_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
+
+
+# =========================================================
+# SUPABASE SAFE DASHBOARD LOGGING
+# =========================================================
+
 def get_supabase():
     try:
         url = os.getenv("SUPABASE_URL")
@@ -59,13 +100,20 @@ def get_supabase():
         if not url or not key:
             return None
         return create_client(url, key)
-    except:
+    except Exception:
         return None
+
 
 supabase = get_supabase()
 
-# ===================== SUPABASE LOGGING (FIXED) =====================
+
 def log_scan_to_supabase(scan_summary, scanned_count, eligible_setups):
+    """
+    Safe dashboard logging.
+    Uses only columns already confirmed working:
+    scans.created_at
+    scan_health_logs.created_at, stocks_checked, final_passed
+    """
     if supabase is None:
         print("⚠️ Supabase not connected")
         return
@@ -73,41 +121,68 @@ def log_scan_to_supabase(scan_summary, scanned_count, eligible_setups):
     try:
         now = datetime.now(IST).isoformat()
 
-        # SAFE INSERT → scans
         supabase.table("scans").insert({
             "created_at": now
         }).execute()
 
-        # SAFE INSERT → scan_health_logs
         supabase.table("scan_health_logs").insert({
             "created_at": now,
             "stocks_checked": scanned_count,
             "final_passed": len(eligible_setups)
         }).execute()
 
-        print("✅ Scan logged to Supabase")
+        print("✅ Scan data logged to Supabase for dashboard")
 
     except Exception as e:
         print(f"❌ Supabase logging error: {e}")
 
-# ===================== SAFE HELPERS =====================
+
+# =========================================================
+# SAFE HELPERS
+# =========================================================
+
 def safe_float(value, default=None):
     try:
         if value is None:
             return default
         return float(value)
-    except:
+    except Exception:
         return default
 
-# ===================== MAIN ENGINE =====================
+
+def clean_market_dataframe(df):
+    if df is None or df.empty:
+        return df
+
+    df = df.copy()
+
+    for col in OHLCV_COLUMNS:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    available_cols = [col for col in OHLCV_COLUMNS if col in df.columns]
+    if available_cols:
+        df = df.dropna(subset=available_cols)
+
+    return df
+
+
 def run_news_engine_safely():
     if run_news_engine is None:
+        print("📰 News Engine: not connected / function not found")
         return
-    try:
-        run_news_engine()
-    except:
-        pass
 
+    try:
+        print("📰 Running News Engine...")
+        run_news_engine()
+        print("✅ News Engine Completed")
+    except Exception as e:
+        print(f"⚠️ News Engine Error: {e}")
+
+
+# =========================================================
+# MAIN SCANNER
+# =========================================================
 
 def scan_for_setups():
     print("🚀 TITAN scan started...")
@@ -117,21 +192,61 @@ def scan_for_setups():
     scan_id = datetime.now(IST).strftime("%Y%m%d_%H%M%S")
 
     market_status = market_regime_status()
+    print(f"📊 Market Status: {market_status}")
+
+    try:
+        evolution_state = get_evolution_state()
+        closed_trades = int(evolution_state.get("total_closed_trades", 0))
+    except Exception:
+        closed_trades = 0
+
+    try:
+        adaptive_threshold = safe_float(
+            get_evolution_filter_threshold(BASE_EVOLUTION_THRESHOLD),
+            BASE_EVOLUTION_THRESHOLD,
+        )
+    except Exception:
+        adaptive_threshold = BASE_EVOLUTION_THRESHOLD
+
+    if closed_trades < MIN_CLOSED_TRADES_FOR_EVOLUTION_FILTER:
+        print(
+            f"🧠 Evolution Mode: LEARNING PHASE "
+            f"({closed_trades}/{MIN_CLOSED_TRADES_FOR_EVOLUTION_FILTER} closed trades)"
+        )
+        print("🧠 Evolution Filter: OFF until enough outcome data is collected")
+        print("🧠 Adaptive Scoring: NEUTRAL until enough outcome data is collected")
+        print("🧩 Pattern Intelligence: NEUTRAL until enough outcome data is collected")
+        print("🌐 Regime Intelligence: ACTIVE light score adjustment")
+        print("🏆 Elite Selection: ACTIVE ranking mode")
+    else:
+        print("🧠 Evolution Mode: ACTIVE FILTERING")
+        print(f"🧠 Evolution Filter Threshold: {adaptive_threshold}")
+        print("🧠 Adaptive Scoring: ACTIVE")
+        print("🧩 Pattern Intelligence: ACTIVE")
+        print("🌐 Regime Intelligence: ACTIVE")
+        print("🏆 Elite Selection: ACTIVE highest-probability mode")
 
     eligible_setups = []
+    rejected_by_evolution = 0
     scanned_count = 0
+    error_count = 0
 
     for symbol in NSE_STOCKS:
         try:
             df = load_cached_stock_data(symbol)
+            df = clean_market_dataframe(df)
 
-            if df is None or df.empty:
+            if df is None or df.empty or len(df) < 30:
                 continue
 
             scanned_count += 1
 
             live_price = safe_float(get_live_price(symbol))
-            if not live_price:
+
+            if live_price is None:
+                live_price = safe_float(df["Close"].iloc[-1])
+
+            if live_price is None or live_price <= 0:
                 continue
 
             trend = trend_direction(df)
@@ -146,66 +261,182 @@ def scan_for_setups():
             if not strong_momentum(df, side):
                 continue
 
+            if not avoid_fake_breakout(df, side):
+                continue
+
+            if not relative_strength_ok(symbol):
+                continue
+
             if not breakout_ready(df, side):
                 continue
 
-            entry, sl, target = calculate_trade_levels(df, side, live_price)
+            volume_score = safe_float(volume_anomaly_score(df), 0.0)
+            strength_score = safe_float(price_strength_score(df), 0.0)
+            compression_value = safe_float(compression_score(df), 0.0)
+
+            score = safe_float(
+                final_signal_score(
+                    volume_score=volume_score,
+                    strength_score=strength_score,
+                    compression_score=compression_value,
+                    trend=trend,
+                    side=side,
+                ),
+                0.0,
+            )
+
+            entry, sl, target = calculate_trade_levels(
+                df=df,
+                side=side,
+                price=live_price,
+            )
 
             entry = safe_float(entry)
             sl = safe_float(sl)
             target = safe_float(target)
 
-            if not entry or not sl or not target:
+            if entry is None or sl is None or target is None:
                 continue
 
-            rr = safe_float(calculate_rr(entry, sl, target, side), 0)
+            rr = safe_float(
+                calculate_rr(
+                    entry=entry,
+                    sl=sl,
+                    target=target,
+                    side=side,
+                ),
+                0.0,
+            )
 
             if rr <= 0:
                 continue
 
-            score = safe_float(final_signal_score(), 0)
-
-            if not passes_quality_filters(score, rr, side, market_status):
+            if not passes_quality_filters(
+                score=score,
+                rr=rr,
+                side=side,
+                market_status=market_status,
+            ):
                 continue
+
+            reason = build_reason(
+                symbol=symbol,
+                side=side,
+                score=score,
+                rr=rr,
+                trend=trend,
+                volume_score=volume_score,
+                strength_score=strength_score,
+                compression_score=compression_value,
+                market_status=market_status,
+            )
 
             setup = {
                 "symbol": symbol,
-                "score": score,
-                "rr": rr,
+                "side": side,
+                "entry": round(entry, 2),
+                "sl": round(sl, 2),
+                "target": round(target, 2),
+                "rr": round(rr, 2),
+                "score": round(score, 2),
+                "rank_score": round(score + (rr * 10), 2),
+                "confirmations": [],
+                "reason": reason,
+                "market_status": market_status,
+                "timestamp": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S"),
             }
+
+            setup = evolve_setup(setup)
+            setup = adaptive_score_adjustment(setup)
+            setup = apply_pattern_intelligence(setup)
+            setup = regime_score_adjustment(setup)
+
+            if closed_trades >= MIN_CLOSED_TRADES_FOR_EVOLUTION_FILTER:
+                if not passes_evolution_filter(setup, BASE_EVOLUTION_THRESHOLD):
+                    rejected_by_evolution += 1
+                    continue
+
+            setup["evolution_threshold"] = adaptive_threshold
+            setup["evolution_closed_trades"] = closed_trades
+            setup["evolution_filter_active"] = (
+                closed_trades >= MIN_CLOSED_TRADES_FOR_EVOLUTION_FILTER
+            )
 
             eligible_setups.append(setup)
 
         except Exception as e:
-            print(f"Error {symbol}: {e}")
+            error_count += 1
+            print(f"⚠️ Error scanning {symbol}: {e}")
+            continue
 
     eligible_setups = rank_elite_setups(eligible_setups)
 
-    print(f"📊 Scanned: {scanned_count}")
-    print(f"✅ Setups: {len(eligible_setups)}")
+    print(f"📊 Stocks scanned successfully: {scanned_count}")
+    print(f"⚠️ Stocks failed: {error_count}")
+    print(f"✅ Eligible setups found: {len(eligible_setups)}")
+    print(f"🧠 Rejected by Evolution Filter: {rejected_by_evolution}")
 
+    selected_alerts = eligible_setups[:3]
+    alerted_symbols = [s["symbol"] for s in selected_alerts]
+
+    if selected_alerts:
+        print("🏆 Top 3 elite setups:")
+        for i, setup in enumerate(selected_alerts, start=1):
+            print(
+                f"{i}. {setup.get('symbol')} | "
+                f"Score: {setup.get('score')} | "
+                f"RR: {setup.get('rr')} | "
+                f"Elite: {setup.get('elite_probability_score')}"
+            )
+
+    # ✅ Your original setup journal remains untouched.
     journal_eligible_setups(
         eligible_setups=eligible_setups,
         scan_id=scan_id,
-        alerted_symbols=[],
+        alerted_symbols=alerted_symbols,
         market_status=market_status,
     )
 
+    print("📘 Journal updated")
+
+    # ✅ NEW: Convert all good eligible setups into live/internal trades.
+    # Top 3 are marked telegram_alerted=YES, remaining setups are NO.
+    add_good_setups_as_live_trades(
+        eligible_setups=eligible_setups,
+        scan_id=scan_id,
+        alerted_symbols=alerted_symbols,
+        market_status=market_status,
+    )
+
+    # ✅ NEW: Check active live/internal trades for TP/SL.
+    update_live_trade_outcomes()
+
+    # ✅ Existing outcome tracker remains active.
     track_trade_outcomes(limit=50)
+    print("📊 Outcome tracker completed")
+
     run_evolution_engine()
+    print("🧠 Evolution updated")
 
     last_scan_summary = {
         "scan_id": scan_id,
         "market_status": market_status,
+        "stocks_scanned": scanned_count,
+        "stocks_failed": error_count,
+        "eligible_setups": len(eligible_setups),
+        "rejected_by_evolution": rejected_by_evolution,
+        "top_3_symbols": alerted_symbols,
+        "closed_trades_at_scan_start": closed_trades,
+        "timestamp": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S"),
     }
 
     update_master_status(last_scan_summary=last_scan_summary)
+    print("📡 Master status updated")
 
-    # ✅ FINAL CRITICAL LINE (THIS FIXES DASHBOARD)
     log_scan_to_supabase(
         scan_summary=last_scan_summary,
         scanned_count=scanned_count,
-        eligible_setups=eligible_setups
+        eligible_setups=eligible_setups,
     )
 
     return eligible_setups
