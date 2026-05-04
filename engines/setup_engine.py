@@ -31,23 +31,23 @@ from titan_brain.db import (
     insert_scan,
     insert_scan_symbol,
     insert_trade,
-    insert_setup
+    insert_setup,
 )
 
 
 # =========================================================
-# TITAN SETUP ENGINE - STABLE CONFLUENCE VERSION
+# TITAN SETUP ENGINE - FINAL STABLE CONFLUENCE VERSION
 # =========================================================
 # Permanent logic:
-# 1. Live price required, with fallback to latest cached close.
-# 2. Trend decides LONG/SHORT.
-# 3. Engines are not treated as all-or-nothing gates.
-# 4. A setup passes only when:
-#    - Entry is ready
-#    - Quality filter passes
-#    - At least 3 confirmations are true
-#    - Trade levels exist
-#    - RR >= 1.5
+# 1. Uses Upstox live price first.
+# 2. If Upstox price is unavailable, falls back to latest cached close.
+# 3. Uses engines as confirmations, not one-by-one hard blockers.
+# 4. Final setup requires:
+#    - entry readiness
+#    - quality filter pass
+#    - minimum confluence confirmations
+#    - valid levels
+#    - RR >= MIN_RR
 # =========================================================
 
 MIN_CONFIRMATIONS = 3
@@ -62,7 +62,7 @@ def save_scan_health_log(
     entry_passed,
     final_passed,
     alerts_sent,
-    market_status
+    market_status,
 ):
     try:
         supabase_url = os.getenv("SUPABASE_URL")
@@ -85,21 +85,13 @@ def save_scan_health_log(
             "alerts_sent": alerts_sent,
             "market_status": str(market_status),
             "status": "COMPLETED",
-            "note": "Stable confluence scan health saved"
+            "note": "Final stable confluence scan health saved",
         }).execute()
 
         print("✅ Scan health saved")
 
     except Exception as e:
         print(f"❌ Scan health save failed: {e}")
-
-
-def side_for_engines(side):
-    if side == "LONG":
-        return "LONG"
-    if side == "SHORT":
-        return "SHORT"
-    return None
 
 
 def safe_latest_close(data):
@@ -109,9 +101,16 @@ def safe_latest_close(data):
         return None
 
 
+def normalize_engine_side(side):
+    if side in ["LONG", "BUY"]:
+        return "LONG"
+    if side in ["SHORT", "SELL"]:
+        return "SHORT"
+    return None
+
+
 def scan_for_setups():
     setups = []
-
     scanned_symbols = []
     setup_symbols = []
     errors = []
@@ -154,7 +153,7 @@ def scan_for_setups():
         "total_symbols": total_symbols,
         "scanned_count": 0,
         "setup_count": 0,
-        "errors": []
+        "errors": [],
     }
 
     scan_id = insert_scan(scan_record)
@@ -165,6 +164,9 @@ def scan_for_setups():
             scan_record["scanned_count"] += 1
             stocks_checked += 1
 
+            # =========================
+            # PRICE: UPSTOX FIRST, CACHE FALLBACK
+            # =========================
             live_price = get_live_price(symbol)
             live_source = "UPSTOX"
 
@@ -182,20 +184,26 @@ def scan_for_setups():
                         "compression_score": 0,
                         "final_score": 0,
                         "passed": False,
-                        "reason": "NO_PRICE"
+                        "reason": "NO_PRICE",
                     })
                     continue
 
                 live_price = fallback_price
                 live_source = "CACHE_CLOSE"
 
+            # =========================
+            # TREND / SIDE
+            # =========================
             trend = trend_direction(data)
             side = trade_side_from_trend(trend)
-            engine_side = side_for_engines(side)
+            engine_side = normalize_engine_side(side)
 
-            if side is None:
+            if side is None or engine_side is None:
                 no_valid_trend += 1
-                print(f"SCAN DEBUG → {symbol} | price={live_price} | source={live_source} | BLOCKED=NO_VALID_TREND | trend={trend}")
+                print(
+                    f"SCAN DEBUG → {symbol} | price={live_price} | source={live_source} | "
+                    f"BLOCKED=NO_VALID_TREND | trend={trend}"
+                )
                 insert_scan_symbol(scan_id, {
                     "symbol": symbol,
                     "price": live_price,
@@ -205,40 +213,60 @@ def scan_for_setups():
                     "compression_score": 0,
                     "final_score": 0,
                     "passed": False,
-                    "reason": "NO_VALID_TREND"
+                    "reason": "NO_VALID_TREND",
                 })
                 continue
 
             trend_passed += 1
 
+            # =========================
+            # SCORES
+            # =========================
             volume_score = volume_anomaly_score(data)
             strength_score = price_strength_score(data)
             comp_score = compression_score(data)
+            final_score = final_signal_score(volume_score, strength_score, comp_score)
 
-            final_score = final_signal_score(
-                volume_score,
-                strength_score,
-                comp_score
-            )
-
+            # =========================
+            # ENGINE CONFIRMATIONS
+            # =========================
             structure_result = structure_ok(data, side=engine_side)
             momentum_result = strong_momentum(data, side=engine_side)
             fake_breakout_ok = avoid_fake_breakout(data)
             relative_strength_result = relative_strength_ok(data, side=engine_side)
-            entry_result = breakout_ready(data)
-            quality_result = passes_quality_filters(
-                final_score=final_score,
-                volume_score=volume_score,
-                strength_score=strength_score,
-                compression_score=comp_score
-            )
+            entry_result = breakout_ready(data, side=engine_side)
+
+            # IMPORTANT: pass dictionary positionally to avoid signature mismatch.
+            quality_result = passes_quality_filters({
+                "score": final_score,
+                "rr": MIN_RR,
+                "volume_x": volume_score,
+                "compression": comp_score,
+            })
 
             if structure_result:
                 structure_passed += 1
+            else:
+                structure_fail += 1
+
             if momentum_result:
                 momentum_passed += 1
+            else:
+                momentum_fail += 1
+
+            if not fake_breakout_ok:
+                fake_breakout_fail += 1
+
+            if not relative_strength_result:
+                relative_weak += 1
+
             if entry_result:
                 entry_passed += 1
+            else:
+                not_ready += 1
+
+            if not quality_result:
+                quality_fail += 1
 
             confirmations = [
                 structure_result,
@@ -258,199 +286,159 @@ def scan_for_setups():
                 f"entry={entry_result} | quality={quality_result} | confirmations={confirmation_count}"
             )
 
-            fail_reason = "UNKNOWN"
+            # =========================
+            # FINAL CONFLUENCE DECISION
+            # =========================
             passed = False
+            fail_reason = "UNKNOWN"
 
-            # Primary failure reason for clean breakdown.
-            if not structure_result:
-                structure_fail += 1
-                fail_reason = "STRUCTURE_FAIL"
-            elif not momentum_result:
-                momentum_fail += 1
-                fail_reason = "MOMENTUM_FAIL"
-            elif not fake_breakout_ok:
-                fake_breakout_fail += 1
-                fail_reason = "FAKE_BREAKOUT"
-            elif not relative_strength_result:
-                relative_weak += 1
-                fail_reason = "RELATIVE_WEAK"
-            elif not entry_result:
-                not_ready += 1
+            if not entry_result:
                 fail_reason = "NOT_READY"
             elif not quality_result:
-                quality_fail += 1
                 fail_reason = "QUALITY_FAIL"
             elif confirmation_count < MIN_CONFIRMATIONS:
                 confluence_fail += 1
                 fail_reason = "CONFLUENCE_FAIL"
             else:
-                passed = True
-                fail_reason = "CANDIDATE_PASSED"
+                # Trade levels and RR are part of the final setup decision.
+                levels = calculate_trade_levels(
+                    symbol=symbol,
+                    side=side,
+                    entry_price=live_price,
+                    data=data,
+                )
 
-            if not passed:
-                print(f"FILTER RESULT → {symbol} | {fail_reason}")
-                insert_scan_symbol(scan_id, {
-                    "symbol": symbol,
-                    "price": live_price,
-                    "trend": trend,
-                    "volume_score": volume_score,
-                    "strength_score": strength_score,
-                    "compression_score": comp_score,
-                    "final_score": final_score,
-                    "passed": False,
-                    "reason": fail_reason
-                })
-                continue
+                if not levels:
+                    levels_fail += 1
+                    fail_reason = "LEVELS_FAIL"
+                else:
+                    entry = levels["entry"]
+                    stop_loss = levels["stop_loss"]
+                    target = levels["target"]
 
-            levels = calculate_trade_levels(
-                symbol=symbol,
-                side=side,
-                entry_price=live_price,
-                data=data
-            )
+                    rr = calculate_rr(entry, stop_loss, target, side)
 
-            if not levels:
-                levels_fail += 1
-                print(f"FILTER RESULT → {symbol} | LEVELS_FAIL")
-                insert_scan_symbol(scan_id, {
-                    "symbol": symbol,
-                    "price": live_price,
-                    "trend": trend,
-                    "volume_score": volume_score,
-                    "strength_score": strength_score,
-                    "compression_score": comp_score,
-                    "final_score": final_score,
-                    "passed": False,
-                    "reason": "LEVELS_FAIL"
-                })
-                continue
+                    if rr < MIN_RR:
+                        rr_fail += 1
+                        fail_reason = "RR_FAIL"
+                        print(
+                            f"SETUP BLOCKED → {symbol} | RR_FAIL | "
+                            f"entry={entry} | sl={stop_loss} | target={target} | rr={rr}"
+                        )
+                    else:
+                        passed = True
+                        fail_reason = "PASSED"
+                        final_passed += 1
 
-            entry = levels["entry"]
-            stop_loss = levels["stop_loss"]
-            target = levels["target"]
+                        pos_data = position_sizing(entry, stop_loss)
+                        position_size = pos_data.get("qty", 0)
+                        risk_amount = pos_data.get("risk_amount", 0)
 
-            rr = calculate_rr(entry, stop_loss, target, side)
+                        reason = build_reason(
+                            symbol=symbol,
+                            side=side,
+                            volume_score=volume_score,
+                            strength_score=strength_score,
+                            compression_score=comp_score,
+                            final_score=final_score,
+                            trend=trend,
+                            market_status=market_status,
+                        )
 
-            if rr < MIN_RR:
-                rr_fail += 1
-                print(f"FILTER RESULT → {symbol} | RR_FAIL | rr={rr}")
-                insert_scan_symbol(scan_id, {
-                    "symbol": symbol,
-                    "price": live_price,
-                    "trend": trend,
-                    "volume_score": volume_score,
-                    "strength_score": strength_score,
-                    "compression_score": comp_score,
-                    "final_score": final_score,
-                    "passed": False,
-                    "reason": "RR_FAIL"
-                })
-                continue
+                        trigger = trigger_status(symbol, side, entry, live_price)
 
-            final_passed += 1
-            fail_reason = "PASSED"
+                        trade_id = log_trade(
+                            symbol=symbol,
+                            side=side,
+                            entry=entry,
+                            stop_loss=stop_loss,
+                            target=target,
+                            position_size=position_size,
+                            risk_amount=risk_amount,
+                            rr=rr,
+                            scores={
+                                "volume_score": volume_score,
+                                "strength_score": strength_score,
+                                "compression_score": comp_score,
+                                "final_score": final_score,
+                            },
+                            market_context={
+                                "market_status": market_status,
+                                "trend": trend,
+                            },
+                            setup_context={
+                                "structure_ok": structure_result,
+                                "momentum_ok": momentum_result,
+                                "fake_breakout_ok": fake_breakout_ok,
+                                "relative_strength_ok": relative_strength_result,
+                                "entry_ready": entry_result,
+                                "confirmations": confirmation_count,
+                            },
+                            reason=reason,
+                            trigger_status=trigger,
+                        )
 
-            reason = build_reason(
-                symbol=symbol,
-                side=side,
-                volume_score=volume_score,
-                strength_score=strength_score,
-                compression_score=comp_score,
-                final_score=final_score,
-                trend=trend,
-                market_status=market_status
-            )
+                        insert_setup({
+                            "trade_id": trade_id,
+                            "symbol": symbol,
+                            "side": side,
+                            "entry": entry,
+                            "stop_loss": stop_loss,
+                            "target": target,
+                            "rr": rr,
+                            "position_size": position_size,
+                            "risk_amount": risk_amount,
+                            "scores": {
+                                "volume_score": volume_score,
+                                "strength_score": strength_score,
+                                "compression_score": comp_score,
+                                "final_score": final_score,
+                            },
+                            "market_context": {
+                                "market_status": market_status,
+                                "trend": trend,
+                            },
+                            "setup_context": {
+                                "structure_ok": structure_result,
+                                "momentum_ok": momentum_result,
+                                "fake_breakout_ok": fake_breakout_ok,
+                                "relative_strength_ok": relative_strength_result,
+                                "entry_ready": entry_result,
+                                "confirmations": confirmation_count,
+                            },
+                            "reason": reason,
+                            "trigger_status": trigger,
+                            "status": "OPEN",
+                        })
 
-            trigger = trigger_status(symbol, side, entry, live_price)
+                        insert_trade({
+                            "trade_id": trade_id,
+                            "symbol": symbol,
+                            "side": side,
+                            "entry": entry,
+                            "stop_loss": stop_loss,
+                            "target": target,
+                            "rr": rr,
+                            "position_size": position_size,
+                            "risk_amount": risk_amount,
+                            "scores": {
+                                "volume_score": volume_score,
+                                "strength_score": strength_score,
+                                "compression_score": comp_score,
+                                "final_score": final_score,
+                            },
+                            "market_context": market_status,
+                            "setup_context": {"trend": trend, "confirmations": confirmation_count},
+                            "reason": reason,
+                            "trigger_status": trigger,
+                            "status": "OPEN",
+                        })
 
-            trade_id = log_trade(
-                symbol=symbol,
-                side=side,
-                entry=entry,
-                stop_loss=stop_loss,
-                target=target,
-                position_size=position_sizing(entry, stop_loss).get("qty", 0),
-                risk_amount=position_sizing(entry, stop_loss).get("risk_amount", 0),
-                rr=rr,
-                scores={
-                    "volume_score": volume_score,
-                    "strength_score": strength_score,
-                    "compression_score": comp_score,
-                    "final_score": final_score
-                },
-                market_context={
-                    "market_status": market_status,
-                    "trend": trend
-                },
-                setup_context={
-                    "structure_ok": structure_result,
-                    "momentum_ok": momentum_result,
-                    "breakout_ready": entry_result,
-                    "relative_strength_ok": relative_strength_result,
-                    "confirmation_count": confirmation_count
-                },
-                reason=reason,
-                trigger_status=trigger
-            )
+                        setups.append(symbol)
+                        setup_symbols.append(symbol)
+                        scan_record["setup_count"] += 1
 
-            pos_data = position_sizing(entry, stop_loss)
-            position_size = pos_data.get("qty", 0)
-            risk_amount = pos_data.get("risk_amount", 0)
-
-            insert_setup({
-                "trade_id": trade_id,
-                "symbol": symbol,
-                "side": side,
-                "entry": entry,
-                "stop_loss": stop_loss,
-                "target": target,
-                "rr": rr,
-                "position_size": position_size,
-                "risk_amount": risk_amount,
-                "scores": {
-                    "volume_score": volume_score,
-                    "strength_score": strength_score,
-                    "compression_score": comp_score,
-                    "final_score": final_score
-                },
-                "market_context": {
-                    "market_status": market_status,
-                    "trend": trend
-                },
-                "setup_context": {
-                    "structure_ok": structure_result,
-                    "momentum_ok": momentum_result,
-                    "breakout_ready": entry_result,
-                    "relative_strength_ok": relative_strength_result,
-                    "confirmation_count": confirmation_count
-                },
-                "reason": reason,
-                "trigger_status": trigger,
-                "status": "OPEN"
-            })
-
-            insert_trade({
-                "trade_id": trade_id,
-                "symbol": symbol,
-                "side": side,
-                "entry": entry,
-                "stop_loss": stop_loss,
-                "target": target,
-                "rr": rr,
-                "position_size": position_size,
-                "risk_amount": risk_amount,
-                "scores": {
-                    "volume_score": volume_score,
-                    "strength_score": strength_score,
-                    "compression_score": comp_score,
-                    "final_score": final_score
-                },
-                "market_context": market_status,
-                "setup_context": {"trend": trend, "confirmation_count": confirmation_count},
-                "reason": reason,
-                "trigger_status": trigger,
-                "status": "OPEN"
-            })
+            print(f"FILTER RESULT → {symbol} | {fail_reason}")
 
             insert_scan_symbol(scan_id, {
                 "symbol": symbol,
@@ -460,19 +448,13 @@ def scan_for_setups():
                 "strength_score": strength_score,
                 "compression_score": comp_score,
                 "final_score": final_score,
-                "passed": True,
-                "reason": "PASSED"
+                "passed": passed,
+                "reason": fail_reason,
             })
-
-            setups.append(symbol)
-            setup_symbols.append(symbol)
-            scan_record["setup_count"] += 1
-
-            print(f"✅ VALID SETUP → {symbol} | side={side} | entry={entry} | sl={stop_loss} | target={target} | rr={rr}")
 
         except Exception as e:
             errors.append(f"{symbol}: {e}")
-            print(f"❌ ERROR → {symbol}: {e}")
+            print(f"❌ SYMBOL ERROR → {symbol}: {e}")
             continue
 
     print("========== SCAN FAILURE BREAKDOWN ==========")
@@ -489,13 +471,13 @@ def scan_for_setups():
     print(f"Levels Fail: {levels_fail}")
     print(f"RR Fail: {rr_fail}")
     print(f"Final Passed: {final_passed}")
-    print("============================================")
+    print("===========================================")
 
     log_scan(
         total_symbols=total_symbols,
         scanned_symbols=scanned_symbols,
         setup_symbols=setup_symbols,
-        errors=errors
+        errors=errors,
     )
 
     save_scan_health_log(
@@ -506,7 +488,7 @@ def scan_for_setups():
         entry_passed=entry_passed,
         final_passed=final_passed,
         alerts_sent=alerts_sent,
-        market_status=market_status
+        market_status=market_status,
     )
 
     if setups:
