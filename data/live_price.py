@@ -106,5 +106,6 @@ def fetch_price_from_upstox(symbol):
 
 
 def get_live_price(symbol):
-    price = fetch_price_from_upstox(symbol)
+    clean_symbol = str(symbol).replace(".NS", "").upper().strip()
+price = fetch_price_from_upstox(clean_symbol)
     return safe_float(price)
