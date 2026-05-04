@@ -1,6 +1,6 @@
 TITAN MASTER STATUS
 ============================================================
-Updated At: 2026-05-04 14:26:26
+Updated At: 2026-05-04 14:31:51
 Flow: Scan → Journal → Outcome → Learning → Evolution → Adaptive Scoring → Pattern Intelligence → Regime Intelligence → Elite Selection
 
 INTELLIGENCE STAGE
@@ -11,11 +11,11 @@ Description: Collecting first outcomes. Evolution filter and adaptive scoring re
 
 TRADE / JOURNAL STATUS
 ------------------------------------------------------------
-Total journal rows: 108
+Total journal rows: 144
 Closed trades: 0
 Wins: 0
 Losses: 0
-Open trades: 108
+Open trades: 144
 Accuracy: 0.0%
 
 EVOLUTION STATUS
