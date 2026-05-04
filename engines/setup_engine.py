@@ -1,3 +1,8 @@
+import os
+from datetime import datetime
+
+from supabase import create_client
+
 from data.loader import load_cached_stock_data
 from data.live_price import get_live_price
 
@@ -30,12 +35,63 @@ from titan_brain.db import (
 )
 
 
+def save_scan_health_log(
+    stocks_checked,
+    trend_passed,
+    momentum_passed,
+    structure_passed,
+    entry_passed,
+    final_passed,
+    alerts_sent,
+    market_status
+):
+    try:
+        supabase_url = os.getenv("SUPABASE_URL")
+        supabase_key = os.getenv("SUPABASE_KEY")
+
+        if not supabase_url or not supabase_key:
+            print("⚠️ Supabase secrets missing. Scan health not saved.")
+            return
+
+        supabase = create_client(supabase_url, supabase_key)
+
+        supabase.table("scan_health_logs").insert({
+            "scan_cycle_id": datetime.now().isoformat(),
+            "stocks_checked": stocks_checked,
+            "trend_passed": trend_passed,
+            "momentum_passed": momentum_passed,
+            "structure_passed": structure_passed,
+            "entry_passed": entry_passed,
+            "final_passed": final_passed,
+            "alerts_sent": alerts_sent,
+            "market_status": str(market_status),
+            "status": "COMPLETED",
+            "note": "Scan health log saved successfully"
+        }).execute()
+
+        print("✅ Scan health saved")
+
+    except Exception as e:
+        print(f"❌ Scan health save failed: {e}")
+
+
 def scan_for_setups():
     setups = []
 
     scanned_symbols = []
     setup_symbols = []
     errors = []
+
+    # =========================
+    # SCAN HEALTH COUNTERS
+    # =========================
+    stocks_checked = 0
+    trend_passed = 0
+    momentum_passed = 0
+    structure_passed = 0
+    entry_passed = 0
+    final_passed = 0
+    alerts_sent = 0
 
     market_status = market_regime_status()
     symbols = load_cached_stock_data()
@@ -54,9 +110,10 @@ def scan_for_setups():
         try:
             scanned_symbols.append(symbol)
             scan_record["scanned_count"] += 1
+            stocks_checked += 1
 
-            # ---------- DEFAULT ----------
             live_price = get_live_price(symbol)
+
             if live_price is None:
                 insert_scan_symbol(scan_id, {
                     "symbol": symbol,
@@ -88,6 +145,8 @@ def scan_for_setups():
                 })
                 continue
 
+            trend_passed += 1
+
             volume_score = volume_anomaly_score(data)
             strength_score = price_strength_score(data)
             comp_score = compression_score(data)
@@ -101,10 +160,23 @@ def scan_for_setups():
             passed = False
             fail_reason = "UNKNOWN"
 
-            if not structure_ok(data):
+            structure_result = structure_ok(data)
+            momentum_result = strong_momentum(data)
+            breakout_result = breakout_ready(data)
+
+            if structure_result:
+                structure_passed += 1
+
+            if momentum_result:
+                momentum_passed += 1
+
+            if breakout_result:
+                entry_passed += 1
+
+            if not structure_result:
                 fail_reason = "STRUCTURE_FAIL"
 
-            elif not strong_momentum(data):
+            elif not momentum_result:
                 fail_reason = "MOMENTUM_FAIL"
 
             elif not avoid_fake_breakout(data):
@@ -113,7 +185,7 @@ def scan_for_setups():
             elif not relative_strength_ok(symbol):
                 fail_reason = "RELATIVE_WEAK"
 
-            elif not breakout_ready(data):
+            elif not breakout_result:
                 fail_reason = "NOT_READY"
 
             elif not passes_quality_filters(
@@ -127,6 +199,7 @@ def scan_for_setups():
             else:
                 passed = True
                 fail_reason = "PASSED"
+                final_passed += 1
 
             insert_scan_symbol(scan_id, {
                 "symbol": symbol,
@@ -143,7 +216,6 @@ def scan_for_setups():
             if not passed:
                 continue
 
-            # ---------- VALID SETUP ----------
             levels = calculate_trade_levels(
                 symbol=symbol,
                 side=side,
@@ -159,6 +231,7 @@ def scan_for_setups():
             target = levels["target"]
 
             rr = calculate_rr(entry, stop_loss, target, side)
+
             if rr < 2:
                 continue
 
@@ -179,7 +252,6 @@ def scan_for_setups():
 
             trigger = trigger_status(symbol, side, entry, live_price)
 
-            # ---------- TRADE ----------
             trade_id = log_trade(
                 symbol=symbol,
                 side=side,
@@ -204,7 +276,6 @@ def scan_for_setups():
                 trigger_status=trigger
             )
 
-            # ---------- SETUP MEMORY ----------
             insert_setup({
                 "trade_id": trade_id,
                 "symbol": symbol,
@@ -235,7 +306,6 @@ def scan_for_setups():
                 "status": "OPEN"
             })
 
-            # ---------- TRADE MEMORY ----------
             insert_trade({
                 "trade_id": trade_id,
                 "symbol": symbol,
@@ -272,6 +342,17 @@ def scan_for_setups():
         scanned_symbols=scanned_symbols,
         setup_symbols=setup_symbols,
         errors=errors
+    )
+
+    save_scan_health_log(
+        stocks_checked=stocks_checked,
+        trend_passed=trend_passed,
+        momentum_passed=momentum_passed,
+        structure_passed=structure_passed,
+        entry_passed=entry_passed,
+        final_passed=final_passed,
+        alerts_sent=alerts_sent,
+        market_status=market_status
     )
 
     return setups
