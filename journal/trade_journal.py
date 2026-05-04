@@ -1,208 +1,174 @@
+"""
+TITAN - Trade Journal Engine
+----------------------------
+Journals ALL eligible setups, not only Telegram alerts.
+
+Stores:
+symbol, side, entry, SL, target, RR, score, rank_score,
+confirmations, reason, timestamp, alert_sent, market_status
+"""
+
+import csv
 import json
-import os
+from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, Optional
+from zoneinfo import ZoneInfo
+
+IST = ZoneInfo("Asia/Kolkata")
+
+JOURNAL_DIR = Path("data/journals")
+CSV_FILE = JOURNAL_DIR / "trade_journal.csv"
+JSONL_FILE = JOURNAL_DIR / "trade_journal.jsonl"
+
+FIELDS = [
+    "timestamp",
+    "scan_id",
+    "symbol",
+    "side",
+    "entry",
+    "sl",
+    "target",
+    "rr",
+    "score",
+    "rank_score",
+    "confirmations",
+    "reason",
+    "alert_sent",
+    "market_status",
+]
 
 
-MEMORY_DIR = os.path.join("titan_brain", "memory")
-TRADE_MEMORY_FILE = os.path.join(MEMORY_DIR, "trade_memory.json")
+def _safe_get(setup, *keys, default=""):
+    if not isinstance(setup, dict):
+        return default
+
+    for key in keys:
+        if key in setup and setup[key] is not None:
+            return setup[key]
+
+    return default
 
 
-def _ensure_trade_memory_file():
-    os.makedirs(MEMORY_DIR, exist_ok=True)
+def _to_text(value):
+    if value is None:
+        return ""
 
-    if not os.path.exists(TRADE_MEMORY_FILE):
-        with open(TRADE_MEMORY_FILE, "w") as f:
-            json.dump([], f, indent=4)
+    if isinstance(value, (list, tuple, set)):
+        return " | ".join(map(str, value))
 
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False)
 
-def _load_trades():
-    _ensure_trade_memory_file()
-
-    with open(TRADE_MEMORY_FILE, "r") as f:
-        try:
-            return json.load(f)
-        except json.JSONDecodeError:
-            return []
+    return str(value)
 
 
-def _save_trades(data):
-    _ensure_trade_memory_file()
+def ensure_journal_files():
+    JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
 
-    with open(TRADE_MEMORY_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+    if not CSV_FILE.exists():
+        with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=FIELDS)
+            writer.writeheader()
 
-
-def generate_trade_id(symbol: str) -> str:
-    now = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{symbol}_{now}"
-
-
-def is_duplicate_open_trade(symbol: str, side: str, entry: float, tolerance: float = 0.15):
-    trades = _load_trades()
-
-    for trade in trades:
-        if trade.get("status") != "OPEN":
-            continue
-
-        if trade.get("symbol") != symbol:
-            continue
-
-        if trade.get("side") != side:
-            continue
-
-        old_entry = trade.get("entry")
-
-        if old_entry is None:
-            continue
-
-        if abs(float(old_entry) - float(entry)) <= tolerance:
-            return True, trade.get("trade_id")
-
-    return False, None
+    if not JSONL_FILE.exists():
+        JSONL_FILE.touch()
 
 
-def log_trade(
-    symbol: str,
-    side: str,
-    entry: float,
-    stop_loss: float,
-    target: float,
-    position_size: float,
-    risk_amount: float,
-    rr: float,
-    scores: Dict[str, Any],
-    market_context: Dict[str, Any],
-    setup_context: Dict[str, Any],
-    reason: str,
-    trigger_status: str,
-    extra_notes: Optional[str] = None
-) -> str:
-
-    duplicate, existing_trade_id = is_duplicate_open_trade(
-        symbol=symbol,
-        side=side,
-        entry=entry
-    )
-
-    if duplicate:
-        return existing_trade_id
-
-    trades = _load_trades()
-    trade_id = generate_trade_id(symbol)
-
-    trade = {
-        "trade_id": trade_id,
-        "timestamp": datetime.now().isoformat(),
-
-        "symbol": symbol,
-        "side": side,
-
-        "entry": entry,
-        "stop_loss": stop_loss,
-        "target": target,
-        "rr": rr,
-
-        "position_size": position_size,
-        "risk_amount": risk_amount,
-
-        "scores": scores,
-        "market_context": market_context,
-        "setup_context": setup_context,
-
-        "reason": reason,
-        "trigger_status": trigger_status,
-
-        "status": "OPEN",
-        "result": None,
-        "exit_price": None,
-        "exit_time": None,
-        "actual_rr": None,
-        "pnl": None,
-
-        "mistake_tags": [],
-        "learning_notes": [],
-        "extra_notes": extra_notes
-    }
-
-    trades.append(trade)
-    _save_trades(trades)
-
-    return trade_id
-
-
-def update_trade_result(
-    trade_id: str,
-    result: str,
-    exit_price: float,
-    actual_rr: float,
-    pnl: float,
-    mistake_tags: Optional[list] = None,
-    learning_notes: Optional[list] = None
-) -> bool:
-
-    trades = _load_trades()
-
-    for trade in trades:
-        if trade.get("trade_id") == trade_id:
-            trade["status"] = "CLOSED"
-            trade["result"] = result
-            trade["exit_price"] = exit_price
-            trade["exit_time"] = datetime.now().isoformat()
-            trade["actual_rr"] = actual_rr
-            trade["pnl"] = pnl
-            trade["mistake_tags"] = mistake_tags or []
-            trade["learning_notes"] = learning_notes or []
-
-            _save_trades(trades)
-            return True
-
-    return False
-
-
-def get_all_trades():
-    return _load_trades()
-
-
-def get_open_trades():
-    return [trade for trade in _load_trades() if trade.get("status") == "OPEN"]
-
-
-def get_closed_trades():
-    return [trade for trade in _load_trades() if trade.get("status") == "CLOSED"]
-
-
-def get_trades_by_symbol(symbol: str):
-    return [trade for trade in _load_trades() if trade.get("symbol") == symbol]
-
-
-def basic_performance_summary():
-    closed = get_closed_trades()
-
-    if not closed:
-        return {
-            "total_closed_trades": 0,
-            "win_rate": 0,
-            "total_pnl": 0,
-            "average_rr": 0,
-            "message": "No closed trades yet."
-        }
-
-    total = len(closed)
-    wins = len([t for t in closed if t.get("result") == "WIN"])
-    losses = len([t for t in closed if t.get("result") == "LOSS"])
-
-    total_pnl = sum(t.get("pnl", 0) for t in closed if t.get("pnl") is not None)
-    rr_values = [t.get("actual_rr") for t in closed if t.get("actual_rr") is not None]
-
-    average_rr = sum(rr_values) / len(rr_values) if rr_values else 0
-    win_rate = (wins / total) * 100
+def build_journal_row(setup, scan_id=None, alert_sent=False, market_status=""):
+    now = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
 
     return {
-        "total_closed_trades": total,
-        "wins": wins,
-        "losses": losses,
-        "win_rate": round(win_rate, 2),
-        "total_pnl": round(total_pnl, 2),
-        "average_rr": round(average_rr, 2)
+        "timestamp": now,
+        "scan_id": scan_id or now.replace(" ", "_").replace(":", "-"),
+        "symbol": _safe_get(setup, "symbol", "stock", "ticker"),
+        "side": _safe_get(setup, "side", "direction"),
+        "entry": _safe_get(setup, "entry", "entry_price"),
+        "sl": _safe_get(setup, "sl", "stop_loss", "stoploss"),
+        "target": _safe_get(setup, "target", "tp", "t1", "target1"),
+        "rr": _safe_get(setup, "rr", "risk_reward"),
+        "score": _safe_get(setup, "score", "final_score"),
+        "rank_score": _safe_get(setup, "rank_score", "ranking_score"),
+        "confirmations": _to_text(
+            _safe_get(setup, "confirmations", "signals", default=[])
+        ),
+        "reason": _to_text(
+            _safe_get(setup, "reason", "setup_reason", default="")
+        ),
+        "alert_sent": bool(alert_sent),
+        "market_status": _to_text(market_status),
     }
+
+
+def journal_eligible_setups(
+    eligible_setups,
+    scan_id=None,
+    alerted_symbols=None,
+    market_status="",
+):
+    ensure_journal_files()
+
+    if eligible_setups is None:
+        eligible_setups = []
+
+    alerted_symbols = set(alerted_symbols or [])
+    rows = []
+
+    for setup in eligible_setups:
+        symbol = _safe_get(setup, "symbol", "stock", "ticker")
+        alert_sent = symbol in alerted_symbols
+
+        row = build_journal_row(
+            setup=setup,
+            scan_id=scan_id,
+            alert_sent=alert_sent,
+            market_status=market_status,
+        )
+
+        rows.append(row)
+
+    if not rows:
+        return 0
+
+    with open(CSV_FILE, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDS)
+        writer.writerows(rows)
+
+    with open(JSONL_FILE, "a", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    return len(rows)
+def journal_eligible_setups(eligible_setups, scan_id, alerted_symbols, market_status):
+    import csv
+    from pathlib import Path
+    from datetime import datetime
+
+    file_path = Path("data/trade_journal.csv")
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    file_exists = file_path.exists()
+
+    with open(file_path, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+
+        if not file_exists:
+            writer.writerow([
+                "timestamp", "scan_id", "symbol", "side",
+                "entry", "sl", "target", "rr",
+                "score", "status", "alerted"
+            ])
+
+        for setup in eligible_setups:
+            writer.writerow([
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                scan_id,
+                setup.get("symbol"),
+                setup.get("side"),
+                setup.get("entry"),
+                setup.get("sl"),
+                setup.get("target"),
+                setup.get("rr"),
+                setup.get("score"),
+                "OPEN",
+                "YES" if setup.get("symbol") in alerted_symbols else "NO"
+            ])
