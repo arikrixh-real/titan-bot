@@ -131,27 +131,36 @@ def scan_for_setups():
             stocks_checked += 1
 
             live_price = get_live_price(symbol)
+            price_source = "UPSTOX_LIVE"
 
             if live_price is None:
-                no_live_price_count += 1
+                try:
+                    live_price = round(float(data["Close"].iloc[-1]), 2)
+                    price_source = "CSV_FALLBACK"
+                    print(
+                        f"SCAN DEBUG → {symbol} | "
+                        f"live_price=None | fallback_price={live_price} | SOURCE=CSV_FALLBACK"
+                    )
+                except Exception:
+                    no_live_price_count += 1
 
-                print(
-                    f"SCAN DEBUG → {symbol} | "
-                    f"live_price=None | BLOCKED=NO_LIVE_PRICE"
-                )
+                    print(
+                        f"SCAN DEBUG → {symbol} | "
+                        f"live_price=None | fallback_failed=True | BLOCKED=NO_LIVE_PRICE"
+                    )
 
-                insert_scan_symbol(scan_id, {
-                    "symbol": symbol,
-                    "price": 0,
-                    "trend": "NA",
-                    "volume_score": 0,
-                    "strength_score": 0,
-                    "compression_score": 0,
-                    "final_score": 0,
-                    "passed": False,
-                    "reason": "NO_LIVE_PRICE"
-                })
-                continue
+                    insert_scan_symbol(scan_id, {
+                        "symbol": symbol,
+                        "price": 0,
+                        "trend": "NA",
+                        "volume_score": 0,
+                        "strength_score": 0,
+                        "compression_score": 0,
+                        "final_score": 0,
+                        "passed": False,
+                        "reason": "NO_LIVE_PRICE"
+                    })
+                    continue
 
             trend = trend_direction(data)
             side = trade_side_from_trend(trend)
@@ -161,7 +170,7 @@ def scan_for_setups():
 
                 print(
                     f"SCAN DEBUG → {symbol} | "
-                    f"price={live_price} | trend={trend} | side=None | "
+                    f"price={live_price} | source={price_source} | trend={trend} | side=None | "
                     f"BLOCKED=NO_VALID_TREND"
                 )
 
@@ -210,7 +219,7 @@ def scan_for_setups():
 
             print(
                 f"ENTRY DEBUG → {symbol} | "
-                f"price={live_price} | trend={trend} | side={side} | "
+                f"price={live_price} | source={price_source} | trend={trend} | side={side} | "
                 f"volume={volume_score} | strength={strength_score} | "
                 f"compression={comp_score} | final_score={final_score} | "
                 f"structure={structure_result} | momentum={momentum_result} | "
