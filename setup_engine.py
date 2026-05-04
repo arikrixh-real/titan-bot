@@ -67,6 +67,13 @@ from engines.master_status import update_master_status
 from journal.trade_journal import journal_eligible_setups
 from journal.outcome_tracker import track_trade_outcomes
 
+# ✅ Optional News Engine import
+# Safe: if news engine file/function is missing, TITAN will not crash.
+try:
+    from intelligence.news_engine import run_news_engine
+except Exception:
+    run_news_engine = None
+
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -111,8 +118,27 @@ def clean_market_dataframe(df):
     return df
 
 
+
+def run_news_engine_safely():
+    """
+    Runs TITAN news engine without affecting trading scan stability.
+    If the news engine fails, setup scan continues normally.
+    """
+    if run_news_engine is None:
+        print("📰 News Engine: not connected / function not found")
+        return
+
+    try:
+        print("📰 Running News Engine...")
+        run_news_engine()
+        print("✅ News Engine Completed")
+    except Exception as e:
+        print(f"⚠️ News Engine Error: {e}")
+
 def scan_for_setups():
     print("🚀 TITAN scan started...")
+
+    run_news_engine_safely()
 
     scan_id = datetime.now(IST).strftime("%Y%m%d_%H%M%S")
 
