@@ -299,21 +299,13 @@ def latest_row(table_name, order_column="created_at"):
     try:
         if supabase is None:
             return None
-
-        query = (
+        result = (
             supabase.table(table_name)
             .select("*")
             .order(order_column, desc=True)
+            .limit(1)
+            .execute()
         )
-
-        # Extra safety: if table has id column, this makes latest row selection stable.
-        try:
-            query = query.order("id", desc=True)
-        except Exception:
-            pass
-
-        result = query.limit(1).execute()
-
         if result.data:
             return result.data[0]
         return None
@@ -346,7 +338,6 @@ def get_latest_scan_health():
             supabase.table("scan_health_logs")
             .select("*")
             .order("created_at", desc=True)
-            .order("id", desc=True)
             .limit(1)
             .execute()
         )
@@ -357,20 +348,7 @@ def get_latest_scan_health():
         return None
 
     except Exception:
-        try:
-            # Fallback for tables without id column
-            result = (
-                supabase.table("scan_health_logs")
-                .select("*")
-                .order("created_at", desc=True)
-                .limit(1)
-                .execute()
-            )
-            if result.data:
-                return result.data[0]
-            return None
-        except Exception:
-            return None
+        return None
 
 
 def parse_dt(value):
@@ -471,23 +449,6 @@ def status_html(status):
 # =========================================================
 
 def get_live_trades_count():
-    # Primary source: Supabase trades table.
-    # This works on Streamlit Cloud because GitHub runtime CSV files are not shared with Streamlit.
-    try:
-        if supabase is not None:
-            result = (
-                supabase.table("trades")
-                .select("*", count="exact")
-                .eq("status", "OPEN")
-                .limit(1)
-                .execute()
-            )
-            if result.count is not None:
-                return result.count
-    except Exception:
-        pass
-
-    # Fallback: local CSV, useful only when dashboard and scanner run in same environment.
     possible_paths = [
         "active_trades.csv",
         "data/active_trades.csv",
@@ -505,6 +466,62 @@ def get_live_trades_count():
 
             if df.empty:
                 return 0
+
+
+
+def get_trade_results_stats():
+    """
+    Reads closed trade outcomes from Supabase trade_results.
+    Counts only real outcomes:
+    - WIN
+    - LOSS
+
+    Ignores:
+    - NO_TRADE
+    - EXPIRED
+    - OPEN
+    - NULL
+    """
+    stats = {
+        "wins": 0,
+        "losses": 0,
+        "closed_total": 0,
+        "accuracy": 0,
+    }
+
+    if supabase is None:
+        return stats
+
+    try:
+        win_result = (
+            supabase.table("trade_results")
+            .select("*", count="exact")
+            .eq("result", "WIN")
+            .limit(1)
+            .execute()
+        )
+        stats["wins"] = int(win_result.count or 0)
+    except Exception:
+        stats["wins"] = 0
+
+    try:
+        loss_result = (
+            supabase.table("trade_results")
+            .select("*", count="exact")
+            .eq("result", "LOSS")
+            .limit(1)
+            .execute()
+        )
+        stats["losses"] = int(loss_result.count or 0)
+    except Exception:
+        stats["losses"] = 0
+
+    stats["closed_total"] = stats["wins"] + stats["losses"]
+
+    if stats["closed_total"] > 0:
+        stats["accuracy"] = round((stats["wins"] / stats["closed_total"]) * 100)
+
+    return stats
 
             status_columns = ["status", "trade_status", "outcome", "state"]
 
@@ -744,6 +761,8 @@ if stocks_passed == 0:
 
 live_trades_count = get_live_trades_count()
 
+
+trade_result_stats = get_trade_results_stats()
 wins = count_any_table(["winning_trades", "wins"])
 losses = count_any_table(["losing_trades", "losses"])
 
@@ -872,10 +891,10 @@ with p1:
     metric_card("No. of Trades", f"{total_trades:,}", "Total trade records")
 
 with p2:
-    metric_card("No. of Wins", f"{wins:,}", "Winning trades")
+    metric_card("No. of Wins", f"{trade_result_stats['wins']:,}", "Winning trades")
 
 with p3:
-    metric_card("No. of Losses", f"{losses:,}", "Losing trades")
+    metric_card("No. of Losses", f"{trade_result_stats['losses']:,}", "Losing trades")
 
 with p4:
     metric_card("RR", rr_display, "Current risk-reward model")
@@ -1040,7 +1059,7 @@ if scan_health:
         metric_card("Alerts This Scan", f"{latest_health_alerts:,}", "Real alerts only")
 
     with h3:
-        metric_card("Live Trades Count", f"{live_trades_count:,}", "From Supabase trades")
+        metric_card("Live Trades Count", f"{live_trades_count:,}", "From active_trades.csv")
 
 else:
     st.info("No scan breakdown data yet. Wait for the next GitHub 5-minute scan after scan health logging is pushed.")
