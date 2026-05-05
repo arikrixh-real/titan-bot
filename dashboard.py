@@ -299,13 +299,21 @@ def latest_row(table_name, order_column="created_at"):
     try:
         if supabase is None:
             return None
-        result = (
+
+        query = (
             supabase.table(table_name)
             .select("*")
             .order(order_column, desc=True)
-            .limit(1)
-            .execute()
         )
+
+        # Extra safety: if table has id column, this makes latest row selection stable.
+        try:
+            query = query.order("id", desc=True)
+        except Exception:
+            pass
+
+        result = query.limit(1).execute()
+
         if result.data:
             return result.data[0]
         return None
@@ -338,6 +346,7 @@ def get_latest_scan_health():
             supabase.table("scan_health_logs")
             .select("*")
             .order("created_at", desc=True)
+            .order("id", desc=True)
             .limit(1)
             .execute()
         )
@@ -348,7 +357,20 @@ def get_latest_scan_health():
         return None
 
     except Exception:
-        return None
+        try:
+            # Fallback for tables without id column
+            result = (
+                supabase.table("scan_health_logs")
+                .select("*")
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                return result.data[0]
+            return None
+        except Exception:
+            return None
 
 
 def parse_dt(value):
@@ -449,6 +471,23 @@ def status_html(status):
 # =========================================================
 
 def get_live_trades_count():
+    # Primary source: Supabase trades table.
+    # This works on Streamlit Cloud because GitHub runtime CSV files are not shared with Streamlit.
+    try:
+        if supabase is not None:
+            result = (
+                supabase.table("trades")
+                .select("*", count="exact")
+                .eq("status", "OPEN")
+                .limit(1)
+                .execute()
+            )
+            if result.count is not None:
+                return result.count
+    except Exception:
+        pass
+
+    # Fallback: local CSV, useful only when dashboard and scanner run in same environment.
     possible_paths = [
         "active_trades.csv",
         "data/active_trades.csv",
@@ -1001,7 +1040,7 @@ if scan_health:
         metric_card("Alerts This Scan", f"{latest_health_alerts:,}", "Real alerts only")
 
     with h3:
-        metric_card("Live Trades Count", f"{live_trades_count:,}", "From active_trades.csv")
+        metric_card("Live Trades Count", f"{live_trades_count:,}", "From Supabase trades")
 
 else:
     st.info("No scan breakdown data yet. Wait for the next GitHub 5-minute scan after scan health logging is pushed.")
