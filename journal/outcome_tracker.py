@@ -1,13 +1,14 @@
 """
-TITAN Outcome Tracker - FINAL ACTIVE ONLY FIX
---------------------------------------------
-Fixes "Still open: 200+" by tracking only valid current OPEN trades.
-- Old/stale OPEN rows become EXPIRED / NO_TRADE.
-- Duplicate OPEN rows by symbol+side become EXPIRED / NO_TRADE.
-- TP hit => CLOSED + WIN in Supabase trade_results.
-- SL hit => CLOSED + LOSS in Supabase trade_results.
-- EOD incomplete trades => EXPIRED + NO_TRADE.
-- NO_TRADE should not count in accuracy.
+TITAN Outcome Tracker - FAST SAFE FIX
+-------------------------------------
+Stops workflow hanging.
+
+Main speed fix:
+- Stale/duplicate/EOD NO_TRADE rows are expired locally only.
+- No Upstox call for junk rows.
+- No Supabase write for junk rows.
+- Only current valid OPEN trades are live-price checked.
+- Only real TP/SL closures sync to Supabase.
 """
 
 import csv
@@ -105,7 +106,9 @@ def is_valid_symbol(symbol):
 def parse_dt(value):
     if not value:
         return None
+
     value = str(value).strip().replace("Z", "+00:00")
+
     try:
         dt = datetime.fromisoformat(value)
         if dt.tzinfo is None:
@@ -113,11 +116,13 @@ def parse_dt(value):
         return dt.astimezone(IST)
     except Exception:
         pass
+
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
         try:
             return datetime.strptime(value[:19], fmt).replace(tzinfo=IST)
         except Exception:
             pass
+
     return None
 
 
@@ -145,23 +150,28 @@ def normalize_row(row):
     out = {k: row.get(k, "") for k in ACTIVE_FIELDS}
     out["symbol"] = clean_symbol(out.get("symbol"))
     out["side"] = str(out.get("side", "")).upper().strip()
+
     status = str(out.get("status", "")).upper().strip()
     if status in ("ACTIVE", "LIVE", "RUNNING"):
         status = "OPEN"
+
     out["status"] = status
     return out
 
 
 def get_price(symbol, fallback=None):
     symbol = clean_symbol(symbol)
+
     if not is_valid_symbol(symbol) or get_live_price is None:
         return fallback
+
     try:
         p = safe_float(get_live_price(symbol))
         if p and p > 0:
             return p
     except Exception:
         pass
+
     return fallback
 
 
@@ -169,11 +179,15 @@ def get_supabase():
     try:
         if create_client is None:
             return None
+
         url = os.getenv("SUPABASE_URL")
         key = os.getenv("SUPABASE_KEY")
+
         if not url or not key:
             return None
+
         return create_client(url, key)
+
     except Exception:
         return None
 
@@ -182,20 +196,27 @@ def remove_missing_column(err, payload):
     m = re.search(r"Could not find the '([^']+)' column", str(err))
     if not m:
         return False
+
     col = m.group(1)
     if col in payload:
         payload.pop(col, None)
         return True
+
     return False
 
 
 def sync_result(outcome_row):
+    raw = str(outcome_row.get("outcome", "")).upper()
+
+    # Important speed rule: only real TP/SL results go to Supabase.
+    if raw not in ("TARGET_HIT", "SL_HIT"):
+        return False
+
     client = get_supabase()
     if client is None:
         return False
 
-    raw = str(outcome_row.get("outcome", "")).upper()
-    result = "WIN" if raw == "TARGET_HIT" else "LOSS" if raw == "SL_HIT" else "NO_TRADE" if raw == "NO_TRADE" else raw
+    result = "WIN" if raw == "TARGET_HIT" else "LOSS"
 
     payload = {
         "created_at": now_iso(),
@@ -222,10 +243,15 @@ def sync_result(outcome_row):
             if remove_missing_column(e, payload):
                 continue
             return False
+
     return False
 
 
 def update_trade_status(row, status):
+    # Important speed rule: only real closed trades update Supabase.
+    if status != "CLOSED":
+        return False
+
     client = get_supabase()
     if client is None:
         return False
@@ -252,6 +278,7 @@ def evaluate_trade(row, price):
 
     if price is None:
         return "OPEN", "", "Live price unavailable"
+
     if entry is None or sl is None or target is None:
         return "OPEN", "", "Invalid trade levels"
 
@@ -296,25 +323,20 @@ def make_outcome(row, exit_price, outcome, pnl, reason):
     }
 
 
-def expire_trade(row, reason):
-    fallback = safe_float(row.get("last_price"))
-    price = get_price(row.get("symbol"), fallback=fallback)
-    entry = safe_float(row.get("entry"))
-    side = str(row.get("side", "")).upper().strip()
-
-    pnl = ""
-    if price is not None and entry is not None:
-        pnl = round(price - entry, 2) if side == "LONG" else round(entry - price, 2) if side == "SHORT" else ""
-
+def expire_trade_fast(row, reason):
+    # No Upstox call. No Supabase call. Fast local cleanup.
     row["last_checked_at"] = now_text()
-    row["last_price"] = price if price is not None else ""
-    row["pnl_points"] = pnl
     row["result_reason"] = reason
     row["status"] = "EXPIRED"
 
-    out = make_outcome(row, price, "NO_TRADE", pnl, reason)
-    sync_result(out)
-    update_trade_status(row, "EXPIRED")
+    out = make_outcome(
+        row=row,
+        exit_price=row.get("last_price", ""),
+        outcome="NO_TRADE",
+        pnl=row.get("pnl_points", ""),
+        reason=reason,
+    )
+
     return row, out
 
 
@@ -326,7 +348,11 @@ def write_active(rows):
 
 
 def write_open(rows):
-    open_rows = [r for r in rows if str(r.get("status", "")).upper().strip() == "OPEN"]
+    open_rows = [
+        r for r in rows
+        if str(r.get("status", "")).upper().strip() == "OPEN"
+    ]
+
     with open(OPEN_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=ACTIVE_FIELDS)
         w.writeheader()
@@ -336,14 +362,16 @@ def write_open(rows):
 def append_outcomes(rows):
     if not rows:
         return
+
     with open(OUTCOME_CSV, "a", newline="", encoding="utf-8") as f:
         csv.DictWriter(f, fieldnames=OUTCOME_FIELDS).writerows(rows)
+
     with open(OUTCOME_JSONL, "a", encoding="utf-8") as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
-def track_trade_outcomes(limit=50):
+def track_trade_outcomes(limit=20):
     ensure_files()
 
     with open(ACTIVE_TRADES_CSV, "r", newline="", encoding="utf-8") as f:
@@ -351,19 +379,21 @@ def track_trade_outcomes(limit=50):
 
     updated = []
     finals = []
+
     checked = 0
     bad = 0
     expired = 0
     stale_expired = 0
     duplicate_expired = 0
-    seen = set()
 
+    seen = set()
     market_now = is_market_hours()
     eod_now = is_eod_expiry_time()
 
     for row in rows:
         symbol = clean_symbol(row.get("symbol"))
         side = str(row.get("side", "")).upper().strip()
+
         row["symbol"] = symbol
         row["side"] = side
 
@@ -378,22 +408,36 @@ def track_trade_outcomes(limit=50):
         key = f"{symbol}|{side}"
 
         if not is_today_trade(row):
-            row, out = expire_trade(row, "Expired stale/missing-date OPEN row; not counted in accuracy")
-            updated.append(row); finals.append(out)
-            expired += 1; stale_expired += 1
+            row, out = expire_trade_fast(
+                row,
+                "Expired stale/missing-date OPEN row; not counted in accuracy",
+            )
+            updated.append(row)
+            finals.append(out)
+            expired += 1
+            stale_expired += 1
             continue
 
         if key in seen:
-            row, out = expire_trade(row, "Expired duplicate OPEN row; not counted in accuracy")
-            updated.append(row); finals.append(out)
-            expired += 1; duplicate_expired += 1
+            row, out = expire_trade_fast(
+                row,
+                "Expired duplicate OPEN row; not counted in accuracy",
+            )
+            updated.append(row)
+            finals.append(out)
+            expired += 1
+            duplicate_expired += 1
             continue
 
         seen.add(key)
 
         if eod_now:
-            row, out = expire_trade(row, "Expired at end of trading day; not counted in accuracy")
-            updated.append(row); finals.append(out)
+            row, out = expire_trade_fast(
+                row,
+                "Expired at end of trading day; not counted in accuracy",
+            )
+            updated.append(row)
+            finals.append(out)
             expired += 1
             continue
 
@@ -403,12 +447,13 @@ def track_trade_outcomes(limit=50):
             updated.append(row)
             continue
 
-        if limit is not None and checked >= int(limit):
+        if checked >= int(limit):
             updated.append(row)
             continue
 
         price = get_price(symbol, fallback=safe_float(row.get("last_price")))
         outcome, pnl, reason = evaluate_trade(row, price)
+
         checked += 1
 
         row["last_checked_at"] = now_text()
@@ -433,13 +478,16 @@ def track_trade_outcomes(limit=50):
 
     targets = sum(1 for r in finals if r["outcome"] == "TARGET_HIT")
     sls = sum(1 for r in finals if r["outcome"] == "SL_HIT")
-    still_open = sum(1 for r in updated if str(r.get("status", "")).upper().strip() == "OPEN")
+    still_open = sum(
+        1 for r in updated
+        if str(r.get("status", "")).upper().strip() == "OPEN"
+    )
 
     print(f"📊 Outcome Tracker Checked: {checked} current OPEN trades")
     print(f"🧹 Skipped bad old rows: {bad}")
     print(f"✅ Newly closed targets: {targets}")
     print(f"❌ Newly closed SLs: {sls}")
-    print(f"⏳ Expired NO_TRADE at EOD/stale/duplicate: {expired}")
+    print(f"⏳ Expired NO_TRADE stale/duplicate/EOD: {expired}")
     print(f"   └─ stale expired: {stale_expired}")
     print(f"   └─ duplicate expired: {duplicate_expired}")
     print(f"⏳ Still open: {still_open}")
@@ -448,4 +496,4 @@ def track_trade_outcomes(limit=50):
 
 
 if __name__ == "__main__":
-    track_trade_outcomes(limit=50)
+    track_trade_outcomes(limit=20)
