@@ -489,15 +489,10 @@ def get_live_trades_count():
 
 def get_trade_results_stats():
     """
-    Reads real closed results from Supabase trade_results.
+    Reads real closed trade results from Supabase trade_results.
     Counts only WIN and LOSS. Ignores NO_TRADE / EXPIRED.
     """
-    stats = {
-        "wins": 0,
-        "losses": 0,
-        "closed_total": 0,
-        "accuracy": 0,
-    }
+    stats = {"wins": 0, "losses": 0, "closed_total": 0, "accuracy": 0}
 
     if supabase is None:
         return stats
@@ -529,7 +524,7 @@ def get_trade_results_stats():
     stats["closed_total"] = stats["wins"] + stats["losses"]
 
     if stats["closed_total"] > 0:
-        stats["accuracy"] = round((stats["wins"] / stats["closed_total"]) * 100)
+        stats["accuracy"] = int((stats["wins"] / stats["closed_total"]) * 100)
 
     return stats
 
@@ -752,23 +747,15 @@ if stocks_passed == 0:
 
 live_trades_count = get_live_trades_count()
 
-
+# ✅ Final performance stats from real closed trade outcomes
 trade_result_stats = get_trade_results_stats()
-wins = count_any_table(["winning_trades", "wins"])
-losses = count_any_table(["losing_trades", "losses"])
 
-if wins == 0 and losses == 0 and total_trades > 0:
-    latest_trade_row = latest_any_table(["trade_journal", "trades"])
-    wins = 0
-    losses = 0
+wins = trade_result_stats["wins"]
+losses = trade_result_stats["losses"]
+closed_trades = trade_result_stats["closed_total"]
+total_trades = closed_trades
 
-closed_trades = wins + losses
-
-if closed_trades > 0:
-    accuracy_percent = int((wins / closed_trades) * 100)
-else:
-    accuracy_percent = 0
-
+accuracy_percent = trade_result_stats["accuracy"]
 trade_performance_percent = accuracy_percent
 
 rr_display = "1:2"
@@ -879,13 +866,13 @@ st.markdown("<div class='section-title'>📊 Trading Performance</div>", unsafe_
 p1, p2, p3, p4 = st.columns(4)
 
 with p1:
-    metric_card("No. of Trades", f"{trade_result_stats['closed_total']:,}", "Closed WIN/LOSS trades")
+    metric_card("No. of Trades", f"{total_trades:,}", "Closed WIN/LOSS trades")
 
 with p2:
-    metric_card("No. of Wins", f"{trade_result_stats['wins']:,}", "Winning trades")
+    metric_card("No. of Wins", f"{wins:,}", "Winning trades")
 
 with p3:
-    metric_card("No. of Losses", f"{trade_result_stats['losses']:,}", "Losing trades")
+    metric_card("No. of Losses", f"{losses:,}", "Losing trades")
 
 with p4:
     metric_card("RR", rr_display, "Current risk-reward model")
@@ -896,7 +883,7 @@ with g1:
     circular_graph(
         "Overall Trade Performance",
         trade_performance_percent,
-        "Based on closed wins/losses",
+        "Based on closed WIN/LOSS trades",
         "blue",
     )
 
