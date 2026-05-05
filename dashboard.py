@@ -490,8 +490,7 @@ def get_live_trades_count():
 def get_trade_results_stats():
     """
     Reads real closed results from Supabase trade_results.
-    Counts only WIN and LOSS.
-    Ignores NO_TRADE / EXPIRED / OPEN / NULL.
+    Counts only WIN and LOSS. Ignores NO_TRADE / EXPIRED.
     """
     stats = {
         "wins": 0,
@@ -880,7 +879,7 @@ st.markdown("<div class='section-title'>📊 Trading Performance</div>", unsafe_
 p1, p2, p3, p4 = st.columns(4)
 
 with p1:
-    metric_card("No. of Trades", f"{total_trades:,}", "Total trade records")
+    metric_card("No. of Trades", f"{trade_result_stats['closed_total']:,}", "Closed WIN/LOSS trades")
 
 with p2:
     metric_card("No. of Wins", f"{trade_result_stats['wins']:,}", "Winning trades")
@@ -905,7 +904,7 @@ with g2:
     circular_graph(
         "TITAN Overall Accuracy",
         accuracy_percent,
-        "Accuracy becomes real after outcome tracker",
+        "Accuracy from closed WIN/LOSS trades",
         "green",
     )
 
