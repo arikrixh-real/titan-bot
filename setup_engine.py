@@ -220,11 +220,11 @@ def run_news_engine_safely():
         print(f"⚠️ News Engine Error: {e}")
 
 
+
 def _symbol_activity_score(symbol, scan_bucket):
     """
     Lightweight dynamic ranking score.
     Uses cached candles only, so it does not add extra API load.
-    Higher score = more important for current scan.
     """
     try:
         df = load_cached_stock_data(symbol)
@@ -257,7 +257,6 @@ def _symbol_activity_score(symbol, scan_bucket):
             if avg_vol > 0:
                 volume_score = min(5.0, last_vol / avg_vol)
 
-        # Small deterministic rotation factor so same 50 does not get locked forever.
         rotation_score = ((abs(hash(f"{symbol}_{scan_bucket}")) % 1000) / 1000.0)
 
         return round((one_bar_move * 2.0) + five_bar_move + volume_score + rotation_score, 4)
@@ -269,22 +268,17 @@ def _symbol_activity_score(symbol, scan_bucket):
 def select_dynamic_scan_universe(scan_id):
     """
     Selects dynamic top 50 stocks every scan.
-    Keeps everything else in setup_engine unchanged.
     """
     try:
         now = datetime.now(IST)
         scan_bucket = int(now.timestamp() // (DYNAMIC_ROTATION_BUCKET_MINUTES * 60))
 
         ranked = []
-
-        scan_universe = select_dynamic_scan_universe(scan_id)
-
-    for symbol in scan_universe:
-            score = _symbol_activity_score(symbol, scan_bucket)
-            ranked.append((score, symbol))
+        for candidate_symbol in NSE_STOCKS:
+            score = _symbol_activity_score(candidate_symbol, scan_bucket)
+            ranked.append((score, candidate_symbol))
 
         ranked.sort(reverse=True, key=lambda x: x[0])
-
         selected = [symbol for score, symbol in ranked[:DYNAMIC_SCAN_SIZE]]
 
         if not selected:
@@ -357,7 +351,9 @@ def scan_for_setups():
     momentum_passed_count = 0
     entry_passed_count = 0
 
-    for symbol in NSE_STOCKS:
+    scan_universe = select_dynamic_scan_universe(scan_id)
+
+    for symbol in scan_universe:
         try:
             df = load_cached_stock_data(symbol)
             df = clean_market_dataframe(df)
