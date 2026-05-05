@@ -1,19 +1,13 @@
-
 """
-TITAN - Outcome Tracker Engine FINAL
-------------------------------------
-Fixes:
-- TP/SL trades close properly.
-- Closed outcomes sync safely to Supabase trade_results.
-- Matching Supabase trades are marked CLOSED / EXPIRED.
-- End-of-day incomplete trades become EXPIRED / NO_TRADE.
-- NO_TRADE is not a win/loss and should not be used in accuracy.
-- Does not send Telegram alerts.
-- Does not place broker orders.
-
-Trading-hour rules:
-- Outcomes are checked only during market hours: 09:15 to 15:30 IST.
-- From 15:25 IST onwards, still-open trades expire as NO_TRADE.
+TITAN Outcome Tracker - FINAL ACTIVE ONLY FIX
+--------------------------------------------
+Fixes "Still open: 200+" by tracking only valid current OPEN trades.
+- Old/stale OPEN rows become EXPIRED / NO_TRADE.
+- Duplicate OPEN rows by symbol+side become EXPIRED / NO_TRADE.
+- TP hit => CLOSED + WIN in Supabase trade_results.
+- SL hit => CLOSED + LOSS in Supabase trade_results.
+- EOD incomplete trades => EXPIRED + NO_TRADE.
+- NO_TRADE should not count in accuracy.
 """
 
 import csv
@@ -60,45 +54,43 @@ OUTCOME_FIELDS = [
 ]
 
 
-def _now_dt():
+def now_dt():
     return datetime.now(IST)
 
 
-def _now():
-    return _now_dt().strftime("%Y-%m-%d %H:%M:%S")
+def now_text():
+    return now_dt().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _now_iso():
-    return _now_dt().isoformat()
+def now_iso():
+    return now_dt().isoformat()
 
 
 def is_trading_day():
-    return _now_dt().weekday() < 5
+    return now_dt().weekday() < 5
 
 
 def is_market_hours():
-    now = _now_dt()
-    return is_trading_day() and MARKET_OPEN_TIME <= now.time() <= MARKET_CLOSE_TIME
+    n = now_dt()
+    return is_trading_day() and MARKET_OPEN_TIME <= n.time() <= MARKET_CLOSE_TIME
 
 
 def is_eod_expiry_time():
-    now = _now_dt()
-    return is_trading_day() and now.time() >= EOD_EXPIRE_TIME
+    n = now_dt()
+    return is_trading_day() and n.time() >= EOD_EXPIRE_TIME
 
 
-def safe_float(value, default=None):
+def safe_float(v, default=None):
     try:
-        if value is None or value == "":
+        if v is None or v == "":
             return default
-        return float(value)
+        return float(v)
     except Exception:
         return default
 
 
 def clean_symbol(symbol):
-    symbol = str(symbol or "").upper().strip()
-    symbol = symbol.replace(".NS", "")
-    return symbol
+    return str(symbol or "").upper().strip().replace(".NS", "")
 
 
 def is_valid_symbol(symbol):
@@ -107,44 +99,73 @@ def is_valid_symbol(symbol):
         return False
     if re.fullmatch(r"[0-9_:-]+", symbol):
         return False
-    if len(symbol) > 25:
-        return False
-    return True
+    return len(symbol) <= 25
 
 
-def _ensure_csv(path, fields):
+def parse_dt(value):
+    if not value:
+        return None
+    value = str(value).strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(value)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=IST)
+        return dt.astimezone(IST)
+    except Exception:
+        pass
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(value[:19], fmt).replace(tzinfo=IST)
+        except Exception:
+            pass
+    return None
+
+
+def is_today_trade(row):
+    dt = parse_dt(row.get("opened_at"))
+    return bool(dt and dt.date() == now_dt().date())
+
+
+def ensure_csv(path, fields):
     JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
     if not path.exists() or path.stat().st_size == 0:
         with open(path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fields)
-            writer.writeheader()
+            csv.DictWriter(f, fieldnames=fields).writeheader()
 
 
 def ensure_files():
-    JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
-    _ensure_csv(ACTIVE_TRADES_CSV, ACTIVE_FIELDS)
-    _ensure_csv(OPEN_TRADES_CSV, ACTIVE_FIELDS)
-    _ensure_csv(OUTCOME_CSV, OUTCOME_FIELDS)
+    ensure_csv(ACTIVE_TRADES_CSV, ACTIVE_FIELDS)
+    ensure_csv(OPEN_TRADES_CSV, ACTIVE_FIELDS)
+    ensure_csv(OUTCOME_CSV, OUTCOME_FIELDS)
     if not OUTCOME_JSONL.exists():
         OUTCOME_JSONL.touch()
 
 
-def _get_price(symbol, fallback=None):
+def normalize_row(row):
+    out = {k: row.get(k, "") for k in ACTIVE_FIELDS}
+    out["symbol"] = clean_symbol(out.get("symbol"))
+    out["side"] = str(out.get("side", "")).upper().strip()
+    status = str(out.get("status", "")).upper().strip()
+    if status in ("ACTIVE", "LIVE", "RUNNING"):
+        status = "OPEN"
+    out["status"] = status
+    return out
+
+
+def get_price(symbol, fallback=None):
     symbol = clean_symbol(symbol)
-    if not is_valid_symbol(symbol):
-        return fallback
-    if get_live_price is None:
+    if not is_valid_symbol(symbol) or get_live_price is None:
         return fallback
     try:
-        price = safe_float(get_live_price(symbol))
-        if price is not None and price > 0:
-            return price
+        p = safe_float(get_live_price(symbol))
+        if p and p > 0:
+            return p
     except Exception:
         pass
     return fallback
 
 
-def _get_supabase():
+def get_supabase():
     try:
         if create_client is None:
             return None
@@ -157,34 +178,27 @@ def _get_supabase():
         return None
 
 
-def _remove_missing_column(error_text, payload):
-    match = re.search(r"Could not find the '([^']+)' column", str(error_text))
-    if not match:
+def remove_missing_column(err, payload):
+    m = re.search(r"Could not find the '([^']+)' column", str(err))
+    if not m:
         return False
-    missing = match.group(1)
-    if missing in payload:
-        payload.pop(missing, None)
+    col = m.group(1)
+    if col in payload:
+        payload.pop(col, None)
         return True
     return False
 
 
-def _sync_result_to_supabase(outcome_row):
-    client = _get_supabase()
+def sync_result(outcome_row):
+    client = get_supabase()
     if client is None:
         return False
 
     raw = str(outcome_row.get("outcome", "")).upper()
-    if raw == "TARGET_HIT":
-        result = "WIN"
-    elif raw == "SL_HIT":
-        result = "LOSS"
-    elif raw == "NO_TRADE":
-        result = "NO_TRADE"
-    else:
-        result = raw or "UNKNOWN"
+    result = "WIN" if raw == "TARGET_HIT" else "LOSS" if raw == "SL_HIT" else "NO_TRADE" if raw == "NO_TRADE" else raw
 
     payload = {
-        "created_at": _now_iso(),
+        "created_at": now_iso(),
         "trade_id": outcome_row.get("trade_id", ""),
         "symbol": outcome_row.get("symbol", ""),
         "side": outcome_row.get("side", ""),
@@ -197,65 +211,72 @@ def _sync_result_to_supabase(outcome_row):
         "outcome": raw,
         "pnl_points": safe_float(outcome_row.get("pnl_points"), 0.0),
         "reason": outcome_row.get("result_reason", ""),
-        "closed_at": outcome_row.get("closed_at", _now()),
+        "closed_at": outcome_row.get("closed_at", now_text()),
     }
 
-    payload_try = dict(payload)
     for _ in range(15):
         try:
-            client.table("trade_results").insert(payload_try).execute()
+            client.table("trade_results").insert(payload).execute()
             return True
         except Exception as e:
-            if _remove_missing_column(str(e), payload_try):
+            if remove_missing_column(e, payload):
                 continue
             return False
     return False
 
 
-def _update_supabase_trade_status(symbol, side, status):
-    client = _get_supabase()
+def update_trade_status(row, status):
+    client = get_supabase()
     if client is None:
         return False
+
+    trade_id = str(row.get("trade_id", "")).strip()
+    symbol = clean_symbol(row.get("symbol", ""))
+    side = str(row.get("side", "")).upper().strip()
+
     try:
-        client.table("trades").update({"status": status}).eq("symbol", symbol).eq("side", side).eq("status", "OPEN").execute()
+        if trade_id:
+            client.table("trades").update({"status": status}).eq("trade_id", trade_id).eq("status", "OPEN").execute()
+        else:
+            client.table("trades").update({"status": status}).eq("symbol", symbol).eq("side", side).eq("status", "OPEN").execute()
         return True
     except Exception:
         return False
 
 
-def _evaluate(row, current_price):
+def evaluate_trade(row, price):
     side = str(row.get("side", "")).upper().strip()
     entry = safe_float(row.get("entry"))
     sl = safe_float(row.get("sl"))
     target = safe_float(row.get("target"))
 
-    if current_price is None:
+    if price is None:
         return "OPEN", "", "Live price unavailable"
     if entry is None or sl is None or target is None:
         return "OPEN", "", "Invalid trade levels"
 
     if side == "LONG":
-        pnl = round(current_price - entry, 2)
-        if current_price >= target:
+        pnl = round(price - entry, 2)
+        if price >= target:
             return "TARGET_HIT", pnl, "LONG target reached"
-        if current_price <= sl:
+        if price <= sl:
             return "SL_HIT", pnl, "LONG stop loss reached"
         return "OPEN", pnl, "LONG trade still open"
 
     if side == "SHORT":
-        pnl = round(entry - current_price, 2)
-        if current_price <= target:
+        pnl = round(entry - price, 2)
+        if price <= target:
             return "TARGET_HIT", pnl, "SHORT target reached"
-        if current_price >= sl:
+        if price >= sl:
             return "SL_HIT", pnl, "SHORT stop loss reached"
         return "OPEN", pnl, "SHORT trade still open"
 
     return "OPEN", "", "Invalid side"
 
 
-def _outcome_row(row, exit_price, outcome, pnl_points, reason):
+def make_outcome(row, exit_price, outcome, pnl, reason):
     return {
-        "closed_at": _now(),
+        "closed_at": now_text(),
         "trade_id": row.get("trade_id", ""),
         "opened_at": row.get("opened_at", ""),
         "scan_id": row.get("scan_id", ""),
@@ -270,162 +291,160 @@ def _outcome_row(row, exit_price, outcome, pnl_points, reason):
         "alert_sent": row.get("alert_sent", ""),
         "exit_price": exit_price if exit_price is not None else "",
         "outcome": outcome,
-        "pnl_points": pnl_points,
+        "pnl_points": pnl,
         "result_reason": reason,
     }
 
 
-def _write_active(rows):
+def expire_trade(row, reason):
+    fallback = safe_float(row.get("last_price"))
+    price = get_price(row.get("symbol"), fallback=fallback)
+    entry = safe_float(row.get("entry"))
+    side = str(row.get("side", "")).upper().strip()
+
+    pnl = ""
+    if price is not None and entry is not None:
+        pnl = round(price - entry, 2) if side == "LONG" else round(entry - price, 2) if side == "SHORT" else ""
+
+    row["last_checked_at"] = now_text()
+    row["last_price"] = price if price is not None else ""
+    row["pnl_points"] = pnl
+    row["result_reason"] = reason
+    row["status"] = "EXPIRED"
+
+    out = make_outcome(row, price, "NO_TRADE", pnl, reason)
+    sync_result(out)
+    update_trade_status(row, "EXPIRED")
+    return row, out
+
+
+def write_active(rows):
     with open(ACTIVE_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=ACTIVE_FIELDS)
-        writer.writeheader()
-        writer.writerows(rows)
+        w = csv.DictWriter(f, fieldnames=ACTIVE_FIELDS)
+        w.writeheader()
+        w.writerows(rows)
 
 
-def _write_open(rows):
+def write_open(rows):
     open_rows = [r for r in rows if str(r.get("status", "")).upper().strip() == "OPEN"]
     with open(OPEN_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=ACTIVE_FIELDS)
-        writer.writeheader()
-        writer.writerows(open_rows)
+        w = csv.DictWriter(f, fieldnames=ACTIVE_FIELDS)
+        w.writeheader()
+        w.writerows(open_rows)
 
 
-def _append_outcomes(rows):
+def append_outcomes(rows):
     if not rows:
         return
     with open(OUTCOME_CSV, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=OUTCOME_FIELDS)
-        writer.writerows(rows)
+        csv.DictWriter(f, fieldnames=OUTCOME_FIELDS).writerows(rows)
     with open(OUTCOME_JSONL, "a", encoding="utf-8") as f:
-        for row in rows:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        for r in rows:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
 def track_trade_outcomes(limit=50):
     ensure_files()
 
     with open(ACTIVE_TRADES_CSV, "r", newline="", encoding="utf-8") as f:
-        all_rows = list(csv.DictReader(f))
+        rows = [normalize_row(r) for r in csv.DictReader(f)]
 
-    updated_rows = []
-    final_rows = []
+    updated = []
+    finals = []
+    checked = 0
+    bad = 0
+    expired = 0
+    stale_expired = 0
+    duplicate_expired = 0
+    seen = set()
 
-    checked_count = 0
-    skipped_bad_rows = 0
-    expired_count = 0
+    market_now = is_market_hours()
+    eod_now = is_eod_expiry_time()
 
-    open_indices = [
-        i for i, row in enumerate(all_rows)
-        if str(row.get("status", "")).upper().strip() == "OPEN"
-    ]
-
-    if limit is not None:
-        open_indices_to_check = open_indices[:int(limit)]
-    else:
-        open_indices_to_check = open_indices
-
-    indices_to_check = set(open_indices_to_check)
-
-    expire_now = is_eod_expiry_time()
-    market_open_now = is_market_hours()
-
-    for i, row in enumerate(all_rows):
-        symbol = clean_symbol(row.get("symbol", ""))
+    for row in rows:
+        symbol = clean_symbol(row.get("symbol"))
         side = str(row.get("side", "")).upper().strip()
         row["symbol"] = symbol
+        row["side"] = side
 
-        if not is_valid_symbol(symbol) or side not in ["LONG", "SHORT"]:
-            skipped_bad_rows += 1
+        if not is_valid_symbol(symbol) or side not in ("LONG", "SHORT"):
+            bad += 1
             continue
 
-        current_status = str(row.get("status", "")).upper().strip()
-
-        if current_status != "OPEN":
-            updated_rows.append(row)
+        if row.get("status") != "OPEN":
+            updated.append(row)
             continue
 
-        if expire_now:
-            fallback_price = safe_float(row.get("last_price"))
-            current_price = _get_price(symbol, fallback=fallback_price)
+        key = f"{symbol}|{side}"
 
-            pnl_points = ""
-            entry = safe_float(row.get("entry"))
-
-            if current_price is not None and entry is not None:
-                if side == "LONG":
-                    pnl_points = round(current_price - entry, 2)
-                elif side == "SHORT":
-                    pnl_points = round(entry - current_price, 2)
-
-            row["last_checked_at"] = _now()
-            row["last_price"] = current_price if current_price is not None else ""
-            row["pnl_points"] = pnl_points
-            row["result_reason"] = "Expired at end of trading day; not counted in accuracy"
-            row["status"] = "EXPIRED"
-
-            out = _outcome_row(
-                row=row,
-                exit_price=current_price,
-                outcome="NO_TRADE",
-                pnl_points=pnl_points,
-                reason="Expired at end of trading day; not counted in accuracy",
-            )
-
-            final_rows.append(out)
-            _sync_result_to_supabase(out)
-            _update_supabase_trade_status(symbol, side, "EXPIRED")
-            expired_count += 1
-            updated_rows.append(row)
+        if not is_today_trade(row):
+            row, out = expire_trade(row, "Expired stale/missing-date OPEN row; not counted in accuracy")
+            updated.append(row); finals.append(out)
+            expired += 1; stale_expired += 1
             continue
 
-        if not market_open_now:
-            row["last_checked_at"] = _now()
+        if key in seen:
+            row, out = expire_trade(row, "Expired duplicate OPEN row; not counted in accuracy")
+            updated.append(row); finals.append(out)
+            expired += 1; duplicate_expired += 1
+            continue
+
+        seen.add(key)
+
+        if eod_now:
+            row, out = expire_trade(row, "Expired at end of trading day; not counted in accuracy")
+            updated.append(row); finals.append(out)
+            expired += 1
+            continue
+
+        if not market_now:
+            row["last_checked_at"] = now_text()
             row["result_reason"] = "Outside market hours; outcome check skipped"
-            updated_rows.append(row)
+            updated.append(row)
             continue
 
-        if i not in indices_to_check:
-            updated_rows.append(row)
+        if limit is not None and checked >= int(limit):
+            updated.append(row)
             continue
 
-        fallback_price = safe_float(row.get("last_price"))
-        current_price = _get_price(symbol, fallback=fallback_price)
+        price = get_price(symbol, fallback=safe_float(row.get("last_price")))
+        outcome, pnl, reason = evaluate_trade(row, price)
+        checked += 1
 
-        outcome, pnl_points, reason = _evaluate(row, current_price)
-        checked_count += 1
-
-        row["last_checked_at"] = _now()
-        row["last_price"] = current_price if current_price is not None else ""
-        row["pnl_points"] = pnl_points
+        row["last_checked_at"] = now_text()
+        row["last_price"] = price if price is not None else ""
+        row["pnl_points"] = pnl
         row["result_reason"] = reason
 
-        if outcome in ["TARGET_HIT", "SL_HIT"]:
+        if outcome in ("TARGET_HIT", "SL_HIT"):
             row["status"] = "CLOSED"
-            final_row = _outcome_row(row, current_price, outcome, pnl_points, reason)
-            final_rows.append(final_row)
-            _sync_result_to_supabase(final_row)
-            _update_supabase_trade_status(symbol, side, "CLOSED")
+            out = make_outcome(row, price, outcome, pnl, reason)
+            finals.append(out)
+            sync_result(out)
+            update_trade_status(row, "CLOSED")
         else:
             row["status"] = "OPEN"
 
-        updated_rows.append(row)
+        updated.append(row)
 
-    _write_active(updated_rows)
-    _write_open(updated_rows)
-    _append_outcomes(final_rows)
+    write_active(updated)
+    write_open(updated)
+    append_outcomes(finals)
 
-    closed_targets = sum(1 for r in final_rows if r["outcome"] == "TARGET_HIT")
-    closed_sls = sum(1 for r in final_rows if r["outcome"] == "SL_HIT")
-    still_open = sum(1 for r in updated_rows if str(r.get("status", "")).upper().strip() == "OPEN")
+    targets = sum(1 for r in finals if r["outcome"] == "TARGET_HIT")
+    sls = sum(1 for r in finals if r["outcome"] == "SL_HIT")
+    still_open = sum(1 for r in updated if str(r.get("status", "")).upper().strip() == "OPEN")
 
-    print(f"📊 Outcome Tracker Checked: {checked_count} open/internal trades")
-    print(f"🧹 Skipped bad old rows: {skipped_bad_rows}")
-    print(f"✅ Newly closed targets: {closed_targets}")
-    print(f"❌ Newly closed SLs: {closed_sls}")
-    print(f"⏳ Expired NO_TRADE at EOD: {expired_count}")
+    print(f"📊 Outcome Tracker Checked: {checked} current OPEN trades")
+    print(f"🧹 Skipped bad old rows: {bad}")
+    print(f"✅ Newly closed targets: {targets}")
+    print(f"❌ Newly closed SLs: {sls}")
+    print(f"⏳ Expired NO_TRADE at EOD/stale/duplicate: {expired}")
+    print(f"   └─ stale expired: {stale_expired}")
+    print(f"   └─ duplicate expired: {duplicate_expired}")
     print(f"⏳ Still open: {still_open}")
 
-    return checked_count
+    return checked
 
 
 if __name__ == "__main__":
