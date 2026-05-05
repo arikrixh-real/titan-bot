@@ -467,20 +467,31 @@ def get_live_trades_count():
             if df.empty:
                 return 0
 
+            status_columns = ["status", "trade_status", "outcome", "state"]
+
+            for col in status_columns:
+                if col in df.columns:
+                    live_df = df[
+                        df[col]
+                        .astype(str)
+                        .str.upper()
+                        .isin(["ACTIVE", "OPEN", "LIVE", "RUNNING"])
+                    ]
+                    return len(live_df)
+
+            return len(df)
+
+        except Exception:
+            continue
+
+    return 0
 
 
 def get_trade_results_stats():
     """
-    Reads closed trade outcomes from Supabase trade_results.
-    Counts only real outcomes:
-    - WIN
-    - LOSS
-
-    Ignores:
-    - NO_TRADE
-    - EXPIRED
-    - OPEN
-    - NULL
+    Reads real closed results from Supabase trade_results.
+    Counts only WIN and LOSS.
+    Ignores NO_TRADE / EXPIRED / OPEN / NULL.
     """
     stats = {
         "wins": 0,
@@ -522,25 +533,6 @@ def get_trade_results_stats():
         stats["accuracy"] = round((stats["wins"] / stats["closed_total"]) * 100)
 
     return stats
-
-            status_columns = ["status", "trade_status", "outcome", "state"]
-
-            for col in status_columns:
-                if col in df.columns:
-                    live_df = df[
-                        df[col]
-                        .astype(str)
-                        .str.upper()
-                        .isin(["ACTIVE", "OPEN", "LIVE", "RUNNING"])
-                    ]
-                    return len(live_df)
-
-            return len(df)
-
-        except Exception:
-            continue
-
-    return 0
 
 
 # =========================================================
