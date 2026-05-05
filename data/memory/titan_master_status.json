@@ -1,9 +1,9 @@
 {
-  "updated_at": "2026-05-05 22:26:47",
+  "updated_at": "2026-05-05 22:33:06",
   "system_name": "TITAN",
   "system_flow": "Scan → Journal → Outcome → Learning → Evolution → Adaptive Scoring → Pattern Intelligence → Regime Intelligence → Elite Selection",
   "last_scan_summary": {
-    "scan_id": "20260506_035633",
+    "scan_id": "20260506_040240",
     "market_status": {
       "market_ok": true,
       "reason": "Level 1 market filter active"
@@ -20,10 +20,10 @@
     "top_3_symbols": [
       "PFC.NS",
       "HAVELLS.NS",
-      "JINDALSTEL.NS"
+      "CHOLAFIN.NS"
     ],
     "closed_trades_at_scan_start": 0,
-    "timestamp": "2026-05-06 03:56:47"
+    "timestamp": "2026-05-06 04:03:06"
   },
   "journal": {
     "total_journal_rows": 293,
@@ -43,7 +43,7 @@
     "score_boost": 1.0,
     "filter_strictness": 1.0,
     "ranking_confidence": 1.0,
-    "last_updated": "2026-05-05 22:26:47",
+    "last_updated": "2026-05-05 22:33:06",
     "notes": [
       "Waiting for more closed trades. Need at least 5, found 0."
     ]
