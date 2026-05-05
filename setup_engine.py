@@ -555,7 +555,7 @@ def scan_for_setups():
 
     # Existing outcome tracker remains active
     try:
-        track_trade_outcomes(limit=50)
+        track_trade_outcomes(limit=10)
         print("📊 Outcome tracker completed")
     except Exception as e:
         print(f"⚠️ Outcome tracker error: {e}")
