@@ -83,6 +83,10 @@ MIN_CLOSED_TRADES_FOR_EVOLUTION_FILTER = 10
 
 OHLCV_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 
+# Dynamic scan settings
+DYNAMIC_SCAN_SIZE = 50
+DYNAMIC_ROTATION_BUCKET_MINUTES = 5
+
 
 # =========================================================
 # SUPABASE
@@ -214,6 +218,86 @@ def run_news_engine_safely():
         print("✅ News Engine Completed")
     except Exception as e:
         print(f"⚠️ News Engine Error: {e}")
+
+
+def _symbol_activity_score(symbol, scan_bucket):
+    """
+    Lightweight dynamic ranking score.
+    Uses cached candles only, so it does not add extra API load.
+    Higher score = more important for current scan.
+    """
+    try:
+        df = load_cached_stock_data(symbol)
+        df = clean_market_dataframe(df)
+
+        if df is None or df.empty or len(df) < 30:
+            return 0.0
+
+        close = pd.to_numeric(df["Close"], errors="coerce").dropna()
+
+        if len(close) < 30:
+            return 0.0
+
+        if "Volume" in df.columns:
+            volume = pd.to_numeric(df["Volume"], errors="coerce").dropna()
+        else:
+            volume = pd.Series(dtype=float)
+
+        last_close = float(close.iloc[-1])
+        prev_close = float(close.iloc[-2])
+        old_close = float(close.iloc[-6]) if len(close) >= 6 else prev_close
+
+        one_bar_move = abs((last_close - prev_close) / prev_close) * 100 if prev_close else 0.0
+        five_bar_move = abs((last_close - old_close) / old_close) * 100 if old_close else 0.0
+
+        volume_score = 0.0
+        if len(volume) >= 20:
+            avg_vol = float(volume.iloc[-20:].mean())
+            last_vol = float(volume.iloc[-1])
+            if avg_vol > 0:
+                volume_score = min(5.0, last_vol / avg_vol)
+
+        # Small deterministic rotation factor so same 50 does not get locked forever.
+        rotation_score = ((abs(hash(f"{symbol}_{scan_bucket}")) % 1000) / 1000.0)
+
+        return round((one_bar_move * 2.0) + five_bar_move + volume_score + rotation_score, 4)
+
+    except Exception:
+        return 0.0
+
+
+def select_dynamic_scan_universe(scan_id):
+    """
+    Selects dynamic top 50 stocks every scan.
+    Keeps everything else in setup_engine unchanged.
+    """
+    try:
+        now = datetime.now(IST)
+        scan_bucket = int(now.timestamp() // (DYNAMIC_ROTATION_BUCKET_MINUTES * 60))
+
+        ranked = []
+
+        scan_universe = select_dynamic_scan_universe(scan_id)
+
+    for symbol in scan_universe:
+            score = _symbol_activity_score(symbol, scan_bucket)
+            ranked.append((score, symbol))
+
+        ranked.sort(reverse=True, key=lambda x: x[0])
+
+        selected = [symbol for score, symbol in ranked[:DYNAMIC_SCAN_SIZE]]
+
+        if not selected:
+            selected = list(NSE_STOCKS)[:DYNAMIC_SCAN_SIZE]
+
+        print(f"🎯 Dynamic Scan Mode: selected {len(selected)} stocks from {len(NSE_STOCKS)} universe")
+        print(f"🎯 Dynamic sample: {', '.join(selected[:10])}")
+
+        return selected
+
+    except Exception as e:
+        print(f"⚠️ Dynamic scan selection failed, using first {DYNAMIC_SCAN_SIZE}: {e}")
+        return list(NSE_STOCKS)[:DYNAMIC_SCAN_SIZE]
 
 
 # =========================================================
