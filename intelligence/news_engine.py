@@ -7,21 +7,16 @@ What this does:
 3. Detects affected sectors.
 4. Stores latest batch locally in titan_brain/memory/news_batch_state.json.
 5. Stores news into Supabase news_memory table.
-6. Avoids duplicate news using news_hash when Supabase supports it.
-7. Does not crash if Supabase table has fewer columns.
+6. Avoids duplicate news using:
+   - local hash memory
+   - current batch hash check
+   - Supabase news_hash/link check
+7. Does not insert broken NULL-only fallback rows.
 8. Keeps setup_engine.py safe.
 
-Recommended Supabase news_memory columns:
-- id uuid default gen_random_uuid()
-- created_at timestamptz default now()
-- news_hash text
-- title text
-- summary text
-- link text
-- source text
-- detected_symbols jsonb
-- sectors jsonb
-- fetched_at timestamptz
+NOTE:
+Only duplicate-prevention/storage safety was improved.
+News collection scope is kept the same.
 """
 
 import os
@@ -181,6 +176,8 @@ NEWS_FEEDS = [
 ]
 
 NEWS_MEMORY_FILE = Path("titan_brain/memory/news_batch_state.json")
+NEWS_HASH_MEMORY_FILE = Path("titan_brain/memory/news_seen_hashes.json")
+MAX_LOCAL_HASHES = 5000
 
 
 # =========================================================
@@ -197,6 +194,43 @@ def clean_text(text):
 def make_news_hash(title, link):
     raw = f"{str(title).strip().lower()}|{str(link).strip().lower()}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+# =========================================================
+# LOCAL HASH MEMORY
+# =========================================================
+
+def load_seen_hashes():
+    try:
+        if not NEWS_HASH_MEMORY_FILE.exists():
+            return set()
+
+        with open(NEWS_HASH_MEMORY_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        return set(data.get("seen_hashes", []))
+
+    except Exception:
+        return set()
+
+
+def save_seen_hashes(seen_hashes):
+    try:
+        NEWS_HASH_MEMORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+        hash_list = list(seen_hashes)[-MAX_LOCAL_HASHES:]
+
+        data = {
+            "updated_at": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S"),
+            "count": len(hash_list),
+            "seen_hashes": hash_list,
+        }
+
+        with open(NEWS_HASH_MEMORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
+    except Exception as e:
+        print(f"⚠️ Could not save news hash memory: {e}")
 
 
 # =========================================================
@@ -260,11 +294,6 @@ def get_supabase():
 
 
 def supabase_news_exists(client, news_hash, link):
-    """
-    Duplicate check.
-    Uses news_hash first. If schema does not support it, uses link.
-    If neither works, returns False and insert retry still protects from crashes.
-    """
     if client is None:
         return False
 
@@ -298,11 +327,6 @@ def supabase_news_exists(client, news_hash, link):
 
 
 def remove_missing_column_from_payload(error_text, payload):
-    """
-    Supabase/PostgREST error format:
-    Could not find the 'column_name' column of 'news_memory'
-    This removes the missing column and retries safely.
-    """
     match = re.search(r"Could not find the '([^']+)' column", str(error_text))
     if not match:
         return False
@@ -323,6 +347,8 @@ def insert_news_to_supabase(news_items):
         print("⚠️ News Supabase not connected")
         return 0
 
+    seen_hashes = load_seen_hashes()
+
     inserted_count = 0
     duplicate_count = 0
     failed_count = 0
@@ -332,8 +358,19 @@ def insert_news_to_supabase(news_items):
         link = item.get("link", "")
         news_hash = item.get("news_hash") or make_news_hash(title, link)
 
+        if not title or not link:
+            duplicate_count += 1
+            continue
+
+        # Layer 1: local memory dedup
+        if news_hash in seen_hashes:
+            duplicate_count += 1
+            continue
+
+        # Layer 2: Supabase dedup
         if supabase_news_exists(client, news_hash, link):
             duplicate_count += 1
+            seen_hashes.add(news_hash)
             continue
 
         payload = {
@@ -348,7 +385,6 @@ def insert_news_to_supabase(news_items):
             "fetched_at": item.get("fetched_at_iso", datetime.now(IST).isoformat()),
         }
 
-        # Retry by automatically removing columns your table does not have.
         success = False
         payload_to_try = dict(payload)
 
@@ -356,6 +392,7 @@ def insert_news_to_supabase(news_items):
             try:
                 client.table("news_memory").insert(payload_to_try).execute()
                 inserted_count += 1
+                seen_hashes.add(news_hash)
                 success = True
                 break
 
@@ -363,25 +400,21 @@ def insert_news_to_supabase(news_items):
                 removed = remove_missing_column_from_payload(str(e), payload_to_try)
 
                 if not removed:
-                    # Final fallback: created_at only.
-                    try:
-                        client.table("news_memory").insert({
-                            "created_at": datetime.now(IST).isoformat()
-                        }).execute()
-                        inserted_count += 1
-                        success = True
-                        break
-                    except Exception:
-                        break
+                    # Important:
+                    # Do NOT insert created_at-only fallback rows.
+                    # That caused NULL/duplicate spam earlier.
+                    break
 
         if not success:
             failed_count += 1
+
+    save_seen_hashes(seen_hashes)
 
     print(f"☁️ News Supabase inserted: {inserted_count}")
     print(f"♻️ News duplicates skipped: {duplicate_count}")
 
     if failed_count:
-        print(f"⚠️ News Supabase failed: {failed_count}")
+        print(f"⚠️ News Supabase failed/skipped: {failed_count}")
 
     return inserted_count
 
@@ -392,6 +425,8 @@ def insert_news_to_supabase(news_items):
 
 def fetch_news():
     all_news = []
+    batch_hashes = set()
+    batch_duplicates = 0
 
     for feed_url in NEWS_FEEDS:
         try:
@@ -413,6 +448,14 @@ def fetch_news():
                     continue
 
                 news_hash = make_news_hash(title, link)
+
+                # Layer 3: duplicate inside same RSS batch
+                if news_hash in batch_hashes:
+                    batch_duplicates += 1
+                    continue
+
+                batch_hashes.add(news_hash)
+
                 fetched_at_iso = datetime.now(IST).isoformat()
 
                 news_item = {
@@ -431,6 +474,9 @@ def fetch_news():
 
         except Exception as e:
             print(f"⚠️ Error fetching news from {feed_url}: {e}")
+
+    if batch_duplicates:
+        print(f"♻️ News batch duplicates skipped: {batch_duplicates}")
 
     return all_news
 
