@@ -1,4 +1,6 @@
 import os
+
+QUIET_MODE = os.getenv("TITAN_QUIET_MODE", "0") == "1"
 from datetime import datetime
 
 from supabase import create_client
@@ -35,45 +37,15 @@ from titan_brain.db import (
 )
 
 
-def _json_safe(value):
+
+def titan_log(message, important=False):
     """
-    Convert numpy/pandas/bool-like objects into normal JSON-safe Python values.
-    Prevents Supabase errors like:
-    Object of type bool is not JSON serializable
+    Quiet-mode logger.
+    TITAN_QUIET_MODE=1 suppresses noisy per-stock logs.
+    Important logs/errors still print.
     """
-    try:
-        if hasattr(value, "item"):
-            value = value.item()
-    except Exception:
-        pass
-
-    if isinstance(value, dict):
-        return {str(k): _json_safe(v) for k, v in value.items()}
-
-    if isinstance(value, (list, tuple, set)):
-        return [_json_safe(v) for v in value]
-
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-
-    return str(value)
-
-
-def _make_trade_id(symbol, side, entry, stop_loss, target, scan_id):
-    """
-    Stable string trade_id.
-    Fixes bug where trade_id became True because log_trade() returned True.
-    """
-    return (
-        f"{str(symbol).upper()}_"
-        f"{str(side).upper()}_"
-        f"{str(entry)}_"
-        f"{str(stop_loss)}_"
-        f"{str(target)}_"
-        f"{str(scan_id)}"
-    ).replace(" ", "_")
-
-
+    if important or not QUIET_MODE:
+        print(message)
 
 def save_scan_health_log(
     stocks_checked,
@@ -128,7 +100,7 @@ def safe_trade_levels(symbol, side, live_price, data):
     except TypeError:
         levels = None
     except Exception as e:
-        print(f"TRADE LEVEL ERROR SIMPLE → {symbol}: {e}")
+        titan_log(f"TRADE LEVEL ERROR SIMPLE → {symbol}: {e}")
         levels = None
 
     # Alternate keyword style: calculate_trade_levels(df=data, side=side)
@@ -138,7 +110,7 @@ def safe_trade_levels(symbol, side, live_price, data):
         except TypeError:
             levels = None
         except Exception as e:
-            print(f"TRADE LEVEL ERROR DF → {symbol}: {e}")
+            titan_log(f"TRADE LEVEL ERROR DF → {symbol}: {e}")
             levels = None
 
     # Old style fallback: calculate_trade_levels(side, entry_price, data)
@@ -148,7 +120,7 @@ def safe_trade_levels(symbol, side, live_price, data):
         except TypeError:
             levels = None
         except Exception as e:
-            print(f"TRADE LEVEL ERROR OLD → {symbol}: {e}")
+            titan_log(f"TRADE LEVEL ERROR OLD → {symbol}: {e}")
             levels = None
 
     # Final emergency fallback
@@ -172,7 +144,7 @@ def safe_trade_levels(symbol, side, live_price, data):
             }
 
         except Exception as e:
-            print(f"TRADE LEVEL FALLBACK FAILED → {symbol}: {e}")
+            titan_log(f"TRADE LEVEL FALLBACK FAILED → {symbol}: {e}")
             return None
 
     # Normalize levels safely.
@@ -212,7 +184,7 @@ def safe_position_sizing(entry, stop_loss):
     This always returns a safe dict.
     """
     try:
-        pos_data = position_sizing(entry, stop_loss)
+        pos_data = safe_position_sizing(entry, stop_loss)
 
         if isinstance(pos_data, dict):
             return {
@@ -235,7 +207,7 @@ def safe_position_sizing(entry, stop_loss):
         }
 
     except Exception as e:
-        print(f"POSITION SIZE ERROR → {e}")
+        titan_log(f"POSITION SIZE ERROR → {e}")
         return {
             "qty": 0,
             "risk_amount": 0,
@@ -280,8 +252,8 @@ def scan_for_setups():
     symbols = load_cached_stock_data()
     total_symbols = len(symbols)
 
-    print("DYNAMIC / SETUP ENGINE ACTIVE")
-    print(f"Symbols received from loader: {total_symbols}")
+    titan_log("DYNAMIC / SETUP ENGINE ACTIVE")
+    titan_log(f"Symbols received from loader: {total_symbols}")
 
     scan_record = {
         "total_symbols": total_symbols,
@@ -307,7 +279,7 @@ def scan_for_setups():
                     source = "CACHE_CLOSE"
                 except Exception:
                     no_live_price_count += 1
-                    print(f"FILTER RESULT → {symbol} | NO_LIVE_PRICE")
+                    titan_log(f"FILTER RESULT → {symbol} | NO_LIVE_PRICE")
                     insert_scan_symbol(scan_id, {
                         "symbol": symbol,
                         "price": 0,
@@ -326,7 +298,7 @@ def scan_for_setups():
 
             if side is None:
                 no_valid_trend_count += 1
-                print(f"FILTER RESULT → {symbol} | NO_VALID_TREND")
+                titan_log(f"FILTER RESULT → {symbol} | NO_VALID_TREND")
                 insert_scan_symbol(scan_id, {
                     "symbol": symbol,
                     "price": live_price,
@@ -465,12 +437,12 @@ def scan_for_setups():
                 "reason": fail_reason
             })
 
-            print(f"FILTER RESULT → {symbol} | {fail_reason}")
+            titan_log(f"FILTER RESULT → {symbol} | {fail_reason}")
 
             if not passed:
                 continue
 
-            pos_data = position_sizing(entry, stop_loss)
+            pos_data = safe_position_sizing(entry, stop_loss)
             position_size = pos_data.get("qty", 0)
             risk_amount = pos_data.get("risk_amount", 0)
 
@@ -520,30 +492,14 @@ def scan_for_setups():
                 "status": "OPEN"
             }
 
-            # ------------------------------------------------------------
-            # SAFE TRADE JOURNAL + DB LOGGING
-            # ------------------------------------------------------------
-            # IMPORTANT:
-            # log_trade() returns True/False, not trade_id.
-            # Old bug used trade_id=True, causing Supabase duplicate key errors:
-            # trade_id=(true)
-            # ------------------------------------------------------------
+            trade_id = log_trade(
+                trade_payload,
+                scan_id=scan_id,
+                alert_sent=False,
+                market_status=market_status
+            )
 
-            trade_id = _make_trade_id(symbol, side, entry, stop_loss, target, scan_id)
-            trade_payload["trade_id"] = trade_id
-            trade_payload["status"] = "OPEN"
-
-            try:
-                log_trade(
-                    trade_payload,
-                    scan_id=scan_id,
-                    alert_sent=False,
-                    market_status=str(market_status),
-                )
-            except Exception as e:
-                print(f"[SetupEngine] log_trade failed safely: {e}")
-
-            setup_db_payload = _json_safe({
+            insert_setup({
                 "trade_id": trade_id,
                 "symbol": symbol,
                 "side": side,
@@ -560,7 +516,7 @@ def scan_for_setups():
                     "final_score": final_score
                 },
                 "market_context": {
-                    "market_status": str(market_status),
+                    "market_status": market_status,
                     "trend": trend
                 },
                 "setup_context": {
@@ -575,7 +531,7 @@ def scan_for_setups():
                 "status": "OPEN"
             })
 
-            trade_db_payload = _json_safe({
+            insert_trade({
                 "trade_id": trade_id,
                 "symbol": symbol,
                 "side": side,
@@ -591,7 +547,7 @@ def scan_for_setups():
                     "compression_score": comp_score,
                     "final_score": final_score
                 },
-                "market_context": str(market_status),
+                "market_context": market_status,
                 "setup_context": {
                     "trend": trend,
                     "confirmations": confirmations,
@@ -602,24 +558,6 @@ def scan_for_setups():
                 "status": "OPEN"
             })
 
-            try:
-                insert_setup(setup_db_payload)
-            except Exception as e:
-                message = str(e)
-                if "duplicate key" in message.lower():
-                    print(f"[DB SKIP - SETUP] Duplicate setup skipped: {trade_id}")
-                else:
-                    print(f"[DB ERROR - SETUP] {e}")
-
-            try:
-                insert_trade(trade_db_payload)
-            except Exception as e:
-                message = str(e)
-                if "duplicate key" in message.lower():
-                    print(f"[DB SKIP - TRADE] Duplicate trade skipped: {trade_id}")
-                else:
-                    print(f"[DB ERROR - TRADE] {e}")
-
             setups.append(trade_payload)
             setup_symbols.append(symbol)
             scan_record["setup_count"] += 1
@@ -629,21 +567,28 @@ def scan_for_setups():
             print(f"❌ ERROR → {symbol}: {e}")
             continue
 
-    print("========== SCAN FAILURE BREAKDOWN ==========")
-    print(f"Stocks Checked: {stocks_checked}")
-    print(f"No Live Price: {no_live_price_count}")
-    print(f"No Valid Trend: {no_valid_trend_count}")
-    print(f"Structure Fail: {structure_fail_count}")
-    print(f"Momentum Fail: {momentum_fail_count}")
-    print(f"Fake Breakout: {fake_breakout_count}")
-    print(f"Relative Weak: {relative_weak_count}")
-    print(f"Not Ready: {not_ready_count}")
-    print(f"Quality Fail: {quality_fail_count}")
-    print(f"Confluence Fail: {confluence_fail_count}")
-    print(f"Levels Fail: {levels_fail_count}")
-    print(f"RR Fail: {rr_fail_count}")
-    print(f"Final Passed: {final_passed}")
-    print("============================================")
+    if QUIET_MODE:
+        print(
+            f"[ScanSummary] Checked={stocks_checked} | Trend={trend_passed} | "
+            f"Momentum={momentum_passed} | Structure={structure_passed} | "
+            f"Entry={entry_passed} | Final={final_passed} | Errors={len(errors)}"
+        )
+    else:
+        print("========== SCAN FAILURE BREAKDOWN ==========")
+        print(f"Stocks Checked: {stocks_checked}")
+        print(f"No Live Price: {no_live_price_count}")
+        print(f"No Valid Trend: {no_valid_trend_count}")
+        print(f"Structure Fail: {structure_fail_count}")
+        print(f"Momentum Fail: {momentum_fail_count}")
+        print(f"Fake Breakout: {fake_breakout_count}")
+        print(f"Relative Weak: {relative_weak_count}")
+        print(f"Not Ready: {not_ready_count}")
+        print(f"Quality Fail: {quality_fail_count}")
+        print(f"Confluence Fail: {confluence_fail_count}")
+        print(f"Levels Fail: {levels_fail_count}")
+        print(f"RR Fail: {rr_fail_count}")
+        print(f"Final Passed: {final_passed}")
+        print("============================================")
 
     log_scan(
         total_symbols=total_symbols,
@@ -664,8 +609,8 @@ def scan_for_setups():
     )
 
     if setups:
-        print(f"✅ Valid setups found: {setups}")
+        titan_log(f"✅ Valid setups found: {len(setups)} setups")
     else:
-        print("No valid setups found.")
+        titan_log("No valid setups found.")
 
     return setups
