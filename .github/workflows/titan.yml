@@ -22,13 +22,12 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
@@ -43,7 +42,6 @@ jobs:
       - name: Verify TITAN files
         run: |
           echo "Checking TITAN files..."
-          ls -la
           test -f titan_master_brain/master_controller.py
 
       - name: Run TITAN Master Brain
@@ -53,6 +51,7 @@ jobs:
           UPSTOX_ACCESS_TOKEN: ${{ secrets.UPSTOX_ACCESS_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          TITAN_QUIET_MODE: "1"
         run: |
           python -c "from titan_master_brain.master_controller import run_master_brain; run_master_brain()"
 
@@ -60,4 +59,4 @@ jobs:
         if: always()
         run: |
           echo "Skipping Git memory push during 5-minute live scan."
-          echo "TITAN scan, alerts, journaling, outcome tracking, and dashboard data still run."
+          echo "TITAN scan, Master Brain, alerts, journaling, and outcome tracking still run."
