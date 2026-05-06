@@ -1,9 +1,9 @@
 {
-  "updated_at": "2026-05-06 00:12:45",
+  "updated_at": "2026-05-06 00:16:46",
   "system_name": "TITAN",
   "system_flow": "Scan → Journal → Outcome → Learning → Evolution → Adaptive Scoring → Pattern Intelligence → Regime Intelligence → Elite Selection",
   "last_scan_summary": {
-    "scan_id": "20260506_054222",
+    "scan_id": "20260506_054632",
     "market_status": {
       "market_ok": true,
       "reason": "Level 1 market filter active"
@@ -11,19 +11,19 @@
     "stocks_scanned": 50,
     "stocks_failed": 0,
     "trend_passed": 24,
-    "momentum_passed": 16,
+    "momentum_passed": 17,
     "structure_passed": 22,
-    "entry_passed": 16,
-    "eligible_setups": 16,
+    "entry_passed": 17,
+    "eligible_setups": 17,
     "alerts_sent": 3,
     "rejected_by_evolution": 0,
     "top_3_symbols": [
       "PFC.NS",
       "HAVELLS.NS",
-      "RECLTD.NS"
+      "HAL.NS"
     ],
     "closed_trades_at_scan_start": 0,
-    "timestamp": "2026-05-06 05:42:45"
+    "timestamp": "2026-05-06 05:46:46"
   },
   "journal": {
     "total_journal_rows": 293,
@@ -43,7 +43,7 @@
     "score_boost": 1.0,
     "filter_strictness": 1.0,
     "ranking_confidence": 1.0,
-    "last_updated": "2026-05-06 00:12:45",
+    "last_updated": "2026-05-06 00:16:46",
     "notes": [
       "Waiting for more closed trades. Need at least 5, found 0."
     ]
