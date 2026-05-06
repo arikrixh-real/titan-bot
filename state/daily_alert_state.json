@@ -1,0 +1,9 @@
+{
+  "date": "2026-05-06",
+  "alerts_sent": 3,
+  "alerted_keys": [
+    "PFC|SHORT|452.25|453.15|450.45",
+    "HAVELLS|LONG|1260.0|1255.0|1270.0",
+    "MARICO|LONG|783.5|782.7|785.1"
+  ]
+}

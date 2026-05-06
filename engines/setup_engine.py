@@ -35,6 +35,46 @@ from titan_brain.db import (
 )
 
 
+def _json_safe(value):
+    """
+    Convert numpy/pandas/bool-like objects into normal JSON-safe Python values.
+    Prevents Supabase errors like:
+    Object of type bool is not JSON serializable
+    """
+    try:
+        if hasattr(value, "item"):
+            value = value.item()
+    except Exception:
+        pass
+
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(v) for v in value]
+
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+
+    return str(value)
+
+
+def _make_trade_id(symbol, side, entry, stop_loss, target, scan_id):
+    """
+    Stable string trade_id.
+    Fixes bug where trade_id became True because log_trade() returned True.
+    """
+    return (
+        f"{str(symbol).upper()}_"
+        f"{str(side).upper()}_"
+        f"{str(entry)}_"
+        f"{str(stop_loss)}_"
+        f"{str(target)}_"
+        f"{str(scan_id)}"
+    ).replace(" ", "_")
+
+
+
 def save_scan_health_log(
     stocks_checked,
     trend_passed,
@@ -135,9 +175,24 @@ def safe_trade_levels(symbol, side, live_price, data):
             print(f"TRADE LEVEL FALLBACK FAILED → {symbol}: {e}")
             return None
 
-    entry = levels.get("entry") or levels.get("price") or live_price
-    stop_loss = levels.get("stop_loss") or levels.get("sl")
-    target = levels.get("target") or levels.get("tp") or levels.get("t1")
+    # Normalize levels safely.
+    # Some calculate_trade_levels() versions return dict.
+    # Some return tuple/list like (entry, sl, target).
+    if isinstance(levels, dict):
+        entry = levels.get("entry") or levels.get("price") or live_price
+        stop_loss = levels.get("stop_loss") or levels.get("sl")
+        target = levels.get("target") or levels.get("tp") or levels.get("t1")
+
+    elif isinstance(levels, (tuple, list)):
+        values = list(levels)
+        entry = values[0] if len(values) > 0 else live_price
+        stop_loss = values[1] if len(values) > 1 else None
+        target = values[2] if len(values) > 2 else None
+
+    else:
+        entry = live_price
+        stop_loss = None
+        target = None
 
     if entry is None or stop_loss is None or target is None:
         return None
@@ -147,6 +202,47 @@ def safe_trade_levels(symbol, side, live_price, data):
         "stop_loss": round(float(stop_loss), 2),
         "target": round(float(target), 2)
     }
+
+
+def safe_position_sizing(entry, stop_loss):
+    """
+    Robust position sizing wrapper.
+    Some versions of position_sizing() return dict.
+    Some return tuple/list.
+    This always returns a safe dict.
+    """
+    try:
+        pos_data = position_sizing(entry, stop_loss)
+
+        if isinstance(pos_data, dict):
+            return {
+                "qty": pos_data.get("qty") or pos_data.get("quantity") or pos_data.get("position_size") or 0,
+                "risk_amount": pos_data.get("risk_amount") or pos_data.get("risk") or 0,
+                "raw": pos_data
+            }
+
+        if isinstance(pos_data, (tuple, list)):
+            return {
+                "qty": pos_data[0] if len(pos_data) > 0 else 0,
+                "risk_amount": pos_data[1] if len(pos_data) > 1 else 0,
+                "raw": list(pos_data)
+            }
+
+        return {
+            "qty": 0,
+            "risk_amount": 0,
+            "raw": pos_data
+        }
+
+    except Exception as e:
+        print(f"POSITION SIZE ERROR → {e}")
+        return {
+            "qty": 0,
+            "risk_amount": 0,
+            "raw": None
+        }
+
+
 
 
 def scan_for_setups():
@@ -391,41 +487,15 @@ def scan_for_setups():
 
             trigger = trigger_status(symbol, side, entry, live_price)
 
-            trade_id = log_trade(
-                symbol=symbol,
-                side=side,
-                entry=entry,
-                stop_loss=stop_loss,
-                target=target,
-                position_size=position_size,
-                risk_amount=risk_amount,
-                rr=rr,
-                scores={
-                    "volume_score": volume_score,
-                    "strength_score": strength_score,
-                    "compression_score": comp_score,
-                    "final_score": final_score
-                },
-                market_context={
-                    "market_status": market_status,
-                    "trend": trend
-                },
-                setup_context={
-                    "confirmations": confirmations,
-                    "source": source
-                },
-                reason=reason,
-                trigger_status=trigger
-            )
-
-            insert_setup({
-                "trade_id": trade_id,
+            trade_payload = {
                 "symbol": symbol,
                 "side": side,
                 "entry": entry,
                 "stop_loss": stop_loss,
                 "target": target,
                 "rr": rr,
+                "score": final_score,
+                "rank_score": final_score,
                 "position_size": position_size,
                 "risk_amount": risk_amount,
                 "scores": {
@@ -448,9 +518,32 @@ def scan_for_setups():
                 "reason": reason,
                 "trigger_status": trigger,
                 "status": "OPEN"
-            })
+            }
 
-            insert_trade({
+            # ------------------------------------------------------------
+            # SAFE TRADE JOURNAL + DB LOGGING
+            # ------------------------------------------------------------
+            # IMPORTANT:
+            # log_trade() returns True/False, not trade_id.
+            # Old bug used trade_id=True, causing Supabase duplicate key errors:
+            # trade_id=(true)
+            # ------------------------------------------------------------
+
+            trade_id = _make_trade_id(symbol, side, entry, stop_loss, target, scan_id)
+            trade_payload["trade_id"] = trade_id
+            trade_payload["status"] = "OPEN"
+
+            try:
+                log_trade(
+                    trade_payload,
+                    scan_id=scan_id,
+                    alert_sent=False,
+                    market_status=str(market_status),
+                )
+            except Exception as e:
+                print(f"[SetupEngine] log_trade failed safely: {e}")
+
+            setup_db_payload = _json_safe({
                 "trade_id": trade_id,
                 "symbol": symbol,
                 "side": side,
@@ -466,7 +559,39 @@ def scan_for_setups():
                     "compression_score": comp_score,
                     "final_score": final_score
                 },
-                "market_context": market_status,
+                "market_context": {
+                    "market_status": str(market_status),
+                    "trend": trend
+                },
+                "setup_context": {
+                    "structure_ok": structure_result,
+                    "momentum_ok": momentum_result,
+                    "breakout_ready": entry_result,
+                    "confirmations": confirmations,
+                    "source": source
+                },
+                "reason": reason,
+                "trigger_status": trigger,
+                "status": "OPEN"
+            })
+
+            trade_db_payload = _json_safe({
+                "trade_id": trade_id,
+                "symbol": symbol,
+                "side": side,
+                "entry": entry,
+                "stop_loss": stop_loss,
+                "target": target,
+                "rr": rr,
+                "position_size": position_size,
+                "risk_amount": risk_amount,
+                "scores": {
+                    "volume_score": volume_score,
+                    "strength_score": strength_score,
+                    "compression_score": comp_score,
+                    "final_score": final_score
+                },
+                "market_context": str(market_status),
                 "setup_context": {
                     "trend": trend,
                     "confirmations": confirmations,
@@ -477,7 +602,25 @@ def scan_for_setups():
                 "status": "OPEN"
             })
 
-            setups.append(symbol)
+            try:
+                insert_setup(setup_db_payload)
+            except Exception as e:
+                message = str(e)
+                if "duplicate key" in message.lower():
+                    print(f"[DB SKIP - SETUP] Duplicate setup skipped: {trade_id}")
+                else:
+                    print(f"[DB ERROR - SETUP] {e}")
+
+            try:
+                insert_trade(trade_db_payload)
+            except Exception as e:
+                message = str(e)
+                if "duplicate key" in message.lower():
+                    print(f"[DB SKIP - TRADE] Duplicate trade skipped: {trade_id}")
+                else:
+                    print(f"[DB ERROR - TRADE] {e}")
+
+            setups.append(trade_payload)
             setup_symbols.append(symbol)
             scan_record["setup_count"] += 1
 

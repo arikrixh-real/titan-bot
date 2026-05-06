@@ -1,0 +1,9 @@
+{
+  "date": "2026-05-06",
+  "alerts_sent": 3,
+  "messages": [
+    "\ud83d\ude80 TITAN TRADE SIGNAL\n\n\ud83d\udccc Stock: PFC\n\ud83d\udccd Side: SHORT\n\n\ud83c\udfaf Entry: 452.25\n\ud83d\uded1 SL: 453.15\n\ud83c\udfc1 Target: 450.45\n\u2696\ufe0f RR: 2.0\n\n\ud83e\udde0 Decision: DOWNGRADE\n\ud83d\udd25 Confidence: MEDIUM\n\u2b50 Tier: GOOD\n\ud83d\udcca Score: 3.17\n\ud83c\udfc6 Rank: 67.7\n\n\u23f0 Time: 2026-05-06 00:07:45 IST\n\n\u26a0\ufe0f Educational/analysis signal. Follow risk management.",
+    "\ud83d\ude80 TITAN TRADE SIGNAL\n\n\ud83d\udccc Stock: MARICO\n\ud83d\udccd Side: LONG\n\n\ud83c\udfaf Entry: 783.5\n\ud83d\uded1 SL: 782.7\n\ud83c\udfc1 Target: 785.1\n\u2696\ufe0f RR: 2.0\n\n\ud83e\udde0 Decision: DOWNGRADE\n\ud83d\udd25 Confidence: MEDIUM\n\u2b50 Tier: GOOD\n\ud83d\udcca Score: 3.12\n\ud83c\udfc6 Rank: 67.2\n\n\u23f0 Time: 2026-05-06 00:07:45 IST\n\n\u26a0\ufe0f Educational/analysis signal. Follow risk management.",
+    "\ud83d\ude80 TITAN TRADE SIGNAL\n\n\ud83d\udccc Stock: HAVELLS\n\ud83d\udccd Side: LONG\n\n\ud83c\udfaf Entry: 1260.0\n\ud83d\uded1 SL: 1255.0\n\ud83c\udfc1 Target: 1270.0\n\u2696\ufe0f RR: 2.0\n\n\ud83e\udde0 Decision: DOWNGRADE\n\ud83d\udd25 Confidence: MEDIUM\n\u2b50 Tier: GOOD\n\ud83d\udcca Score: 3.1\n\ud83c\udfc6 Rank: 67.0\n\n\u23f0 Time: 2026-05-06 00:07:45 IST\n\n\u26a0\ufe0f Educational/analysis signal. Follow risk management."
+  ]
+}

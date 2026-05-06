@@ -307,3 +307,46 @@ def journal_eligible_setups(
     print(f"📌 Active Trades Added: {len(new_active_rows)} new OPEN trades")
 
     return len(journal_rows)
+
+# ------------------------------------------------------------
+# TITAN COMPATIBILITY FIX
+# ------------------------------------------------------------
+# Some existing engines import:
+#     from journal.trade_journal import log_trade
+#
+# Your journal engine mainly uses journal_eligible_setups().
+# This wrapper keeps old imports working without changing the
+# existing trade journal lifecycle.
+# ------------------------------------------------------------
+
+def log_trade(trade_data, scan_id=None, alert_sent=False, market_status=""):
+    """
+    Compatibility wrapper for engines that expect log_trade().
+
+    It safely logs a single trade/setup using the existing
+    journal_eligible_setups() function.
+
+    Returns:
+        True  -> logged successfully / no crash
+        False -> failed safely
+    """
+
+    try:
+        if trade_data is None:
+            return False
+
+        if not isinstance(trade_data, dict):
+            trade_data = {"reason": str(trade_data)}
+
+        journal_eligible_setups(
+            eligible_setups=[trade_data],
+            scan_id=scan_id,
+            alerted_symbols=[],
+            market_status=market_status,
+        )
+
+        return True
+
+    except Exception as e:
+        print(f"[TradeJournal] log_trade compatibility wrapper failed: {e}")
+        return False

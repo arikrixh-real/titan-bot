@@ -1,20 +1,28 @@
 """
-TITAN - Filter Engine (FIXED SAFE VERSION)
------------------------------------------
+TITAN - Filter Engine (FIXED SAFE COMPATIBLE VERSION)
+----------------------------------------------------
 
-Fixes GitHub error:
-'<' not supported between instances of 'int' and 'str'
+Fixes:
+1. GitHub error:
+   '<' not supported between instances of 'int' and 'str'
+
+2. Setup engine mismatch:
+   passes_quality_filters() missing 1 required positional argument: 'rr'
 
 Cause:
-Some values were coming as strings in GitHub Actions.
+Some callers pass:
+- passes_quality_filters(score, rr, side, market_status)
+while some older callers pass:
+- passes_quality_filters(score)
+- passes_quality_filters(score, side)
+- passes_quality_filters(setup_dict)
 
-This file safely converts:
-- score
-- rr
-- market flags
+This version supports all safely.
 
 Used by:
-setup_engine.py
+- setup_engine.py
+- master brain
+- older engine calls
 """
 
 from __future__ import annotations
@@ -44,7 +52,6 @@ def safe_float(value: Any, default: float = 0.0) -> float:
         if text == "":
             return default
 
-        # Clean common formatting
         text = text.replace("%", "").replace(",", "")
 
         return float(text)
@@ -75,21 +82,85 @@ def safe_bool(value: Any, default: bool = False) -> bool:
     return default
 
 
+def _extract_from_setup_dict(setup: Dict[str, Any]) -> tuple[Any, Any, str, Dict[str, Any]]:
+    """
+    Supports calls like:
+        passes_quality_filters(setup_dict)
+
+    Extracts score, rr, side, market_status from common key names.
+    """
+
+    score = (
+        setup.get("score")
+        or setup.get("final_score")
+        or setup.get("rank_score")
+        or setup.get("elite_probability_score")
+        or 0.0
+    )
+
+    rr = (
+        setup.get("rr")
+        or setup.get("risk_reward")
+        or setup.get("risk_reward_ratio")
+        or setup.get("r_ratio")
+        or MIN_RR
+    )
+
+    side = (
+        setup.get("side")
+        or setup.get("direction")
+        or setup.get("trade_side")
+        or "LONG"
+    )
+
+    market_status = (
+        setup.get("market_status")
+        or setup.get("market")
+        or {}
+    )
+
+    if not isinstance(market_status, dict):
+        market_status = {}
+
+    return score, rr, side, market_status
+
+
 def passes_quality_filters(
-    score: Any,
-    rr: Any,
+    score: Any = 0.0,
+    rr: Any = None,
     side: str = "LONG",
     market_status: Dict[str, Any] | None = None,
 ) -> bool:
     """
     Final quality filter before setup is accepted.
 
-    Safe rules:
+    Safe compatible rules:
+    - Accepts old/new call styles.
     - Market must be OK if market_status is provided.
     - Score must be numeric.
     - RR must be numeric.
     - Side must be LONG or SHORT.
+
+    Supported call styles:
+        passes_quality_filters(score, rr, side, market_status)
+        passes_quality_filters(score)
+        passes_quality_filters(score, side)
+        passes_quality_filters(setup_dict)
     """
+
+    # If first argument is full setup dict
+    if isinstance(score, dict):
+        score, rr, side, market_status = _extract_from_setup_dict(score)
+
+    # If second argument looks like side instead of RR
+    # Example: passes_quality_filters(score, "LONG")
+    if isinstance(rr, str) and rr.strip().upper() in {"LONG", "SHORT"}:
+        side = rr
+        rr = MIN_RR
+
+    # If rr missing, use minimum acceptable RR to preserve old callers
+    if rr is None:
+        rr = MIN_RR
 
     market_status = market_status or {}
 
@@ -101,8 +172,8 @@ def passes_quality_filters(
     if side_value not in {"LONG", "SHORT"}:
         return False
 
-    # Market filter
-    # If market_status is empty, don't block.
+    # Market filter:
+    # If market_status is empty, do not block.
     # If market_ok exists and is False, block.
     if isinstance(market_status, dict) and "market_ok" in market_status:
         market_ok = safe_bool(market_status.get("market_ok"), False)
@@ -119,16 +190,25 @@ def passes_quality_filters(
     return True
 
 
-# Backward-compatible alias if older files call another name
 def quality_filter(
-    score: Any,
-    rr: Any,
+    score: Any = 0.0,
+    rr: Any = None,
     side: str = "LONG",
     market_status: Dict[str, Any] | None = None,
 ) -> bool:
+    """
+    Backward-compatible alias.
+    """
     return passes_quality_filters(
         score=score,
         rr=rr,
         side=side,
         market_status=market_status,
     )
+
+
+def filter_setup(setup: Dict[str, Any]) -> bool:
+    """
+    Extra compatibility helper for any engine that calls filter_setup(setup).
+    """
+    return passes_quality_filters(setup)

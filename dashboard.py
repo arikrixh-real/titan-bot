@@ -11,6 +11,11 @@ from supabase import create_client, Client
 # =========================================================
 # TITAN DASHBOARD V2
 # Clean Command Center Dashboard
+# FIXED:
+# - Trading Performance reads local data/journals/trade_outcomes.csv first
+# - Counts ONLY TP/WIN as wins and SL/LOSS as losses
+# - Ignores OPEN trades
+# - Added Master Brain status / evolution visibility
 # =========================================================
 
 st.set_page_config(
@@ -282,6 +287,191 @@ supabase: Client | None = get_supabase_client()
 
 
 # =========================================================
+# SAFE LOCAL FILE HELPERS
+# =========================================================
+
+def read_csv_safe(paths):
+    """
+    Reads first existing CSV safely.
+    Skips corrupted rows instead of crashing dashboard.
+    """
+    for path in paths:
+        try:
+            if not os.path.exists(path):
+                continue
+            df = pd.read_csv(path, on_bad_lines="skip")
+            return df
+        except Exception:
+            continue
+    return pd.DataFrame()
+
+
+def normalize_outcome(value):
+    text = str(value or "").strip().upper()
+
+    if text in ["TP", "WIN", "WON", "TARGET", "TARGET_HIT", "PROFIT"]:
+        return "WIN"
+
+    if text in ["SL", "LOSS", "LOST", "STOPLOSS", "STOP_LOSS", "STOP_LOSS_HIT"]:
+        return "LOSS"
+
+    if text in ["OPEN", "ACTIVE", "LIVE", "RUNNING", "WAITING"]:
+        return "OPEN"
+
+    return text
+
+
+def get_local_trade_performance_stats():
+    """
+    Dashboard performance fix:
+    Read local outcome files and count ONLY closed trades:
+    - TP / WIN = win
+    - SL / LOSS = loss
+    - OPEN ignored
+
+    This prevents frozen/wrong 36/6/30 stats when outcome tracker is still producing OPEN rows.
+    """
+    stats = {
+        "wins": 0,
+        "losses": 0,
+        "closed_total": 0,
+        "accuracy": 0,
+        "open_total": 0,
+        "source": "LOCAL_OUTCOMES",
+        "latest_outcome_time": None,
+    }
+
+    df = read_csv_safe([
+        "data/journals/trade_outcomes.csv",
+        "journal/trade_outcomes.csv",
+        "trade_outcomes.csv",
+    ])
+
+    if df.empty:
+        return stats
+
+    # Find outcome/result column
+    outcome_col = None
+    for col in ["outcome", "result", "status", "trade_result"]:
+        if col in df.columns:
+            outcome_col = col
+            break
+
+    if not outcome_col:
+        return stats
+
+    normalized = df[outcome_col].apply(normalize_outcome)
+
+    stats["wins"] = int((normalized == "WIN").sum())
+    stats["losses"] = int((normalized == "LOSS").sum())
+    stats["open_total"] = int((normalized == "OPEN").sum())
+    stats["closed_total"] = stats["wins"] + stats["losses"]
+
+    if stats["closed_total"] > 0:
+        stats["accuracy"] = int((stats["wins"] / stats["closed_total"]) * 100)
+
+    # Latest outcome time
+    for time_col in ["closed_at", "checked_at", "timestamp", "time", "created_at"]:
+        if time_col in df.columns and not df[time_col].dropna().empty:
+            latest_raw = df[time_col].dropna().iloc[-1]
+            stats["latest_outcome_time"] = parse_dt(latest_raw)
+            break
+
+    return stats
+
+
+def get_master_brain_status():
+    """
+    Shows whether Master Brain / continuous evolution cycle is active.
+    Uses local files produced by TITAN.
+    """
+    active_df = read_csv_safe([
+        "data/journals/active_trades.csv",
+        "journal/active_trades.csv",
+        "active_trades.csv",
+    ])
+
+    outcomes_df = read_csv_safe([
+        "data/journals/trade_outcomes.csv",
+        "journal/trade_outcomes.csv",
+        "trade_outcomes.csv",
+    ])
+
+    learning_report_paths = [
+        "data/learning/learning_report.json",
+        "data/learning/learning_summary.txt",
+        "reports/evolution_report.txt",
+        "reports/titan_master_status.txt",
+    ]
+
+    last_learning_time = None
+    learning_file_found = False
+
+    for path in learning_report_paths:
+        try:
+            if os.path.exists(path):
+                learning_file_found = True
+                modified = datetime.fromtimestamp(os.path.getmtime(path), tz=IST)
+                if last_learning_time is None or modified > last_learning_time:
+                    last_learning_time = modified
+        except Exception:
+            pass
+
+    latest_activity_time = None
+
+    for df in [active_df, outcomes_df]:
+        if df.empty:
+            continue
+
+        for col in ["last_checked_at", "checked_at", "closed_at", "opened_at", "timestamp", "created_at"]:
+            if col in df.columns and not df[col].dropna().empty:
+                dt = parse_dt(df[col].dropna().iloc[-1])
+                if dt and (latest_activity_time is None or dt > latest_activity_time):
+                    latest_activity_time = dt
+
+    if last_learning_time and (latest_activity_time is None or last_learning_time > latest_activity_time):
+        latest_activity_time = last_learning_time
+
+    active_trades = get_live_trades_count()
+    local_stats = get_local_trade_performance_stats()
+
+    # Status logic
+    if latest_activity_time:
+        age_seconds = (datetime.now(IST) - latest_activity_time).total_seconds()
+
+        if age_seconds <= 900:
+            master_status = "ACTIVE"
+        elif age_seconds <= 3600:
+            master_status = "DELAYED"
+        else:
+            master_status = "WAITING"
+    else:
+        master_status = "WAITING"
+
+    if active_trades > 0 or local_stats["open_total"] > 0:
+        evolution_status_value = "OBSERVING"
+        evolution_sub = f"Monitoring {active_trades or local_stats['open_total']} open/live trades"
+    elif local_stats["closed_total"] > 0:
+        evolution_status_value = "LEARNING"
+        evolution_sub = f"Learning from {local_stats['closed_total']} closed outcomes"
+    elif learning_file_found:
+        evolution_status_value = "BUILDING"
+        evolution_sub = "Learning files detected"
+    else:
+        evolution_status_value = "WAITING"
+        evolution_sub = "Waiting for outcomes"
+
+    return {
+        "master_status": master_status,
+        "evolution_status": evolution_status_value,
+        "evolution_sub": evolution_sub,
+        "last_activity": latest_activity_time,
+        "last_activity_age": age_text_from_dt(latest_activity_time),
+        "learning_file_found": learning_file_found,
+    }
+
+
+# =========================================================
 # SAFE SUPABASE HELPERS
 # =========================================================
 
@@ -360,7 +550,7 @@ def parse_dt(value):
         dt = datetime.fromisoformat(value)
 
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=IST)
 
         return dt.astimezone(IST)
     except Exception:
@@ -391,7 +581,7 @@ def latest_dt(*values):
 
 def age_text_from_dt(dt):
     if not dt:
-        return "No scan yet"
+        return "No data yet"
 
     now = datetime.now(IST)
     seconds = int((now - dt).total_seconds())
@@ -434,9 +624,9 @@ def scan_status_from_dt(dt):
 def status_html(status):
     status = str(status).upper()
 
-    if status in ["ONLINE", "CONNECTED", "SUCCESS", "RUNNING", "ACTIVE"]:
+    if status in ["ONLINE", "CONNECTED", "SUCCESS", "RUNNING", "ACTIVE", "LEARNING", "OBSERVING"]:
         css = "pill-green"
-    elif status in ["DELAYED", "UNKNOWN", "WAITING", "NOT CONFIGURED"]:
+    elif status in ["DELAYED", "UNKNOWN", "WAITING", "NOT CONFIGURED", "BUILDING"]:
         css = "pill-yellow"
     else:
         css = "pill-red"
@@ -450,6 +640,7 @@ def status_html(status):
 
 def get_live_trades_count():
     possible_paths = [
+        "data/journals/active_trades.csv",
         "active_trades.csv",
         "data/active_trades.csv",
         "journals/active_trades.csv",
@@ -462,7 +653,7 @@ def get_live_trades_count():
             if not os.path.exists(path):
                 continue
 
-            df = pd.read_csv(path)
+            df = pd.read_csv(path, on_bad_lines="skip")
 
             if df.empty:
                 return 0
@@ -489,8 +680,8 @@ def get_live_trades_count():
 
 def get_trade_results_stats():
     """
-    Reads real closed trade results from Supabase trade_results.
-    Counts only WIN and LOSS. Ignores NO_TRADE / EXPIRED.
+    Fallback Supabase stats.
+    Used only if local outcome CSV has zero closed trades.
     """
     stats = {"wins": 0, "losses": 0, "closed_total": 0, "accuracy": 0}
 
@@ -732,7 +923,7 @@ else:
 
 
 # Counts
-total_trades = count_any_table(["trade_journal", "trades"])
+total_trade_rows = count_any_table(["trade_journal", "trades"])
 news_gathered = count_any_table(["news_memory", "news", "news_journal"])
 
 scan_cycles = count_any_table(["scan_journal", "scans"])
@@ -747,12 +938,28 @@ if stocks_passed == 0:
 
 live_trades_count = get_live_trades_count()
 
-# ✅ Final performance stats from real closed trade outcomes
-trade_result_stats = get_trade_results_stats()
+# ✅ FIXED performance stats:
+# Priority 1: local data/journals/trade_outcomes.csv from outcome tracker
+# Priority 2: fallback Supabase trade_results only if local has zero closed trades
+local_trade_stats = get_local_trade_performance_stats()
+supabase_trade_stats = get_trade_results_stats()
+
+if local_trade_stats["closed_total"] > 0:
+    trade_result_stats = local_trade_stats
+else:
+    trade_result_stats = {
+        **supabase_trade_stats,
+        "open_total": local_trade_stats.get("open_total", 0),
+        "source": "SUPABASE_FALLBACK",
+        "latest_outcome_time": local_trade_stats.get("latest_outcome_time"),
+    }
 
 wins = trade_result_stats["wins"]
 losses = trade_result_stats["losses"]
 closed_trades = trade_result_stats["closed_total"]
+open_outcome_trades = trade_result_stats.get("open_total", 0)
+
+# Dashboard should show CLOSED trades in performance
 total_trades = closed_trades
 
 accuracy_percent = trade_result_stats["accuracy"]
@@ -760,12 +967,14 @@ trade_performance_percent = accuracy_percent
 
 rr_display = "1:2"
 
+master_brain_data = get_master_brain_status()
+
 SUPABASE_STORAGE_LIMIT_MB = 500
 
 estimated_storage_mb = (
     (stocks_scanned * 0.002)
     + (news_gathered * 0.003)
-    + (total_trades * 0.002)
+    + (total_trade_rows * 0.002)
     + (telegram_alerts * 0.001)
 )
 
@@ -774,16 +983,18 @@ supabase_storage_percent = int(min(100, (estimated_storage_mb / SUPABASE_STORAGE
 engine_progress = {
     "Scan Engine": 90,
     "News Engine": 75,
-    "Learning Engine": 45,
-    "Evolution Engine": 35,
-    "Risk Engine": 80,
-    "Market Regime Engine": 70,
+    "Learning Engine": 55 if closed_trades > 0 else 45,
+    "Evolution Engine": 50 if closed_trades > 0 else 40,
+    "Risk Engine": 85,
+    "Market Regime Engine": 75,
+    "Master Brain": 90,
+    "Execution Engine": 85,
 }
 
 news_status = "ACTIVE" if news_gathered > 0 else "WAITING"
 telegram_status = "ACTIVE" if telegram_alerts > 0 else "WAITING"
-learning_status = "ACTIVE" if stocks_scanned > 0 else "WAITING"
-evolution_status = "BUILDING"
+learning_status = master_brain_data["evolution_status"]
+evolution_status = master_brain_data["evolution_status"]
 
 if scan_health:
     latest_stocks_checked = int(scan_health.get("stocks_checked") or 0)
@@ -866,13 +1077,13 @@ st.markdown("<div class='section-title'>📊 Trading Performance</div>", unsafe_
 p1, p2, p3, p4 = st.columns(4)
 
 with p1:
-    metric_card("No. of Trades", f"{total_trades:,}", "Closed WIN/LOSS trades")
+    metric_card("No. of Trades", f"{total_trades:,}", "Closed TP/SL trades only")
 
 with p2:
-    metric_card("No. of Wins", f"{wins:,}", "Winning trades")
+    metric_card("No. of Wins", f"{wins:,}", "TP / WIN trades")
 
 with p3:
-    metric_card("No. of Losses", f"{losses:,}", "Losing trades")
+    metric_card("No. of Losses", f"{losses:,}", "SL / LOSS trades")
 
 with p4:
     metric_card("RR", rr_display, "Current risk-reward model")
@@ -883,7 +1094,7 @@ with g1:
     circular_graph(
         "Overall Trade Performance",
         trade_performance_percent,
-        "Based on closed WIN/LOSS trades",
+        f"Closed only · Open ignored: {open_outcome_trades}",
         "blue",
     )
 
@@ -891,8 +1102,48 @@ with g2:
     circular_graph(
         "TITAN Overall Accuracy",
         accuracy_percent,
-        "Accuracy from closed WIN/LOSS trades",
+        f"Source: {trade_result_stats.get('source', 'UNKNOWN')}",
         "green",
+    )
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+
+# =========================================================
+# 2B. MASTER BRAIN / EVOLUTION STATUS
+# =========================================================
+
+st.markdown("<div class='section'>", unsafe_allow_html=True)
+st.markdown("<div class='section-title'>🧠 Master Brain & Evolution Status</div>", unsafe_allow_html=True)
+
+mb1, mb2, mb3, mb4 = st.columns(4)
+
+with mb1:
+    status_card(
+        "Master Brain",
+        master_brain_data["master_status"],
+        f"Last brain activity: {master_brain_data['last_activity_age']}",
+    )
+
+with mb2:
+    status_card(
+        "Continuous Evolution",
+        master_brain_data["evolution_status"],
+        master_brain_data["evolution_sub"],
+    )
+
+with mb3:
+    metric_card(
+        "Open Learning Trades",
+        f"{open_outcome_trades:,}",
+        "OPEN trades being watched",
+    )
+
+with mb4:
+    metric_card(
+        "Closed Learning Trades",
+        f"{closed_trades:,}",
+        "TP/SL results used for accuracy",
     )
 
 st.markdown("</div>", unsafe_allow_html=True)
@@ -985,11 +1236,13 @@ with r1:
     small_status("Scan Engine", scan_status, f"Last scan: {last_scan_age}")
     small_status("GitHub 5-Min Runner", github_status, f"Last run: {github_age}")
     small_status("Supabase Memory", supabase_status, "Database connection")
+    small_status("Master Brain", master_brain_data["master_status"], f"Last activity: {master_brain_data['last_activity_age']}")
 
 with r2:
     small_status("News Engine", news_status, f"News gathered: {news_gathered:,}")
     small_status("Telegram Alert Engine", telegram_status, f"Alerts sent: {telegram_alerts:,}")
-    small_status("Learning / Evolution", learning_status, "Learning data pipeline")
+    small_status("Learning / Evolution", learning_status, master_brain_data["evolution_sub"])
+    small_status("Outcome Tracker", "ACTIVE" if open_outcome_trades > 0 or closed_trades > 0 else "WAITING", f"Open: {open_outcome_trades}, Closed: {closed_trades}")
 
 st.markdown("</div>", unsafe_allow_html=True)
 

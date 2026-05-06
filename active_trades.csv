@@ -1,0 +1,1 @@
+trade_id,scan_id,symbol,side,entry,sl,target,rr,score,rank_score,market_status,telegram_alerted,status,opened_at,last_checked_at,last_price,close_price,closed_at,result,reason
