@@ -9,7 +9,7 @@ on:
 
 concurrency:
   group: titan-automation
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -17,11 +17,13 @@ permissions:
 jobs:
   titan-run:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -42,9 +44,9 @@ jobs:
         run: |
           echo "Checking TITAN files..."
           ls -la
-          test -f setup_engine.py
+          test -f setup_engine.py || test -f titan_master_brain/master_controller.py
 
-      - name: Run TITAN
+      - name: Run TITAN Master Brain
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -52,7 +54,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          python setup_engine.py
+          python -c "from titan_master_brain.master_controller import run_master_brain; run_master_brain()"
 
       - name: Save TITAN memory
         if: always()
@@ -60,12 +62,13 @@ jobs:
           git config user.name "titan-bot"
           git config user.email "titan@bot.com"
 
-          git add data/ reports/ || true
+          git pull --rebase origin main || true
+
+          git add data/ reports/ state/ || true
 
           if git diff --cached --quiet; then
-            echo "No changes"
+            echo "No TITAN memory changes"
           else
             git commit -m "update titan memory"
-            git pull --rebase || true
-            git push || true
+            git push origin HEAD:main || true
           fi
