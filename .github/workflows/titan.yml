@@ -44,7 +44,7 @@ jobs:
         run: |
           echo "Checking TITAN files..."
           ls -la
-          test -f setup_engine.py || test -f titan_master_brain/master_controller.py
+          test -f titan_master_brain/master_controller.py
 
       - name: Run TITAN Master Brain
         env:
@@ -56,19 +56,8 @@ jobs:
         run: |
           python -c "from titan_master_brain.master_controller import run_master_brain; run_master_brain()"
 
-      - name: Save TITAN memory
+      - name: Skip Git memory push
         if: always()
         run: |
-          git config user.name "titan-bot"
-          git config user.email "titan@bot.com"
-
-          git pull --rebase origin main || true
-
-          git add data/ reports/ state/ || true
-
-          if git diff --cached --quiet; then
-            echo "No TITAN memory changes"
-          else
-            git commit -m "update titan memory"
-            git push origin HEAD:main || true
-          fi
+          echo "Skipping Git memory push during 5-minute live scan."
+          echo "TITAN scan, alerts, journaling, outcome tracking, and dashboard data still run."
