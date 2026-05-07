@@ -33,7 +33,6 @@ from scanners.volume_scanner import volume_anomaly_score
 from scanners.strength_scanner import price_strength_score
 from scanners.compression_scanner import compression_score
 
-print("🚨 NEW TRADE_RESULTS SETUP_ENGINE ACTIVE 🚨")
 
 from engines.score_engine import final_signal_score
 from engines.trade_levels import calculate_trade_levels
@@ -296,6 +295,68 @@ def select_dynamic_scan_universe(scan_id):
         return list(NSE_STOCKS)[:DYNAMIC_SCAN_SIZE]
 
 
+
+def save_selected_alerts_to_trade_results(selected_alerts, scan_id, market_status):
+    """
+    Saves only the final selected/alerted Titan trades to Supabase trade_results.
+    Uses this file's Supabase client directly, so dashboard metrics update reliably.
+    """
+    if not selected_alerts:
+        print("ℹ️ trade_results: no selected alerts to save")
+        return 0
+
+    if supabase is None:
+        print("❌ trade_results: Supabase not connected")
+        return 0
+
+    saved_count = 0
+
+    for setup in selected_alerts:
+        try:
+            symbol = setup.get("symbol")
+            side = setup.get("side")
+            entry = safe_float(setup.get("entry"))
+            sl = safe_float(setup.get("sl"))
+            tp = safe_float(setup.get("target") or setup.get("tp"))
+            rr = safe_float(setup.get("rr"), 0.0)
+            score = safe_float(setup.get("score"), 0.0)
+
+            if not symbol or not side or entry is None or sl is None or tp is None:
+                print(f"⚠️ trade_results skipped invalid setup: {setup}")
+                continue
+
+            now_iso = datetime.now(IST).isoformat()
+
+            row = {
+                "symbol": symbol,
+                "side": side,
+                "entry": entry,
+                "sl": sl,
+                "tp": tp,
+                "status": "LIVE",
+                "result": None,
+                "pnl": 0,
+                "exit_price": None,
+                "market_status": str(market_status),
+                "scan_id": scan_id,
+                "rr": rr,
+                "score": score,
+                "opened_at": now_iso,
+                "created_at": now_iso,
+                "updated_at": now_iso,
+            }
+
+            supabase.table("trade_results").insert(row).execute()
+            saved_count += 1
+            print(f"✅ trade_results saved: {symbol} | {side} | entry={entry} sl={sl} tp={tp}")
+
+        except Exception as e:
+            print(f"❌ trade_results insert failed for {setup.get('symbol')}: {e}")
+
+    print(f"✅ trade_results final saved count: {saved_count}/{len(selected_alerts)}")
+    return saved_count
+
+
 # =========================================================
 # MAIN SCANNER
 # =========================================================
@@ -510,29 +571,14 @@ def scan_for_setups():
     print(f"🧠 Rejected by Evolution Filter: {rejected_by_evolution}")
 
     selected_alerts = eligible_setups[:3]
-
-    # ✅ Save selected Titan trades into trade_results for dashboard metrics
-    try:
-        from titan_brain.memory.trade_results_memory import save_trade_result
-
-        for setup in selected_alerts:
-            save_trade_result(
-                symbol=setup.get("symbol"),
-                side=setup.get("side"),
-                entry=setup.get("entry"),
-                sl=setup.get("sl"),
-                tp=setup.get("target"),
-                status="LIVE",
-                result=None,
-                pnl=0,
-                exit_price=None,
-            )
-
-        print(f"✅ trade_results updated: {len(selected_alerts)} selected trades saved")
-
-    except Exception as e:
-        print(f"❌ trade_results save block failed: {e}")
     alerted_symbols = [s.get("symbol") for s in selected_alerts if s.get("symbol")]
+
+    # ✅ Final direct save to trade_results for dashboard trade metrics
+    save_selected_alerts_to_trade_results(
+        selected_alerts=selected_alerts,
+        scan_id=scan_id,
+        market_status=market_status,
+    )
 
     if selected_alerts:
         print("🏆 Top 3 elite setups:")
