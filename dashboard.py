@@ -380,7 +380,7 @@ def get_local_trade_performance_stats():
     return stats
 
 
-def get_master_brain_status():
+def get_master_brain_status(github_time=None, scan_time=None, outcome_time=None):
     """
     Shows whether Master Brain / continuous evolution cycle is active.
     Uses local files produced by TITAN.
@@ -429,8 +429,11 @@ def get_master_brain_status():
                 if dt and (latest_activity_time is None or dt > latest_activity_time):
                     latest_activity_time = dt
 
-    if last_learning_time and (latest_activity_time is None or last_learning_time > latest_activity_time):
-        latest_activity_time = last_learning_time
+    # Git memory push is disabled, so local file timestamps may be old on Streamlit.
+    # Use GitHub/scan/outcome activity as Master Brain activity source.
+    for external_dt in [github_time, scan_time, outcome_time, last_learning_time]:
+        if external_dt and (latest_activity_time is None or external_dt > latest_activity_time):
+            latest_activity_time = external_dt
 
     active_trades = get_live_trades_count()
     local_stats = get_local_trade_performance_stats()
@@ -680,44 +683,63 @@ def get_live_trades_count():
 
 def get_trade_results_stats():
     """
-    Fallback Supabase stats.
-    Used only if local outcome CSV has zero closed trades.
+    FIXED dashboard performance source.
+    Reads Supabase trade_results rows directly and supports both formats:
+    - result = WIN / LOSS
+    - outcome = TP / SL
     """
-    stats = {"wins": 0, "losses": 0, "closed_total": 0, "accuracy": 0}
+    stats = {
+        "wins": 0,
+        "losses": 0,
+        "closed_total": 0,
+        "accuracy": 0,
+        "open_total": 0,
+        "source": "SUPABASE_TRADE_RESULTS",
+        "latest_outcome_time": None,
+    }
 
     if supabase is None:
         return stats
 
     try:
-        win_result = (
-            supabase.table("trade_results")
-            .select("*", count="exact")
-            .eq("result", "WIN")
-            .limit(1)
-            .execute()
-        )
-        stats["wins"] = int(win_result.count or 0)
+        result = supabase.table("trade_results").select("*").limit(5000).execute()
+        rows = result.data or []
+
+        latest_time = None
+
+        for row in rows:
+            value = (
+                row.get("result")
+                or row.get("outcome")
+                or row.get("status")
+                or row.get("trade_result")
+            )
+            normalized = normalize_outcome(value)
+
+            if normalized == "WIN":
+                stats["wins"] += 1
+            elif normalized == "LOSS":
+                stats["losses"] += 1
+            elif normalized == "OPEN":
+                stats["open_total"] += 1
+
+            for time_col in ["closed_at", "created_at", "updated_at", "timestamp"]:
+                if row.get(time_col):
+                    dt = parse_dt(row.get(time_col))
+                    if dt and (latest_time is None or dt > latest_time):
+                        latest_time = dt
+                    break
+
+        stats["closed_total"] = stats["wins"] + stats["losses"]
+
+        if stats["closed_total"] > 0:
+            stats["accuracy"] = int((stats["wins"] / stats["closed_total"]) * 100)
+
+        stats["latest_outcome_time"] = latest_time
+        return stats
+
     except Exception:
-        stats["wins"] = 0
-
-    try:
-        loss_result = (
-            supabase.table("trade_results")
-            .select("*", count="exact")
-            .eq("result", "LOSS")
-            .limit(1)
-            .execute()
-        )
-        stats["losses"] = int(loss_result.count or 0)
-    except Exception:
-        stats["losses"] = 0
-
-    stats["closed_total"] = stats["wins"] + stats["losses"]
-
-    if stats["closed_total"] > 0:
-        stats["accuracy"] = int((stats["wins"] / stats["closed_total"]) * 100)
-
-    return stats
+        return stats
 
 
 # =========================================================
@@ -939,25 +961,33 @@ if stocks_passed == 0:
 live_trades_count = get_live_trades_count()
 
 # ✅ FIXED performance stats:
-# Priority 1: local data/journals/trade_outcomes.csv from outcome tracker
-# Priority 2: fallback Supabase trade_results only if local has zero closed trades
+# Priority 1: Supabase trade_results because Git memory push is disabled
+# Priority 2: local outcomes only for local testing
 local_trade_stats = get_local_trade_performance_stats()
 supabase_trade_stats = get_trade_results_stats()
 
-if local_trade_stats["closed_total"] > 0:
+if supabase_trade_stats["closed_total"] > 0:
+    trade_result_stats = {
+        **supabase_trade_stats,
+        "open_total": max(local_trade_stats.get("open_total", 0), supabase_trade_stats.get("open_total", 0)),
+    }
+elif local_trade_stats["closed_total"] > 0:
     trade_result_stats = local_trade_stats
 else:
     trade_result_stats = {
-        **supabase_trade_stats,
+        "wins": 0,
+        "losses": 0,
+        "closed_total": 0,
+        "accuracy": 0,
         "open_total": local_trade_stats.get("open_total", 0),
-        "source": "SUPABASE_FALLBACK",
-        "latest_outcome_time": local_trade_stats.get("latest_outcome_time"),
+        "source": "NO_CLOSED_RESULTS",
+        "latest_outcome_time": None,
     }
 
 wins = trade_result_stats["wins"]
 losses = trade_result_stats["losses"]
 closed_trades = trade_result_stats["closed_total"]
-open_outcome_trades = trade_result_stats.get("open_total", 0)
+open_outcome_trades = max(trade_result_stats.get("open_total", 0), live_trades_count)
 
 # Dashboard should show CLOSED trades in performance
 total_trades = closed_trades
@@ -967,7 +997,11 @@ trade_performance_percent = accuracy_percent
 
 rr_display = "1:2"
 
-master_brain_data = get_master_brain_status()
+master_brain_data = get_master_brain_status(
+    github_time=github_data.get("last_run_time"),
+    scan_time=real_latest_scan_time,
+    outcome_time=trade_result_stats.get("latest_outcome_time"),
+)
 
 SUPABASE_STORAGE_LIMIT_MB = 500
 
