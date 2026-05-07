@@ -746,10 +746,15 @@ def get_supabase_live_trades_count():
 
 def get_trade_results_stats():
     """
-    FIXED dashboard performance source.
-    Reads Supabase trade_results rows directly and supports both formats:
-    - result = WIN / LOSS
-    - outcome = TP / SL
+    FINAL FIX:
+    Supabase trade_results contains many NO_TRADE rows.
+    Those are scan/check rows, NOT real completed trades.
+
+    This function now:
+    - ignores NO_TRADE / SKIP / WAITING rows completely
+    - counts only real closed results: WIN/TP and LOSS/SL
+    - groups by trade_id and keeps only the latest row per trade_id
+    - avoids duplicate 5-minute outcome-check rows
     """
     stats = {
         "wins": 0,
@@ -757,7 +762,7 @@ def get_trade_results_stats():
         "closed_total": 0,
         "accuracy": 0,
         "open_total": 0,
-        "source": "SUPABASE_TRADE_RESULTS",
+        "source": "SUPABASE_TRADE_RESULTS_LATEST_ONLY",
         "latest_outcome_time": None,
     }
 
@@ -765,33 +770,79 @@ def get_trade_results_stats():
         return stats
 
     try:
-        result = supabase.table("trade_results").select("*").limit(5000).execute()
+        result = (
+            supabase.table("trade_results")
+            .select("*")
+            .order("created_at", desc=True)
+            .limit(5000)
+            .execute()
+        )
         rows = result.data or []
 
+        latest_by_trade = {}
         latest_time = None
 
         for row in rows:
-            value = (
+            raw_value = (
                 row.get("result")
                 or row.get("outcome")
                 or row.get("status")
                 or row.get("trade_result")
             )
-            normalized = normalize_outcome(value)
+            raw_text = str(raw_value or "").strip().upper()
 
+            # IMPORTANT: NO_TRADE is not win/loss/open trade.
+            # It means Titan scanned/checked but did not create a trade.
+            if raw_text in [
+                "", "NONE", "NULL", "NAN",
+                "NO_TRADE", "NO TRADE", "NOTRADE",
+                "SKIP", "SKIPPED", "REJECTED", "FILTERED",
+                "WAIT", "WAITING", "WATCH", "WATCHLIST",
+            ]:
+                continue
+
+            normalized = normalize_outcome(raw_text)
+
+            # Count only meaningful trade states
+            if normalized not in ["WIN", "LOSS", "OPEN"]:
+                continue
+
+            trade_key = (
+                row.get("trade_id")
+                or row.get("setup_id")
+                or row.get("signal_id")
+                or row.get("symbol")
+                or row.get("id")
+            )
+
+            if not trade_key:
+                continue
+
+            row_dt = None
+            for time_col in ["closed_at", "updated_at", "created_at", "timestamp"]:
+                if row.get(time_col):
+                    row_dt = parse_dt(row.get(time_col))
+                    break
+
+            if row_dt and (latest_time is None or row_dt > latest_time):
+                latest_time = row_dt
+
+            old_row = latest_by_trade.get(str(trade_key))
+            if old_row is None:
+                latest_by_trade[str(trade_key)] = {"row": row, "status": normalized, "time": row_dt}
+            else:
+                old_time = old_row.get("time")
+                if row_dt and (old_time is None or row_dt > old_time):
+                    latest_by_trade[str(trade_key)] = {"row": row, "status": normalized, "time": row_dt}
+
+        for item in latest_by_trade.values():
+            normalized = item["status"]
             if normalized == "WIN":
                 stats["wins"] += 1
             elif normalized == "LOSS":
                 stats["losses"] += 1
             elif normalized == "OPEN":
                 stats["open_total"] += 1
-
-            for time_col in ["closed_at", "created_at", "updated_at", "timestamp"]:
-                if row.get(time_col):
-                    dt = parse_dt(row.get(time_col))
-                    if dt and (latest_time is None or dt > latest_time):
-                        latest_time = dt
-                    break
 
         stats["closed_total"] = stats["wins"] + stats["losses"]
 
@@ -803,7 +854,6 @@ def get_trade_results_stats():
 
     except Exception:
         return stats
-
 
 # =========================================================
 # GITHUB HELPERS
