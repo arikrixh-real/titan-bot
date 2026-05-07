@@ -1,28 +1,26 @@
 """
-TITAN Trade Execution Layer - DEDUP SAFE SCHEMA FINAL
------------------------------------------------------
-This version fixes the Supabase 'sl column missing' problem.
+TITAN Trade Execution Layer - SAFE LIVE TRADE SYNC FINAL
+--------------------------------------------------------
 
-What it does:
+Purpose:
 1. Good setups become OPEN internal/live trades.
 2. Telegram top 3 are marked telegram_alerted=YES in local CSV.
-3. Duplicate OPEN trades are prevented using:
-   - local active_trades.csv
-   - Supabase symbol + side + status check
-4. Supabase insert uses ONLY safe columns:
-   - trade_id
-   - symbol
-   - side
-   - status
-   - created_at
-   - reason
-   - trigger_status
-5. It does NOT insert sl/entry/target/rr into Supabase, because your schema/cache is rejecting sl.
-6. Full Entry/SL/Target/RR are still saved in active_trades.csv and tracked for TP/SL.
-7. No real broker orders are placed.
+3. Duplicate OPEN trades are prevented locally and in Supabase.
+4. Supabase trades table is used for dashboard LIVE trade count.
+5. Full Entry/SL/Target/RR are safely kept in active_trades.csv.
+6. No broker orders are placed.
+
+Safe fixes:
+- Uses data/journals/active_trades.csv first, matching the main journal/outcome tracker.
+- Local active trade save will NOT fail just because Supabase insert fails.
+- Supabase insert uses schema-safe payload and auto-removes missing columns.
+- Supabase trade status is updated to CLOSED when TP/SL closes.
+- Does not touch alert selection logic.
 """
 
 import os
+import re
+from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -41,8 +39,15 @@ except Exception:
 
 IST = ZoneInfo("Asia/Kolkata")
 
-ACTIVE_TRADES_FILE = "active_trades.csv"
-TRADE_RESULTS_FILE = "trade_results.csv"
+JOURNAL_DIR = Path("data/journals")
+JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
+
+ACTIVE_TRADES_FILE = str(JOURNAL_DIR / "active_trades.csv")
+TRADE_RESULTS_FILE = str(JOURNAL_DIR / "trade_results.csv")
+
+# Legacy fallback files, only used if they already exist and data/journals file is empty/missing.
+LEGACY_ACTIVE_TRADES_FILE = "active_trades.csv"
+LEGACY_TRADE_RESULTS_FILE = "trade_results.csv"
 
 ACTIVE_COLUMNS = [
     "trade_id",
@@ -105,12 +110,26 @@ def _safe_float(value, default=0.0):
         return default
 
 
-def _read_csv(path, columns):
-    if not os.path.exists(path):
+def _safe_text(value, max_len=500):
+    try:
+        text = str(value or "")
+        return text[:max_len]
+    except Exception:
+        return ""
+
+
+def _read_csv(path, columns, legacy_path=None):
+    selected_path = path
+
+    if (not os.path.exists(selected_path) or os.path.getsize(selected_path) == 0) and legacy_path:
+        if os.path.exists(legacy_path) and os.path.getsize(legacy_path) > 0:
+            selected_path = legacy_path
+
+    if not os.path.exists(selected_path):
         return pd.DataFrame(columns=columns)
 
     try:
-        df = pd.read_csv(path)
+        df = pd.read_csv(selected_path, on_bad_lines="skip")
 
         for col in columns:
             if col not in df.columns:
@@ -124,6 +143,10 @@ def _read_csv(path, columns):
 
 def _write_csv(df, path, columns):
     try:
+        parent = Path(path).parent
+        if str(parent) not in ["", "."]:
+            parent.mkdir(parents=True, exist_ok=True)
+
         for col in columns:
             if col not in df.columns:
                 df[col] = ""
@@ -151,11 +174,81 @@ def _get_supabase():
         return None
 
 
+def _extract_missing_column(error_text):
+    match = re.search(r"Could not find the '([^']+)' column", str(error_text))
+    if match:
+        return match.group(1)
+    return None
+
+
+def _safe_supabase_insert(client, table_name, payload):
+    """
+    Insert payload safely. If Supabase schema cache rejects a column,
+    remove that column and retry.
+    """
+    clean = dict(payload)
+
+    for _ in range(10):
+        try:
+            client.table(table_name).insert(clean).execute()
+            return True
+
+        except Exception as e:
+            missing_col = _extract_missing_column(e)
+
+            if missing_col and missing_col in clean:
+                print(f"⚠️ Supabase {table_name} missing column removed: {missing_col}")
+                clean.pop(missing_col, None)
+                continue
+
+            print(f"⚠️ Supabase {table_name} insert skipped: {e}")
+            return False
+
+    return False
+
+
+def _safe_supabase_update_trade_closed(client, trade_id, result="", close_price=None, closed_at=None):
+    """
+    Updates Supabase trades row to CLOSED for dashboard live count.
+    Uses safe retry if some columns do not exist.
+    """
+    if client is None or not trade_id:
+        return False
+
+    payload = {
+        "status": "CLOSED",
+        "result": result,
+        "close_price": close_price,
+        "closed_at": closed_at or _now_iso(),
+        "updated_at": _now_iso(),
+    }
+
+    clean = dict(payload)
+
+    for _ in range(10):
+        try:
+            client.table("trades").update(clean).eq("trade_id", trade_id).execute()
+            return True
+
+        except Exception as e:
+            missing_col = _extract_missing_column(e)
+
+            if missing_col and missing_col in clean:
+                print(f"⚠️ Supabase trades update missing column removed: {missing_col}")
+                clean.pop(missing_col, None)
+                continue
+
+            print(f"⚠️ Supabase trades status update skipped for {trade_id}: {e}")
+            return False
+
+    return False
+
+
 def _supabase_open_trade_exists(client, symbol, side):
     try:
         result = (
             client.table("trades")
-            .select("id")
+            .select("trade_id")
             .eq("symbol", symbol)
             .eq("side", side)
             .eq("status", "OPEN")
@@ -170,11 +263,31 @@ def _supabase_open_trade_exists(client, symbol, side):
         return False
 
 
+def _local_open_trade_exists(active_df, symbol, side):
+    try:
+        open_df = active_df[
+            active_df["status"]
+            .astype(str)
+            .str.upper()
+            .isin(["OPEN", "ACTIVE", "LIVE"])
+        ].copy()
+
+        keys = set(
+            open_df["symbol"].astype(str).str.upper()
+            + "|"
+            + open_df["side"].astype(str).str.upper()
+        )
+
+        return f"{symbol}|{side}" in keys
+
+    except Exception:
+        return False
+
+
 def _insert_trade_to_supabase(row):
     """
-    Safe Supabase insert.
-    Uses only columns that are safe for your trades table.
-    Detailed trade values are still kept in active_trades.csv.
+    Safe Supabase insert for dashboard live-trade sync.
+    Full details stay in local active_trades.csv.
     """
     client = _get_supabase()
 
@@ -190,39 +303,57 @@ def _insert_trade_to_supabase(row):
     if _supabase_open_trade_exists(client, symbol, side):
         return False
 
+    # Include useful fields; _safe_supabase_insert removes any missing schema columns.
     payload = {
         "trade_id": str(row.get("trade_id", "")),
         "symbol": symbol,
         "side": side,
         "status": "OPEN",
-        "reason": str(row.get("reason", ""))[:500],
+        "entry": _safe_float(row.get("entry")),
+        "sl": _safe_float(row.get("sl")),
+        "stop_loss": _safe_float(row.get("sl")),
+        "target": _safe_float(row.get("target")),
+        "rr": _safe_float(row.get("rr")),
+        "score": _safe_float(row.get("score")),
+        "rank_score": _safe_float(row.get("rank_score")),
+        "market_status": _safe_text(row.get("market_status"), 1000),
+        "telegram_alerted": str(row.get("telegram_alerted", "NO")),
+        "reason": _safe_text(row.get("reason"), 500),
         "trigger_status": "INTERNAL_TRADE",
+        "opened_at": _now_iso(),
         "created_at": _now_iso(),
+        "updated_at": _now_iso(),
     }
 
-    try:
-        client.table("trades").insert(payload).execute()
-        return True
-
-    except Exception as e:
-        print(f"⚠️ Supabase safe trade insert skipped for {symbol} {side}: {e}")
-        return False
+    return _safe_supabase_insert(client, "trades", payload)
 
 
-def _insert_result_to_supabase_minimal():
+def _insert_result_to_supabase_minimal(result_row):
+    """
+    Minimal trade_results insert. If outcome tracker already saves results,
+    duplicate/schema errors are skipped safely.
+    """
     client = _get_supabase()
 
     if client is None:
         return False
 
-    try:
-        client.table("trade_results").insert({
-            "created_at": _now_iso()
-        }).execute()
-        return True
+    payload = {
+        "trade_id": str(result_row.get("trade_id", "")),
+        "symbol": str(result_row.get("symbol", "")).upper(),
+        "side": str(result_row.get("side", "")).upper(),
+        "entry": _safe_float(result_row.get("entry")),
+        "exit_price": _safe_float(result_row.get("close_price")),
+        "close_price": _safe_float(result_row.get("close_price")),
+        "result": str(result_row.get("result", "")),
+        "outcome": "TP" if str(result_row.get("result", "")).upper() == "WIN" else "SL",
+        "pnl_points": _safe_float(result_row.get("pnl_points")),
+        "closed_at": result_row.get("closed_at") or _now_iso(),
+        "reason": _safe_text(result_row.get("reason"), 500),
+        "created_at": _now_iso(),
+    }
 
-    except Exception:
-        return False
+    return _safe_supabase_insert(client, "trade_results", payload)
 
 
 def _trade_hit_result(side, price, sl, target):
@@ -262,21 +393,20 @@ def add_good_setups_as_live_trades(
     market_status="",
     max_new_trades=None,
 ):
+    """
+    Adds valid setups as OPEN trades.
+
+    Important safety:
+    - Local active trade is saved even if Supabase insert fails.
+    - Duplicate prevention is local-first.
+    - Supabase sync is best-effort for dashboard live count.
+    """
     alerted_symbols = set(alerted_symbols or [])
 
-    active_df = _read_csv(ACTIVE_TRADES_FILE, ACTIVE_COLUMNS)
-
-    open_df = active_df[
-        active_df["status"]
-        .astype(str)
-        .str.upper()
-        .isin(["OPEN", "ACTIVE", "LIVE"])
-    ].copy()
-
-    existing_open_keys = set(
-        open_df["symbol"].astype(str).str.upper()
-        + "|"
-        + open_df["side"].astype(str).str.upper()
+    active_df = _read_csv(
+        ACTIVE_TRADES_FILE,
+        ACTIVE_COLUMNS,
+        legacy_path=LEGACY_ACTIVE_TRADES_FILE,
     )
 
     new_rows = []
@@ -294,9 +424,7 @@ def add_good_setups_as_live_trades(
         if not symbol or side not in ["LONG", "SHORT"]:
             continue
 
-        key = f"{symbol}|{side}"
-
-        if key in existing_open_keys:
+        if _local_open_trade_exists(active_df, symbol, side):
             duplicate_skipped += 1
             continue
 
@@ -313,11 +441,13 @@ def add_good_setups_as_live_trades(
             continue
 
         now_text = _now()
-        trade_id = f"{scan_id}_{symbol}_{side}_{len(active_df) + len(new_rows) + 1}"
+
+        safe_scan_id = str(scan_id or datetime.now(IST).strftime("%Y%m%d_%H%M%S"))
+        trade_id = f"{safe_scan_id}_{symbol}_{side}_{len(active_df) + len(new_rows) + 1}"
 
         row = {
             "trade_id": trade_id,
-            "scan_id": scan_id,
+            "scan_id": safe_scan_id,
             "symbol": symbol,
             "side": side,
             "entry": round(entry, 2),
@@ -335,22 +465,18 @@ def add_good_setups_as_live_trades(
             "close_price": "",
             "closed_at": "",
             "result": "",
-            "reason": str(setup.get("reason", ""))[:500],
+            "reason": _safe_text(setup.get("reason", ""), 500),
         }
 
-        inserted_to_supabase = _insert_trade_to_supabase(row)
-
-        if not inserted_to_supabase:
-            duplicate_skipped += 1
-            continue
-
+        # Local trade is always added first.
         new_rows.append(row)
-        existing_open_keys.add(key)
         local_added += 1
-        supabase_added += 1
 
-    if new_rows:
-        active_df = pd.concat([active_df, pd.DataFrame(new_rows)], ignore_index=True)
+        # Supabase sync is best-effort and will not block local tracking.
+        if _insert_trade_to_supabase(row):
+            supabase_added += 1
+
+        active_df = pd.concat([active_df, pd.DataFrame([row])], ignore_index=True)
 
     _write_csv(active_df, ACTIVE_TRADES_FILE, ACTIVE_COLUMNS)
 
@@ -362,8 +488,16 @@ def add_good_setups_as_live_trades(
 
 
 def update_live_trade_outcomes():
-    active_df = _read_csv(ACTIVE_TRADES_FILE, ACTIVE_COLUMNS)
-    results_df = _read_csv(TRADE_RESULTS_FILE, RESULT_COLUMNS)
+    active_df = _read_csv(
+        ACTIVE_TRADES_FILE,
+        ACTIVE_COLUMNS,
+        legacy_path=LEGACY_ACTIVE_TRADES_FILE,
+    )
+    results_df = _read_csv(
+        TRADE_RESULTS_FILE,
+        RESULT_COLUMNS,
+        legacy_path=LEGACY_TRADE_RESULTS_FILE,
+    )
 
     if active_df.empty:
         print("📊 Trade Execution Layer: 0 active trades")
@@ -384,6 +518,8 @@ def update_live_trade_outcomes():
     checked = 0
     closed_targets = 0
     closed_sls = 0
+
+    client = _get_supabase()
 
     for idx in open_indices:
         row = active_df.loc[idx]
@@ -417,6 +553,7 @@ def update_live_trade_outcomes():
             continue
 
         close_time = _now()
+        close_iso = _now_iso()
         result = "WIN" if hit == "TARGET" else "LOSS"
         pnl = _pnl_points(side, entry, price)
 
@@ -450,7 +587,15 @@ def update_live_trade_outcomes():
             ignore_index=True,
         )
 
-        _insert_result_to_supabase_minimal()
+        _safe_supabase_update_trade_closed(
+            client=client,
+            trade_id=str(row.get("trade_id", "")),
+            result=result,
+            close_price=round(price, 2),
+            closed_at=close_iso,
+        )
+
+        _insert_result_to_supabase_minimal(result_row)
 
         if result == "WIN":
             closed_targets += 1
@@ -483,7 +628,11 @@ def update_live_trade_outcomes():
 
 
 def get_live_trades_count():
-    active_df = _read_csv(ACTIVE_TRADES_FILE, ACTIVE_COLUMNS)
+    active_df = _read_csv(
+        ACTIVE_TRADES_FILE,
+        ACTIVE_COLUMNS,
+        legacy_path=LEGACY_ACTIVE_TRADES_FILE,
+    )
 
     if active_df.empty:
         return 0
