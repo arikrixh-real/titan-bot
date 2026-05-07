@@ -216,7 +216,7 @@ def run_news_engine_safely():
     try:
         print("📰 Running News Engine...")
         run_news_engine()
-        print("✅ News Engine Completed")
+        print("✅ News Engine Completed and news_memory updated")
     except Exception as e:
         print(f"⚠️ News Engine Error: {e}")
 
@@ -573,12 +573,11 @@ def scan_for_setups():
     selected_alerts = eligible_setups[:3]
     alerted_symbols = [s.get("symbol") for s in selected_alerts if s.get("symbol")]
 
-    # ✅ Final direct save to trade_results for dashboard trade metrics
-    save_selected_alerts_to_trade_results(
-        selected_alerts=selected_alerts,
-        scan_id=scan_id,
-        market_status=market_status,
-    )
+    # ✅ IMPORTANT:
+    # trade_results insertion is now handled ONLY by:
+    # titan_master_brain/master_controller.py
+    #
+    # This prevents duplicate LIVE trades and repeated dashboard inflation.
 
     if selected_alerts:
         print("🏆 Top 3 elite setups:")

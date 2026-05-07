@@ -1,10 +1,17 @@
 """
 TITAN MASTER CONTROLLER
-STEP 9B FINAL - TRADE_RESULTS FIXED
+STEP 9B FINAL - STABLE FIX
+
+Fixes:
+1. Saves real Telegram-sent trades into Supabase trade_results.
+2. Prevents duplicate LIVE trade for same symbol + side.
+3. Auto-closes LIVE trades after 3:30 PM IST.
+4. Prevents Telegram trade alerts outside market hours.
+5. Keeps outcome tracker active.
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
 from supabase import create_client
@@ -28,6 +35,29 @@ from journal.outcome_tracker import track_trade_outcomes
 
 
 IST = ZoneInfo("Asia/Kolkata")
+
+MARKET_OPEN = time(8, 30)
+MARKET_CLOSE = time(15, 30)
+
+TEST_SYMBOLS = {"TEST", "TESTPY"}
+
+
+# =========================================================
+# SAFE HELPERS
+# =========================================================
+
+def _now_ist():
+    return datetime.now(IST)
+
+
+def _is_market_alert_time():
+    now = _now_ist()
+
+    # Monday=0, Sunday=6
+    if now.weekday() >= 5:
+        return False
+
+    return MARKET_OPEN <= now.time() <= MARKET_CLOSE
 
 
 def _safe_float(value, default=None):
@@ -63,32 +93,114 @@ def _get_supabase():
         key = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
         if not url or not key:
-            print("[TradeResults] Supabase env missing. Skipping trade_results save.")
+            print("[Supabase] Missing SUPABASE_URL / SUPABASE_KEY. DB actions skipped.")
             return None
 
         return create_client(url, key)
 
     except Exception as e:
-        print(f"[TradeResults] Supabase connection failed: {e}")
+        print(f"[Supabase ERROR] Connection failed: {e}")
         return None
+
+
+# =========================================================
+# MARKET CLOSE HANDLER
+# =========================================================
+
+def auto_close_live_trades_after_market_close():
+    """
+    After 3:30 PM IST, unresolved LIVE trades become MARKET_CLOSED.
+    This prevents dashboard showing fake live trades at night.
+    """
+    now = _now_ist()
+
+    # Do nothing before market close
+    if now.time() < MARKET_CLOSE:
+        return 0
+
+    supabase = _get_supabase()
+    if supabase is None:
+        return 0
+
+    closed_count = 0
+
+    try:
+        result = (
+            supabase.table("trade_results")
+            .select("*")
+            .eq("status", "LIVE")
+            .execute()
+        )
+
+        for row in result.data or []:
+            symbol = str(row.get("symbol") or "").upper()
+
+            if symbol in TEST_SYMBOLS:
+                continue
+
+            row_id = row.get("id")
+            if not row_id:
+                continue
+
+            supabase.table("trade_results").update({
+                "status": "MARKET_CLOSED",
+                "outcome": "MARKET_CLOSED",
+                "result": "MARKET_CLOSED",
+                "closed_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+                "reason": "Auto closed because market session ended"
+            }).eq("id", row_id).execute()
+
+            closed_count += 1
+            print(f"[MarketClose] Auto-closed LIVE trade: {symbol}")
+
+    except Exception as e:
+        print(f"[MarketClose ERROR] {e}")
+
+    if closed_count:
+        print(f"[MarketClose] Auto-closed {closed_count} live trade(s).")
+
+    return closed_count
+
+
+# =========================================================
+# TRADE_RESULTS SAVE
+# =========================================================
+
+def _live_trade_exists(supabase, symbol, side):
+    try:
+        result = (
+            supabase.table("trade_results")
+            .select("id")
+            .eq("symbol", str(symbol))
+            .eq("side", str(side))
+            .eq("status", "LIVE")
+            .limit(1)
+            .execute()
+        )
+
+        return bool(result.data)
+
+    except Exception as e:
+        print(f"[TradeResults] Duplicate check failed for {symbol} {side}: {e}")
+        return False
 
 
 def save_sent_packets_to_trade_results(sent_packets, context=None):
     """
     Saves only Telegram-sent trades into trade_results.
-    This is the real active path because master_controller sends Telegram.
+    Prevents duplicate LIVE trade for same symbol + side.
     """
     if not sent_packets:
         print("[TradeResults] No sent packets to save.")
         return 0
 
     supabase = _get_supabase()
-
     if supabase is None:
         return 0
 
     saved_count = 0
-    now_iso = datetime.now(IST).isoformat()
+    now_iso = _now_ist().isoformat()
 
     market_status = None
     if isinstance(context, dict):
@@ -120,9 +232,21 @@ def save_sent_packets_to_trade_results(sent_packets, context=None):
                 print(f"[TradeResults] Skipped invalid packet: {packet}")
                 continue
 
+            symbol = str(symbol).upper()
+            side = str(side).upper()
+
+            if symbol in TEST_SYMBOLS:
+                print(f"[TradeResults] Skipped test symbol: {symbol}")
+                continue
+
+            # FINAL DUPLICATE PROTECTION
+            if _live_trade_exists(supabase, symbol, side):
+                print(f"[TradeResults] LIVE trade already exists for {symbol} {side}. Skipping duplicate.")
+                continue
+
             row = {
-                "symbol": str(symbol),
-                "side": str(side),
+                "symbol": symbol,
+                "side": side,
                 "entry": entry,
                 "sl": sl,
                 "tp": tp,
@@ -155,9 +279,13 @@ def save_sent_packets_to_trade_results(sent_packets, context=None):
         except Exception as e:
             print(f"[TradeResults ERROR] Save failed for packet {packet}: {e}")
 
-    print(f"[TradeResults] Saved {saved_count}/{len(sent_packets)} sent trades.")
+    print(f"[TradeResults] Saved {saved_count}/{len(sent_packets)} sent trade(s).")
     return saved_count
 
+
+# =========================================================
+# PRINT HELPERS
+# =========================================================
 
 def _print_setup_reasoning(evaluated_setups):
     print("\n[MasterBrain] Setup Reasoning:\n")
@@ -180,8 +308,15 @@ def _print_setup_reasoning(evaluated_setups):
         print(f"{symbol} → {decision} | {confidence} | {reasoning_text}")
 
 
+# =========================================================
+# MAIN MASTER BRAIN
+# =========================================================
+
 def run_master_brain(send_telegram=True, run_outcome_tracker=True):
     print("[MasterBrain] Step 9B Final Master Controller Running...")
+
+    # Always clean stale LIVE trades first after market close
+    auto_close_live_trades_after_market_close()
 
     master_input = build_master_input()
     context = build_context(master_input)
@@ -213,16 +348,20 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
 
     sent_packets = []
 
+    # Telegram only during market alert window
     if send_telegram:
-        sent_packets = send_telegram_signals(execution_result)
-
-        if sent_packets:
-            save_sent_packets_to_trade_results(sent_packets, context=context)
-
-            mark_alerts_sent(sent_packets)
-            print(f"[DailyAlert] Marked {len(sent_packets)} alert(s) as sent.")
+        if not _is_market_alert_time():
+            print("[Telegram] Market closed / outside alert window. No trade alerts sent.")
         else:
-            print("[DailyAlert] No alerts marked sent because Telegram sending failed or no packets existed.")
+            sent_packets = send_telegram_signals(execution_result)
+
+            if sent_packets:
+                save_sent_packets_to_trade_results(sent_packets, context=context)
+
+                mark_alerts_sent(sent_packets)
+                print(f"[DailyAlert] Marked {len(sent_packets)} alert(s) as sent.")
+            else:
+                print("[DailyAlert] No alerts marked sent because Telegram sending failed or no packets existed.")
     else:
         print("[Telegram] send_telegram=False, dry run only. Nothing sent.")
 
@@ -237,6 +376,9 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
             outcome_result = {"error": str(e)}
     else:
         print("[OutcomeTracker] run_outcome_tracker=False, skipped.")
+
+    # Run market close cleanup again after outcome tracker
+    auto_close_live_trades_after_market_close()
 
     print("\n[MasterBrain] Cycle Complete\n")
 

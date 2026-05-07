@@ -189,15 +189,31 @@ def _quality_tier_rank(tier: str) -> int:
 
 
 def _candidate_key(candidate: Dict[str, Any]) -> str:
+    """
+    FINAL DUPLICATE ALERT FIX:
+    Only ONE Telegram alert per symbol + side per trading day.
+
+    Earlier key used entry/sl/target, so tiny level changes created new keys
+    and caused repeated Telegram alerts every 5 minutes.
+    """
+
     raw = _extract_raw(candidate)
 
-    symbol = str(candidate.get("symbol") or raw.get("symbol") or "UNKNOWN").upper()
-    side = str(candidate.get("side") or raw.get("side") or "").upper()
-    entry = str(candidate.get("entry") or raw.get("entry") or "")
-    sl = str(candidate.get("sl") or candidate.get("stop_loss") or raw.get("sl") or raw.get("stop_loss") or "")
-    target = str(candidate.get("target") or raw.get("target") or "")
+    symbol = str(
+        candidate.get("symbol")
+        or raw.get("symbol")
+        or "UNKNOWN"
+    ).strip().upper()
 
-    return f"{symbol}|{side}|{entry}|{sl}|{target}"
+    side = str(
+        candidate.get("side")
+        or raw.get("side")
+        or raw.get("direction")
+        or raw.get("trade_side")
+        or ""
+    ).strip().upper()
+
+    return f"{_today_key()}|{symbol}|{side}"
 
 
 def _load_state() -> Dict[str, Any]:
