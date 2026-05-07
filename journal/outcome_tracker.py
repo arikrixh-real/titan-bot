@@ -57,17 +57,7 @@ OUTCOME_FIELDS = [
 ]
 
 
-# ---------------------------------------------------------
-# SUPABASE CLIENT
-# ---------------------------------------------------------
-
 def _get_supabase_client():
-    """
-    Robust Supabase connection for GitHub + local.
-    Tries:
-    1. titan_master_brain.supabase_client.supabase
-    2. SUPABASE_URL + SUPABASE_KEY from env/secrets
-    """
     try:
         from titan_master_brain.supabase_client import supabase
         if supabase is not None:
@@ -95,10 +85,6 @@ def _get_supabase_client():
 SUPABASE = _get_supabase_client()
 
 
-# ---------------------------------------------------------
-# BASIC HELPERS
-# ---------------------------------------------------------
-
 def _now():
     return datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -110,11 +96,6 @@ def _safe_float(value, default=0.0):
         return float(value)
     except Exception:
         return default
-
-
-def _safe_bool(value):
-    text = str(value).strip().lower()
-    return text in {"true", "1", "yes", "y"}
 
 
 def _json_safe(value):
@@ -157,10 +138,6 @@ def _ensure_files():
         OUTCOMES_JSONL.touch()
 
 
-# ---------------------------------------------------------
-# OUTCOME LOGIC
-# ---------------------------------------------------------
-
 def _check_outcome(row, live_price):
     side = str(row.get("side", "")).upper().strip()
 
@@ -186,13 +163,6 @@ def _check_outcome(row, live_price):
 
 
 def _save_trade_result_to_supabase(outcome_row):
-    """
-    Saves one CLOSED trade result to Supabase.
-
-    Dashboard reads trade_results:
-    - TP becomes WIN
-    - SL becomes LOSS
-    """
     if SUPABASE is None:
         print("[OutcomeTracker DB] Supabase not connected. Result not saved to dashboard DB.")
         return False
@@ -209,6 +179,9 @@ def _save_trade_result_to_supabase(outcome_row):
         print("[OutcomeTracker DB] Missing trade_id. Result not saved.")
         return False
 
+    # IMPORTANT:
+    # Do NOT include alert_sent here because user's Supabase trade_results table
+    # does not have that column.
     payload = _json_safe({
         "trade_id": trade_id,
         "symbol": outcome_row.get("symbol", ""),
@@ -224,7 +197,6 @@ def _save_trade_result_to_supabase(outcome_row):
         "closed_at": outcome_row.get("closed_at"),
         "opened_at": outcome_row.get("opened_at"),
         "reason": outcome_row.get("result_reason", ""),
-        "alert_sent": _safe_bool(outcome_row.get("alert_sent")),
         "market_status": str(outcome_row.get("market_status", "")),
     })
 
@@ -280,10 +252,6 @@ def _append_outcome(row, outcome, exit_price, pnl_points, reason):
 
     _save_trade_result_to_supabase(outcome_row)
 
-
-# ---------------------------------------------------------
-# MAIN TRACKER
-# ---------------------------------------------------------
 
 def track_trade_outcomes():
     _ensure_files()
