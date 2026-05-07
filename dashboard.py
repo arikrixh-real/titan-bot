@@ -711,10 +711,18 @@ def _is_test_symbol(symbol):
 
 def get_live_trades_count():
     """
-    FINAL FIX:
-    Dashboard live trades must come from Supabase trade_results,
-    not active_trades.csv. CSV is only fallback for local testing.
+    FINAL LIVE TRADE FIX:
+    Live trades should come from active/open trades, not trade_results.
+
+    Priority:
+    1. Supabase trades table if it has OPEN/LIVE/ACTIVE rows
+    2. Local active_trades.csv fallback
+    3. 0 if nothing available
+
+    NOTE:
+    trade_results is for CLOSED TP/SL performance only.
     """
+
     supabase_count = get_supabase_live_trades_count()
 
     if supabase_count > 0:
@@ -737,7 +745,7 @@ def get_live_trades_count():
             df = pd.read_csv(path, on_bad_lines="skip")
 
             if df.empty:
-                return 0
+                continue
 
             if "symbol" in df.columns:
                 df = df[~df["symbol"].astype(str).str.upper().isin(TEST_SYMBOLS)]
@@ -750,11 +758,11 @@ def get_live_trades_count():
                         df[col]
                         .astype(str)
                         .str.upper()
-                        .isin(["ACTIVE", "OPEN", "LIVE", "RUNNING"])
+                        .isin(["ACTIVE", "OPEN", "LIVE", "RUNNING", "PENDING"])
                     ]
-                    return len(live_df)
+                    return int(len(live_df))
 
-            return len(df)
+            return int(len(df))
 
         except Exception:
             continue
@@ -765,7 +773,8 @@ def get_live_trades_count():
 
 def get_supabase_live_trades_count():
     """
-    Reads live/open trades directly from Supabase trade_results.
+    Reads live/open trades from Supabase trades table.
+    Does NOT use trade_results because trade_results stores closed TP/SL outcomes.
     Excludes manual TEST rows.
     """
     if supabase is None:
@@ -773,14 +782,14 @@ def get_supabase_live_trades_count():
 
     try:
         result = (
-            supabase.table("trade_results")
-            .select("symbol,status,outcome,result")
-            .order("created_at", desc=True)
+            supabase.table("trades")
+            .select("symbol,status,trade_status,outcome,result")
             .limit(5000)
             .execute()
         )
 
         rows = result.data or []
+
         if not rows:
             return 0
 
@@ -792,6 +801,7 @@ def get_supabase_live_trades_count():
 
             value = (
                 row.get("status")
+                or row.get("trade_status")
                 or row.get("outcome")
                 or row.get("result")
             )
@@ -802,10 +812,11 @@ def get_supabase_live_trades_count():
             if normalized == "OPEN" or raw in ["ACTIVE", "LIVE", "RUNNING", "OPEN", "PENDING"]:
                 live_count += 1
 
-        return live_count
+        return int(live_count)
 
     except Exception:
         return 0
+
 
 
 def get_trade_results_stats():
