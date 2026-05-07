@@ -17,11 +17,17 @@ Safe:
 - Does not send alerts
 - Does not place broker orders
 - Does not delete trades
+
+FINAL FIX:
+- Does NOT crash if Supabase trade_results table is missing columns.
+- Automatically removes missing columns reported by Supabase schema cache.
+- Fixes error: Could not find the 'target' column of 'trade_results'.
 """
 
 import csv
 import json
 import os
+import re
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -66,6 +72,13 @@ def _get_supabase_client():
         pass
 
     try:
+        from titan_brain.supabase_client import supabase
+        if supabase is not None:
+            return supabase
+    except Exception:
+        pass
+
+    try:
         from supabase import create_client
 
         url = os.getenv("SUPABASE_URL")
@@ -93,7 +106,7 @@ def _safe_float(value, default=0.0):
     try:
         if value is None or value == "":
             return default
-        return float(value)
+        return round(float(value), 4)
     except Exception:
         return default
 
@@ -120,13 +133,15 @@ def _json_safe(value):
 def _ensure_files():
     JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
 
+    active_fields = [
+        "trade_id", "opened_at", "scan_id", "symbol", "side", "entry", "sl",
+        "target", "rr", "score", "rank_score", "alert_sent", "market_status",
+        "status", "last_checked_at", "last_price", "pnl_points", "result_reason"
+    ]
+
     if not ACTIVE_TRADES_CSV.exists():
         with open(ACTIVE_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=[
-                "trade_id", "opened_at", "scan_id", "symbol", "side", "entry", "sl",
-                "target", "rr", "score", "rank_score", "alert_sent", "market_status",
-                "status", "last_checked_at", "last_price", "pnl_points", "result_reason"
-            ])
+            writer = csv.DictWriter(f, fieldnames=active_fields)
             writer.writeheader()
 
     if not OUTCOMES_CSV.exists():
@@ -162,6 +177,50 @@ def _check_outcome(row, live_price):
     return "OPEN", price, pnl, "Still open"
 
 
+def _extract_missing_column(error_text):
+    """
+    Supabase/PGRST usually says:
+    Could not find the 'target' column of 'trade_results' in the schema cache
+    This function extracts target.
+    """
+
+    match = re.search(r"Could not find the '([^']+)' column", str(error_text))
+    if match:
+        return match.group(1)
+
+    return None
+
+
+def _insert_trade_result_payload(payload):
+    """
+    Robust insert:
+    - Tries to insert payload.
+    - If Supabase says a column does not exist, remove that column and retry.
+    - Prevents dashboard result update from failing just because table schema is older.
+    """
+
+    cleaned = dict(payload)
+
+    for _ in range(10):
+        try:
+            SUPABASE.table("trade_results").insert(_json_safe(cleaned)).execute()
+            return True
+
+        except Exception as e:
+            missing_col = _extract_missing_column(e)
+
+            if missing_col and missing_col in cleaned:
+                print(f"[OutcomeTracker DB FIX] Removing missing trade_results column: {missing_col}")
+                cleaned.pop(missing_col, None)
+                continue
+
+            print(f"[OutcomeTracker DB ERROR] trade_results save failed: {e}")
+            return False
+
+    print("[OutcomeTracker DB ERROR] trade_results save failed after schema cleanup retries.")
+    return False
+
+
 def _save_trade_result_to_supabase(outcome_row):
     if SUPABASE is None:
         print("[OutcomeTracker DB] Supabase not connected. Result not saved to dashboard DB.")
@@ -179,10 +238,7 @@ def _save_trade_result_to_supabase(outcome_row):
         print("[OutcomeTracker DB] Missing trade_id. Result not saved.")
         return False
 
-    # IMPORTANT:
-    # Do NOT include alert_sent here because user's Supabase trade_results table
-    # does not have that column.
-    payload = _json_safe({
+    payload = {
         "trade_id": trade_id,
         "symbol": outcome_row.get("symbol", ""),
         "side": outcome_row.get("side", ""),
@@ -198,7 +254,9 @@ def _save_trade_result_to_supabase(outcome_row):
         "opened_at": outcome_row.get("opened_at"),
         "reason": outcome_row.get("result_reason", ""),
         "market_status": str(outcome_row.get("market_status", "")),
-    })
+    }
+
+    payload = _json_safe(payload)
 
     try:
         existing = (
@@ -213,9 +271,13 @@ def _save_trade_result_to_supabase(outcome_row):
             print(f"[OutcomeTracker DB] Result already exists: {trade_id}")
             return True
 
-        SUPABASE.table("trade_results").insert(payload).execute()
-        print(f"[OutcomeTracker DB] Supabase result saved: {trade_id} -> {result}")
-        return True
+        saved = _insert_trade_result_payload(payload)
+
+        if saved:
+            print(f"[OutcomeTracker DB] Supabase result saved: {trade_id} -> {result}")
+            return True
+
+        return False
 
     except Exception as e:
         print(f"[OutcomeTracker DB ERROR] trade_results save failed: {e}")
@@ -248,7 +310,7 @@ def _append_outcome(row, outcome, exit_price, pnl_points, reason):
         writer.writerow(outcome_row)
 
     with open(OUTCOMES_JSONL, "a", encoding="utf-8") as f:
-        f.write(json.dumps(outcome_row, ensure_ascii=False) + "\n")
+        f.write(json.dumps(_json_safe(outcome_row), ensure_ascii=False) + "\n")
 
     _save_trade_result_to_supabase(outcome_row)
 
