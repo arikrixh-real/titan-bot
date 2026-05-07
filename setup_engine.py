@@ -22,12 +22,6 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import os
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except Exception:
-    pass
-
 import pandas as pd
 from supabase import create_client
 
@@ -66,7 +60,6 @@ from engines.master_status import update_master_status
 
 from journal.trade_journal import journal_eligible_setups
 from journal.outcome_tracker import track_trade_outcomes
-from titan_brain.memory.trade_results_memory import save_trade_result
 
 try:
     from journal.trade_execution_layer import (
@@ -226,142 +219,6 @@ def run_news_engine_safely():
     except Exception as e:
         print(f"⚠️ News Engine Error: {e}")
 
-
-
-
-def save_alerted_trades_to_trade_results(selected_alerts):
-    """
-    Stores only the top alerted setups into Supabase trade_results.
-    This powers dashboard total trades + live trades.
-    Duplicate protection: skips same symbol/side if already LIVE.
-    """
-    if not selected_alerts:
-        print("📊 trade_results: no selected alerts to save")
-        return 0
-
-    saved_count = 0
-
-    for setup in selected_alerts:
-        try:
-            symbol = setup.get("symbol")
-            side = setup.get("side")
-            entry = setup.get("entry")
-            sl = setup.get("sl")
-            tp = setup.get("target") or setup.get("tp")
-
-            if not symbol or not side or entry is None or sl is None or tp is None:
-                print(f"⚠️ trade_results skipped incomplete setup: {setup}")
-                continue
-
-            # Skip duplicate open trade for same symbol + side
-            if supabase is not None:
-                existing = supabase.table("trade_results").select("id").eq("symbol", symbol).eq("side", side).eq("status", "LIVE").limit(1).execute()
-                if getattr(existing, "data", None):
-                    print(f"⏭️ trade_results duplicate LIVE skipped: {symbol} {side}")
-                    continue
-
-            ok = save_trade_result(
-                symbol=symbol,
-                side=side,
-                entry=entry,
-                sl=sl,
-                tp=tp,
-                status="LIVE",
-                result=None,
-                pnl=0,
-                exit_price=None,
-            )
-
-            if ok:
-                saved_count += 1
-
-        except Exception as e:
-            print(f"⚠️ trade_results save error: {e}")
-
-    print(f"✅ trade_results saved alerted trades: {saved_count}")
-    return saved_count
-
-
-def update_trade_results_outcomes():
-    """
-    Checks LIVE rows in Supabase trade_results and closes them when TP/SL hits.
-    This powers dashboard wins, losses, closed trades, accuracy and pnl.
-    """
-    if supabase is None:
-        print("⚠️ Supabase not connected for trade_results outcome update")
-        return
-
-    try:
-        live_rows = supabase.table("trade_results").select("*").eq("status", "LIVE").limit(100).execute()
-        trades = getattr(live_rows, "data", None) or []
-
-        if not trades:
-            print("📊 trade_results: no LIVE trades to update")
-            return
-
-        closed_count = 0
-
-        for trade in trades:
-            try:
-                trade_id = trade.get("id")
-                symbol = trade.get("symbol")
-                side = trade.get("side")
-                entry = safe_float(trade.get("entry"))
-                sl = safe_float(trade.get("sl"))
-                tp = safe_float(trade.get("tp"))
-
-                if not trade_id or not symbol or not side or entry is None or sl is None or tp is None:
-                    continue
-
-                live_price = safe_float(get_live_price(symbol))
-                if live_price is None:
-                    continue
-
-                result = None
-                exit_price = None
-
-                if side == "LONG":
-                    if live_price >= tp:
-                        result = "WIN"
-                        exit_price = tp
-                    elif live_price <= sl:
-                        result = "LOSS"
-                        exit_price = sl
-                elif side == "SHORT":
-                    if live_price <= tp:
-                        result = "WIN"
-                        exit_price = tp
-                    elif live_price >= sl:
-                        result = "LOSS"
-                        exit_price = sl
-
-                if result is None:
-                    continue
-
-                if side == "LONG":
-                    pnl = round(exit_price - entry, 2)
-                else:
-                    pnl = round(entry - exit_price, 2)
-
-                supabase.table("trade_results").update({
-                    "status": "CLOSED",
-                    "result": result,
-                    "exit_price": exit_price,
-                    "pnl": pnl,
-                    "closed_at": datetime.now(IST).isoformat(),
-                    "updated_at": datetime.now(IST).isoformat(),
-                }).eq("id", trade_id).execute()
-
-                closed_count += 1
-                print(f"✅ trade_results closed: {symbol} | {result} | pnl={pnl}")
-
-            except Exception as e:
-                print(f"⚠️ trade_results single outcome error: {e}")
-
-        print(f"📊 trade_results outcome update completed | closed={closed_count}")
-
-    except Exception as e:
-        print(f"❌ trade_results outcome update failed: {e}")
 
 
 def _symbol_activity_score(symbol, scan_bucket):
@@ -651,6 +508,28 @@ def scan_for_setups():
     print(f"🧠 Rejected by Evolution Filter: {rejected_by_evolution}")
 
     selected_alerts = eligible_setups[:3]
+
+    # ✅ Save selected Titan trades into trade_results for dashboard metrics
+    try:
+        from titan_brain.memory.trade_results_memory import save_trade_result
+
+        for setup in selected_alerts:
+            save_trade_result(
+                symbol=setup.get("symbol"),
+                side=setup.get("side"),
+                entry=setup.get("entry"),
+                sl=setup.get("sl"),
+                tp=setup.get("target"),
+                status="LIVE",
+                result=None,
+                pnl=0,
+                exit_price=None,
+            )
+
+        print(f"✅ trade_results updated: {len(selected_alerts)} selected trades saved")
+
+    except Exception as e:
+        print(f"❌ trade_results save block failed: {e}")
     alerted_symbols = [s.get("symbol") for s in selected_alerts if s.get("symbol")]
 
     if selected_alerts:
@@ -662,9 +541,6 @@ def scan_for_setups():
                 f"RR: {setup.get('rr')} | "
                 f"Elite: {setup.get('elite_probability_score')}"
             )
-
-    # Save alerted setups to Supabase trade_results for dashboard metrics
-    save_alerted_trades_to_trade_results(selected_alerts)
 
     # Journal all eligible setups
     journal_eligible_setups(
@@ -698,12 +574,6 @@ def scan_for_setups():
             print(f"⚠️ Trade execution outcome error: {e}")
     else:
         print("⚠️ Trade execution outcome layer not connected")
-
-    # Update Supabase trade_results TP/SL outcomes for dashboard win/loss/accuracy
-    try:
-        update_trade_results_outcomes()
-    except Exception as e:
-        print(f"⚠️ trade_results outcome updater error: {e}")
 
     # Existing outcome tracker remains active
     try:
