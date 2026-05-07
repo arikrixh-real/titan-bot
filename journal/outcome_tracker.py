@@ -1,6 +1,6 @@
 """
 TITAN - Outcome Tracker Safe Engine
-STEP 9A - DASHBOARD SUPABASE FIX
+STEP 9A - SUPABASE DASHBOARD RESULT FIX
 
 Purpose:
 - Reads OPEN trades from data/journals/active_trades.csv
@@ -10,8 +10,8 @@ Purpose:
 - Writes completed outcomes to:
     data/journals/trade_outcomes.csv
     data/journals/trade_outcomes.jsonl
-- Also writes CLOSED result to Supabase trade_results table so deployed
-  dashboard can update without Git-pushing CSV files every 5 minutes.
+- Saves every CLOSED TP/SL result to Supabase trade_results
+  so deployed dashboard updates without Git memory push.
 
 Safe:
 - Does not send alerts
@@ -21,16 +21,12 @@ Safe:
 
 import csv
 import json
+import os
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from data.live_price import get_live_price
-
-try:
-    from titan_master_brain.supabase_client import supabase
-except Exception:
-    supabase = None
 
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -60,6 +56,48 @@ OUTCOME_FIELDS = [
     "result_reason",
 ]
 
+
+# ---------------------------------------------------------
+# SUPABASE CLIENT
+# ---------------------------------------------------------
+
+def _get_supabase_client():
+    """
+    Robust Supabase connection for GitHub + local.
+    Tries:
+    1. titan_master_brain.supabase_client.supabase
+    2. SUPABASE_URL + SUPABASE_KEY from env/secrets
+    """
+    try:
+        from titan_master_brain.supabase_client import supabase
+        if supabase is not None:
+            return supabase
+    except Exception:
+        pass
+
+    try:
+        from supabase import create_client
+
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_KEY")
+
+        if not url or not key:
+            print("[OutcomeTracker DB] Supabase secrets missing. Dashboard DB result not saved.")
+            return None
+
+        return create_client(url, key)
+
+    except Exception as e:
+        print(f"[OutcomeTracker DB] Supabase client unavailable: {e}")
+        return None
+
+
+SUPABASE = _get_supabase_client()
+
+
+# ---------------------------------------------------------
+# BASIC HELPERS
+# ---------------------------------------------------------
 
 def _now():
     return datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
@@ -119,6 +157,10 @@ def _ensure_files():
         OUTCOMES_JSONL.touch()
 
 
+# ---------------------------------------------------------
+# OUTCOME LOGIC
+# ---------------------------------------------------------
+
 def _check_outcome(row, live_price):
     side = str(row.get("side", "")).upper().strip()
 
@@ -139,21 +181,20 @@ def _check_outcome(row, live_price):
         if price <= target:
             return "TP", target, round(entry - target, 4), "SHORT target hit"
 
-    return "OPEN", price, round(price - entry if side == "LONG" else entry - price, 4), "Still open"
+    pnl = round(price - entry if side == "LONG" else entry - price, 4)
+    return "OPEN", price, pnl, "Still open"
 
 
-def _save_outcome_to_supabase(outcome_row):
+def _save_trade_result_to_supabase(outcome_row):
     """
-    Minimal dashboard fix:
-    save only CLOSED TP/SL outcome to Supabase trade_results table.
+    Saves one CLOSED trade result to Supabase.
 
     Dashboard reads trade_results:
-    result = WIN / LOSS
-
-    TP -> WIN
-    SL -> LOSS
+    - TP becomes WIN
+    - SL becomes LOSS
     """
-    if supabase is None:
+    if SUPABASE is None:
+        print("[OutcomeTracker DB] Supabase not connected. Result not saved to dashboard DB.")
         return False
 
     outcome = str(outcome_row.get("outcome", "")).upper().strip()
@@ -165,6 +206,7 @@ def _save_outcome_to_supabase(outcome_row):
     trade_id = str(outcome_row.get("trade_id", "")).strip()
 
     if not trade_id:
+        print("[OutcomeTracker DB] Missing trade_id. Result not saved.")
         return False
 
     payload = _json_safe({
@@ -188,7 +230,7 @@ def _save_outcome_to_supabase(outcome_row):
 
     try:
         existing = (
-            supabase.table("trade_results")
+            SUPABASE.table("trade_results")
             .select("trade_id")
             .eq("trade_id", trade_id)
             .limit(1)
@@ -196,14 +238,15 @@ def _save_outcome_to_supabase(outcome_row):
         )
 
         if existing.data:
+            print(f"[OutcomeTracker DB] Result already exists: {trade_id}")
             return True
 
-        supabase.table("trade_results").insert(payload).execute()
-        print(f"[OutcomeTracker] Supabase result saved: {trade_id} -> {result}")
+        SUPABASE.table("trade_results").insert(payload).execute()
+        print(f"[OutcomeTracker DB] Supabase result saved: {trade_id} -> {result}")
         return True
 
     except Exception as e:
-        print(f"[OutcomeTracker DB SKIP] trade_results save failed safely: {e}")
+        print(f"[OutcomeTracker DB ERROR] trade_results save failed: {e}")
         return False
 
 
@@ -235,8 +278,12 @@ def _append_outcome(row, outcome, exit_price, pnl_points, reason):
     with open(OUTCOMES_JSONL, "a", encoding="utf-8") as f:
         f.write(json.dumps(outcome_row, ensure_ascii=False) + "\n")
 
-    _save_outcome_to_supabase(outcome_row)
+    _save_trade_result_to_supabase(outcome_row)
 
+
+# ---------------------------------------------------------
+# MAIN TRACKER
+# ---------------------------------------------------------
 
 def track_trade_outcomes():
     _ensure_files()
@@ -253,7 +300,6 @@ def track_trade_outcomes():
     checked = 0
     closed = 0
     still_open = 0
-
     updated_rows = []
 
     for row in rows:
