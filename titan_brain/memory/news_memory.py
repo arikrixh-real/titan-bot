@@ -16,7 +16,7 @@ def save_news_memory(
             title = summary[:120]
 
         if not title:
-            print("⚠️ News skipped: missing title")
+            print("⚠️ Missing title")
             return False
 
         supabase = get_supabase()
@@ -28,7 +28,7 @@ def save_news_memory(
             "source": source,
             "summary": summary,
             "sentiment": sentiment,
-            "impact_score": impact_score or 0,
+            "impact_score": impact_score,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -37,9 +37,9 @@ def save_news_memory(
             on_conflict="url"
         ).execute()
 
-        print(f"✅ News memory saved: {symbol} | {title[:50]}")
+        print(f"✅ News saved: {title[:50]}")
         return True
 
     except Exception as e:
-        print(f"❌ News memory save failed: {e}")
+        print(f"❌ News save failed: {e}")
         return False
