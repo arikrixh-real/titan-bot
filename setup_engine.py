@@ -33,6 +33,8 @@ from scanners.volume_scanner import volume_anomaly_score
 from scanners.strength_scanner import price_strength_score
 from scanners.compression_scanner import compression_score
 
+print("🚨 NEW TRADE_RESULTS SETUP_ENGINE ACTIVE 🚨")
+
 from engines.score_engine import final_signal_score
 from engines.trade_levels import calculate_trade_levels
 from engines.risk_engine import calculate_rr
