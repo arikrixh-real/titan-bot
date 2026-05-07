@@ -1,21 +1,13 @@
 """
 TITAN MASTER CONTROLLER
-STEP 9B FINAL
-
-Flow:
-Input Aggregator
-→ Context Builder
-→ Setup Reasoning
-→ Final Decision Engine
-→ Alert / Execution Filter
-→ Daily Alert Manager
-→ Execution Engine
-→ Telegram Sender
-→ Mark Alerts Sent
-→ Outcome Tracker
-
-This is the full connected Master Brain cycle.
+STEP 9B FINAL - TRADE_RESULTS FIXED
 """
+
+import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from supabase import create_client
 
 from titan_master_brain.input_aggregator import build_master_input
 from titan_master_brain.context_builder import build_context
@@ -33,6 +25,138 @@ from titan_master_brain.execution_engine import (
     send_telegram_signals,
 )
 from journal.outcome_tracker import track_trade_outcomes
+
+
+IST = ZoneInfo("Asia/Kolkata")
+
+
+def _safe_float(value, default=None):
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except Exception:
+        return default
+
+
+def _deep_get(data, keys, default=None):
+    if not isinstance(data, dict):
+        return default
+
+    for key in keys:
+        if key in data and data.get(key) is not None:
+            return data.get(key)
+
+    for nested_key in ["setup", "trade", "signal", "packet", "data", "raw", "meta"]:
+        nested = data.get(nested_key)
+        if isinstance(nested, dict):
+            for key in keys:
+                if key in nested and nested.get(key) is not None:
+                    return nested.get(key)
+
+    return default
+
+
+def _get_supabase():
+    try:
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+        if not url or not key:
+            print("[TradeResults] Supabase env missing. Skipping trade_results save.")
+            return None
+
+        return create_client(url, key)
+
+    except Exception as e:
+        print(f"[TradeResults] Supabase connection failed: {e}")
+        return None
+
+
+def save_sent_packets_to_trade_results(sent_packets, context=None):
+    """
+    Saves only Telegram-sent trades into trade_results.
+    This is the real active path because master_controller sends Telegram.
+    """
+    if not sent_packets:
+        print("[TradeResults] No sent packets to save.")
+        return 0
+
+    supabase = _get_supabase()
+
+    if supabase is None:
+        return 0
+
+    saved_count = 0
+    now_iso = datetime.now(IST).isoformat()
+
+    market_status = None
+    if isinstance(context, dict):
+        market_status = (
+            context.get("market_type")
+            or context.get("market_status")
+            or context.get("setup_environment")
+            or context.get("trading_mode")
+        )
+
+    for packet in sent_packets:
+        try:
+            if not isinstance(packet, dict):
+                print(f"[TradeResults] Skipped non-dict packet: {packet}")
+                continue
+
+            symbol = _deep_get(packet, ["symbol", "stock", "ticker", "name"])
+            side = _deep_get(packet, ["side", "direction", "trade_side"])
+
+            entry = _safe_float(_deep_get(packet, ["entry", "entry_price", "price"]))
+            sl = _safe_float(_deep_get(packet, ["sl", "stop_loss", "stoploss"]))
+            tp = _safe_float(_deep_get(packet, ["tp", "target", "target_price", "t1"]))
+
+            rr = _safe_float(_deep_get(packet, ["rr", "risk_reward", "actual_rr"]), 0)
+            score = _safe_float(_deep_get(packet, ["score", "final_score", "rank_score"]), 0)
+            reason = _deep_get(packet, ["reason", "reasoning", "message", "note"], "")
+
+            if not symbol or not side or entry is None or sl is None or tp is None:
+                print(f"[TradeResults] Skipped invalid packet: {packet}")
+                continue
+
+            row = {
+                "symbol": str(symbol),
+                "side": str(side),
+                "entry": entry,
+                "sl": sl,
+                "tp": tp,
+                "target_price": tp,
+                "stop_loss": sl,
+                "status": "LIVE",
+                "result": None,
+                "outcome": None,
+                "pnl": 0,
+                "pnl_points": None,
+                "exit_price": None,
+                "close_price": None,
+                "market_status": str(market_status) if market_status is not None else None,
+                "rr": rr,
+                "score": score,
+                "reason": str(reason) if reason is not None else "",
+                "opened_at": now_iso,
+                "created_at": now_iso,
+                "updated_at": now_iso,
+            }
+
+            supabase.table("trade_results").insert(row).execute()
+
+            saved_count += 1
+            print(
+                f"[TradeResults] SAVED REAL TRADE: "
+                f"{symbol} | {side} | entry={entry} | sl={sl} | tp={tp}"
+            )
+
+        except Exception as e:
+            print(f"[TradeResults ERROR] Save failed for packet {packet}: {e}")
+
+    print(f"[TradeResults] Saved {saved_count}/{len(sent_packets)} sent trades.")
+    return saved_count
 
 
 def _print_setup_reasoning(evaluated_setups):
@@ -59,10 +183,7 @@ def _print_setup_reasoning(evaluated_setups):
 def run_master_brain(send_telegram=True, run_outcome_tracker=True):
     print("[MasterBrain] Step 9B Final Master Controller Running...")
 
-    # STEP 1 — Build full master input packet safely
     master_input = build_master_input()
-
-    # STEP 2 — Build context
     context = build_context(master_input)
 
     print("[MasterBrain] Context Built")
@@ -70,39 +191,34 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
     print("[MasterBrain] Trading Mode:", context.get("trading_mode"))
     print("[MasterBrain] Setup Environment:", context.get("setup_environment"))
 
-    # STEP 3 — Read setups
     setups_packet = master_input.get("setups", {})
     setups = setups_packet.get("data", []) if isinstance(setups_packet, dict) else []
 
     print("[MasterBrain] Setups:", len(setups))
 
-    # STEP 4 — Setup reasoning
     evaluated_setups = evaluate_setups(setups, context)
     _print_setup_reasoning(evaluated_setups)
 
-    # STEP 5 — Final decision layer
     final_decisions = make_final_decisions(evaluated_setups, context)
     print_final_decisions(final_decisions)
 
-    # STEP 6 — Alert / execution filter
     alert_filter_result = filter_alert_candidates(final_decisions)
     print_alert_filter_result(alert_filter_result)
 
-    # STEP 7 — Daily 3 alert manager
     daily_alert_result = select_daily_alerts(alert_filter_result)
     print_daily_alert_selection(daily_alert_result)
 
-    # STEP 8 — Prepare Telegram-ready packets
     execution_result = prepare_execution_packets(daily_alert_result)
     print_execution_packets(execution_result)
 
-    # STEP 8C — Telegram send + mark sent
     sent_packets = []
 
     if send_telegram:
         sent_packets = send_telegram_signals(execution_result)
 
         if sent_packets:
+            save_sent_packets_to_trade_results(sent_packets, context=context)
+
             mark_alerts_sent(sent_packets)
             print(f"[DailyAlert] Marked {len(sent_packets)} alert(s) as sent.")
         else:
@@ -110,7 +226,6 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
     else:
         print("[Telegram] send_telegram=False, dry run only. Nothing sent.")
 
-    # STEP 9 — Outcome tracking
     outcome_result = None
 
     if run_outcome_tracker:
@@ -136,3 +251,7 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
         "sent_packets": sent_packets,
         "outcome_result": outcome_result,
     }
+
+
+if __name__ == "__main__":
+    run_master_brain()
