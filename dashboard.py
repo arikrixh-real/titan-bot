@@ -394,6 +394,40 @@ def get_supabase_master_activity_time():
     return max(times) if times else None
 
 
+def get_news_memory_status():
+    """
+    Reads news_memory from Supabase.
+    ACTIVE = latest news updated recently.
+    STALE = news exists but old.
+    WAITING = no news yet.
+    """
+    info = {
+        "count": table_count("news_memory"),
+        "status": "WAITING",
+        "latest_time": None,
+        "age": "No news yet",
+    }
+
+    row = latest_row("news_memory")
+    latest_time = row_time(row)
+
+    info["latest_time"] = latest_time
+    info["age"] = age_text_from_dt(latest_time)
+
+    if latest_time:
+        age_seconds = (datetime.now(IST) - latest_time).total_seconds()
+        if age_seconds <= 6 * 3600:
+            info["status"] = "ACTIVE"
+        elif age_seconds <= 48 * 3600:
+            info["status"] = "DELAYED"
+        else:
+            info["status"] = "STALE"
+    elif info["count"] > 0:
+        info["status"] = "ACTIVE"
+
+    return info
+
+
 def get_master_brain_status(github_time=None, scan_time=None, outcome_time=None):
     """
     Shows whether Master Brain / continuous evolution cycle is active.
@@ -656,7 +690,7 @@ def status_html(status):
 
     if status in ["ONLINE", "CONNECTED", "SUCCESS", "RUNNING", "ACTIVE", "LEARNING", "OBSERVING"]:
         css = "pill-green"
-    elif status in ["DELAYED", "UNKNOWN", "WAITING", "NOT CONFIGURED", "BUILDING"]:
+    elif status in ["DELAYED", "UNKNOWN", "WAITING", "NOT CONFIGURED", "BUILDING", "STALE"]:
         css = "pill-yellow"
     else:
         css = "pill-red"
@@ -665,10 +699,27 @@ def status_html(status):
 
 
 # =========================================================
-# ACTIVE TRADES CSV HELPER
+# LIVE TRADES HELPERS
 # =========================================================
 
+TEST_SYMBOLS = {"TEST", "TESTPY"}
+
+
+def _is_test_symbol(symbol):
+    return str(symbol or "").strip().upper() in TEST_SYMBOLS
+
+
 def get_live_trades_count():
+    """
+    FINAL FIX:
+    Dashboard live trades must come from Supabase trade_results,
+    not active_trades.csv. CSV is only fallback for local testing.
+    """
+    supabase_count = get_supabase_live_trades_count()
+
+    if supabase_count > 0:
+        return supabase_count
+
     possible_paths = [
         "data/journals/active_trades.csv",
         "active_trades.csv",
@@ -687,6 +738,9 @@ def get_live_trades_count():
 
             if df.empty:
                 return 0
+
+            if "symbol" in df.columns:
+                df = df[~df["symbol"].astype(str).str.upper().isin(TEST_SYMBOLS)]
 
             status_columns = ["status", "trade_status", "outcome", "state"]
 
@@ -711,29 +765,39 @@ def get_live_trades_count():
 
 def get_supabase_live_trades_count():
     """
-    Reads live/open trades directly from Supabase trades table.
-    This fixes Streamlit dashboard freezing when active_trades.csv is not available on Streamlit Cloud.
+    Reads live/open trades directly from Supabase trade_results.
+    Excludes manual TEST rows.
     """
     if supabase is None:
         return 0
 
     try:
-        result = supabase.table("trades").select("*").limit(5000).execute()
+        result = (
+            supabase.table("trade_results")
+            .select("symbol,status,outcome,result")
+            .order("created_at", desc=True)
+            .limit(5000)
+            .execute()
+        )
+
         rows = result.data or []
         if not rows:
             return 0
 
         live_count = 0
+
         for row in rows:
+            if _is_test_symbol(row.get("symbol")):
+                continue
+
             value = (
                 row.get("status")
-                or row.get("trade_status")
-                or row.get("state")
                 or row.get("outcome")
                 or row.get("result")
             )
-            normalized = normalize_outcome(value)
+
             raw = str(value or "").strip().upper()
+            normalized = normalize_outcome(raw)
 
             if normalized == "OPEN" or raw in ["ACTIVE", "LIVE", "RUNNING", "OPEN", "PENDING"]:
                 live_count += 1
@@ -747,14 +811,11 @@ def get_supabase_live_trades_count():
 def get_trade_results_stats():
     """
     FINAL FIX:
-    Supabase trade_results contains many NO_TRADE rows.
-    Those are scan/check rows, NOT real completed trades.
-
-    This function now:
-    - ignores NO_TRADE / SKIP / WAITING rows completely
-    - counts only real closed results: WIN/TP and LOSS/SL
-    - groups by trade_id and keeps only the latest row per trade_id
-    - avoids duplicate 5-minute outcome-check rows
+    Reads Supabase trade_results as the source of truth.
+    - LIVE/OPEN/ACTIVE = open learning trades
+    - WIN/TP = wins
+    - LOSS/SL = losses
+    - excludes manual TEST / TESTPY rows
     """
     stats = {
         "wins": 0,
@@ -762,7 +823,7 @@ def get_trade_results_stats():
         "closed_total": 0,
         "accuracy": 0,
         "open_total": 0,
-        "source": "SUPABASE_TRADE_RESULTS_LATEST_ONLY",
+        "source": "SUPABASE_TRADE_RESULTS",
         "latest_outcome_time": None,
     }
 
@@ -777,72 +838,35 @@ def get_trade_results_stats():
             .limit(5000)
             .execute()
         )
-        rows = result.data or []
 
-        latest_by_trade = {}
+        rows = result.data or []
         latest_time = None
 
         for row in rows:
+            if _is_test_symbol(row.get("symbol")):
+                continue
+
             raw_value = (
-                row.get("result")
-                or row.get("outcome")
+                row.get("outcome")
+                or row.get("result")
                 or row.get("status")
                 or row.get("trade_result")
             )
-            raw_text = str(raw_value or "").strip().upper()
+            normalized = normalize_outcome(raw_value)
 
-            # IMPORTANT: NO_TRADE is not win/loss/open trade.
-            # It means Titan scanned/checked but did not create a trade.
-            if raw_text in [
-                "", "NONE", "NULL", "NAN",
-                "NO_TRADE", "NO TRADE", "NOTRADE",
-                "SKIP", "SKIPPED", "REJECTED", "FILTERED",
-                "WAIT", "WAITING", "WATCH", "WATCHLIST",
-            ]:
-                continue
-
-            normalized = normalize_outcome(raw_text)
-
-            # Count only meaningful trade states
-            if normalized not in ["WIN", "LOSS", "OPEN"]:
-                continue
-
-            trade_key = (
-                row.get("trade_id")
-                or row.get("setup_id")
-                or row.get("signal_id")
-                or row.get("symbol")
-                or row.get("id")
-            )
-
-            if not trade_key:
-                continue
-
-            row_dt = None
-            for time_col in ["closed_at", "updated_at", "created_at", "timestamp"]:
-                if row.get(time_col):
-                    row_dt = parse_dt(row.get(time_col))
-                    break
-
-            if row_dt and (latest_time is None or row_dt > latest_time):
-                latest_time = row_dt
-
-            old_row = latest_by_trade.get(str(trade_key))
-            if old_row is None:
-                latest_by_trade[str(trade_key)] = {"row": row, "status": normalized, "time": row_dt}
-            else:
-                old_time = old_row.get("time")
-                if row_dt and (old_time is None or row_dt > old_time):
-                    latest_by_trade[str(trade_key)] = {"row": row, "status": normalized, "time": row_dt}
-
-        for item in latest_by_trade.values():
-            normalized = item["status"]
             if normalized == "WIN":
                 stats["wins"] += 1
             elif normalized == "LOSS":
                 stats["losses"] += 1
             elif normalized == "OPEN":
                 stats["open_total"] += 1
+
+            for time_col in ["closed_at", "updated_at", "created_at", "timestamp", "opened_at"]:
+                if row.get(time_col):
+                    row_dt = parse_dt(row.get(time_col))
+                    if row_dt and (latest_time is None or row_dt > latest_time):
+                        latest_time = row_dt
+                    break
 
         stats["closed_total"] = stats["wins"] + stats["losses"]
 
@@ -1058,8 +1082,9 @@ else:
 
 
 # Counts
-total_trade_rows = count_any_table(["trades"])
-news_gathered = count_any_table(["news_memory"])
+total_trade_rows = count_any_table(["trade_results", "trades"])
+news_memory_data = get_news_memory_status()
+news_gathered = news_memory_data["count"]
 
 scan_cycles = count_any_table(["scans"])
 scan_symbols_count = count_any_table(["scan_symbols"])
@@ -1075,7 +1100,7 @@ stocks_passed = count_any_table(["setups"])
 if stocks_passed == 0:
     stocks_passed = telegram_alerts
 
-live_trades_count = max(get_supabase_live_trades_count(), get_live_trades_count())
+live_trades_count = get_live_trades_count()
 
 # ✅ FIXED performance stats:
 # Priority 1: Supabase trade_results because Git memory push is disabled
@@ -1096,15 +1121,15 @@ else:
         "losses": 0,
         "closed_total": 0,
         "accuracy": 0,
-        "open_total": local_trade_stats.get("open_total", 0),
-        "source": "NO_CLOSED_RESULTS",
-        "latest_outcome_time": None,
+        "open_total": max(supabase_trade_stats.get("open_total", 0), local_trade_stats.get("open_total", 0)),
+        "source": "SUPABASE_TRADE_RESULTS_OPEN_ONLY",
+        "latest_outcome_time": supabase_trade_stats.get("latest_outcome_time"),
     }
 
 wins = trade_result_stats["wins"]
 losses = trade_result_stats["losses"]
 closed_trades = trade_result_stats["closed_total"]
-open_outcome_trades = max(trade_result_stats.get("open_total", 0), live_trades_count)
+open_outcome_trades = max(supabase_trade_stats.get("open_total", 0), trade_result_stats.get("open_total", 0), live_trades_count)
 
 # Dashboard should show CLOSED trades in performance
 total_trades = closed_trades
@@ -1142,7 +1167,7 @@ engine_progress = {
     "Execution Engine": 85,
 }
 
-news_status = "ACTIVE" if news_gathered > 0 else "WAITING"
+news_status = news_memory_data["status"]
 telegram_status = "ACTIVE" if telegram_alerts > 0 else "WAITING"
 learning_status = master_brain_data["evolution_status"]
 evolution_status = master_brain_data["evolution_status"]
@@ -1337,7 +1362,7 @@ st.markdown("<div class='section-title'>📡 Market Activity</div>", unsafe_allo
 m1, m2, m3, m4 = st.columns(4)
 
 with m1:
-    metric_card("News Gathered", f"{news_gathered:,}", "News memory collected")
+    metric_card("News Gathered", f"{news_gathered:,}", f"Latest: {news_memory_data['age']}")
 
 with m2:
     metric_card("Stocks Scanned", f"{stocks_scanned:,}", "Scan cycles × 50 stocks")
@@ -1390,7 +1415,7 @@ with r1:
     small_status("Master Brain", master_brain_data["master_status"], f"Last activity: {master_brain_data['last_activity_age']}")
 
 with r2:
-    small_status("News Engine", news_status, f"News gathered: {news_gathered:,}")
+    small_status("News Engine", news_status, f"News: {news_gathered:,} · Latest: {news_memory_data['age']}")
     small_status("Telegram Alert Engine", telegram_status, f"Alerts sent: {telegram_alerts:,}")
     small_status("Learning / Evolution", learning_status, master_brain_data["evolution_sub"])
     small_status("Outcome Tracker", "ACTIVE" if open_outcome_trades > 0 or closed_trades > 0 else "WAITING", f"Open: {open_outcome_trades}, Closed: {closed_trades}")
@@ -1441,7 +1466,7 @@ if scan_health:
         metric_card("Alerts This Scan", f"{latest_health_alerts:,}", "Real alerts only")
 
     with h3:
-        metric_card("Live Trades Count", f"{live_trades_count:,}", "From active_trades.csv")
+        metric_card("Live Trades Count", f"{live_trades_count:,}", "From Supabase trade_results")
 
 else:
     st.info("No scan breakdown data yet. Wait for the next GitHub 5-minute scan after scan health logging is pushed.")
