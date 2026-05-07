@@ -380,6 +380,20 @@ def get_local_trade_performance_stats():
     return stats
 
 
+
+def get_supabase_master_activity_time():
+    """
+    Reads latest activity from real TITAN Supabase memory tables.
+    """
+    times = []
+    for table in ["learning_memory", "market_conditions", "news_memory", "scan_health_logs", "scans", "setups", "strategy_weights", "trade_results", "trades"]:
+        row = latest_row(table)
+        dt = row_time(row)
+        if dt:
+            times.append(dt)
+    return max(times) if times else None
+
+
 def get_master_brain_status(github_time=None, scan_time=None, outcome_time=None):
     """
     Shows whether Master Brain / continuous evolution cycle is active.
@@ -431,7 +445,7 @@ def get_master_brain_status(github_time=None, scan_time=None, outcome_time=None)
 
     # Git memory push is disabled, so local file timestamps may be old on Streamlit.
     # Use GitHub/scan/outcome activity as Master Brain activity source.
-    for external_dt in [github_time, scan_time, outcome_time, last_learning_time]:
+    for external_dt in [github_time, scan_time, outcome_time, last_learning_time, get_supabase_master_activity_time()]:
         if external_dt and (latest_activity_time is None or external_dt > latest_activity_time):
             latest_activity_time = external_dt
 
@@ -489,21 +503,34 @@ def table_count(table_name):
 
 
 def latest_row(table_name, order_column="created_at"):
+    """
+    Safely fetch latest row. Some TITAN tables may use timestamp/updated_at instead of created_at.
+    """
+    if supabase is None:
+        return None
+
+    for col in [order_column, "created_at", "updated_at", "timestamp", "scan_time", "time", "datetime"]:
+        try:
+            result = (
+                supabase.table(table_name)
+                .select("*")
+                .order(col, desc=True)
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                return result.data[0]
+        except Exception:
+            continue
+
     try:
-        if supabase is None:
-            return None
-        result = (
-            supabase.table(table_name)
-            .select("*")
-            .order(order_column, desc=True)
-            .limit(1)
-            .execute()
-        )
+        result = supabase.table(table_name).select("*").limit(1).execute()
         if result.data:
             return result.data[0]
-        return None
     except Exception:
-        return None
+        pass
+
+    return None
 
 
 def count_any_table(table_names):
@@ -679,6 +706,42 @@ def get_live_trades_count():
             continue
 
     return 0
+
+
+
+def get_supabase_live_trades_count():
+    """
+    Reads live/open trades directly from Supabase trades table.
+    This fixes Streamlit dashboard freezing when active_trades.csv is not available on Streamlit Cloud.
+    """
+    if supabase is None:
+        return 0
+
+    try:
+        result = supabase.table("trades").select("*").limit(5000).execute()
+        rows = result.data or []
+        if not rows:
+            return 0
+
+        live_count = 0
+        for row in rows:
+            value = (
+                row.get("status")
+                or row.get("trade_status")
+                or row.get("state")
+                or row.get("outcome")
+                or row.get("result")
+            )
+            normalized = normalize_outcome(value)
+            raw = str(value or "").strip().upper()
+
+            if normalized == "OPEN" or raw in ["ACTIVE", "LIVE", "RUNNING", "OPEN", "PENDING"]:
+                live_count += 1
+
+        return live_count
+
+    except Exception:
+        return 0
 
 
 def get_trade_results_stats():
@@ -919,7 +982,7 @@ def small_status(name, status, sub=""):
 # LOAD TITAN DATA
 # =========================================================
 
-latest_scan = latest_any_table(["scan_journal", "scans"])
+latest_scan = latest_any_table(["scans", "scan_symbols", "scan_health_logs"])
 scan_health = get_latest_scan_health()
 
 latest_scan_time = row_time(latest_scan)
@@ -945,20 +1008,24 @@ else:
 
 
 # Counts
-total_trade_rows = count_any_table(["trade_journal", "trades"])
-news_gathered = count_any_table(["news_memory", "news", "news_journal"])
+total_trade_rows = count_any_table(["trades"])
+news_gathered = count_any_table(["news_memory"])
 
-scan_cycles = count_any_table(["scan_journal", "scans"])
-stocks_scanned = scan_cycles * SCAN_BATCH_SIZE
+scan_cycles = count_any_table(["scans"])
+scan_symbols_count = count_any_table(["scan_symbols"])
+if scan_symbols_count > 0:
+    stocks_scanned = scan_symbols_count
+else:
+    stocks_scanned = scan_cycles * SCAN_BATCH_SIZE
 
-telegram_alerts = count_any_table(["telegram_alerts", "alerts", "signal_alerts"])
+telegram_alerts = count_any_table(["setups"])
 
-stocks_passed = count_any_table(["passed_stocks", "passed_scans", "signals"])
+stocks_passed = count_any_table(["setups"])
 
 if stocks_passed == 0:
     stocks_passed = telegram_alerts
 
-live_trades_count = get_live_trades_count()
+live_trades_count = max(get_supabase_live_trades_count(), get_live_trades_count())
 
 # ✅ FIXED performance stats:
 # Priority 1: Supabase trade_results because Git memory push is disabled
