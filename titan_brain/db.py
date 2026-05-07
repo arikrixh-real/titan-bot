@@ -1,18 +1,37 @@
 from titan_brain.supabase_client import supabase
 from datetime import datetime
+import json
+
+
+def _safe_json(data):
+    """
+    Converts non-serializable values safely for Supabase.
+    Prevents:
+    Object of type bool is not JSON serializable
+    """
+
+    try:
+        return json.loads(json.dumps(data, default=str))
+    except Exception:
+        return {}
 
 
 def insert_scan(scan_data):
     try:
-        response = supabase.table("scans").insert({
+        payload = _safe_json({
             "scan_time": datetime.now().isoformat(),
-            "total_symbols": scan_data["total_symbols"],
-            "scanned_count": scan_data["scanned_count"],
-            "setup_count": scan_data["setup_count"],
-            "errors": scan_data["errors"]
-        }).execute()
+            "total_symbols": scan_data.get("total_symbols", 0),
+            "scanned_count": scan_data.get("scanned_count", 0),
+            "setup_count": scan_data.get("setup_count", 0),
+            "errors": scan_data.get("errors", 0)
+        })
 
-        return response.data[0]["id"]
+        response = supabase.table("scans").insert(payload).execute()
+
+        if response.data:
+            return response.data[0]["id"]
+
+        return None
 
     except Exception as e:
         print(f"[DB ERROR - SCAN] {e}")
@@ -21,19 +40,21 @@ def insert_scan(scan_data):
 
 def insert_scan_symbol(scan_id, symbol_data):
     try:
-        supabase.table("scan_symbols").insert({
+        payload = _safe_json({
             "scan_id": scan_id,
-            "symbol": symbol_data["symbol"],
-            "price": symbol_data["price"],
-            "trend": symbol_data["trend"],
-            "volume_score": symbol_data["volume_score"],
-            "strength_score": symbol_data["strength_score"],
-            "compression_score": symbol_data["compression_score"],
-            "final_score": symbol_data["final_score"],
-            "passed": symbol_data["passed"],
+            "symbol": symbol_data.get("symbol"),
+            "price": symbol_data.get("price"),
+            "trend": symbol_data.get("trend"),
+            "volume_score": symbol_data.get("volume_score"),
+            "strength_score": symbol_data.get("strength_score"),
+            "compression_score": symbol_data.get("compression_score"),
+            "final_score": symbol_data.get("final_score"),
+            "passed": bool(symbol_data.get("passed", False)),
             "reason": symbol_data.get("reason"),
-            "raw_data": symbol_data
-        }).execute()
+            "raw_data": _safe_json(symbol_data)
+        })
+
+        supabase.table("scan_symbols").insert(payload).execute()
 
     except Exception as e:
         print(f"[DB ERROR - SYMBOL] {e}")
@@ -41,7 +62,9 @@ def insert_scan_symbol(scan_id, symbol_data):
 
 def insert_setup(setup_data):
     try:
-        supabase.table("setups").insert(setup_data).execute()
+        payload = _safe_json(setup_data)
+
+        supabase.table("setups").insert(payload).execute()
 
     except Exception as e:
         print(f"[DB ERROR - SETUP] {e}")
@@ -49,7 +72,26 @@ def insert_setup(setup_data):
 
 def insert_trade(trade_data):
     try:
-        supabase.table("trades").insert(trade_data).execute()
+        trade_data = trade_data or {}
+
+        trade_id = trade_data.get("trade_id")
+
+        # Prevent trade_id=True issue
+        if isinstance(trade_id, bool) or not trade_id:
+            symbol = str(trade_data.get("symbol", "UNKNOWN"))
+            side = str(trade_data.get("side", "NA"))
+            entry = str(trade_data.get("entry", "0"))
+
+            trade_id = (
+                f"{symbol}_{side}_{entry}_"
+                f"{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            )
+
+            trade_data["trade_id"] = trade_id
+
+        payload = _safe_json(trade_data)
+
+        supabase.table("trades").insert(payload).execute()
 
     except Exception as e:
         print(f"[DB ERROR - TRADE] {e}")
@@ -57,7 +99,31 @@ def insert_trade(trade_data):
 
 def insert_trade_result(result_data):
     try:
-        supabase.table("trade_results").insert(result_data).execute()
+        result_data = result_data or {}
+
+        # Prevent missing column issues
+        allowed_fields = {
+            "trade_id",
+            "symbol",
+            "side",
+            "entry",
+            "sl",
+            "exit_price",
+            "result",
+            "pnl_points",
+            "closed_at",
+            "close_reason",
+            "market_status"
+        }
+
+        cleaned = {
+            k: v for k, v in result_data.items()
+            if k in allowed_fields
+        }
+
+        payload = _safe_json(cleaned)
+
+        supabase.table("trade_results").insert(payload).execute()
 
     except Exception as e:
         print(f"[DB ERROR - TRADE RESULT] {e}")
@@ -65,7 +131,9 @@ def insert_trade_result(result_data):
 
 def insert_learning(learning_data):
     try:
-        supabase.table("learning_memory").insert(learning_data).execute()
+        payload = _safe_json(learning_data)
+
+        supabase.table("learning_memory").insert(payload).execute()
 
     except Exception as e:
         print(f"[DB ERROR - LEARNING] {e}")
@@ -73,7 +141,9 @@ def insert_learning(learning_data):
 
 def insert_strategy_weights(weight_data):
     try:
-        supabase.table("strategy_weights").insert(weight_data).execute()
+        payload = _safe_json(weight_data)
+
+        supabase.table("strategy_weights").insert(payload).execute()
 
     except Exception as e:
         print(f"[DB ERROR - STRATEGY WEIGHTS] {e}")
