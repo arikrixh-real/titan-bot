@@ -33,6 +33,11 @@ from titan_master_brain.execution_engine import (
 )
 from journal.outcome_tracker import track_trade_outcomes
 
+try:
+    from intelligence.news_engine import run_news_engine
+except Exception:
+    run_news_engine = None
+
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -308,6 +313,27 @@ def _print_setup_reasoning(evaluated_setups):
         print(f"{symbol} → {decision} | {confidence} | {reasoning_text}")
 
 
+
+def run_news_engine_safely():
+    """
+    Runs TITAN News Engine every GitHub cycle.
+    This is placed in master_controller because GitHub active path runs master_controller,
+    not setup_engine.
+    """
+    if run_news_engine is None:
+        print("[NewsEngine] Not connected / import failed.")
+        return []
+
+    try:
+        print("[NewsEngine] Running news intelligence update...")
+        news_items = run_news_engine()
+        print(f"[NewsEngine] Completed. Items collected: {len(news_items or [])}")
+        return news_items or []
+    except Exception as e:
+        print(f"[NewsEngine ERROR] {e}")
+        return []
+
+
 # =========================================================
 # MAIN MASTER BRAIN
 # =========================================================
@@ -317,6 +343,9 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
 
     # Always clean stale LIVE trades first after market close
     auto_close_live_trades_after_market_close()
+
+    # Run news every GitHub cycle from active master_controller path
+    run_news_engine_safely()
 
     master_input = build_master_input()
     context = build_context(master_input)
