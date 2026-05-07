@@ -323,30 +323,45 @@ def log_trade(trade_data, scan_id=None, alert_sent=False, market_status=""):
     """
     Compatibility wrapper for engines that expect log_trade().
 
-    It safely logs a single trade/setup using the existing
-    journal_eligible_setups() function.
+    IMPORTANT:
+    This function returns a generated trade_id string, not True/False.
+    Returning True was causing Supabase to receive trade_id=true,
+    which created duplicate key errors.
 
     Returns:
-        True  -> logged successfully / no crash
-        False -> failed safely
+        str -> generated trade_id when trade is valid/logged
+        ""  -> failed safely / invalid trade
     """
 
     try:
         if trade_data is None:
-            return False
+            return ""
 
         if not isinstance(trade_data, dict):
             trade_data = {"reason": str(trade_data)}
 
-        journal_eligible_setups(
-            eligible_setups=[trade_data],
+        if scan_id is None:
+            scan_id = datetime.now(IST).strftime("%Y%m%d_%H%M%S")
+
+        journal_row, active_row = _build_rows(
+            setup=trade_data,
             scan_id=scan_id,
-            alerted_symbols=[],
+            alert_sent=alert_sent,
             market_status=market_status,
         )
 
-        return True
+        if not _valid_trade(active_row):
+            return ""
+
+        journal_eligible_setups(
+            eligible_setups=[trade_data],
+            scan_id=scan_id,
+            alerted_symbols=[active_row["symbol"]] if alert_sent else [],
+            market_status=market_status,
+        )
+
+        return active_row["trade_id"]
 
     except Exception as e:
         print(f"[TradeJournal] log_trade compatibility wrapper failed: {e}")
-        return False
+        return ""
