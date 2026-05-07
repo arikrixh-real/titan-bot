@@ -1,6 +1,6 @@
 """
 TITAN - Outcome Tracker Safe Engine
-STEP 9A
+STEP 9A - DASHBOARD SUPABASE FIX
 
 Purpose:
 - Reads OPEN trades from data/journals/active_trades.csv
@@ -10,6 +10,8 @@ Purpose:
 - Writes completed outcomes to:
     data/journals/trade_outcomes.csv
     data/journals/trade_outcomes.jsonl
+- Also writes CLOSED result to Supabase trade_results table so deployed
+  dashboard can update without Git-pushing CSV files every 5 minutes.
 
 Safe:
 - Does not send alerts
@@ -24,6 +26,12 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from data.live_price import get_live_price
+
+try:
+    from titan_master_brain.supabase_client import supabase
+except Exception:
+    supabase = None
+
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -64,6 +72,30 @@ def _safe_float(value, default=0.0):
         return float(value)
     except Exception:
         return default
+
+
+def _safe_bool(value):
+    text = str(value).strip().lower()
+    return text in {"true", "1", "yes", "y"}
+
+
+def _json_safe(value):
+    try:
+        if hasattr(value, "item"):
+            value = value.item()
+    except Exception:
+        pass
+
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(v) for v in value]
+
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+
+    return str(value)
 
 
 def _ensure_files():
@@ -110,6 +142,71 @@ def _check_outcome(row, live_price):
     return "OPEN", price, round(price - entry if side == "LONG" else entry - price, 4), "Still open"
 
 
+def _save_outcome_to_supabase(outcome_row):
+    """
+    Minimal dashboard fix:
+    save only CLOSED TP/SL outcome to Supabase trade_results table.
+
+    Dashboard reads trade_results:
+    result = WIN / LOSS
+
+    TP -> WIN
+    SL -> LOSS
+    """
+    if supabase is None:
+        return False
+
+    outcome = str(outcome_row.get("outcome", "")).upper().strip()
+
+    if outcome not in {"TP", "SL"}:
+        return False
+
+    result = "WIN" if outcome == "TP" else "LOSS"
+    trade_id = str(outcome_row.get("trade_id", "")).strip()
+
+    if not trade_id:
+        return False
+
+    payload = _json_safe({
+        "trade_id": trade_id,
+        "symbol": outcome_row.get("symbol", ""),
+        "side": outcome_row.get("side", ""),
+        "entry": _safe_float(outcome_row.get("entry")),
+        "exit_price": _safe_float(outcome_row.get("exit_price")),
+        "stop_loss": _safe_float(outcome_row.get("sl")),
+        "target": _safe_float(outcome_row.get("target")),
+        "rr": _safe_float(outcome_row.get("rr")),
+        "result": result,
+        "outcome": outcome,
+        "pnl_points": _safe_float(outcome_row.get("pnl_points")),
+        "closed_at": outcome_row.get("closed_at"),
+        "opened_at": outcome_row.get("opened_at"),
+        "reason": outcome_row.get("result_reason", ""),
+        "alert_sent": _safe_bool(outcome_row.get("alert_sent")),
+        "market_status": str(outcome_row.get("market_status", "")),
+    })
+
+    try:
+        existing = (
+            supabase.table("trade_results")
+            .select("trade_id")
+            .eq("trade_id", trade_id)
+            .limit(1)
+            .execute()
+        )
+
+        if existing.data:
+            return True
+
+        supabase.table("trade_results").insert(payload).execute()
+        print(f"[OutcomeTracker] Supabase result saved: {trade_id} -> {result}")
+        return True
+
+    except Exception as e:
+        print(f"[OutcomeTracker DB SKIP] trade_results save failed safely: {e}")
+        return False
+
+
 def _append_outcome(row, outcome, exit_price, pnl_points, reason):
     outcome_row = {
         "closed_at": _now(),
@@ -137,6 +234,8 @@ def _append_outcome(row, outcome, exit_price, pnl_points, reason):
 
     with open(OUTCOMES_JSONL, "a", encoding="utf-8") as f:
         f.write(json.dumps(outcome_row, ensure_ascii=False) + "\n")
+
+    _save_outcome_to_supabase(outcome_row)
 
 
 def track_trade_outcomes():
@@ -187,7 +286,6 @@ def track_trade_outcomes():
                 print(f"[OutcomeTracker] {symbol} closed: {outcome} @ {exit_price}")
             else:
                 still_open += 1
-                print(f"[OutcomeTracker] {symbol} still OPEN @ {exit_price}")
 
         except Exception as e:
             row["last_checked_at"] = _now()
@@ -197,7 +295,6 @@ def track_trade_outcomes():
 
         updated_rows.append(row)
 
-    # Preserve existing fields and add any missing required fields
     default_fields = [
         "trade_id", "opened_at", "scan_id", "symbol", "side", "entry", "sl",
         "target", "rr", "score", "rank_score", "alert_sent", "market_status",
