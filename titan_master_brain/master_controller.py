@@ -341,11 +341,41 @@ def run_news_engine_safely():
 def run_master_brain(send_telegram=True, run_outcome_tracker=True):
     print("[MasterBrain] Step 9B Final Master Controller Running...")
 
-    # Always clean stale LIVE trades first after market close
+    trade_window_open = _is_market_alert_time()
+
+    # Always keep market-close cleanup safe.
     auto_close_live_trades_after_market_close()
 
-    # Run news every GitHub cycle from active master_controller path
-    run_news_engine_safely()
+    # Run news every GitHub cycle from active master_controller path.
+    # This is safe before market open.
+    news_items = run_news_engine_safely()
+
+    # SAFETY FIX:
+    # Before 9:20 AM IST / after 3:20 PM IST / weekends:
+    # - Do NOT call build_master_input()
+    # - Do NOT scan/journal setups
+    # - Do NOT create active trades
+    # - Do NOT run outcome tracker on stale prices
+    # This keeps TITAN in research-only mode outside the real trading window.
+    if not trade_window_open:
+        print("[MasterBrain] Outside trade window: research-only mode active.")
+        print("[MasterBrain] Trade execution, journaling, and outcome tracker skipped.")
+        print("[Telegram] Market closed / outside alert window. No trade alerts sent.")
+        print("\n[MasterBrain] Cycle Complete\n")
+
+        return {
+            "mode": "RESEARCH_ONLY",
+            "news_items": news_items,
+            "master_input": None,
+            "context": None,
+            "evaluated_setups": [],
+            "final_decisions": {},
+            "alert_filter_result": {},
+            "daily_alert_result": {},
+            "execution_result": {},
+            "sent_packets": [],
+            "outcome_result": None,
+        }
 
     master_input = build_master_input()
     context = build_context(master_input)
