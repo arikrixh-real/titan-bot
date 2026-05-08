@@ -191,33 +191,98 @@ def _extract_missing_column(error_text):
     return None
 
 
-def _insert_trade_result_payload(payload):
+def _update_trade_result_payload(payload):
     """
-    Robust insert:
-    - Tries to insert payload.
-    - If Supabase says a column does not exist, remove that column and retry.
-    - Prevents dashboard result update from failing just because table schema is older.
+    SAFE CLOSE UPDATE:
+    Updates existing LIVE trade_results row instead of inserting duplicate row.
+
+    Why:
+    Supabase has unique constraint on (symbol, side) for LIVE trades.
+    Closing a trade should UPDATE the existing LIVE row to WIN/LOSS,
+    not INSERT another row for the same symbol + side.
+
+    Fallback:
+    If no existing LIVE row is found, it inserts a new CLOSED result safely.
     """
 
-    cleaned = dict(payload)
+    update_payload = dict(payload)
+
+    symbol = str(update_payload.get("symbol", "")).upper().strip()
+    side = str(update_payload.get("side", "")).upper().strip()
+    trade_id = str(update_payload.get("trade_id", "")).strip()
+
+    if not symbol or not side:
+        print("[OutcomeTracker DB] Missing symbol/side. Result not saved.")
+        return False
+
+    update_payload["status"] = "CLOSED"
 
     for _ in range(10):
         try:
-            SUPABASE.table("trade_results").insert(_json_safe(cleaned)).execute()
+            if trade_id:
+                existing_by_trade_id = (
+                    SUPABASE.table("trade_results")
+                    .select("id")
+                    .eq("trade_id", trade_id)
+                    .limit(1)
+                    .execute()
+                )
+
+                if existing_by_trade_id.data:
+                    row_id = existing_by_trade_id.data[0].get("id")
+                    SUPABASE.table("trade_results").update(_json_safe(update_payload)).eq("id", row_id).execute()
+                    return True
+
+            existing_live = (
+                SUPABASE.table("trade_results")
+                .select("id")
+                .eq("symbol", symbol)
+                .eq("side", side)
+                .eq("status", "LIVE")
+                .limit(1)
+                .execute()
+            )
+
+            if existing_live.data:
+                row_id = existing_live.data[0].get("id")
+                SUPABASE.table("trade_results").update(_json_safe(update_payload)).eq("id", row_id).execute()
+                return True
+
+            SUPABASE.table("trade_results").insert(_json_safe(update_payload)).execute()
             return True
 
         except Exception as e:
             missing_col = _extract_missing_column(e)
 
-            if missing_col and missing_col in cleaned:
+            if missing_col and missing_col in update_payload:
                 print(f"[OutcomeTracker DB FIX] Removing missing trade_results column: {missing_col}")
-                cleaned.pop(missing_col, None)
+                update_payload.pop(missing_col, None)
                 continue
 
-            print(f"[OutcomeTracker DB ERROR] trade_results save failed: {e}")
+            if "duplicate key value" in str(e) or "unique_live_trade_symbol_side" in str(e):
+                try:
+                    existing_any = (
+                        SUPABASE.table("trade_results")
+                        .select("id")
+                        .eq("symbol", symbol)
+                        .eq("side", side)
+                        .limit(1)
+                        .execute()
+                    )
+
+                    if existing_any.data:
+                        row_id = existing_any.data[0].get("id")
+                        SUPABASE.table("trade_results").update(_json_safe(update_payload)).eq("id", row_id).execute()
+                        return True
+
+                except Exception as update_error:
+                    print(f"[OutcomeTracker DB ERROR] duplicate fallback update failed: {update_error}")
+                    return False
+
+            print(f"[OutcomeTracker DB ERROR] trade_results update failed: {e}")
             return False
 
-    print("[OutcomeTracker DB ERROR] trade_results save failed after schema cleanup retries.")
+    print("[OutcomeTracker DB ERROR] trade_results update failed after schema cleanup retries.")
     return False
 
 
@@ -271,10 +336,10 @@ def _save_trade_result_to_supabase(outcome_row):
             print(f"[OutcomeTracker DB] Result already exists: {trade_id}")
             return True
 
-        saved = _insert_trade_result_payload(payload)
+        saved = _update_trade_result_payload(payload)
 
         if saved:
-            print(f"[OutcomeTracker DB] Supabase result saved: {trade_id} -> {result}")
+            print(f"[OutcomeTracker DB] Supabase result updated: {payload.get('symbol')} {payload.get('side')} -> {result}")
             return True
 
         return False
