@@ -41,8 +41,8 @@ except Exception:
 
 IST = ZoneInfo("Asia/Kolkata")
 
-MARKET_OPEN = time(8, 30)
-MARKET_CLOSE = time(15, 30)
+MARKET_OPEN = time(9, 20)
+MARKET_CLOSE = time(15, 20)
 
 TEST_SYMBOLS = {"TEST", "TESTPY"}
 
