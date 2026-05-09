@@ -3,6 +3,7 @@ from datetime import datetime
 from data.live_price import get_live_price
 from titan_brain.supabase_client import supabase
 from titan_brain.db import insert_trade_result
+from utils.market_hours import is_trade_window, trade_window_text
 
 
 def get_open_trades():
@@ -133,6 +134,14 @@ def check_trade_outcome(trade):
 
 def run_outcome_tracker():
     print("🎯 TITAN Outcome Tracker Started")
+
+    if not is_trade_window():
+        print(f"[OutcomeTracker] Skipped outside trade window ({trade_window_text()}).")
+        return {
+            "open_trades": 0,
+            "closed_trades": 0,
+            "skipped": "OUTSIDE_TRADE_WINDOW",
+        }
 
     open_trades = get_open_trades()
 

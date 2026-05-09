@@ -1,14 +1,15 @@
 from datetime import datetime, time
 
+from utils.market_hours import IST, TRADE_WINDOW_END, TRADE_WINDOW_START, is_trade_window
+
 
 def is_premarket():
-    now = datetime.now().time()
-    return time(9, 0) <= now < time(9, 15)
+    now = datetime.now(IST).time()
+    return time(9, 0) <= now < TRADE_WINDOW_START
 
 
 def is_market_open():
-    now = datetime.now().time()
-    return time(9, 15) <= now <= time(15, 30)
+    return is_trade_window()
 
 
 def current_bot_mode():

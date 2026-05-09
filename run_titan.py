@@ -1,5 +1,6 @@
 from intelligence.confluence_engine import apply_news_confluence
 from notifications.telegram_alerts import send_telegram_message
+from utils.market_hours import is_trade_window, trade_window_text
 
 # 🔥 Replace this with your real scanner later
 # For now we simulate technical signals
@@ -42,6 +43,10 @@ Reason: {result['reason']}
 
 
 def main():
+    if not is_trade_window():
+        print(f"Outside trade window ({trade_window_text()}). Telegram alerts skipped.")
+        return
+
     for trade in TECHNICAL_SIGNALS:
         result = apply_news_confluence(
             trade["symbol"],

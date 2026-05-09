@@ -307,6 +307,12 @@ def apply_news_filter(symbol, technical_signal, news_map):
 
 
 def scan_final_titan_picks():
+    from utils.market_hours import is_trade_window, trade_window_text
+
+    if not is_trade_window():
+        print(f"TITAN final pick scan skipped outside trade window ({trade_window_text()}).")
+        return []
+
     final_picks = []
 
     print("TITAN selecting dynamic top 50 stocks...")

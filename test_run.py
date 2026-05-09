@@ -5,6 +5,7 @@ from titan_brain.learning_engine import run_learning_engine
 from titan_brain.evolution_engine import run_evolution_engine
 
 from engines.setup_engine import scan_for_setups
+from utils.market_hours import is_trade_window, trade_window_text
 
 
 def main():
@@ -24,11 +25,14 @@ def main():
     except Exception as e:
         print(f"[TEST RUN MARKET CONDITION ERROR] {e}")
 
-    try:
-        print("\n🎯 Tracking open trade outcomes...")
-        run_outcome_tracker()
-    except Exception as e:
-        print(f"[TEST RUN OUTCOME TRACKER ERROR] {e}")
+    if is_trade_window():
+        try:
+            print("\n🎯 Tracking open trade outcomes...")
+            run_outcome_tracker()
+        except Exception as e:
+            print(f"[TEST RUN OUTCOME TRACKER ERROR] {e}")
+    else:
+        print(f"\nOutside trade window ({trade_window_text()}). Outcome tracker skipped.")
 
     try:
         print("\n📈 Scanning for trade setups...")

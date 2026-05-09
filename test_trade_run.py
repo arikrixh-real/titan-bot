@@ -1,11 +1,16 @@
 import os
 from dotenv import load_dotenv
 from alerts.telegram_alert import send_telegram_message
+from utils.market_hours import is_trade_window, trade_window_text
 
 # ✅ Load .env file
 load_dotenv()
 
 def run_test_trade():
+    if not is_trade_window():
+        print(f"Outside trade window ({trade_window_text()}). Test Telegram trade skipped.")
+        return
+
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
 

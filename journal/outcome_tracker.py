@@ -33,6 +33,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from data.live_price import get_live_price
+from utils.market_hours import is_trade_window, trade_window_text
 
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -387,6 +388,10 @@ def track_trade_outcomes(limit=None):
     limit is optional for backward compatibility with older callers.
     If omitted, all OPEN trades are checked.
     """
+    if not is_trade_window():
+        print(f"[OutcomeTracker] Skipped outside trade window ({trade_window_text()}).")
+        return {"checked": 0, "closed": 0, "open": 0, "skipped": "OUTSIDE_TRADE_WINDOW"}
+
     _ensure_files()
 
     with open(ACTIVE_TRADES_CSV, "r", newline="", encoding="utf-8") as f:

@@ -1,44 +1,16 @@
 import json
 import os
 import hashlib
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from intelligence.titan_decision_engine import scan_final_titan_picks
 from notifications.telegram_alerts import send_telegram_message
+from utils.market_hours import is_trade_window
 
 
 STATE_FILE = "state/sent_signals.json"
 
-ALERT_TIMEZONE = "Asia/Kolkata"
-ALERT_START_HOUR = 8
-ALERT_START_MINUTE = 30
-ALERT_END_HOUR = 15
-ALERT_END_MINUTE = 30
-
-
 def is_alert_time():
-    now = datetime.now(ZoneInfo(ALERT_TIMEZONE))
-
-    # Monday = 0, Sunday = 6
-    if now.weekday() > 4:
-        return False
-
-    start = now.replace(
-        hour=ALERT_START_HOUR,
-        minute=ALERT_START_MINUTE,
-        second=0,
-        microsecond=0,
-    )
-
-    end = now.replace(
-        hour=ALERT_END_HOUR,
-        minute=ALERT_END_MINUTE,
-        second=0,
-        microsecond=0,
-    )
-
-    return start <= now <= end
+    return is_trade_window()
 
 
 def load_state():
@@ -89,14 +61,14 @@ News: {pick['news_short']}
 def main():
     alert_allowed = is_alert_time()
 
+    if not alert_allowed:
+        print("Outside trade window. Silent study only.")
+        return
+
     picks = scan_final_titan_picks()
 
     if not picks:
         print("No setups. Silent scan.")
-        return
-
-    if not alert_allowed:
-        print("Setups found, but outside alert window. Silent study only.")
         return
 
     state = load_state()

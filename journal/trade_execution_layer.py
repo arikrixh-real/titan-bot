@@ -36,6 +36,8 @@ try:
 except Exception:
     get_live_price = None
 
+from utils.market_hours import is_trade_window, trade_window_text
+
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -401,6 +403,10 @@ def add_good_setups_as_live_trades(
     - Duplicate prevention is local-first.
     - Supabase sync is best-effort for dashboard live count.
     """
+    if not is_trade_window():
+        print(f"🛡️ Trade Execution add skipped outside trade window ({trade_window_text()})")
+        return 0
+
     alerted_symbols = set(alerted_symbols or [])
 
     active_df = _read_csv(
@@ -488,6 +494,16 @@ def add_good_setups_as_live_trades(
 
 
 def update_live_trade_outcomes():
+    if not is_trade_window():
+        print(f"🛡️ Trade Execution outcome update skipped outside trade window ({trade_window_text()})")
+        return {
+            "checked": 0,
+            "closed_targets": 0,
+            "closed_sls": 0,
+            "still_open": 0,
+            "skipped": "OUTSIDE_TRADE_WINDOW",
+        }
+
     active_df = _read_csv(
         ACTIVE_TRADES_FILE,
         ACTIVE_COLUMNS,

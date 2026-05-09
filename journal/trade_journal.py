@@ -18,6 +18,8 @@ from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from utils.market_hours import is_trade_window, trade_window_text
+
 IST = ZoneInfo("Asia/Kolkata")
 
 JOURNAL_DIR = Path("data/journals")
@@ -254,6 +256,10 @@ def journal_eligible_setups(
     - becomes an OPEN active internal trade unless same trade is already OPEN
     """
 
+    if not is_trade_window():
+        print(f"🛡️ Trade Journal skipped outside trade window ({trade_window_text()})")
+        return 0
+
     ensure_files()
 
     eligible_setups = eligible_setups or []
@@ -334,6 +340,10 @@ def log_trade(trade_data, scan_id=None, alert_sent=False, market_status=""):
     """
 
     try:
+        if not is_trade_window():
+            print(f"[TradeJournal] log_trade skipped outside trade window ({trade_window_text()})")
+            return ""
+
         if trade_data is None:
             return ""
 

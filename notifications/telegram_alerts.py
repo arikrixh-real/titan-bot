@@ -1,19 +1,11 @@
-import requests
+"""
+Legacy Telegram compatibility wrapper.
 
-BOT_TOKEN = "8635406884:AAFojnnKVAZXc32OAGKYWN34mjlE9m9yGwk"
-CHAT_ID = "5334390668"
+All Telegram sends must go through alerts.telegram_alert so the shared
+3-alert/day cap and duplicate-message protection remain enforced.
+"""
+
+from alerts.telegram_alert import get_daily_alert_status, send_telegram_message
 
 
-def send_telegram_message(message):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": message,
-        "parse_mode": "HTML",
-    }
-
-    try:
-        requests.post(url, data=payload)
-    except Exception as e:
-        print("Telegram Error:", e)
+__all__ = ["send_telegram_message", "get_daily_alert_status"]

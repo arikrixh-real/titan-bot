@@ -58,6 +58,7 @@ from engines.pattern_intelligence import apply_pattern_intelligence
 from engines.regime_intelligence import regime_score_adjustment
 from engines.elite_selector import rank_elite_setups
 from engines.master_status import update_master_status
+from utils.market_hours import is_trade_window, trade_window_text
 
 from journal.trade_journal import journal_eligible_setups
 from journal.outcome_tracker import track_trade_outcomes
@@ -365,6 +366,10 @@ def scan_for_setups():
     print("🚀 TITAN scan started...")
 
     run_news_engine_safely()
+
+    if not is_trade_window():
+        print(f"🛡️ Outside trade window ({trade_window_text()}). Setup scan, journaling, and outcome tracking skipped.")
+        return []
 
     scan_id = datetime.now(IST).strftime("%Y%m%d_%H%M%S")
 

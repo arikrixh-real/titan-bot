@@ -12,7 +12,7 @@ Fixes:
 
 import os
 import re
-from datetime import datetime, time
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from supabase import create_client
@@ -33,6 +33,7 @@ from titan_master_brain.execution_engine import (
     send_telegram_signals,
 )
 from journal.outcome_tracker import track_trade_outcomes
+from utils.market_hours import TRADE_WINDOW_END, TRADE_WINDOW_START, is_trade_window
 
 try:
     from intelligence.news_engine import run_news_engine
@@ -42,8 +43,8 @@ except Exception:
 
 IST = ZoneInfo("Asia/Kolkata")
 
-MARKET_OPEN = time(9, 20)
-MARKET_CLOSE = time(15, 20)
+MARKET_OPEN = TRADE_WINDOW_START
+MARKET_CLOSE = TRADE_WINDOW_END
 
 TEST_SYMBOLS = {"TEST", "TESTPY"}
 
@@ -57,13 +58,7 @@ def _now_ist():
 
 
 def _is_market_alert_time():
-    now = _now_ist()
-
-    # Monday=0, Sunday=6
-    if now.weekday() >= 5:
-        return False
-
-    return MARKET_OPEN <= now.time() <= MARKET_CLOSE
+    return is_trade_window(_now_ist())
 
 
 def _safe_float(value, default=None):

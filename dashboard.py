@@ -890,6 +890,53 @@ def get_trade_results_stats():
     except Exception:
         return stats
 
+
+def get_today_telegram_alert_count():
+    """
+    Counts actual Telegram-sent trade alerts from today's trade_results rows.
+
+    Master Brain writes one trade_results row only after Telegram sending
+    succeeds, so this is a better source than the setups table.
+    """
+    if supabase is None:
+        return 0
+
+    today = datetime.now(IST).replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow = today + timedelta(days=1)
+    seen = set()
+
+    for time_col in ["opened_at", "created_at"]:
+        try:
+            result = (
+                supabase.table("trade_results")
+                .select("symbol,side,opened_at,created_at,status,result,outcome")
+                .gte(time_col, today.isoformat())
+                .lt(time_col, tomorrow.isoformat())
+                .limit(1000)
+                .execute()
+            )
+
+            rows = result.data or []
+            if not rows:
+                continue
+
+            for row in rows:
+                symbol = str(row.get("symbol") or "").strip().upper()
+                side = str(row.get("side") or "").strip().upper()
+
+                if not symbol or not side or _is_test_symbol(symbol):
+                    continue
+
+                seen.add(f"{symbol}|{side}")
+
+            if seen:
+                break
+
+        except Exception:
+            continue
+
+    return min(3, len(seen))
+
 # =========================================================
 # GITHUB HELPERS
 # =========================================================
@@ -1104,7 +1151,7 @@ if scan_symbols_count > 0:
 else:
     stocks_scanned = scan_cycles * SCAN_BATCH_SIZE
 
-telegram_alerts = count_any_table(["setups"])
+telegram_alerts = get_today_telegram_alert_count()
 
 stocks_passed = count_any_table(["setups"])
 

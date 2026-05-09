@@ -28,6 +28,7 @@ from engines.structure_engine import structure_ok
 
 from journal.trade_journal import log_trade
 from journal.scan_journal import log_scan
+from utils.market_hours import is_trade_window, trade_window_text
 
 from titan_brain.db import (
     insert_scan,
@@ -218,6 +219,13 @@ def safe_position_sizing(entry, stop_loss):
 
 
 def scan_for_setups():
+    if not is_trade_window():
+        titan_log(
+            f"Outside trade window ({trade_window_text()}). Setup scan and trade creation skipped.",
+            important=True,
+        )
+        return []
+
     setups = []
 
     scanned_symbols = []
