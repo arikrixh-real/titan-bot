@@ -55,6 +55,17 @@ try:
 except Exception:
     analyze_execution_quality = None
 
+try:
+    from engines.data_advantage_engine import (
+        apply_data_advantage_layer,
+        build_data_advantage_context,
+        market_status_from_context,
+    )
+except Exception:
+    apply_data_advantage_layer = None
+    build_data_advantage_context = None
+    market_status_from_context = None
+
 from titan_brain.db import (
     insert_scan,
     insert_scan_symbol,
@@ -505,9 +516,35 @@ def scan_for_setups():
     rr_fail_count = 0
     phase1_block_count = 0
 
-    market_status = market_regime_status()
     symbols = load_cached_stock_data()
     total_symbols = len(symbols)
+
+    data_advantage_context = {}
+    try:
+        if build_data_advantage_context is not None:
+            data_advantage_context = build_data_advantage_context(symbols)
+    except Exception as e:
+        data_advantage_context = {
+            "available": False,
+            "warnings": ["phase4_context_error"],
+            "error": str(e),
+        }
+
+    try:
+        if market_status_from_context is not None:
+            market_status = market_status_from_context(data_advantage_context)
+        else:
+            market_status = market_regime_status()
+    except Exception as e:
+        market_status = {
+            "market_ok": True,
+            "reason": "Phase 4 market status failed open",
+            "direction": "NEUTRAL",
+            "regime": "UNKNOWN",
+            "status": "UNKNOWN",
+            "volatility": "UNKNOWN",
+            "error": str(e),
+        }
 
     titan_log("DYNAMIC / SETUP ENGINE ACTIVE")
     titan_log(f"Symbols received from loader: {total_symbols}")
@@ -782,6 +819,15 @@ def scan_for_setups():
                 live_price=live_price,
             )
 
+            if apply_data_advantage_layer is not None:
+                trade_payload = apply_data_advantage_layer(
+                    trade_payload=trade_payload,
+                    symbol=symbol,
+                    df=data,
+                    side=side,
+                    market_context=data_advantage_context,
+                )
+
             trade_id = log_trade(
                 trade_payload,
                 scan_id=scan_id,
@@ -799,23 +845,23 @@ def scan_for_setups():
                 "rr": rr,
                 "position_size": position_size,
                 "risk_amount": risk_amount,
-                "scores": {
+                "scores": trade_payload.get("scores", {
                     "volume_score": volume_score,
                     "strength_score": strength_score,
                     "compression_score": comp_score,
                     "final_score": final_score
-                },
-                "market_context": {
+                }),
+                "market_context": trade_payload.get("market_context", {
                     "market_status": market_status,
                     "trend": trend
-                },
-                "setup_context": {
+                }),
+                "setup_context": trade_payload.get("setup_context", {
                     "structure_ok": structure_result,
                     "momentum_ok": momentum_result,
                     "breakout_ready": entry_result,
                     "confirmations": confirmations,
                     "source": source
-                },
+                }),
                 "reason": reason,
                 "trigger_status": trigger,
                 "status": "OPEN"
@@ -831,18 +877,18 @@ def scan_for_setups():
                 "rr": rr,
                 "position_size": position_size,
                 "risk_amount": risk_amount,
-                "scores": {
+                "scores": trade_payload.get("scores", {
                     "volume_score": volume_score,
                     "strength_score": strength_score,
                     "compression_score": comp_score,
                     "final_score": final_score
-                },
-                "market_context": market_status,
-                "setup_context": {
+                }),
+                "market_context": trade_payload.get("market_context", market_status),
+                "setup_context": trade_payload.get("setup_context", {
                     "trend": trend,
                     "confirmations": confirmations,
                     "source": source
-                },
+                }),
                 "reason": reason,
                 "trigger_status": trigger,
                 "status": "OPEN"

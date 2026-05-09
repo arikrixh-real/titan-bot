@@ -77,6 +77,12 @@ def normalize_setup(setup: Any) -> Dict[str, Any]:
             "phase3_applied",
             "phase3_active",
             "phase3_error",
+            "phase4_data_advantage",
+            "phase4_score_adjustment",
+            "data_advantage_score",
+            "market_risk_tone",
+            "sector_strength_score",
+            "unusual_activity_score",
         ]:
             if key in setup:
                 normalized[key] = setup.get(key)
