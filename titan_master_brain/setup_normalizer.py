@@ -45,6 +45,18 @@ def normalize_setup(setup: Any) -> Dict[str, Any]:
             "institutional_score_adjustment",
             "phase1_blocked",
             "phase1_block_reason",
+            "portfolio_construction",
+            "execution_quality",
+            "sector_exposure_score",
+            "portfolio_concentration_risk",
+            "correlation_proxy",
+            "beta_like_market_sensitivity",
+            "volatility_contribution_score",
+            "execution_quality_score",
+            "slippage_risk_estimate",
+            "chase_entry_penalty",
+            "phase2_score_adjustment",
+            "phase2_risk_warnings",
         ]:
             if key in setup:
                 normalized[key] = setup.get(key)

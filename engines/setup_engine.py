@@ -45,6 +45,16 @@ try:
 except Exception:
     evaluate_professional_risk = None
 
+try:
+    from engines.portfolio_construction_engine import analyze_portfolio_construction
+except Exception:
+    analyze_portfolio_construction = None
+
+try:
+    from engines.execution_quality_engine import analyze_execution_quality
+except Exception:
+    analyze_execution_quality = None
+
 from titan_brain.db import (
     insert_scan,
     insert_scan_symbol,
@@ -345,6 +355,113 @@ def apply_institutional_phase1(trade_payload, data, side, live_price, market_sta
     risk_blocks = professional_risk.get("risk_blocks", [])
     result["phase1_blocked"] = bool(risk_blocks)
     result["phase1_block_reason"] = ", ".join(str(item) for item in risk_blocks)
+
+    return result
+
+
+def apply_institutional_phase2(trade_payload, data, side, live_price):
+    """
+    Adds Phase 2 portfolio and execution-quality metadata.
+
+    Fail-open rule:
+    - Engine calculation errors keep the setup alive.
+    - Phase 2 does not hard-block trades.
+    - Score changes are conservative and bounded.
+    """
+    result = dict(trade_payload)
+
+    portfolio = {
+        "available": False,
+        "sector_exposure_score": 50.0,
+        "portfolio_concentration_risk": 50.0,
+        "correlation_proxy": 0.0,
+        "beta_like_market_sensitivity": 1.0,
+        "volatility_contribution_score": 50.0,
+        "portfolio_quality_score": 50.0,
+        "portfolio_risk_warnings": ["phase2_portfolio_not_available"],
+    }
+    execution_quality = {
+        "available": False,
+        "vwap_like_entry_quality_proxy": 50.0,
+        "twap_like_stability_proxy": 50.0,
+        "slippage_risk_estimate": 50.0,
+        "liquidity_sensitive_entry_quality": 50.0,
+        "chase_entry_penalty": 0.0,
+        "execution_quality_score": 50.0,
+        "warnings": ["phase2_execution_not_available"],
+    }
+
+    try:
+        if analyze_portfolio_construction is not None:
+            portfolio = analyze_portfolio_construction(
+                setup=result,
+                df=data,
+            )
+    except Exception as e:
+        portfolio["error"] = str(e)
+
+    try:
+        if analyze_execution_quality is not None:
+            execution_quality = analyze_execution_quality(
+                df=data,
+                setup=result,
+                microstructure=result.get("microstructure", {}),
+                live_price=live_price,
+            )
+    except Exception as e:
+        execution_quality["error"] = str(e)
+
+    portfolio_quality = _safe_float(portfolio.get("portfolio_quality_score"), 50.0)
+    execution_score = _safe_float(execution_quality.get("execution_quality_score"), 50.0)
+    concentration_risk = _safe_float(portfolio.get("portfolio_concentration_risk"), 50.0)
+    slippage_risk = _safe_float(execution_quality.get("slippage_risk_estimate"), 50.0)
+    chase_penalty = _safe_float(execution_quality.get("chase_entry_penalty"), 0.0)
+
+    phase2_adjustment = 0.0
+    phase2_adjustment += (portfolio_quality - 50.0) * 0.004
+    phase2_adjustment += (execution_score - 50.0) * 0.005
+    phase2_adjustment -= max(0.0, concentration_risk - 60.0) * 0.002
+    phase2_adjustment -= max(0.0, slippage_risk - 60.0) * 0.003
+    phase2_adjustment -= chase_penalty * 0.003
+    phase2_adjustment = max(-0.25, min(0.15, phase2_adjustment))
+
+    original_score = _safe_float(result.get("score"), 0.0)
+    adjusted_score = max(0.0, original_score + phase2_adjustment)
+
+    result["score"] = round(adjusted_score, 2)
+    result["rank_score"] = round(adjusted_score, 2)
+    result["phase2_score_adjustment"] = round(phase2_adjustment, 3)
+    result["portfolio_construction"] = portfolio
+    result["execution_quality"] = execution_quality
+    result["sector_exposure_score"] = portfolio.get("sector_exposure_score")
+    result["portfolio_concentration_risk"] = portfolio.get("portfolio_concentration_risk")
+    result["correlation_proxy"] = portfolio.get("correlation_proxy")
+    result["beta_like_market_sensitivity"] = portfolio.get("beta_like_market_sensitivity")
+    result["volatility_contribution_score"] = portfolio.get("volatility_contribution_score")
+    result["execution_quality_score"] = execution_quality.get("execution_quality_score")
+    result["slippage_risk_estimate"] = execution_quality.get("slippage_risk_estimate")
+    result["chase_entry_penalty"] = execution_quality.get("chase_entry_penalty")
+
+    risk_warnings = []
+    risk_warnings.extend(portfolio.get("portfolio_risk_warnings", []) or [])
+    risk_warnings.extend(execution_quality.get("warnings", []) or [])
+    result["phase2_risk_warnings"] = risk_warnings
+
+    if isinstance(result.get("scores"), dict):
+        result["scores"] = dict(result["scores"])
+        result["scores"]["phase2_score_adjustment"] = result["phase2_score_adjustment"]
+        result["scores"]["phase2_adjusted_score"] = result["score"]
+        result["scores"]["portfolio_quality_score"] = portfolio.get("portfolio_quality_score")
+        result["scores"]["execution_quality_score"] = execution_quality.get("execution_quality_score")
+
+    if isinstance(result.get("market_context"), dict):
+        result["market_context"] = dict(result["market_context"])
+        result["market_context"]["portfolio_construction"] = portfolio
+
+    if isinstance(result.get("setup_context"), dict):
+        result["setup_context"] = dict(result["setup_context"])
+        result["setup_context"]["execution_quality"] = execution_quality
+        result["setup_context"]["phase2_risk_warnings"] = risk_warnings
 
     return result
 
@@ -657,6 +774,13 @@ def scan_for_setups():
                     important=True,
                 )
                 continue
+
+            trade_payload = apply_institutional_phase2(
+                trade_payload=trade_payload,
+                data=data,
+                side=side,
+                live_price=live_price,
+            )
 
             trade_id = log_trade(
                 trade_payload,
