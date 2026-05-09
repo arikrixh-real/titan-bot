@@ -13,6 +13,7 @@ Fixes:
 import os
 import re
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from supabase import create_client
@@ -40,6 +41,15 @@ try:
 except Exception:
     run_news_engine = None
 
+try:
+    from engines.adaptive_memory_builder import (
+        build_adaptive_memory,
+        get_adaptive_state_path,
+    )
+except Exception:
+    build_adaptive_memory = None
+    get_adaptive_state_path = None
+
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -47,6 +57,7 @@ MARKET_OPEN = TRADE_WINDOW_START
 MARKET_CLOSE = TRADE_WINDOW_END
 
 TEST_SYMBOLS = {"TEST", "TESTPY"}
+ADAPTIVE_MEMORY_REFRESH_SECONDS = 3600
 
 
 # =========================================================
@@ -387,6 +398,37 @@ def run_news_engine_safely():
         return []
 
 
+def refresh_adaptive_memory_safely():
+    """
+    Phase 3 cache refresh.
+
+    This is intentionally lightweight for GitHub's 5-minute runner:
+    it rebuilds at most once per hour and never blocks trading flow.
+    """
+    if build_adaptive_memory is None or get_adaptive_state_path is None:
+        print("[AdaptiveAI] Memory builder not connected.")
+        return None
+
+    try:
+        state_path = Path(get_adaptive_state_path())
+        if state_path.exists():
+            age_seconds = datetime.now().timestamp() - state_path.stat().st_mtime
+            if age_seconds < ADAPTIVE_MEMORY_REFRESH_SECONDS:
+                print("[AdaptiveAI] Cached memory fresh. Refresh skipped.")
+                return {"skipped": "CACHE_FRESH"}
+
+        state = build_adaptive_memory(write_files=True)
+        print(
+            "[AdaptiveAI] Memory refreshed. "
+            f"Closed trades: {state.get('total_closed_trades')}"
+        )
+        return state
+
+    except Exception as e:
+        print(f"[AdaptiveAI ERROR] Memory refresh skipped: {e}")
+        return {"error": str(e)}
+
+
 # =========================================================
 # MAIN MASTER BRAIN
 # =========================================================
@@ -489,6 +531,8 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
     else:
         print("[OutcomeTracker] run_outcome_tracker=False, skipped.")
 
+    adaptive_memory_result = refresh_adaptive_memory_safely()
+
     # Run market close cleanup again after outcome tracker
     auto_close_live_trades_after_market_close()
 
@@ -504,6 +548,7 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
         "execution_result": execution_result,
         "sent_packets": sent_packets,
         "outcome_result": outcome_result,
+        "adaptive_memory_result": adaptive_memory_result,
     }
 
 

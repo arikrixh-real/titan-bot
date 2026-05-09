@@ -17,14 +17,20 @@ def calculate_elite_probability_score(setup):
     pattern = _safe_float(setup.get("pattern_multiplier"), 1)
     confidence = _safe_float(setup.get("pattern_confidence"), 0)
     regime = _safe_float(setup.get("regime_multiplier"), 1)
+    phase3_confidence = _safe_float(setup.get("adaptive_confidence_score"), 50)
+    cluster_quality = _safe_float(setup.get("cluster_quality_score"), 50)
 
     rr_component = _clamp(rr, 0, 3) * 8
     confidence_component = confidence * 10
+    phase3_component = _clamp((phase3_confidence - 50) / 50, -0.2, 0.2) * 5
+    cluster_component = _clamp((cluster_quality - 50) / 50, -0.2, 0.2) * 5
 
     combined_multiplier = adaptive * pattern * regime
     combined_multiplier = _clamp(combined_multiplier, 0.85, 1.15)
 
-    elite_score = (score + rr_component + confidence_component) * combined_multiplier
+    elite_score = (
+        score + rr_component + confidence_component + phase3_component + cluster_component
+    ) * combined_multiplier
     return round(_clamp(elite_score, 0, 150), 2)
 
 

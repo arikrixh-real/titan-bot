@@ -1,0 +1,456 @@
+{
+  "version": "3.0",
+  "last_updated": "2026-05-10 02:03:38",
+  "total_closed_trades": 85,
+  "total_wins": 34,
+  "total_losses": 51,
+  "bayesian_prior": {
+    "alpha": 2.0,
+    "beta": 2.0
+  },
+  "global_confidence": {
+    "trades": 85,
+    "wins": 34,
+    "losses": 51,
+    "win_rate": 0.4,
+    "posterior_win_rate": 0.4045,
+    "sample_confidence": 1.0,
+    "weight": 0.9522,
+    "adaptive_confidence_score": 40.45
+  },
+  "feature_memory": {
+    "market_filter": {
+      "trades": 85,
+      "wins": 34,
+      "losses": 51,
+      "win_rate": 0.4,
+      "posterior_win_rate": 0.4045,
+      "sample_confidence": 1.0,
+      "weight": 0.9522
+    },
+    "trend": {
+      "trades": 85,
+      "wins": 34,
+      "losses": 51,
+      "win_rate": 0.4,
+      "posterior_win_rate": 0.4045,
+      "sample_confidence": 1.0,
+      "weight": 0.9522
+    }
+  },
+  "regime_memory": {
+    "NEUTRAL_OK": {
+      "trades": 85,
+      "wins": 34,
+      "losses": 51,
+      "win_rate": 0.4,
+      "posterior_win_rate": 0.4045,
+      "sample_confidence": 1.0,
+      "weight": 0.9522
+    }
+  },
+  "sector_memory": {
+    "Metals": {
+      "trades": 3,
+      "wins": 2,
+      "losses": 1,
+      "win_rate": 0.6667,
+      "posterior_win_rate": 0.5714,
+      "sample_confidence": 0.1,
+      "weight": 1.0036
+    },
+    "IT": {
+      "trades": 17,
+      "wins": 2,
+      "losses": 15,
+      "win_rate": 0.1176,
+      "posterior_win_rate": 0.1905,
+      "sample_confidence": 0.5667,
+      "weight": 0.9123
+    },
+    "Auto": {
+      "trades": 23,
+      "wins": 6,
+      "losses": 17,
+      "win_rate": 0.2609,
+      "posterior_win_rate": 0.2963,
+      "sample_confidence": 0.7667,
+      "weight": 0.9219
+    },
+    "Energy / Telecom / Retail": {
+      "trades": 1,
+      "wins": 1,
+      "losses": 0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.6,
+      "sample_confidence": 0.0333,
+      "weight": 1.0017
+    },
+    "UNKNOWN": {
+      "trades": 10,
+      "wins": 1,
+      "losses": 9,
+      "win_rate": 0.1,
+      "posterior_win_rate": 0.2143,
+      "sample_confidence": 0.3333,
+      "weight": 0.9524
+    },
+    "Cement": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "win_rate": 0.0,
+      "posterior_win_rate": 0.4,
+      "sample_confidence": 0.0333,
+      "weight": 0.9983
+    },
+    "FMCG": {
+      "trades": 1,
+      "wins": 1,
+      "losses": 0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.6,
+      "sample_confidence": 0.0333,
+      "weight": 1.0017
+    },
+    "Telecom": {
+      "trades": 10,
+      "wins": 8,
+      "losses": 2,
+      "win_rate": 0.8,
+      "posterior_win_rate": 0.7143,
+      "sample_confidence": 0.3333,
+      "weight": 1.0357
+    },
+    "Oil & Gas": {
+      "trades": 6,
+      "wins": 6,
+      "losses": 0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.8,
+      "sample_confidence": 0.2,
+      "weight": 1.03
+    },
+    "Banking": {
+      "trades": 7,
+      "wins": 6,
+      "losses": 1,
+      "win_rate": 0.8571,
+      "posterior_win_rate": 0.7273,
+      "sample_confidence": 0.2333,
+      "weight": 1.0265
+    },
+    "Consumer / Jewellery": {
+      "trades": 6,
+      "wins": 1,
+      "losses": 5,
+      "win_rate": 0.1667,
+      "posterior_win_rate": 0.3,
+      "sample_confidence": 0.2,
+      "weight": 0.98
+    }
+  },
+  "cluster_memory": {
+    "SHORT|NEUTRAL_OK|METALS|market_filter+trend": {
+      "trades": 2,
+      "wins": 2,
+      "losses": 0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.6667,
+      "sample_confidence": 0.0667,
+      "weight": 1.0056
+    },
+    "SHORT|NEUTRAL_OK|IT|market_filter+trend": {
+      "trades": 14,
+      "wins": 1,
+      "losses": 13,
+      "win_rate": 0.0714,
+      "posterior_win_rate": 0.1667,
+      "sample_confidence": 0.4667,
+      "weight": 0.9222
+    },
+    "SHORT|NEUTRAL_OK|AUTO|market_filter+trend": {
+      "trades": 14,
+      "wins": 6,
+      "losses": 8,
+      "win_rate": 0.4286,
+      "posterior_win_rate": 0.4444,
+      "sample_confidence": 0.4667,
+      "weight": 0.987
+    },
+    "LONG|NEUTRAL_OK|AUTO|market_filter+trend": {
+      "trades": 9,
+      "wins": 0,
+      "losses": 9,
+      "win_rate": 0.0,
+      "posterior_win_rate": 0.1538,
+      "sample_confidence": 0.3,
+      "weight": 0.9481
+    },
+    "LONG|NEUTRAL_OK|ENERGY_TELECOM_RETAIL|market_filter+trend": {
+      "trades": 1,
+      "wins": 1,
+      "losses": 0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.6,
+      "sample_confidence": 0.0333,
+      "weight": 1.0017
+    },
+    "SHORT|NEUTRAL_OK|UNKNOWN|market_filter+trend": {
+      "trades": 10,
+      "wins": 1,
+      "losses": 9,
+      "win_rate": 0.1,
+      "posterior_win_rate": 0.2143,
+      "sample_confidence": 0.3333,
+      "weight": 0.9524
+    },
+    "SHORT|NEUTRAL_OK|CEMENT|market_filter+trend": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "win_rate": 0.0,
+      "posterior_win_rate": 0.4,
+      "sample_confidence": 0.0333,
+      "weight": 0.9983
+    },
+    "LONG|NEUTRAL_OK|METALS|market_filter+trend": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "win_rate": 0.0,
+      "posterior_win_rate": 0.4,
+      "sample_confidence": 0.0333,
+      "weight": 0.9983
+    },
+    "LONG|NEUTRAL_OK|FMCG|market_filter+trend": {
+      "trades": 1,
+      "wins": 1,
+      "losses": 0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.6,
+      "sample_confidence": 0.0333,
+      "weight": 1.0017
+    },
+    "LONG|NEUTRAL_OK|IT|market_filter+trend": {
+      "trades": 3,
+      "wins": 1,
+      "losses": 2,
+      "win_rate": 0.3333,
+      "posterior_win_rate": 0.4286,
+      "sample_confidence": 0.1,
+      "weight": 0.9964
+    },
+    "SHORT|NEUTRAL_OK|TELECOM|market_filter+trend": {
+      "trades": 10,
+      "wins": 8,
+      "losses": 2,
+      "win_rate": 0.8,
+      "posterior_win_rate": 0.7143,
+      "sample_confidence": 0.3333,
+      "weight": 1.0357
+    },
+    "SHORT|NEUTRAL_OK|OIL_GAS|market_filter+trend": {
+      "trades": 6,
+      "wins": 6,
+      "losses": 0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.8,
+      "sample_confidence": 0.2,
+      "weight": 1.03
+    },
+    "SHORT|NEUTRAL_OK|BANKING|market_filter+trend": {
+      "trades": 7,
+      "wins": 6,
+      "losses": 1,
+      "win_rate": 0.8571,
+      "posterior_win_rate": 0.7273,
+      "sample_confidence": 0.2333,
+      "weight": 1.0265
+    },
+    "SHORT|NEUTRAL_OK|CONSUMER_JEWELLERY|market_filter+trend": {
+      "trades": 6,
+      "wins": 1,
+      "losses": 5,
+      "win_rate": 0.1667,
+      "posterior_win_rate": 0.3,
+      "sample_confidence": 0.2,
+      "weight": 0.98
+    }
+  },
+  "symbol_memory": {
+    "TATASTEEL": {
+      "trades": 2,
+      "wins": 2,
+      "losses": 0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.6667,
+      "sample_confidence": 0.0667,
+      "weight": 1.0056
+    },
+    "TCS": {
+      "trades": 4,
+      "wins": 1,
+      "losses": 3,
+      "win_rate": 0.25,
+      "posterior_win_rate": 0.375,
+      "sample_confidence": 0.1333,
+      "weight": 0.9917
+    },
+    "M&M": {
+      "trades": 3,
+      "wins": 2,
+      "losses": 1,
+      "win_rate": 0.6667,
+      "posterior_win_rate": 0.5714,
+      "sample_confidence": 0.1,
+      "weight": 1.0036
+    },
+    "BAJAJ-AUTO": {
+      "trades": 9,
+      "wins": 0,
+      "losses": 9,
+      "win_rate": 0.0,
+      "posterior_win_rate": 0.1538,
+      "sample_confidence": 0.3,
+      "weight": 0.9481
+    },
+    "RELIANCE": {
+      "trades": 1,
+      "wins": 1,
+      "losses": 0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.6,
+      "sample_confidence": 0.0333,
+      "weight": 1.0017
+    },
+    "PFC": {
+      "trades": 10,
+      "wins": 1,
+      "losses": 9,
+      "win_rate": 0.1,
+      "posterior_win_rate": 0.2143,
+      "sample_confidence": 0.3333,
+      "weight": 0.9524
+    },
+    "ULTRACEMCO": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "win_rate": 0.0,
+      "posterior_win_rate": 0.4,
+      "sample_confidence": 0.0333,
+      "weight": 0.9983
+    },
+    "JSWSTEEL": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "win_rate": 0.0,
+      "posterior_win_rate": 0.4,
+      "sample_confidence": 0.0333,
+      "weight": 0.9983
+    },
+    "BRITANNIA": {
+      "trades": 1,
+      "wins": 1,
+      "losses": 0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.6,
+      "sample_confidence": 0.0333,
+      "weight": 1.0017
+    },
+    "TECHM": {
+      "trades": 3,
+      "wins": 1,
+      "losses": 2,
+      "win_rate": 0.3333,
+      "posterior_win_rate": 0.4286,
+      "sample_confidence": 0.1,
+      "weight": 0.9964
+    },
+    "BHARTIARTL": {
+      "trades": 10,
+      "wins": 8,
+      "losses": 2,
+      "win_rate": 0.8,
+      "posterior_win_rate": 0.7143,
+      "sample_confidence": 0.3333,
+      "weight": 1.0357
+    },
+    "HEROMOTOCO": {
+      "trades": 11,
+      "wins": 4,
+      "losses": 7,
+      "win_rate": 0.3636,
+      "posterior_win_rate": 0.4,
+      "sample_confidence": 0.3667,
+      "weight": 0.9817
+    },
+    "ONGC": {
+      "trades": 6,
+      "wins": 6,
+      "losses": 0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.8,
+      "sample_confidence": 0.2,
+      "weight": 1.03
+    },
+    "AXISBANK": {
+      "trades": 7,
+      "wins": 6,
+      "losses": 1,
+      "win_rate": 0.8571,
+      "posterior_win_rate": 0.7273,
+      "sample_confidence": 0.2333,
+      "weight": 1.0265
+    },
+    "TITAN": {
+      "trades": 6,
+      "wins": 1,
+      "losses": 5,
+      "win_rate": 0.1667,
+      "posterior_win_rate": 0.3,
+      "sample_confidence": 0.2,
+      "weight": 0.98
+    },
+    "INFY": {
+      "trades": 10,
+      "wins": 0,
+      "losses": 10,
+      "win_rate": 0.0,
+      "posterior_win_rate": 0.1429,
+      "sample_confidence": 0.3333,
+      "weight": 0.9405
+    }
+  },
+  "side_memory": {
+    "SHORT": {
+      "trades": 70,
+      "wins": 31,
+      "losses": 39,
+      "win_rate": 0.4429,
+      "posterior_win_rate": 0.4459,
+      "sample_confidence": 1.0,
+      "weight": 0.973
+    },
+    "LONG": {
+      "trades": 15,
+      "wins": 3,
+      "losses": 12,
+      "win_rate": 0.2,
+      "posterior_win_rate": 0.2632,
+      "sample_confidence": 0.5,
+      "weight": 0.9408
+    }
+  },
+  "news_reaction_memory": {
+    "seen_news_hashes": [],
+    "symbol_sentiment": {},
+    "sector_sentiment": {}
+  },
+  "builder_notes": [
+    "Adaptive memory is available for conservative post-score ranking adjustments.",
+    "All adjustments are bounded and should not hard-block any setup."
+  ]
+}

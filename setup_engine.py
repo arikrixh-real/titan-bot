@@ -56,6 +56,7 @@ from engines.evolution_engine import (
 from engines.adaptive_scoring import adaptive_score_adjustment
 from engines.pattern_intelligence import apply_pattern_intelligence
 from engines.regime_intelligence import regime_score_adjustment
+from engines.adaptive_intelligence import apply_adaptive_intelligence
 from engines.elite_selector import rank_elite_setups
 from engines.master_status import update_master_status
 from utils.market_hours import is_trade_window, trade_window_text
@@ -549,6 +550,7 @@ def scan_for_setups():
             setup = adaptive_score_adjustment(setup)
             setup = apply_pattern_intelligence(setup)
             setup = regime_score_adjustment(setup)
+            setup = apply_adaptive_intelligence(setup)
 
             if closed_trades >= MIN_CLOSED_TRADES_FOR_EVOLUTION_FILTER:
                 if not passes_evolution_filter(setup, BASE_EVOLUTION_THRESHOLD):
