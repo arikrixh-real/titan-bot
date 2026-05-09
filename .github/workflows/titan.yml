@@ -9,7 +9,7 @@ on:
 
 concurrency:
   group: titan-automation
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write

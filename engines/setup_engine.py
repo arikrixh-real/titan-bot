@@ -184,7 +184,7 @@ def safe_position_sizing(entry, stop_loss):
     This always returns a safe dict.
     """
     try:
-        pos_data = safe_position_sizing(entry, stop_loss)
+        pos_data = position_sizing(entry, stop_loss)
 
         if isinstance(pos_data, dict):
             return {
@@ -457,7 +457,15 @@ def scan_for_setups():
                 market_status=market_status
             )
 
-            trigger = trigger_status(symbol, side, entry, live_price)
+            trigger = trigger_status(
+                symbol=symbol,
+                side=side,
+                entry=entry,
+                price=live_price,
+                score=final_score,
+                rr=rr,
+                market_status=market_status,
+            )
 
             trade_payload = {
                 "symbol": symbol,

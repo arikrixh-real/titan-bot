@@ -380,7 +380,13 @@ def _append_outcome(row, outcome, exit_price, pnl_points, reason):
     _save_trade_result_to_supabase(outcome_row)
 
 
-def track_trade_outcomes():
+def track_trade_outcomes(limit=None):
+    """
+    Tracks OPEN trades.
+
+    limit is optional for backward compatibility with older callers.
+    If omitted, all OPEN trades are checked.
+    """
     _ensure_files()
 
     with open(ACTIVE_TRADES_CSV, "r", newline="", encoding="utf-8") as f:
@@ -396,12 +402,24 @@ def track_trade_outcomes():
     closed = 0
     still_open = 0
     updated_rows = []
+    max_checks = None
+
+    try:
+        if limit is not None:
+            max_checks = max(0, int(limit))
+    except Exception:
+        max_checks = None
 
     for row in rows:
         status = str(row.get("status", "")).upper().strip()
 
         if status != "OPEN":
             updated_rows.append(row)
+            continue
+
+        if max_checks is not None and checked >= max_checks:
+            updated_rows.append(row)
+            still_open += 1
             continue
 
         symbol = row.get("symbol", "")

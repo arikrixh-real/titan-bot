@@ -20,10 +20,16 @@ It only decides:
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List
+
+try:
+    from supabase import create_client
+except Exception:
+    create_client = None
 
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -32,10 +38,17 @@ STATE_DIR = Path("state")
 STATE_FILE = STATE_DIR / "daily_alert_state.json"
 
 MAX_DAILY_ALERTS = 3
+TEST_SYMBOLS = {"TEST", "TESTPY"}
 
 
 def _today_key() -> str:
     return datetime.now(IST).strftime("%Y-%m-%d")
+
+
+def _day_bounds_iso() -> tuple[str, str]:
+    today = datetime.now(IST).replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow = today + timedelta(days=1)
+    return today.isoformat(), tomorrow.isoformat()
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -54,6 +67,23 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return int(value)
     except Exception:
         return default
+
+
+def _get_supabase():
+    try:
+        if create_client is None:
+            return None
+
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+        if not url or not key:
+            return None
+
+        return create_client(url, key)
+
+    except Exception:
+        return None
 
 
 def _confidence_points(confidence: str) -> float:
@@ -216,13 +246,77 @@ def _candidate_key(candidate: Dict[str, Any]) -> str:
     return f"{_today_key()}|{symbol}|{side}"
 
 
+def _row_alert_key(row: Dict[str, Any]) -> str | None:
+    symbol = str(row.get("symbol") or "").strip().upper()
+    side = str(row.get("side") or row.get("direction") or "").strip().upper()
+
+    if not symbol or not side or symbol in TEST_SYMBOLS:
+        return None
+
+    return f"{_today_key()}|{symbol}|{side}"
+
+
+def _load_remote_alert_state() -> Dict[str, Any] | None:
+    """
+    Best-effort persistent alert memory for stateless GitHub runners.
+    Local state remains the fallback when Supabase is unavailable.
+    """
+    client = _get_supabase()
+    if client is None:
+        return None
+
+    start_iso, end_iso = _day_bounds_iso()
+    rows = []
+
+    for time_col in ["opened_at", "created_at"]:
+        try:
+            result = (
+                client.table("trade_results")
+                .select("symbol,side,opened_at,created_at,status")
+                .gte(time_col, start_iso)
+                .lt(time_col, end_iso)
+                .limit(1000)
+                .execute()
+            )
+
+            rows = result.data or []
+            if rows:
+                break
+
+        except Exception:
+            continue
+
+    if not rows:
+        return {
+            "date": _today_key(),
+            "alerts_sent": 0,
+            "alerted_keys": []
+        }
+
+    alerted_keys = []
+    seen = set()
+
+    for row in rows:
+        key = _row_alert_key(row)
+        if key and key not in seen:
+            seen.add(key)
+            alerted_keys.append(key)
+
+    return {
+        "date": _today_key(),
+        "alerts_sent": min(MAX_DAILY_ALERTS, len(alerted_keys)),
+        "alerted_keys": alerted_keys,
+    }
+
+
 def _load_state() -> Dict[str, Any]:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
 
     today = _today_key()
+    remote_state = _load_remote_alert_state()
 
     if not STATE_FILE.exists():
-        return {
+        return remote_state or {
             "date": today,
             "alerts_sent": 0,
             "alerted_keys": []
@@ -241,10 +335,24 @@ def _load_state() -> Dict[str, Any]:
 
         state.setdefault("alerts_sent", 0)
         state.setdefault("alerted_keys", [])
+
+        if remote_state and remote_state.get("date") == today:
+            merged_keys = set(state.get("alerted_keys", []))
+            merged_keys.update(remote_state.get("alerted_keys", []))
+            state["alerted_keys"] = list(merged_keys)
+            state["alerts_sent"] = min(
+                MAX_DAILY_ALERTS,
+                max(
+                    _safe_int(state.get("alerts_sent"), 0),
+                    _safe_int(remote_state.get("alerts_sent"), 0),
+                    len(merged_keys),
+                ),
+            )
+
         return state
 
     except Exception:
-        return {
+        return remote_state or {
             "date": today,
             "alerts_sent": 0,
             "alerted_keys": []

@@ -148,9 +148,13 @@ def send_telegram_signals(execution_result):
                 print(f"[Telegram ERROR] Empty message for {symbol}")
                 continue
 
-            send_telegram_message(message)
-            print(f"[Telegram] Sent: {symbol}")
-            sent_packets.append(packet)
+            sent = send_telegram_message(message)
+
+            if sent:
+                print(f"[Telegram] Sent: {symbol}")
+                sent_packets.append(packet)
+            else:
+                print(f"[Telegram] Not sent: {symbol}")
 
         except Exception as e:
             print(f"[Telegram ERROR] {packet.get('symbol', 'UNKNOWN')} -> {e}")

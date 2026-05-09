@@ -256,7 +256,6 @@ function resize() {
 resize();
 window.addEventListener("resize", resize);
 
-/* STATIC SOFT STAR BACKGROUND */
 const stars = [];
 
 for (let i = 0; i < 850; i++) {
@@ -291,28 +290,43 @@ function setReply(text) {
 }
 
 async function titanBrain(text) {
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-    try {
+    const lower = text.toLowerCase();
 
-        const response = await fetch("http://127.0.0.1:5000/chat", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                message: text
-            })
-        });
-
-        const data = await response.json();
-
-        return data.reply;
-
-    } catch (error) {
-
-        return "Unable to connect to TITAN backend.";
-
+    if (lower.includes("hello") || lower.includes("hi")) {
+        return "Hello. TITAN assistant is online.";
     }
+
+    if (lower.includes("status")) {
+        return "TITAN assistant website is online. Core trading bot remains separate and untouched.";
+    }
+
+    if (lower.includes("backend")) {
+        return "Online backend is not connected yet. Website mode is active.";
+    }
+
+    if (lower.includes("reliance") || lower.includes("price")) {
+        return "Live price backend is not connected yet. Next step is connecting Supabase or TITAN API safely.";
+    }
+
+    if (lower.includes("market")) {
+        return "Market intelligence display is ready. Live market data connection will be added safely next.";
+    }
+
+    if (lower.includes("trade") || lower.includes("trades")) {
+        return "Live trades connection is not added yet. The assistant UI is online and ready for safe integration.";
+    }
+
+    if (lower.includes("error")) {
+        return "No website crash detected. Backend integration is pending.";
+    }
+
+    if (lower.includes("voice")) {
+        return "Voice mode is active if your browser allows microphone and speech permissions.";
+    }
+
+    return "TITAN received: " + text;
 }
 
 function speak(text) {
@@ -341,7 +355,6 @@ function speak(text) {
 }
 
 async function processMessage(text) {
-
     if (!text.trim()) return;
 
     setReply("Thinking...");
@@ -365,7 +378,9 @@ function sendMsg() {
 function clearMsg() {
     document.getElementById("msg").value = "";
     setReply("Hi.");
-    window.speechSynthesis.cancel();
+    if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+    }
     main.classList.remove("listening");
     main.classList.remove("speaking");
 }

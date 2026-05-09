@@ -121,13 +121,13 @@ def send_telegram_message(message):
     """
 
     if not can_send_trade_alert(message):
-        return
+        return False
 
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("❌ Telegram secrets missing. Alert not sent.")
         print(f"BOT_TOKEN: {TELEGRAM_BOT_TOKEN}")
         print(f"CHAT_ID: {TELEGRAM_CHAT_ID}")
-        return
+        return False
 
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -143,11 +143,14 @@ def send_telegram_message(message):
         if response.status_code == 200:
             print("✅ Telegram alert sent successfully")
             _mark_alert_sent(message)
+            return True
         else:
             print(f"❌ Telegram alert failed: {response.text}")
+            return False
 
     except Exception as e:
         print(f"❌ Telegram error: {e}")
+        return False
 
 
 def get_daily_alert_status():

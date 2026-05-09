@@ -11,6 +11,7 @@ Fixes:
 """
 
 import os
+import re
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
@@ -108,6 +109,57 @@ def _get_supabase():
         return None
 
 
+def _extract_missing_column(error_text):
+    match = re.search(r"Could not find the '([^']+)' column", str(error_text))
+    if match:
+        return match.group(1)
+    return None
+
+
+def _safe_supabase_insert(client, table_name, payload):
+    clean = dict(payload)
+
+    for _ in range(12):
+        try:
+            client.table(table_name).insert(clean).execute()
+            return True
+        except Exception as e:
+            missing_col = _extract_missing_column(e)
+
+            if missing_col and missing_col in clean:
+                print(f"[Supabase FIX] {table_name} missing column removed: {missing_col}")
+                clean.pop(missing_col, None)
+                continue
+
+            print(f"[Supabase ERROR] {table_name} insert failed: {e}")
+            return False
+
+    print(f"[Supabase ERROR] {table_name} insert failed after schema cleanup retries.")
+    return False
+
+
+def _safe_supabase_update(client, table_name, payload, match_column, match_value):
+    clean = dict(payload)
+
+    for _ in range(12):
+        try:
+            client.table(table_name).update(clean).eq(match_column, match_value).execute()
+            return True
+        except Exception as e:
+            missing_col = _extract_missing_column(e)
+
+            if missing_col and missing_col in clean:
+                print(f"[Supabase FIX] {table_name} missing update column removed: {missing_col}")
+                clean.pop(missing_col, None)
+                continue
+
+            print(f"[Supabase ERROR] {table_name} update failed: {e}")
+            return False
+
+    print(f"[Supabase ERROR] {table_name} update failed after schema cleanup retries.")
+    return False
+
+
 # =========================================================
 # MARKET CLOSE HANDLER
 # =========================================================
@@ -147,14 +199,17 @@ def auto_close_live_trades_after_market_close():
             if not row_id:
                 continue
 
-            supabase.table("trade_results").update({
+            updated = _safe_supabase_update(supabase, "trade_results", {
                 "status": "MARKET_CLOSED",
                 "outcome": "MARKET_CLOSED",
                 "result": "MARKET_CLOSED",
                 "closed_at": now.isoformat(),
                 "updated_at": now.isoformat(),
                 "reason": "Auto closed because market session ended"
-            }).eq("id", row_id).execute()
+            }, "id", row_id)
+
+            if not updated:
+                continue
 
             closed_count += 1
             print(f"[MarketClose] Auto-closed LIVE trade: {symbol}")
@@ -273,7 +328,10 @@ def save_sent_packets_to_trade_results(sent_packets, context=None):
                 "updated_at": now_iso,
             }
 
-            supabase.table("trade_results").insert(row).execute()
+            inserted = _safe_supabase_insert(supabase, "trade_results", row)
+
+            if not inserted:
+                continue
 
             saved_count += 1
             print(
