@@ -22,7 +22,7 @@ def normalize_setup(setup: Any) -> Dict[str, Any]:
     """
 
     if isinstance(setup, dict):
-        return {
+        normalized = {
             "symbol": setup.get("symbol") or setup.get("stock") or setup.get("ticker") or "UNKNOWN",
             "side": setup.get("side") or setup.get("direction") or setup.get("trade_side") or "UNKNOWN",
             "entry": setup.get("entry") or setup.get("entry_price"),
@@ -34,6 +34,22 @@ def normalize_setup(setup: Any) -> Dict[str, Any]:
             "reason": setup.get("reason") or setup.get("setup_reason") or setup.get("message") or "",
             "raw": setup,
         }
+
+        for key in [
+            "microstructure",
+            "advanced_regime",
+            "professional_risk",
+            "liquidity_quality_score",
+            "regime_confidence",
+            "risk_quality_score",
+            "institutional_score_adjustment",
+            "phase1_blocked",
+            "phase1_block_reason",
+        ]:
+            if key in setup:
+                normalized[key] = setup.get(key)
+
+        return normalized
 
     if isinstance(setup, (tuple, list)):
         values = list(setup)

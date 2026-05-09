@@ -30,6 +30,21 @@ from journal.trade_journal import log_trade
 from journal.scan_journal import log_scan
 from utils.market_hours import is_trade_window, trade_window_text
 
+try:
+    from engines.institutional_microstructure import analyze_microstructure
+except Exception:
+    analyze_microstructure = None
+
+try:
+    from engines.advanced_regime_engine import detect_advanced_regime
+except Exception:
+    detect_advanced_regime = None
+
+try:
+    from engines.pro_risk_engine import evaluate_professional_risk
+except Exception:
+    evaluate_professional_risk = None
+
 from titan_brain.db import (
     insert_scan,
     insert_scan_symbol,
@@ -216,6 +231,122 @@ def safe_position_sizing(entry, stop_loss):
         }
 
 
+def _safe_float(value, default=0.0):
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except Exception:
+        return default
+
+
+def apply_institutional_phase1(trade_payload, data, side, live_price, market_status):
+    """
+    Adds Phase 1 institutional metadata.
+
+    Fail-open rule:
+    - Engine calculation errors keep the setup alive.
+    - Only explicit professional risk blocks remove the setup.
+    """
+    result = dict(trade_payload)
+
+    microstructure = {
+        "available": False,
+        "liquidity_quality_score": 50.0,
+        "warnings": ["phase1_microstructure_not_available"],
+    }
+    advanced_regime = {
+        "available": False,
+        "regime_type": "UNKNOWN",
+        "regime_confidence": 0.0,
+        "warnings": ["phase1_regime_not_available"],
+    }
+    professional_risk = {
+        "risk_allowed": True,
+        "risk_quality_score": 50.0,
+        "risk_blocks": [],
+        "risk_warnings": ["phase1_risk_not_available"],
+    }
+
+    try:
+        if analyze_microstructure is not None:
+            microstructure = analyze_microstructure(
+                df=data,
+                side=side,
+                live_price=live_price,
+            )
+    except Exception as e:
+        microstructure["error"] = str(e)
+
+    try:
+        if detect_advanced_regime is not None:
+            advanced_regime = detect_advanced_regime(
+                df=data,
+                symbol=result.get("symbol"),
+                market_status=market_status,
+            )
+    except Exception as e:
+        advanced_regime["error"] = str(e)
+
+    try:
+        if evaluate_professional_risk is not None:
+            professional_risk = evaluate_professional_risk(
+                setup=result,
+                microstructure=microstructure,
+                regime=advanced_regime,
+            )
+    except Exception as e:
+        professional_risk["error"] = str(e)
+
+    liquidity_quality = _safe_float(microstructure.get("liquidity_quality_score"), 50.0)
+    risk_quality = _safe_float(professional_risk.get("risk_quality_score"), 50.0)
+    regime_confidence = _safe_float(advanced_regime.get("regime_confidence"), 0.0)
+    panic_score = _safe_float(advanced_regime.get("panic_score"), 0.0)
+    liquidity_crisis = _safe_float(advanced_regime.get("liquidity_crisis_score"), 0.0)
+
+    institutional_adjustment = 0.0
+    institutional_adjustment += (liquidity_quality - 50.0) * 0.01
+    institutional_adjustment += (risk_quality - 50.0) * 0.008
+
+    if regime_confidence >= 55 and advanced_regime.get("regime_type") == "TRENDING":
+        institutional_adjustment += 0.15
+
+    if panic_score >= 60 or liquidity_crisis >= 60:
+        institutional_adjustment -= 0.25
+
+    original_score = _safe_float(result.get("score"), 0.0)
+    adjusted_score = max(0.0, original_score + institutional_adjustment)
+
+    result["score"] = round(adjusted_score, 2)
+    result["rank_score"] = round(adjusted_score, 2)
+    result["institutional_score_adjustment"] = round(institutional_adjustment, 3)
+    result["microstructure"] = microstructure
+    result["advanced_regime"] = advanced_regime
+    result["professional_risk"] = professional_risk
+    result["liquidity_quality_score"] = microstructure.get("liquidity_quality_score")
+    result["regime_confidence"] = advanced_regime.get("regime_confidence")
+    result["risk_quality_score"] = professional_risk.get("risk_quality_score")
+
+    if isinstance(result.get("scores"), dict):
+        result["scores"] = dict(result["scores"])
+        result["scores"]["institutional_score_adjustment"] = result["institutional_score_adjustment"]
+        result["scores"]["institutional_adjusted_score"] = result["score"]
+
+    if isinstance(result.get("market_context"), dict):
+        result["market_context"] = dict(result["market_context"])
+        result["market_context"]["advanced_regime"] = advanced_regime
+        result["market_context"]["liquidity_quality_score"] = result["liquidity_quality_score"]
+
+    if isinstance(result.get("setup_context"), dict):
+        result["setup_context"] = dict(result["setup_context"])
+        result["setup_context"]["microstructure"] = microstructure
+        result["setup_context"]["professional_risk"] = professional_risk
+
+    risk_blocks = professional_risk.get("risk_blocks", [])
+    result["phase1_blocked"] = bool(risk_blocks)
+    result["phase1_block_reason"] = ", ".join(str(item) for item in risk_blocks)
+
+    return result
 
 
 def scan_for_setups():
@@ -255,6 +386,7 @@ def scan_for_setups():
     confluence_fail_count = 0
     levels_fail_count = 0
     rr_fail_count = 0
+    phase1_block_count = 0
 
     market_status = market_regime_status()
     symbols = load_cached_stock_data()
@@ -508,6 +640,24 @@ def scan_for_setups():
                 "status": "OPEN"
             }
 
+            trade_payload = apply_institutional_phase1(
+                trade_payload=trade_payload,
+                data=data,
+                side=side,
+                live_price=live_price,
+                market_status=market_status,
+            )
+
+            if trade_payload.get("phase1_blocked"):
+                phase1_block_count += 1
+                final_passed = max(0, final_passed - 1)
+                titan_log(
+                    f"FILTER RESULT → {symbol} | PHASE1_RISK_BLOCK | "
+                    f"{trade_payload.get('phase1_block_reason')}",
+                    important=True,
+                )
+                continue
+
             trade_id = log_trade(
                 trade_payload,
                 scan_id=scan_id,
@@ -587,7 +737,8 @@ def scan_for_setups():
         print(
             f"[ScanSummary] Checked={stocks_checked} | Trend={trend_passed} | "
             f"Momentum={momentum_passed} | Structure={structure_passed} | "
-            f"Entry={entry_passed} | Final={final_passed} | Errors={len(errors)}"
+            f"Entry={entry_passed} | Final={final_passed} | "
+            f"Phase1Blocks={phase1_block_count} | Errors={len(errors)}"
         )
     else:
         print("========== SCAN FAILURE BREAKDOWN ==========")
@@ -603,6 +754,7 @@ def scan_for_setups():
         print(f"Confluence Fail: {confluence_fail_count}")
         print(f"Levels Fail: {levels_fail_count}")
         print(f"RR Fail: {rr_fail_count}")
+        print(f"Phase 1 Risk Blocks: {phase1_block_count}")
         print(f"Final Passed: {final_passed}")
         print("============================================")
 
