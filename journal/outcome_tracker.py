@@ -35,6 +35,15 @@ from zoneinfo import ZoneInfo
 from data.live_price import get_live_price
 from utils.market_hours import is_trade_window, trade_window_text
 
+try:
+    from engines.trade_lifecycle_intelligence import (
+        observe_trade_lifecycle_safely,
+        update_lifecycle_memory_safely,
+    )
+except Exception:
+    observe_trade_lifecycle_safely = None
+    update_lifecycle_memory_safely = None
+
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -407,6 +416,7 @@ def track_trade_outcomes(limit=None):
     closed = 0
     still_open = 0
     updated_rows = []
+    lifecycle_observations = []
     max_checks = None
 
     try:
@@ -437,6 +447,18 @@ def track_trade_outcomes(limit=None):
                 live_price = row.get("last_price") or row.get("entry")
 
             outcome, exit_price, pnl_points, reason = _check_outcome(row, live_price)
+
+            if observe_trade_lifecycle_safely is not None:
+                try:
+                    lifecycle_observation = observe_trade_lifecycle_safely(
+                        row=row,
+                        live_price=live_price,
+                        outcome_status=outcome,
+                    )
+                    if lifecycle_observation:
+                        lifecycle_observations.append(lifecycle_observation)
+                except Exception:
+                    pass
 
             row["last_checked_at"] = _now()
             row["last_price"] = exit_price
@@ -475,12 +497,25 @@ def track_trade_outcomes(limit=None):
         writer.writeheader()
         writer.writerows(updated_rows)
 
+    lifecycle_result = None
+    if update_lifecycle_memory_safely is not None:
+        try:
+            lifecycle_result = update_lifecycle_memory_safely(lifecycle_observations)
+            if isinstance(lifecycle_result, dict) and lifecycle_result.get("error"):
+                print(f"[Lifecycle ERROR] Shadow lifecycle failed open: {lifecycle_result.get('error')}")
+            elif isinstance(lifecycle_result, dict) and lifecycle_result.get("updated"):
+                print(f"[Lifecycle] Shadow observations updated: {lifecycle_result.get('updated')}")
+        except Exception as e:
+            lifecycle_result = {"error": str(e)}
+            print(f"[Lifecycle ERROR] Shadow lifecycle failed open: {e}")
+
     print(f"[OutcomeTracker] Checked: {checked} | Closed: {closed} | Still open: {still_open}")
 
     return {
         "checked": checked,
         "closed": closed,
         "open": still_open,
+        "lifecycle_shadow_result": lifecycle_result,
     }
 
 

@@ -1,0 +1,33 @@
+TITAN Phase 8 Market Narrative Shadow Report
+============================================
+
+Safety
+- Shadow advisory only.
+- No ranking, Telegram, execution, broker, alert-cap, duplicate, or market-hours changes.
+- Uses existing local/cached TITAN metadata only.
+
+Updated: not yet refreshed
+Narrative Type: DATA_INSUFFICIENT_NEUTRAL
+Risk State: NEUTRAL
+Risk Tone Score: 50.0
+Market Direction: UNKNOWN
+Narrative Confidence: 0.0
+
+Breadth: UNKNOWN | Score: 50.0
+Volatility: UNKNOWN | Score: 50.0
+Event Pressure: LOW | Score: 0.0
+
+Sector Leadership:
+- None observed
+
+Sector Weakness:
+- None observed
+
+Setup Alignment:
+- Observed setups: 0
+- Aligned setups: 0
+- Conflicting setups: 0
+- Average alignment score: 50.0
+
+Contradiction Flags:
+- None observed

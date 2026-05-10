@@ -37,6 +37,21 @@ from journal.outcome_tracker import track_trade_outcomes
 from utils.market_hours import TRADE_WINDOW_END, TRADE_WINDOW_START, is_trade_window
 
 try:
+    from engines.multi_agent_reasoning_engine import apply_multi_agent_reasoning
+except Exception:
+    apply_multi_agent_reasoning = None
+
+try:
+    from engines.phase6_shadow_observer import refresh_phase6_shadow_report
+except Exception:
+    refresh_phase6_shadow_report = None
+
+try:
+    from engines.market_narrative_engine import refresh_market_narrative_report
+except Exception:
+    refresh_market_narrative_report = None
+
+try:
     from intelligence.news_engine import run_news_engine
 except Exception:
     run_news_engine = None
@@ -470,6 +485,92 @@ def refresh_phase5_memory_safely():
         return {"error": str(e)}
 
 
+def apply_phase6_shadow_reasoning_safely(evaluated_setups, context):
+    """
+    Phase 6 shadow-only advisory layer.
+
+    It attaches multi-agent metadata after setup reasoning and before final
+    decision ranking. It never blocks setups and never changes ranking.
+    """
+    if apply_multi_agent_reasoning is None:
+        print("[Phase6] Multi-agent reasoning not connected.")
+        return evaluated_setups
+
+    try:
+        enriched = apply_multi_agent_reasoning(evaluated_setups, context)
+        print(f"[Phase6] Shadow reasoning applied to {len(enriched or [])} setup(s).")
+        return enriched
+    except Exception as e:
+        print(f"[Phase6 ERROR] Shadow reasoning failed open: {e}")
+        return evaluated_setups
+
+
+def refresh_phase6_shadow_report_safely(evaluated_setups):
+    """
+    Phase 6 observation-only reporting.
+
+    Uses already-attached Phase 6 metadata and is throttled by report mtime.
+    It never changes rankings, Telegram, alert caps, or execution.
+    """
+    if refresh_phase6_shadow_report is None:
+        print("[Phase6] Shadow observer not connected.")
+        return None
+
+    try:
+        result = refresh_phase6_shadow_report(evaluated_setups or [])
+
+        if isinstance(result, dict) and result.get("skipped") == "CACHE_FRESH":
+            print("[Phase6] Shadow report fresh. Refresh skipped.")
+        elif isinstance(result, dict) and result.get("error"):
+            print(f"[Phase6 ERROR] Shadow report failed open: {result.get('error')}")
+        else:
+            observed = result.get("observed_setup_count", 0) if isinstance(result, dict) else 0
+            print(f"[Phase6] Shadow report refreshed. Observed setups: {observed}")
+
+        return result
+
+    except Exception as e:
+        print(f"[Phase6 ERROR] Shadow report failed open: {e}")
+        return {"error": str(e)}
+
+
+def refresh_phase8_market_narrative_safely(master_input, context, evaluated_setups):
+    """
+    Phase 8 shadow-only market narrative reporting.
+
+    Uses already-built local/cached metadata. It does not mutate context or
+    setups and never feeds into ranking, Telegram, execution, or alerts.
+    """
+    if refresh_market_narrative_report is None:
+        print("[Phase8] Market narrative engine not connected.")
+        return None
+
+    try:
+        result = refresh_market_narrative_report(
+            master_input=master_input,
+            context=context,
+            evaluated_setups=evaluated_setups,
+        )
+
+        if isinstance(result, dict) and result.get("skipped") == "CACHE_FRESH":
+            snapshot = result.get("snapshot") if isinstance(result.get("snapshot"), dict) else {}
+            print(
+                "[Phase8] Market narrative report fresh. "
+                f"Narrative: {snapshot.get('narrative_type', 'UNKNOWN')}"
+            )
+        elif isinstance(result, dict) and result.get("error"):
+            print(f"[Phase8 ERROR] Market narrative failed open: {result.get('error')}")
+        else:
+            narrative = result.get("narrative_type", "UNKNOWN") if isinstance(result, dict) else "UNKNOWN"
+            print(f"[Phase8] Market narrative refreshed: {narrative}")
+
+        return result
+
+    except Exception as e:
+        print(f"[Phase8 ERROR] Market narrative failed open: {e}")
+        return {"error": str(e)}
+
+
 # =========================================================
 # MAIN MASTER BRAIN
 # =========================================================
@@ -527,6 +628,13 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
     print("[MasterBrain] Setups:", len(setups))
 
     evaluated_setups = evaluate_setups(setups, context)
+    evaluated_setups = apply_phase6_shadow_reasoning_safely(evaluated_setups, context)
+    phase6_shadow_report_result = refresh_phase6_shadow_report_safely(evaluated_setups)
+    phase8_market_narrative_result = refresh_phase8_market_narrative_safely(
+        master_input,
+        context,
+        evaluated_setups,
+    )
     _print_setup_reasoning(evaluated_setups)
 
     final_decisions = make_final_decisions(evaluated_setups, context)
@@ -592,6 +700,8 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
         "outcome_result": outcome_result,
         "adaptive_memory_result": adaptive_memory_result,
         "phase5_memory_result": phase5_memory_result,
+        "phase6_shadow_report_result": phase6_shadow_report_result,
+        "phase8_market_narrative_result": phase8_market_narrative_result,
     }
 
 

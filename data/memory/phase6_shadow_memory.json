@@ -1,0 +1,12 @@
+{
+  "agent_stance_distributions": {},
+  "average_agreement_confidence": 0.0,
+  "average_conflict_score": 0.0,
+  "average_consensus_score": 0.0,
+  "contradiction_frequency": 0.0,
+  "generated_at": "not yet refreshed",
+  "most_common_weak_setup_patterns": [],
+  "observed_setup_count": 0,
+  "strongest_agreement_patterns": [],
+  "top_contradiction_types": []
+}
