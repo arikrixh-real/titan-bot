@@ -54,6 +54,11 @@ def _safe_float(value, default=0.0):
         return default
 
 
+def _bounded_meta_rank_points(setup: Dict[str, Any]) -> float:
+    meta_quality = _safe_float(setup.get("meta_quality_score"), 50.0)
+    return max(-0.2, min(0.2, (meta_quality - 50.0) * 0.008))
+
+
 def make_final_decisions(
     evaluated_setups: List[Dict[str, Any]],
     context: Dict[str, Any],
@@ -118,6 +123,7 @@ def make_final_decisions(
         key=lambda s: (
             _decision_rank(s.get("decision")),
             _confidence_rank(s.get("confidence")),
+            _bounded_meta_rank_points(s),
             _safe_float(s.get("score")),
             _safe_float(s.get("rr")),
         ),

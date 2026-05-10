@@ -66,6 +66,11 @@ except Exception:
     build_data_advantage_context = None
     market_status_from_context = None
 
+try:
+    from engines.meta_intelligence_engine import apply_meta_intelligence
+except Exception:
+    apply_meta_intelligence = None
+
 from titan_brain.db import (
     insert_scan,
     insert_scan_symbol,
@@ -827,6 +832,9 @@ def scan_for_setups():
                     side=side,
                     market_context=data_advantage_context,
                 )
+
+            if apply_meta_intelligence is not None:
+                trade_payload = apply_meta_intelligence(trade_payload)
 
             trade_id = log_trade(
                 trade_payload,

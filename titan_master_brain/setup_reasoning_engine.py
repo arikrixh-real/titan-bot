@@ -78,7 +78,7 @@ def evaluate_single_setup(setup: Dict[str, Any], context: Dict[str, Any]) -> Dic
         decision = "REJECT"
         confidence = "LOW"
 
-    return {
+    evaluated = {
         "symbol": raw.get("symbol") or raw.get("stock"),
         "side": side,
         "entry": raw.get("entry") or raw.get("entry_price"),
@@ -91,6 +91,25 @@ def evaluate_single_setup(setup: Dict[str, Any], context: Dict[str, Any]) -> Dic
         "reasoning": reasoning,
         "raw": raw,
     }
+
+    for key in [
+        "strategy_family",
+        "strategy_family_strength",
+        "meta_layer_scores",
+        "meta_quality_score",
+        "meta_rank_adjustment",
+        "meta_adjustment_bounded",
+        "meta_positive_factors",
+        "meta_negative_factors",
+        "meta_explanation",
+        "phase5_applied",
+        "phase5_blocked",
+        "phase5_error",
+    ]:
+        if key in raw:
+            evaluated[key] = raw.get(key)
+
+    return evaluated
 
 
 def evaluate_setups(setups: List[Dict[str, Any]], context: Dict[str, Any]) -> List[Dict[str, Any]]:

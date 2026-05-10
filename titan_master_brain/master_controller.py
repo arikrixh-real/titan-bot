@@ -50,6 +50,15 @@ except Exception:
     build_adaptive_memory = None
     get_adaptive_state_path = None
 
+try:
+    from engines.self_evaluation_report import (
+        build_self_evaluation_report,
+        get_strategy_family_memory_path,
+    )
+except Exception:
+    build_self_evaluation_report = None
+    get_strategy_family_memory_path = None
+
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -58,6 +67,7 @@ MARKET_CLOSE = TRADE_WINDOW_END
 
 TEST_SYMBOLS = {"TEST", "TESTPY"}
 ADAPTIVE_MEMORY_REFRESH_SECONDS = 3600
+PHASE5_MEMORY_REFRESH_SECONDS = 3600
 
 
 # =========================================================
@@ -429,6 +439,37 @@ def refresh_adaptive_memory_safely():
         return {"error": str(e)}
 
 
+def refresh_phase5_memory_safely():
+    """
+    Phase 5 strategy-family memory/report refresh.
+
+    Throttled outside the ranking hot path. It never sends alerts, creates
+    trades, or changes guard behavior.
+    """
+    if build_self_evaluation_report is None or get_strategy_family_memory_path is None:
+        print("[MetaAI] Self-evaluation builder not connected.")
+        return None
+
+    try:
+        state_path = Path(get_strategy_family_memory_path())
+        if state_path.exists():
+            age_seconds = datetime.now().timestamp() - state_path.stat().st_mtime
+            if age_seconds < PHASE5_MEMORY_REFRESH_SECONDS:
+                print("[MetaAI] Strategy-family memory fresh. Refresh skipped.")
+                return {"skipped": "CACHE_FRESH"}
+
+        state = build_self_evaluation_report(write_files=True)
+        print(
+            "[MetaAI] Self-evaluation refreshed. "
+            f"Closed trades: {state.get('total_closed_trades')}"
+        )
+        return state
+
+    except Exception as e:
+        print(f"[MetaAI ERROR] Self-evaluation refresh skipped: {e}")
+        return {"error": str(e)}
+
+
 # =========================================================
 # MAIN MASTER BRAIN
 # =========================================================
@@ -532,6 +573,7 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
         print("[OutcomeTracker] run_outcome_tracker=False, skipped.")
 
     adaptive_memory_result = refresh_adaptive_memory_safely()
+    phase5_memory_result = refresh_phase5_memory_safely()
 
     # Run market close cleanup again after outcome tracker
     auto_close_live_trades_after_market_close()
@@ -549,6 +591,7 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
         "sent_packets": sent_packets,
         "outcome_result": outcome_result,
         "adaptive_memory_result": adaptive_memory_result,
+        "phase5_memory_result": phase5_memory_result,
     }
 
 

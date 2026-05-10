@@ -1,0 +1,239 @@
+{
+  "version": "5.0",
+  "last_updated": "2026-05-10 10:11:08",
+  "total_closed_trades": 85,
+  "total_wins": 34,
+  "total_losses": 51,
+  "global": {
+    "trades": 85.0,
+    "wins": 34.0,
+    "losses": 51.0,
+    "win_rate": 0.4,
+    "posterior_win_rate": 0.4045,
+    "sample_confidence": 1.0,
+    "family_quality_score": 40.45,
+    "weight": 0.9618,
+    "memory_active": true
+  },
+  "families": {
+    "GENERAL": {
+      "trades": 48.217,
+      "wins": 18.4313,
+      "losses": 29.7857,
+      "win_rate": 0.3823,
+      "posterior_win_rate": 0.3913,
+      "sample_confidence": 1.0,
+      "family_quality_score": 39.13,
+      "weight": 0.9565,
+      "memory_active": true
+    }
+  },
+  "symbols": {
+    "TATASTEEL": {
+      "trades": 0.6029,
+      "wins": 0.6029,
+      "losses": 0.0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.5655,
+      "sample_confidence": 0.0201,
+      "family_quality_score": 50.13,
+      "weight": 1.0005,
+      "memory_active": false
+    },
+    "TCS": {
+      "trades": 2.0307,
+      "wins": 0.9272,
+      "losses": 1.1035,
+      "win_rate": 0.4566,
+      "posterior_win_rate": 0.4854,
+      "sample_confidence": 0.0677,
+      "family_quality_score": 49.9,
+      "weight": 0.9996,
+      "memory_active": false
+    },
+    "M&M": {
+      "trades": 1.3832,
+      "wins": 0.6214,
+      "losses": 0.7618,
+      "win_rate": 0.4492,
+      "posterior_win_rate": 0.487,
+      "sample_confidence": 0.0461,
+      "family_quality_score": 49.94,
+      "weight": 0.9998,
+      "memory_active": false
+    },
+    "BAJAJ-AUTO": {
+      "trades": 5.0698,
+      "wins": 0.0,
+      "losses": 5.0698,
+      "win_rate": 0.0,
+      "posterior_win_rate": 0.2205,
+      "sample_confidence": 0.169,
+      "family_quality_score": 45.28,
+      "weight": 0.9811,
+      "memory_active": true
+    },
+    "RELIANCE": {
+      "trades": 0.2985,
+      "wins": 0.2985,
+      "losses": 0.0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.5347,
+      "sample_confidence": 0.0099,
+      "family_quality_score": 50.03,
+      "weight": 1.0001,
+      "memory_active": false
+    },
+    "PFC": {
+      "trades": 5.4869,
+      "wins": 0.303,
+      "losses": 5.1839,
+      "win_rate": 0.0552,
+      "posterior_win_rate": 0.2428,
+      "sample_confidence": 0.1829,
+      "family_quality_score": 45.3,
+      "weight": 0.9812,
+      "memory_active": true
+    },
+    "ULTRACEMCO": {
+      "trades": 0.3076,
+      "wins": 0.0,
+      "losses": 0.3076,
+      "win_rate": 0.0,
+      "posterior_win_rate": 0.4643,
+      "sample_confidence": 0.0103,
+      "family_quality_score": 49.96,
+      "weight": 0.9999,
+      "memory_active": false
+    },
+    "JSWSTEEL": {
+      "trades": 0.3123,
+      "wins": 0.0,
+      "losses": 0.3123,
+      "win_rate": 0.0,
+      "posterior_win_rate": 0.4638,
+      "sample_confidence": 0.0104,
+      "family_quality_score": 49.96,
+      "weight": 0.9998,
+      "memory_active": false
+    },
+    "BRITANNIA": {
+      "trades": 0.3171,
+      "wins": 0.3171,
+      "losses": 0.0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.5367,
+      "sample_confidence": 0.0106,
+      "family_quality_score": 50.04,
+      "weight": 1.0002,
+      "memory_active": false
+    },
+    "TECHM": {
+      "trades": 1.6768,
+      "wins": 0.3368,
+      "losses": 1.34,
+      "win_rate": 0.2009,
+      "posterior_win_rate": 0.4116,
+      "sample_confidence": 0.0559,
+      "family_quality_score": 49.51,
+      "weight": 0.998,
+      "memory_active": false
+    },
+    "BHARTIARTL": {
+      "trades": 5.9913,
+      "wins": 5.2135,
+      "losses": 0.7779,
+      "win_rate": 0.8702,
+      "posterior_win_rate": 0.722,
+      "sample_confidence": 0.1997,
+      "family_quality_score": 54.43,
+      "weight": 1.0177,
+      "memory_active": true
+    },
+    "HEROMOTOCO": {
+      "trades": 7.9215,
+      "wins": 1.9313,
+      "losses": 5.9902,
+      "win_rate": 0.2438,
+      "posterior_win_rate": 0.3298,
+      "sample_confidence": 0.2641,
+      "family_quality_score": 45.5,
+      "weight": 0.982,
+      "memory_active": true
+    },
+    "ONGC": {
+      "trades": 3.4139,
+      "wins": 3.4139,
+      "losses": 0.0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.7302,
+      "sample_confidence": 0.1138,
+      "family_quality_score": 52.62,
+      "weight": 1.0105,
+      "memory_active": false
+    },
+    "AXISBANK": {
+      "trades": 3.97,
+      "wins": 3.5662,
+      "losses": 0.4038,
+      "win_rate": 0.8983,
+      "posterior_win_rate": 0.6984,
+      "sample_confidence": 0.1323,
+      "family_quality_score": 52.63,
+      "weight": 1.0105,
+      "memory_active": false
+    },
+    "TITAN": {
+      "trades": 3.4093,
+      "wins": 0.8996,
+      "losses": 2.5096,
+      "win_rate": 0.2639,
+      "posterior_win_rate": 0.3913,
+      "sample_confidence": 0.1136,
+      "family_quality_score": 48.77,
+      "weight": 0.9951,
+      "memory_active": false
+    },
+    "INFY": {
+      "trades": 6.0252,
+      "wins": 0.0,
+      "losses": 6.0252,
+      "win_rate": 0.0,
+      "posterior_win_rate": 0.1995,
+      "sample_confidence": 0.2008,
+      "family_quality_score": 43.96,
+      "weight": 0.9759,
+      "memory_active": true
+    }
+  },
+  "regimes": {
+    "UNKNOWN": {
+      "trades": 48.217,
+      "wins": 18.4313,
+      "losses": 29.7857,
+      "win_rate": 0.3823,
+      "posterior_win_rate": 0.3913,
+      "sample_confidence": 1.0,
+      "family_quality_score": 39.13,
+      "weight": 0.9565,
+      "memory_active": true
+    }
+  },
+  "overfitting_controls": {
+    "minimum_global_trades": 10,
+    "minimum_family_trades": 5,
+    "decay_factor": 0.985,
+    "bayesian_prior": {
+      "alpha": 2.0,
+      "beta": 2.0
+    },
+    "family_quality_score_cap": [
+      35.0,
+      65.0
+    ],
+    "runtime_adjustment_cap": [
+      -0.3,
+      0.2
+    ]
+  }
+}

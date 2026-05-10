@@ -153,15 +153,18 @@ def calculate_daily_alert_rank(candidate: Dict[str, Any]) -> float:
     """
     Multi-factor ranking.
     Higher rank = better alert priority.
+    Phase 5 meta quality contributes only a tiny bounded ranking nudge.
     """
 
     score = _safe_float(candidate.get("score"), 0.0)
+    meta_quality = _safe_float(candidate.get("meta_quality_score"), 50.0)
     rr = _safe_float(candidate.get("rr"), 0.0)
     confirmations = _extract_confirmations(candidate)
 
     rank = 0.0
 
     rank += score * 10.0
+    rank += max(-2.0, min(2.0, (meta_quality - 50.0) * 0.08))
     rank += rr * 5.0
     rank += _decision_points(candidate.get("decision")) * 8.0
     rank += _confidence_points(candidate.get("confidence")) * 5.0

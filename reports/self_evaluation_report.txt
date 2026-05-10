@@ -1,0 +1,43 @@
+TITAN PHASE 5 SELF-EVALUATION REPORT
+============================================================
+Updated: 2026-05-10 10:11:08
+Closed trades: 85
+Wins: 34
+Losses: 51
+Global calibrated quality: 40.45
+
+WHAT TITAN LEARNED
+------------------------------------------------------------
+- Strategy-family memory can influence ranking within strict caps.
+
+STRONGEST STRATEGY FAMILIES
+------------------------------------------------------------
+GENERAL: trades=48.217, wins=18.4313, losses=29.7857, posterior=0.3913, quality=39.13
+
+WEAKEST SETUPS TO AVOID
+------------------------------------------------------------
+GENERAL: trades=48.217, posterior=0.3913, quality=39.13, active=True
+
+STRONGEST SYMBOLS
+------------------------------------------------------------
+HEROMOTOCO: trades=7.9215, posterior=0.3298, quality=45.5
+INFY: trades=6.0252, posterior=0.1995, quality=43.96
+BHARTIARTL: trades=5.9913, posterior=0.722, quality=54.43
+PFC: trades=5.4869, posterior=0.2428, quality=45.3
+BAJAJ-AUTO: trades=5.0698, posterior=0.2205, quality=45.28
+AXISBANK: trades=3.97, posterior=0.6984, quality=52.63
+ONGC: trades=3.4139, posterior=0.7302, quality=52.62
+TITAN: trades=3.4093, posterior=0.3913, quality=48.77
+
+REGIME PERFORMANCE SUMMARY
+------------------------------------------------------------
+UNKNOWN: trades=48.217, posterior=0.3913, quality=39.13
+
+CONFIDENCE CALIBRATION SUMMARY
+------------------------------------------------------------
+minimum_global_trades: 10
+minimum_family_trades: 5
+decay_factor: 0.985
+bayesian_prior: {'alpha': 2.0, 'beta': 2.0}
+family_quality_score_cap: [35.0, 65.0]
+runtime_adjustment_cap: [-0.3, 0.2]
