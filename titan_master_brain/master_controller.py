@@ -12,6 +12,7 @@ Fixes:
 
 import os
 import re
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -50,6 +51,11 @@ try:
     from engines.market_narrative_engine import refresh_market_narrative_report
 except Exception:
     refresh_market_narrative_report = None
+
+try:
+    from engines.cross_setup_intelligence import refresh_cross_setup_report
+except Exception:
+    refresh_cross_setup_report = None
 
 try:
     from intelligence.news_engine import run_news_engine
@@ -571,6 +577,45 @@ def refresh_phase8_market_narrative_safely(master_input, context, evaluated_setu
         return {"error": str(e)}
 
 
+def refresh_phase9_cross_setup_safely(evaluated_setups, context, final_decisions, phase8_market_narrative_result):
+    """
+    Phase 9 shadow-only cross-setup relational reporting.
+
+    Runs after final decisions and Telegram handling. It receives only copied
+    snapshots, writes compact artifacts, and never feeds ranking, alerts,
+    execution, broker behavior, or daily alert state.
+    """
+    if refresh_cross_setup_report is None:
+        print("[Phase9] Cross-setup intelligence not connected.")
+        return None
+
+    try:
+        result = refresh_cross_setup_report(
+            evaluated_setups=deepcopy(evaluated_setups or []),
+            context=deepcopy(context or {}),
+            final_decisions=deepcopy(final_decisions or {}),
+            market_narrative=deepcopy(phase8_market_narrative_result or {}),
+        )
+
+        if isinstance(result, dict) and result.get("skipped") == "CACHE_FRESH":
+            snapshot = result.get("snapshot") if isinstance(result.get("snapshot"), dict) else {}
+            print(
+                "[Phase9] Cross-setup report fresh. "
+                f"State: {snapshot.get('relational_state', 'UNKNOWN')}"
+            )
+        elif isinstance(result, dict) and result.get("error"):
+            print(f"[Phase9 ERROR] Cross-setup intelligence failed open: {result.get('error')}")
+        else:
+            state = result.get("relational_state", "UNKNOWN") if isinstance(result, dict) else "UNKNOWN"
+            print(f"[Phase9] Cross-setup intelligence refreshed: {state}")
+
+        return result
+
+    except Exception as e:
+        print(f"[Phase9 ERROR] Cross-setup intelligence failed open: {e}")
+        return {"error": str(e)}
+
+
 # =========================================================
 # MAIN MASTER BRAIN
 # =========================================================
@@ -612,6 +657,7 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
             "execution_result": {},
             "sent_packets": [],
             "outcome_result": None,
+            "phase9_cross_setup_result": None,
         }
 
     master_input = build_master_input()
@@ -668,6 +714,13 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
     else:
         print("[Telegram] send_telegram=False, dry run only. Nothing sent.")
 
+    phase9_cross_setup_result = refresh_phase9_cross_setup_safely(
+        evaluated_setups=evaluated_setups,
+        context=context,
+        final_decisions=final_decisions,
+        phase8_market_narrative_result=phase8_market_narrative_result,
+    )
+
     outcome_result = None
 
     if run_outcome_tracker:
@@ -702,6 +755,7 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
         "phase5_memory_result": phase5_memory_result,
         "phase6_shadow_report_result": phase6_shadow_report_result,
         "phase8_market_narrative_result": phase8_market_narrative_result,
+        "phase9_cross_setup_result": phase9_cross_setup_result,
     }
 
 

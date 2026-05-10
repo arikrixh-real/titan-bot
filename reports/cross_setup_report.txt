@@ -1,0 +1,9 @@
+TITAN Phase 9 Cross-Setup Relational Shadow Report
+===================================================
+
+Safety
+- Shadow advisory only.
+- No ranking, decision, alert, execution, broker, market data, or daily-cap integration.
+- Uses already-produced setup/context/memory metadata only.
+
+Status: Not yet refreshed.
