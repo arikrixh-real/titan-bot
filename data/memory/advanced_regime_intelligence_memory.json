@@ -1,0 +1,125 @@
+{
+  "active_regime": {
+    "confidence": 0.45,
+    "previous_primary": null,
+    "primary": "CHOPPY_NO_EDGE",
+    "secondary": [
+      "INDEX_DRIVEN",
+      "TRENDING_BREAKOUT",
+      "MEAN_REVERSION"
+    ],
+    "transition_confirmed": false,
+    "transition_detected": false,
+    "transition_strength": 0.0
+  },
+  "generated_at": "2026-05-10 11:47:15",
+  "history": [
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 11:47:15",
+      "primary": "CHOPPY_NO_EDGE"
+    }
+  ],
+  "layer_freshness": {
+    "cross_setup": {
+      "age_seconds": 2573.012,
+      "available": true,
+      "path": "data\\memory\\cross_setup_memory.json",
+      "status": "OK"
+    },
+    "lifecycle": {
+      "age_seconds": 3522.28,
+      "available": true,
+      "path": "data\\memory\\lifecycle_memory.json",
+      "status": "OK"
+    },
+    "market_narrative": {
+      "age_seconds": 3067.801,
+      "available": true,
+      "path": "data\\memory\\market_narrative_memory.json",
+      "status": "OK"
+    },
+    "master_shadow": {
+      "age_seconds": 1770.266,
+      "available": true,
+      "path": "data\\memory\\master_shadow_memory.json",
+      "status": "OK"
+    },
+    "promotion_gate": {
+      "age_seconds": 1100.1,
+      "available": true,
+      "path": "data\\memory\\promotion_gate_memory.json",
+      "status": "OK"
+    },
+    "strategy_family": {
+      "age_seconds": 5767.046,
+      "available": true,
+      "path": "data\\memory\\strategy_family_memory.json",
+      "status": "OK"
+    }
+  },
+  "phase12_shadow_mode": true,
+  "promotion_gate_features": {
+    "family_regime_edge_quality": 0.0,
+    "promotion_eligible": false,
+    "recommended_live_weight": 0.0,
+    "regime_prediction_quality": 0.0,
+    "samples": 0,
+    "stability_score": 0.45
+  },
+  "rank_adjustment": 0.0,
+  "recommended_live_weight": 0.0,
+  "regime_scores": {
+    "CHOPPY_NO_EDGE": 0.45,
+    "INDEX_DRIVEN": 0.35,
+    "LOW_LIQUIDITY": 0.25,
+    "MEAN_REVERSION": 0.25,
+    "NEWS_SHOCK": 0.0,
+    "PANIC_VOLATILITY": 0.2062,
+    "RISK_OFF": 0.225,
+    "RISK_ON": 0.225,
+    "SECTOR_ROTATION": 0.0,
+    "TRENDING_BREAKOUT": 0.3175
+  },
+  "runtime_bounded": true,
+  "runtime_context": {
+    "context_mode": null,
+    "observed_setups_count": 0,
+    "phase_result_keys": [],
+    "selected_decisions_count": 0
+  },
+  "runtime_ms": 16.0,
+  "safety": {
+    "alert_cap_changes": false,
+    "broker_api_changes": false,
+    "context_mutated": false,
+    "duplicate_prevention_changes": false,
+    "evaluated_setups_mutated": false,
+    "execution_changes": false,
+    "final_decision_changes": false,
+    "final_decisions_mutated": false,
+    "forbidden_imports_detected": [],
+    "live_price_calls": false,
+    "network_calls": false,
+    "no_forbidden_imports_detected": true,
+    "phase12_shadow_mode": true,
+    "rank_adjustment": 0.0,
+    "ranking_changes": false,
+    "recommended_live_weight": 0.0,
+    "scanner_calls": false,
+    "telegram_changes": false
+  },
+  "strategy_family_regime_performance": {
+    "UNKNOWN": {
+      "CHOPPY_NO_EDGE": {
+        "confidence": 0.0,
+        "losses": 0,
+        "samples": 0,
+        "win_rate": 0.0,
+        "wins": 0
+      }
+    }
+  },
+  "version": "12.0",
+  "warnings": []
+}

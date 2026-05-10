@@ -1,0 +1,41 @@
+TITAN Phase 12 Advanced Regime Intelligence Report
+===================================================
+
+Safety
+- Shadow regime intelligence only.
+- No ranking, final decision, Telegram, execution, broker/API, live-price, scanner, alert-cap, duplicate-prevention, Supabase, or network integration.
+- rank_adjustment: 0.0
+- recommended_live_weight: 0.0
+- No forbidden imports detected: True
+
+Updated: 2026-05-10 11:47:15
+Runtime Ms: 16.0 | Bounded: True
+
+Active Regime:
+- Primary: CHOPPY_NO_EDGE
+- Secondary: ['INDEX_DRIVEN', 'TRENDING_BREAKOUT', 'MEAN_REVERSION']
+- Confidence: 0.45
+- Transition detected: False | Confirmed: False
+- Previous primary: None
+
+Top Regime Scores:
+- CHOPPY_NO_EDGE: 0.45
+- INDEX_DRIVEN: 0.35
+- TRENDING_BREAKOUT: 0.3175
+- MEAN_REVERSION: 0.25
+- LOW_LIQUIDITY: 0.25
+- RISK_ON: 0.225
+- RISK_OFF: 0.225
+- PANIC_VOLATILITY: 0.2062
+- SECTOR_ROTATION: 0.0
+- NEWS_SHOCK: 0.0
+
+Promotion Gate Compatibility:
+- Samples: 0
+- Stability score: 0.45
+- Family regime edge quality: 0.0
+- Promotion eligible: False
+- Recommended live weight: 0.0
+
+Warnings:
+- None observed

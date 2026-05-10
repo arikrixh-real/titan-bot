@@ -1,0 +1,295 @@
+{
+  "contradictions": [
+    {
+      "left": "phase11_promotion_gate",
+      "right": "phase13_strategy_genome",
+      "severity": 0.35,
+      "type": "family_stability_vs_insufficient_promotion"
+    }
+  ],
+  "generated_at": "2026-05-10 12:18:17",
+  "history": [
+    {
+      "contradiction_pressure": 0.0175,
+      "generated_at": "2026-05-10 12:18:17",
+      "overall_drift_score": 0.0,
+      "overall_usefulness_score": 0.4231
+    }
+  ],
+  "layer_freshness": {
+    "phase10_master_shadow": {
+      "age_seconds": 3632.135,
+      "available": true,
+      "path": "data\\memory\\master_shadow_memory.json",
+      "status": "OK"
+    },
+    "phase11_promotion_gate": {
+      "age_seconds": 2961.969,
+      "available": true,
+      "path": "data\\memory\\promotion_gate_memory.json",
+      "status": "OK"
+    },
+    "phase12_regime": {
+      "age_seconds": 1861.851,
+      "available": true,
+      "path": "data\\memory\\advanced_regime_intelligence_memory.json",
+      "status": "OK"
+    },
+    "phase13_strategy_genome": {
+      "age_seconds": 1156.653,
+      "available": true,
+      "path": "data\\memory\\strategy_genome_memory.json",
+      "status": "OK"
+    },
+    "phase5_strategy_family": {
+      "age_seconds": 7628.913,
+      "available": true,
+      "path": "data\\memory\\strategy_family_memory.json",
+      "status": "OK"
+    },
+    "phase6_multi_agent": {
+      "age_seconds": 6686.477,
+      "available": true,
+      "path": "data\\memory\\phase6_shadow_memory.json",
+      "status": "OK"
+    },
+    "phase7_lifecycle": {
+      "age_seconds": 5384.148,
+      "available": true,
+      "path": "data\\memory\\lifecycle_memory.json",
+      "status": "OK"
+    },
+    "phase8_market_narrative": {
+      "age_seconds": 4929.67,
+      "available": true,
+      "path": "data\\memory\\market_narrative_memory.json",
+      "status": "OK"
+    },
+    "phase9_cross_setup": {
+      "age_seconds": 4434.88,
+      "available": true,
+      "path": "data\\memory\\cross_setup_memory.json",
+      "status": "OK"
+    }
+  },
+  "layers": {
+    "phase10_master_shadow": {
+      "drift_score": 0.0,
+      "loser_warning_quality": 0.9,
+      "overfit_risk": 0.2497,
+      "promotion_recommendation": "INSUFFICIENT_DATA",
+      "rank_adjustment": 0.0,
+      "recommended_live_weight": 0.0,
+      "sample_confidence": 0.0,
+      "samples": 0,
+      "stability_score": 0.545,
+      "usefulness_score": 0.342,
+      "winner_alignment": 0.8
+    },
+    "phase11_promotion_gate": {
+      "drift_score": 0.0,
+      "loser_warning_quality": 1.0,
+      "overfit_risk": 0.07,
+      "promotion_recommendation": "PROMOTION_CANDIDATE_REVIEW_ONLY",
+      "rank_adjustment": 0.0,
+      "recommended_live_weight": 0.0,
+      "sample_confidence": 0.5,
+      "samples": 50,
+      "stability_score": 0.725,
+      "usefulness_score": 0.7,
+      "winner_alignment": 1.0
+    },
+    "phase12_regime": {
+      "drift_score": 0.0,
+      "loser_warning_quality": 1.0,
+      "overfit_risk": 0.4042,
+      "promotion_recommendation": "INSUFFICIENT_DATA",
+      "rank_adjustment": 0.0,
+      "recommended_live_weight": 0.0,
+      "sample_confidence": 0.0,
+      "samples": 0,
+      "stability_score": 0.64,
+      "usefulness_score": 0.319,
+      "winner_alignment": 0.55
+    },
+    "phase13_strategy_genome": {
+      "drift_score": 0.0,
+      "loser_warning_quality": 0.95,
+      "overfit_risk": 0.6498,
+      "promotion_recommendation": "INSUFFICIENT_DATA",
+      "rank_adjustment": 0.0,
+      "recommended_live_weight": 0.0,
+      "sample_confidence": 0.0,
+      "samples": 0,
+      "stability_score": 0.5525,
+      "usefulness_score": 0.2315,
+      "winner_alignment": 0.125
+    },
+    "phase5_strategy_family": {
+      "drift_score": 0.0,
+      "loser_warning_quality": 1.0,
+      "overfit_risk": 0.0,
+      "promotion_recommendation": "PROMOTION_CANDIDATE_REVIEW_ONLY",
+      "rank_adjustment": 0.0,
+      "recommended_live_weight": 0.0,
+      "sample_confidence": 0.85,
+      "samples": 85,
+      "stability_score": 0.9475,
+      "usefulness_score": 0.7052,
+      "winner_alignment": 0.5
+    },
+    "phase6_multi_agent": {
+      "drift_score": 0.0,
+      "loser_warning_quality": 1.0,
+      "overfit_risk": 0.14,
+      "promotion_recommendation": "INSUFFICIENT_DATA",
+      "rank_adjustment": 0.0,
+      "recommended_live_weight": 0.0,
+      "sample_confidence": 0.0,
+      "samples": 0,
+      "stability_score": 0.55,
+      "usefulness_score": 0.4,
+      "winner_alignment": 1.0
+    },
+    "phase7_lifecycle": {
+      "drift_score": 0.0,
+      "loser_warning_quality": 1.0,
+      "overfit_risk": 0.4335,
+      "promotion_recommendation": "INSUFFICIENT_DATA",
+      "rank_adjustment": 0.0,
+      "recommended_live_weight": 0.0,
+      "sample_confidence": 0.0,
+      "samples": 0,
+      "stability_score": 0.65,
+      "usefulness_score": 0.31,
+      "winner_alignment": 0.5
+    },
+    "phase8_market_narrative": {
+      "drift_score": 0.0,
+      "loser_warning_quality": 1.0,
+      "overfit_risk": 0.14,
+      "promotion_recommendation": "INSUFFICIENT_DATA",
+      "rank_adjustment": 0.0,
+      "recommended_live_weight": 0.0,
+      "sample_confidence": 0.0,
+      "samples": 0,
+      "stability_score": 0.55,
+      "usefulness_score": 0.4,
+      "winner_alignment": 1.0
+    },
+    "phase9_cross_setup": {
+      "drift_score": 0.0,
+      "loser_warning_quality": 1.0,
+      "overfit_risk": 0.14,
+      "promotion_recommendation": "INSUFFICIENT_DATA",
+      "rank_adjustment": 0.0,
+      "recommended_live_weight": 0.0,
+      "sample_confidence": 0.0,
+      "samples": 0,
+      "stability_score": 0.55,
+      "usefulness_score": 0.4,
+      "winner_alignment": 1.0
+    }
+  },
+  "meta_state": {
+    "contradiction_pressure": 0.0175,
+    "overall_drift_score": 0.0,
+    "overall_intelligence_stability": 0.6344,
+    "overall_overfit_risk": 0.2475,
+    "overall_usefulness_score": 0.4231,
+    "rank_adjustment": 0.0,
+    "recommended_live_weight": 0.0
+  },
+  "phase14_shadow_mode": true,
+  "promotion_gate_features": {
+    "contradiction_control_score": 0.9825,
+    "layer_usefulness_quality": 0.4231,
+    "meta_stability_score": 0.6344,
+    "overfit_control_score": 0.7525,
+    "promotion_eligible": false,
+    "recommended_live_weight": 0.0,
+    "samples": 0
+  },
+  "rank_adjustment": 0.0,
+  "recommended_live_weight": 0.0,
+  "regime_layer_usefulness": {
+    "CHOPPY_NO_EDGE": {
+      "phase10_master_shadow": {
+        "confidence": 0.0,
+        "samples": 0,
+        "usefulness_score": 0.342
+      },
+      "phase11_promotion_gate": {
+        "confidence": 0.0,
+        "samples": 0,
+        "usefulness_score": 0.7
+      },
+      "phase12_regime": {
+        "confidence": 0.0,
+        "samples": 0,
+        "usefulness_score": 0.319
+      },
+      "phase13_strategy_genome": {
+        "confidence": 0.0,
+        "samples": 0,
+        "usefulness_score": 0.2315
+      },
+      "phase5_strategy_family": {
+        "confidence": 0.0,
+        "samples": 0,
+        "usefulness_score": 0.7052
+      },
+      "phase6_multi_agent": {
+        "confidence": 0.0,
+        "samples": 0,
+        "usefulness_score": 0.4
+      },
+      "phase7_lifecycle": {
+        "confidence": 0.0,
+        "samples": 0,
+        "usefulness_score": 0.31
+      },
+      "phase8_market_narrative": {
+        "confidence": 0.0,
+        "samples": 0,
+        "usefulness_score": 0.4
+      },
+      "phase9_cross_setup": {
+        "confidence": 0.0,
+        "samples": 0,
+        "usefulness_score": 0.4
+      }
+    }
+  },
+  "runtime_bounded": true,
+  "runtime_context": {
+    "context_mode": null,
+    "observed_setups_count": 0,
+    "phase_result_keys": [],
+    "selected_decisions_count": 0
+  },
+  "runtime_ms": 0.0,
+  "safety": {
+    "automatic_parameter_changes": false,
+    "broker_api_changes": false,
+    "context_mutated": false,
+    "dashboard_changes": false,
+    "evaluated_setups_mutated": false,
+    "execution_changes": false,
+    "final_decision_changes": false,
+    "final_decisions_mutated": false,
+    "forbidden_imports_detected": [],
+    "live_price_calls": false,
+    "network_calls": false,
+    "no_forbidden_imports_detected": true,
+    "phase14_shadow_mode": true,
+    "rank_adjustment": 0.0,
+    "ranking_changes": false,
+    "recommended_live_weight": 0.0,
+    "scanner_calls": false,
+    "self_modifying_code": false,
+    "telegram_changes": false
+  },
+  "version": "14.0",
+  "warnings": []
+}

@@ -1,0 +1,44 @@
+TITAN Phase 14 Meta Evolution Intelligence Report
+=================================================
+
+Safety
+- Shadow meta-evolution audit only.
+- No ranking, final decision, Telegram, execution, broker/API, live-price, scanner, Supabase, network, self-modifying code, automatic parameter, or dashboard integration.
+- rank_adjustment: 0.0
+- recommended_live_weight: 0.0
+- No forbidden imports detected: True
+
+Updated: 2026-05-10 12:18:17
+Runtime Ms: 0.0 | Bounded: True
+
+Meta State:
+- Overall usefulness: 0.4231
+- Overall stability: 0.6344
+- Overall drift: 0.0
+- Overall overfit risk: 0.2475
+- Contradiction pressure: 0.0175
+
+Layer Scores:
+- phase5_strategy_family: usefulness=0.7052, stability=0.9475, drift=0.0, overfit=0.0, recommendation=PROMOTION_CANDIDATE_REVIEW_ONLY
+- phase11_promotion_gate: usefulness=0.7, stability=0.725, drift=0.0, overfit=0.07, recommendation=PROMOTION_CANDIDATE_REVIEW_ONLY
+- phase6_multi_agent: usefulness=0.4, stability=0.55, drift=0.0, overfit=0.14, recommendation=INSUFFICIENT_DATA
+- phase8_market_narrative: usefulness=0.4, stability=0.55, drift=0.0, overfit=0.14, recommendation=INSUFFICIENT_DATA
+- phase9_cross_setup: usefulness=0.4, stability=0.55, drift=0.0, overfit=0.14, recommendation=INSUFFICIENT_DATA
+- phase10_master_shadow: usefulness=0.342, stability=0.545, drift=0.0, overfit=0.2497, recommendation=INSUFFICIENT_DATA
+- phase12_regime: usefulness=0.319, stability=0.64, drift=0.0, overfit=0.4042, recommendation=INSUFFICIENT_DATA
+- phase7_lifecycle: usefulness=0.31, stability=0.65, drift=0.0, overfit=0.4335, recommendation=INSUFFICIENT_DATA
+- phase13_strategy_genome: usefulness=0.2315, stability=0.5525, drift=0.0, overfit=0.6498, recommendation=INSUFFICIENT_DATA
+
+Contradictions: 1
+
+Promotion Gate Compatibility:
+- Samples: 0
+- Meta stability score: 0.6344
+- Layer usefulness quality: 0.4231
+- Overfit control score: 0.7525
+- Contradiction control score: 0.9825
+- Promotion eligible: False
+- Recommended live weight: 0.0
+
+Warnings:
+- None observed

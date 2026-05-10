@@ -58,6 +58,31 @@ except Exception:
     refresh_cross_setup_report = None
 
 try:
+    from engines.master_shadow_command_center import refresh_master_shadow_command_center
+except Exception:
+    refresh_master_shadow_command_center = None
+
+try:
+    from engines.promotion_gate_engine import refresh_promotion_gate
+except Exception:
+    refresh_promotion_gate = None
+
+try:
+    from engines.advanced_regime_intelligence import refresh_advanced_regime_intelligence
+except Exception:
+    refresh_advanced_regime_intelligence = None
+
+try:
+    from engines.strategy_genome_engine import refresh_strategy_genome
+except Exception:
+    refresh_strategy_genome = None
+
+try:
+    from engines.meta_evolution_intelligence import refresh_meta_evolution_intelligence
+except Exception:
+    refresh_meta_evolution_intelligence = None
+
+try:
     from intelligence.news_engine import run_news_engine
 except Exception:
     run_news_engine = None
@@ -616,6 +641,196 @@ def refresh_phase9_cross_setup_safely(evaluated_setups, context, final_decisions
         return {"error": str(e)}
 
 
+def refresh_phase10_master_shadow_safely(evaluated_setups, context, final_decisions, phase_results):
+    """
+    Phase 10 read-only command-center reporting.
+
+    Aggregates existing shadow memories into compact dashboard/report artifacts.
+    It never feeds ranking, alerts, Telegram, execution, broker behavior, market
+    data, or daily alert state.
+    """
+    if refresh_master_shadow_command_center is None:
+        print("[Phase10] Master shadow command center not connected.")
+        return None
+
+    try:
+        result = refresh_master_shadow_command_center(
+            evaluated_setups=deepcopy(evaluated_setups or []),
+            context=deepcopy(context or {}),
+            final_decisions=deepcopy(final_decisions or {}),
+            phase_results=deepcopy(phase_results or {}),
+        )
+
+        snapshot = result.get("snapshot") if isinstance(result, dict) and isinstance(result.get("snapshot"), dict) else result
+        status = snapshot.get("command_status", {}) if isinstance(snapshot, dict) else {}
+        state = status.get("overall_state", "UNKNOWN")
+
+        if isinstance(result, dict) and result.get("skipped") == "CACHE_FRESH":
+            print(f"[Phase10] Master shadow report fresh. State: {state}")
+        elif isinstance(result, dict) and status.get("failed_open"):
+            print(f"[Phase10 ERROR] Master shadow failed open. State: {state}")
+        else:
+            print(f"[Phase10] Master shadow refreshed. State: {state}")
+
+        return result
+
+    except Exception as e:
+        print(f"[Phase10 ERROR] Master shadow failed open: {e}")
+        return {"error": str(e)}
+
+
+def refresh_phase11_promotion_gate_safely(evaluated_setups, final_decisions, phase_results):
+    """
+    Phase 11 shadow-only promotion governance.
+
+    Evaluates whether shadow layers appear statistically useful. It never feeds
+    ranking, alerts, Telegram, execution, broker behavior, TP/SL, market data,
+    or daily alert state. Recommended live weight remains zero.
+    """
+    if refresh_promotion_gate is None:
+        print("[Phase11] Promotion gate not connected.")
+        return None
+
+    try:
+        result = refresh_promotion_gate(
+            evaluated_setups=deepcopy(evaluated_setups or []),
+            final_decisions=deepcopy(final_decisions or {}),
+            phase_results=deepcopy(phase_results or {}),
+        )
+
+        snapshot = result.get("snapshot") if isinstance(result, dict) and isinstance(result.get("snapshot"), dict) else result
+        summary = snapshot.get("promotion_summary", {}) if isinstance(snapshot, dict) else {}
+        status = snapshot.get("status", "UNKNOWN") if isinstance(snapshot, dict) else "UNKNOWN"
+        score = summary.get("max_promotion_score", 0.0) if isinstance(summary, dict) else 0.0
+
+        if isinstance(result, dict) and result.get("skipped") == "CACHE_FRESH":
+            print(f"[Phase11] Promotion gate report fresh. Status: {status} | score={score}")
+        elif isinstance(result, dict) and "phase11_failed_open" in (result.get("warnings") or []):
+            print(f"[Phase11 ERROR] Promotion gate failed open. Status: {status}")
+        else:
+            print(f"[Phase11] Promotion gate refreshed. Status: {status} | score={score}")
+
+        return result
+
+    except Exception as e:
+        print(f"[Phase11 ERROR] Promotion gate failed open: {e}")
+        return {"error": str(e)}
+
+
+def refresh_phase12_advanced_regime_safely(evaluated_setups, context, final_decisions, phase_results):
+    """
+    Phase 12 shadow-only advanced regime intelligence.
+
+    Classifies regime and tracks family/regime behavior for reports only. It
+    never feeds ranking, final decisions, alerts, Telegram, execution, broker
+    behavior, TP/SL, market data, alert caps, or duplicate prevention.
+    """
+    if refresh_advanced_regime_intelligence is None:
+        print("[Phase12] Advanced regime intelligence not connected.")
+        return None
+
+    try:
+        result = refresh_advanced_regime_intelligence(
+            evaluated_setups=deepcopy(evaluated_setups or []),
+            context=deepcopy(context or {}),
+            final_decisions=deepcopy(final_decisions or {}),
+            phase_results=deepcopy(phase_results or {}),
+        )
+
+        snapshot = result.get("snapshot") if isinstance(result, dict) and isinstance(result.get("snapshot"), dict) else result
+        active = snapshot.get("active_regime", {}) if isinstance(snapshot, dict) else {}
+        regime = active.get("primary", "UNKNOWN") if isinstance(active, dict) else "UNKNOWN"
+
+        if isinstance(result, dict) and result.get("skipped") == "CACHE_FRESH":
+            print(f"[Phase12] Advanced regime report fresh. Regime: {regime}")
+        elif isinstance(result, dict) and "phase12_failed_open" in (result.get("warnings") or []):
+            print(f"[Phase12 ERROR] Advanced regime failed open. Regime: {regime}")
+        else:
+            print(f"[Phase12] Advanced regime refreshed. Regime: {regime}")
+
+        return result
+
+    except Exception as e:
+        print(f"[Phase12 ERROR] Advanced regime failed open: {e}")
+        return {"error": str(e)}
+
+
+def refresh_phase13_strategy_genome_safely(evaluated_setups, context, final_decisions, phase_results):
+    """
+    Phase 13 shadow-only strategy genome reporting.
+
+    Groups observed setup DNA and family behavior for memory/report only. It
+    never feeds ranking, final decisions, alerts, Telegram, execution, TP/SL,
+    broker behavior, market data, alert caps, duplicate prevention, or dashboard.
+    """
+    if refresh_strategy_genome is None:
+        print("[Phase13] Strategy genome engine not connected.")
+        return None
+
+    try:
+        result = refresh_strategy_genome(
+            evaluated_setups=deepcopy(evaluated_setups or []),
+            context=deepcopy(context or {}),
+            final_decisions=deepcopy(final_decisions or {}),
+            phase_results=deepcopy(phase_results or {}),
+        )
+
+        snapshot = result.get("snapshot") if isinstance(result, dict) and isinstance(result.get("snapshot"), dict) else result
+        families = snapshot.get("families", {}) if isinstance(snapshot, dict) else {}
+        family_count = len(families) if isinstance(families, dict) else 0
+
+        if isinstance(result, dict) and result.get("skipped") == "CACHE_FRESH":
+            print(f"[Phase13] Strategy genome report fresh. Families: {family_count}")
+        elif isinstance(result, dict) and "phase13_failed_open" in (result.get("warnings") or []):
+            print("[Phase13 ERROR] Strategy genome failed open.")
+        else:
+            print(f"[Phase13] Strategy genome refreshed. Families: {family_count}")
+
+        return result
+
+    except Exception as e:
+        print(f"[Phase13 ERROR] Strategy genome failed open: {e}")
+        return {"error": str(e)}
+
+
+def refresh_phase14_meta_evolution_safely(evaluated_setups, context, final_decisions, phase_results):
+    """
+    Phase 14 shadow-only meta-evolution audit.
+
+    Evaluates intelligence-layer quality for memory/report only. It never
+    changes ranking, final decisions, alerts, Telegram, execution, broker/API,
+    market data, parameters, code, alert caps, duplicate prevention, or dashboard.
+    """
+    if refresh_meta_evolution_intelligence is None:
+        print("[Phase14] Meta evolution intelligence not connected.")
+        return None
+
+    try:
+        result = refresh_meta_evolution_intelligence(
+            evaluated_setups=deepcopy(evaluated_setups or []),
+            context=deepcopy(context or {}),
+            final_decisions=deepcopy(final_decisions or {}),
+            phase_results=deepcopy(phase_results or {}),
+        )
+
+        snapshot = result.get("snapshot") if isinstance(result, dict) and isinstance(result.get("snapshot"), dict) else result
+        meta = snapshot.get("meta_state", {}) if isinstance(snapshot, dict) else {}
+        usefulness = meta.get("overall_usefulness_score", "UNKNOWN") if isinstance(meta, dict) else "UNKNOWN"
+
+        if isinstance(result, dict) and result.get("skipped") == "CACHE_FRESH":
+            print(f"[Phase14] Meta evolution report fresh. Usefulness: {usefulness}")
+        elif isinstance(result, dict) and "phase14_failed_open" in (result.get("warnings") or []):
+            print("[Phase14 ERROR] Meta evolution failed open.")
+        else:
+            print(f"[Phase14] Meta evolution refreshed. Usefulness: {usefulness}")
+
+        return result
+
+    except Exception as e:
+        print(f"[Phase14 ERROR] Meta evolution failed open: {e}")
+        return {"error": str(e)}
+
+
 # =========================================================
 # MAIN MASTER BRAIN
 # =========================================================
@@ -643,6 +858,49 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
         print("[MasterBrain] Outside trade window: research-only mode active.")
         print("[MasterBrain] Trade execution, journaling, and outcome tracker skipped.")
         print("[Telegram] Market closed / outside alert window. No trade alerts sent.")
+
+        phase10_master_shadow_result = refresh_phase10_master_shadow_safely(
+            evaluated_setups=[],
+            context={},
+            final_decisions={},
+            phase_results={"news_items_collected": len(news_items or [])},
+        )
+        phase11_promotion_gate_result = refresh_phase11_promotion_gate_safely(
+            evaluated_setups=[],
+            final_decisions={},
+            phase_results={"phase10_master_shadow_result": phase10_master_shadow_result},
+        )
+        phase12_advanced_regime_result = refresh_phase12_advanced_regime_safely(
+            evaluated_setups=[],
+            context={},
+            final_decisions={},
+            phase_results={
+                "phase10_master_shadow_result": phase10_master_shadow_result,
+                "phase11_promotion_gate_result": phase11_promotion_gate_result,
+            },
+        )
+        phase13_strategy_genome_result = refresh_phase13_strategy_genome_safely(
+            evaluated_setups=[],
+            context={},
+            final_decisions={},
+            phase_results={
+                "phase10_master_shadow_result": phase10_master_shadow_result,
+                "phase11_promotion_gate_result": phase11_promotion_gate_result,
+                "phase12_advanced_regime_result": phase12_advanced_regime_result,
+            },
+        )
+        phase14_meta_evolution_result = refresh_phase14_meta_evolution_safely(
+            evaluated_setups=[],
+            context={},
+            final_decisions={},
+            phase_results={
+                "phase10_master_shadow_result": phase10_master_shadow_result,
+                "phase11_promotion_gate_result": phase11_promotion_gate_result,
+                "phase12_advanced_regime_result": phase12_advanced_regime_result,
+                "phase13_strategy_genome_result": phase13_strategy_genome_result,
+            },
+        )
+
         print("\n[MasterBrain] Cycle Complete\n")
 
         return {
@@ -658,6 +916,11 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
             "sent_packets": [],
             "outcome_result": None,
             "phase9_cross_setup_result": None,
+            "phase10_master_shadow_result": phase10_master_shadow_result,
+            "phase11_promotion_gate_result": phase11_promotion_gate_result,
+            "phase12_advanced_regime_result": phase12_advanced_regime_result,
+            "phase13_strategy_genome_result": phase13_strategy_genome_result,
+            "phase14_meta_evolution_result": phase14_meta_evolution_result,
         }
 
     master_input = build_master_input()
@@ -736,6 +999,77 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
     adaptive_memory_result = refresh_adaptive_memory_safely()
     phase5_memory_result = refresh_phase5_memory_safely()
 
+    phase10_master_shadow_result = refresh_phase10_master_shadow_safely(
+        evaluated_setups=evaluated_setups,
+        context=context,
+        final_decisions=final_decisions,
+        phase_results={
+            "phase5_memory_result": phase5_memory_result,
+            "phase6_shadow_report_result": phase6_shadow_report_result,
+            "phase8_market_narrative_result": phase8_market_narrative_result,
+            "phase9_cross_setup_result": phase9_cross_setup_result,
+            "adaptive_memory_result": adaptive_memory_result,
+            "outcome_result": outcome_result,
+        },
+    )
+    phase11_promotion_gate_result = refresh_phase11_promotion_gate_safely(
+        evaluated_setups=evaluated_setups,
+        final_decisions=final_decisions,
+        phase_results={
+            "phase10_master_shadow_result": phase10_master_shadow_result,
+            "phase5_memory_result": phase5_memory_result,
+            "phase6_shadow_report_result": phase6_shadow_report_result,
+            "phase8_market_narrative_result": phase8_market_narrative_result,
+            "phase9_cross_setup_result": phase9_cross_setup_result,
+            "outcome_result": outcome_result,
+        },
+    )
+    phase12_advanced_regime_result = refresh_phase12_advanced_regime_safely(
+        evaluated_setups=evaluated_setups,
+        context=context,
+        final_decisions=final_decisions,
+        phase_results={
+            "phase10_master_shadow_result": phase10_master_shadow_result,
+            "phase11_promotion_gate_result": phase11_promotion_gate_result,
+            "phase5_memory_result": phase5_memory_result,
+            "phase6_shadow_report_result": phase6_shadow_report_result,
+            "phase8_market_narrative_result": phase8_market_narrative_result,
+            "phase9_cross_setup_result": phase9_cross_setup_result,
+            "outcome_result": outcome_result,
+        },
+    )
+    phase13_strategy_genome_result = refresh_phase13_strategy_genome_safely(
+        evaluated_setups=evaluated_setups,
+        context=context,
+        final_decisions=final_decisions,
+        phase_results={
+            "phase10_master_shadow_result": phase10_master_shadow_result,
+            "phase11_promotion_gate_result": phase11_promotion_gate_result,
+            "phase12_advanced_regime_result": phase12_advanced_regime_result,
+            "phase5_memory_result": phase5_memory_result,
+            "phase6_shadow_report_result": phase6_shadow_report_result,
+            "phase8_market_narrative_result": phase8_market_narrative_result,
+            "phase9_cross_setup_result": phase9_cross_setup_result,
+            "outcome_result": outcome_result,
+        },
+    )
+    phase14_meta_evolution_result = refresh_phase14_meta_evolution_safely(
+        evaluated_setups=evaluated_setups,
+        context=context,
+        final_decisions=final_decisions,
+        phase_results={
+            "phase10_master_shadow_result": phase10_master_shadow_result,
+            "phase11_promotion_gate_result": phase11_promotion_gate_result,
+            "phase12_advanced_regime_result": phase12_advanced_regime_result,
+            "phase13_strategy_genome_result": phase13_strategy_genome_result,
+            "phase5_memory_result": phase5_memory_result,
+            "phase6_shadow_report_result": phase6_shadow_report_result,
+            "phase8_market_narrative_result": phase8_market_narrative_result,
+            "phase9_cross_setup_result": phase9_cross_setup_result,
+            "outcome_result": outcome_result,
+        },
+    )
+
     # Run market close cleanup again after outcome tracker
     auto_close_live_trades_after_market_close()
 
@@ -756,6 +1090,11 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
         "phase6_shadow_report_result": phase6_shadow_report_result,
         "phase8_market_narrative_result": phase8_market_narrative_result,
         "phase9_cross_setup_result": phase9_cross_setup_result,
+        "phase10_master_shadow_result": phase10_master_shadow_result,
+        "phase11_promotion_gate_result": phase11_promotion_gate_result,
+        "phase12_advanced_regime_result": phase12_advanced_regime_result,
+        "phase13_strategy_genome_result": phase13_strategy_genome_result,
+        "phase14_meta_evolution_result": phase14_meta_evolution_result,
     }
 
 

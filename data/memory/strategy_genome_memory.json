@@ -1,0 +1,159 @@
+{
+  "active_regime": "CHOPPY_NO_EDGE",
+  "decaying_families": [],
+  "dna_fingerprints": {
+    "UNKNOWN|LONG|CHOPPY_NO_EDGE|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
+      "failure_patterns": [
+        "expired_at_end_of_trading_day;_not_count"
+      ],
+      "family": "UNKNOWN",
+      "samples": 0,
+      "win_rate": 0.0
+    },
+    "UNKNOWN|LONG|CHOPPY_NO_EDGE|score_low|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
+      "failure_patterns": [
+        "expired_at_end_of_trading_day;_not_count"
+      ],
+      "family": "UNKNOWN",
+      "samples": 0,
+      "win_rate": 0.0
+    },
+    "UNKNOWN|LONG|CHOPPY_NO_EDGE|score_medium|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
+      "failure_patterns": [
+        "expired_at_end_of_trading_day;_not_count"
+      ],
+      "family": "UNKNOWN",
+      "samples": 0,
+      "win_rate": 0.0
+    },
+    "UNKNOWN|SHORT|CHOPPY_NO_EDGE|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
+      "failure_patterns": [
+        "expired_at_end_of_trading_day;_not_count"
+      ],
+      "family": "UNKNOWN",
+      "samples": 0,
+      "win_rate": 0.0
+    },
+    "UNKNOWN|SHORT|CHOPPY_NO_EDGE|score_medium|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
+      "failure_patterns": [
+        "expired_at_end_of_trading_day;_not_count"
+      ],
+      "family": "UNKNOWN",
+      "samples": 0,
+      "win_rate": 0.0
+    }
+  },
+  "dominant_families": [],
+  "failure_clusters": {
+    "expired_at_end_of_trading_day;_not_count": {
+      "count": 300
+    }
+  },
+  "families": {
+    "UNKNOWN": {
+      "avg_lifecycle_health": 0.5,
+      "avg_rr": 2.0,
+      "avg_score": 2.6499,
+      "decay_score": 0.0,
+      "dominance_score": 1.0,
+      "drift_score": 0.0,
+      "family_state": "INSUFFICIENT_DATA",
+      "loss_rate": 0.0,
+      "losses": 0,
+      "open_or_other": 300,
+      "rank_adjustment": 0.0,
+      "recommended_live_weight": 0.0,
+      "samples": 0,
+      "stability_score": 0.875,
+      "win_rate": 0.0,
+      "wins": 0
+    }
+  },
+  "generated_at": "2026-05-10 11:59:00",
+  "history": [
+    {
+      "decaying_families": [],
+      "dominant_family": null,
+      "generated_at": "2026-05-10 11:59:00"
+    }
+  ],
+  "layer_freshness": {
+    "lifecycle": {
+      "age_seconds": 4227.466,
+      "available": true,
+      "path": "data\\memory\\lifecycle_memory.json",
+      "status": "OK"
+    },
+    "master_shadow": {
+      "age_seconds": 2475.452,
+      "available": true,
+      "path": "data\\memory\\master_shadow_memory.json",
+      "status": "OK"
+    },
+    "promotion_gate": {
+      "age_seconds": 1805.285,
+      "available": true,
+      "path": "data\\memory\\promotion_gate_memory.json",
+      "status": "OK"
+    },
+    "regime": {
+      "age_seconds": 705.167,
+      "available": true,
+      "path": "data\\memory\\advanced_regime_intelligence_memory.json",
+      "status": "OK"
+    }
+  },
+  "phase13_shadow_mode": true,
+  "promotion_gate_features": {
+    "drift_control_score": 1.0,
+    "failure_cluster_quality": 0.95,
+    "family_stability_score": 0.875,
+    "promotion_eligible": false,
+    "recommended_live_weight": 0.0,
+    "regime_compatibility_quality": 0.375,
+    "samples": 0
+  },
+  "rank_adjustment": 0.0,
+  "recommended_live_weight": 0.0,
+  "regime_family_compatibility": {
+    "CHOPPY_NO_EDGE": {
+      "UNKNOWN": {
+        "compatibility_score": 0.375,
+        "confidence": 0.0,
+        "samples": 0
+      }
+    }
+  },
+  "runtime_bounded": true,
+  "runtime_context": {
+    "context_mode": null,
+    "observed_setups_count": 0,
+    "phase_result_keys": [],
+    "selected_decisions_count": 0
+  },
+  "runtime_ms": 15.0,
+  "safety": {
+    "alert_cap_changes": false,
+    "broker_api_changes": false,
+    "context_mutated": false,
+    "dashboard_changes": false,
+    "duplicate_prevention_changes": false,
+    "evaluated_setups_mutated": false,
+    "execution_changes": false,
+    "final_decision_changes": false,
+    "final_decisions_mutated": false,
+    "forbidden_imports_detected": [],
+    "live_price_calls": false,
+    "network_calls": false,
+    "no_forbidden_imports_detected": true,
+    "phase13_shadow_mode": true,
+    "rank_adjustment": 0.0,
+    "ranking_changes": false,
+    "recommended_live_weight": 0.0,
+    "scanner_calls": false,
+    "telegram_changes": false,
+    "tp_sl_changes": false
+  },
+  "version": "13.0",
+  "warnings": []
+}

@@ -1,4 +1,5 @@
 import os
+import json
 import time
 from datetime import datetime, timezone, timedelta
 
@@ -304,6 +305,48 @@ def read_csv_safe(paths):
         except Exception:
             continue
     return pd.DataFrame()
+
+
+def get_master_shadow_dashboard_data():
+    """
+    Reads Phase 10 command-center memory only.
+    No report generation, network calls, Supabase writes, scans, or live prices.
+    """
+    neutral = {
+        "status": "WAITING",
+        "narrative": "UNKNOWN",
+        "cross_setup_heat": 0.0,
+        "tracked_lifecycle_trades": 0,
+        "shadow_warnings": 0,
+        "runtime_bounded": True,
+        "updated_at": "No data yet",
+    }
+
+    path = "data/memory/master_shadow_memory.json"
+    try:
+        if not os.path.exists(path) or os.path.getsize(path) > 1_000_000:
+            return neutral
+
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if not isinstance(data, dict):
+            return neutral
+
+        cards = data.get("dashboard_cards") if isinstance(data.get("dashboard_cards"), dict) else {}
+        command = data.get("command_status") if isinstance(data.get("command_status"), dict) else {}
+
+        return {
+            "status": str(cards.get("master_shadow_state") or command.get("overall_state") or "WAITING"),
+            "narrative": str(cards.get("narrative") or "UNKNOWN"),
+            "cross_setup_heat": float(cards.get("cross_setup_heat") or 0.0),
+            "tracked_lifecycle_trades": int(cards.get("tracked_lifecycle_trades") or 0),
+            "shadow_warnings": int(cards.get("shadow_warnings") or 0),
+            "runtime_bounded": bool(data.get("runtime_bounded", True)),
+            "updated_at": str(data.get("generated_at") or "No data yet"),
+        }
+    except Exception:
+        return neutral
 
 
 def normalize_outcome(value):
@@ -1202,6 +1245,7 @@ master_brain_data = get_master_brain_status(
     scan_time=real_latest_scan_time,
     outcome_time=trade_result_stats.get("latest_outcome_time"),
 )
+master_shadow_data = get_master_shadow_dashboard_data()
 
 SUPABASE_STORAGE_LIMIT_MB = 500
 
@@ -1380,6 +1424,50 @@ with mb4:
         "TP/SL results used for accuracy",
     )
 
+st.markdown("</div>", unsafe_allow_html=True)
+
+
+# =========================================================
+# 2C. MASTER SHADOW COMMAND CENTER
+# =========================================================
+
+st.markdown("<div class='section'>", unsafe_allow_html=True)
+st.markdown("<div class='section-title'>Master Shadow Command Center</div>", unsafe_allow_html=True)
+
+ms1, ms2, ms3, ms4 = st.columns(4)
+
+with ms1:
+    status_card(
+        "Shadow Health",
+        master_shadow_data["status"],
+        f"Updated: {master_shadow_data['updated_at']}",
+    )
+
+with ms2:
+    metric_card(
+        "Market Narrative",
+        master_shadow_data["narrative"],
+        "Phase 8 shadow summary",
+    )
+
+with ms3:
+    circular_graph(
+        "Cross-Setup Heat",
+        int(master_shadow_data["cross_setup_heat"]),
+        "Phase 9 concentration",
+        "yellow",
+    )
+
+with ms4:
+    metric_card(
+        "Lifecycle Tracked",
+        f"{master_shadow_data['tracked_lifecycle_trades']:,}",
+        f"Warnings: {master_shadow_data['shadow_warnings']}",
+    )
+
+st.caption(
+    "Phase 10 is read-only: dashboard reads local master_shadow_memory.json only; it does not scan, fetch prices, send alerts, or write trade state."
+)
 st.markdown("</div>", unsafe_allow_html=True)
 
 

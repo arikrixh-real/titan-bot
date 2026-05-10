@@ -1,0 +1,30 @@
+TITAN Phase 13 Strategy Genome Report
+======================================
+
+Safety
+- Shadow strategy genome only.
+- No ranking, final decision, Telegram, execution, TP/SL, broker/API, live-price, scanner, alert-cap, duplicate-prevention, Supabase, network, or dashboard integration.
+- rank_adjustment: 0.0
+- recommended_live_weight: 0.0
+- No forbidden imports detected: True
+
+Updated: 2026-05-10 11:59:00
+Runtime Ms: 15.0 | Bounded: True
+Active Regime: CHOPPY_NO_EDGE
+
+Top Strategy Families:
+- UNKNOWN: samples=0, win_rate=0.0, stability=0.875, drift=0.0, state=INSUFFICIENT_DATA
+
+Dominant Families: []
+Decaying Families: []
+
+Promotion Gate Compatibility:
+- Samples: 0
+- Family stability score: 0.875
+- Drift control score: 1.0
+- Regime compatibility quality: 0.375
+- Promotion eligible: False
+- Recommended live weight: 0.0
+
+Warnings:
+- None observed
