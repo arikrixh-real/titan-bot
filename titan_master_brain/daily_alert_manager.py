@@ -157,13 +157,17 @@ def calculate_daily_alert_rank(candidate: Dict[str, Any]) -> float:
     """
 
     score = _safe_float(candidate.get("score"), 0.0)
+    rank_score = _safe_float(
+        candidate.get("new_blended_rank_score", candidate.get("blended_rank_score")),
+        score,
+    )
     meta_quality = _safe_float(candidate.get("meta_quality_score"), 50.0)
     rr = _safe_float(candidate.get("rr"), 0.0)
     confirmations = _extract_confirmations(candidate)
 
     rank = 0.0
 
-    rank += score * 10.0
+    rank += rank_score * 10.0
     rank += max(-2.0, min(2.0, (meta_quality - 50.0) * 0.08))
     rank += rr * 5.0
     rank += _decision_points(candidate.get("decision")) * 8.0

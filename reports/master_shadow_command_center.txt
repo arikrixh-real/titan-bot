@@ -7,17 +7,17 @@ Safety
 - phase10_rank_adjustment: 0.0
 - No forbidden imports detected: True
 
-Updated: 2026-05-10 11:17:45
-Overall Shadow Health: ACTIVE
+Updated: 2026-05-10 22:23:18
+Overall Shadow Health: DEGRADED_OBSERVING
 Confidence Stability: 20.0
 Runtime Ms: 0.0 | Bounded: True
 
 Dashboard Cards:
-- Shadow State: ACTIVE
+- Shadow State: DEGRADED_OBSERVING
 - Market Narrative: UNKNOWN
 - Cross-Setup Heat: 0.0
 - Lifecycle Trades Tracked: 0
-- Shadow Warnings: 1
+- Shadow Warnings: 6
 
 Layer Summary:
 - Phase 5 setup-family strengths: None observed
@@ -32,4 +32,8 @@ Lifecycle Warnings:
 - None observed
 
 Data Quality Warnings:
-- None observed
+- phase5_memory_stale
+- phase6_memory_stale
+- phase7_memory_stale
+- phase8_memory_stale
+- phase9_memory_stale

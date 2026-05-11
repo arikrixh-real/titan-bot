@@ -1,0 +1,81 @@
+{
+  "symbol": "UNKNOWN",
+  "calendar_data_mode": "INSUFFICIENT",
+  "rbi_events": {
+    "active": false,
+    "count": 0,
+    "max_impact_score": 0.0,
+    "nearest_hours_until": null,
+    "events": []
+  },
+  "fed_events": {
+    "active": false,
+    "count": 0,
+    "max_impact_score": 0.0,
+    "nearest_hours_until": null,
+    "events": []
+  },
+  "inflation_events": {
+    "active": false,
+    "count": 0,
+    "max_impact_score": 0.0,
+    "nearest_hours_until": null,
+    "events": []
+  },
+  "gdp_events": {
+    "active": false,
+    "count": 0,
+    "max_impact_score": 0.0,
+    "nearest_hours_until": null,
+    "events": []
+  },
+  "budget_events": {
+    "active": false,
+    "count": 0,
+    "max_impact_score": 0.0,
+    "nearest_hours_until": null,
+    "events": []
+  },
+  "earnings_events": {
+    "active": false,
+    "count": 0,
+    "max_impact_score": 0.0,
+    "events": []
+  },
+  "expiry_events": {
+    "active": false,
+    "count": 0,
+    "max_impact_score": 0.0,
+    "nearest_hours_until": null,
+    "events": [],
+    "is_expiry_day": false,
+    "days_to_expiry": null
+  },
+  "event_risk_score": 0.0,
+  "no_trade_caution": {
+    "active": false,
+    "warning": "NONE",
+    "event_count": 0,
+    "window": "NONE",
+    "events": [],
+    "proxy": false
+  },
+  "macro_impact_forecast": {
+    "macro_risk_state": "NORMAL",
+    "expected_directional_bias": "NEUTRAL",
+    "sensitive_events": []
+  },
+  "event_volatility_anticipation": {
+    "volatility_score": 0.0,
+    "volatility_state": "NORMAL",
+    "expiry_volatility_caution": false
+  },
+  "calendar_intelligence_score": 50.0,
+  "calendar_bias": "NEUTRAL",
+  "calendar_warning": "REVIEW",
+  "live_order_allowed": false,
+  "explanations": [
+    "Calendar data mode: INSUFFICIENT.",
+    "No useful calendar or proxy event data; score kept neutral."
+  ]
+}

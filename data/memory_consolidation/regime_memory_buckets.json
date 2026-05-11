@@ -1,0 +1,132 @@
+{
+  "bucket_count": 1,
+  "buckets": {
+    "UNKNOWN": [
+      {
+        "pattern": "ADAPTIVE_INTELLIGENCE_STATE",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "ADVANCED_REGIME_INTELLIGENCE_MEMORY",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "CROSS_SETUP_MEMORY",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "EVOLUTION_STATE",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "LIFECYCLE_MEMORY",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "MARKET_NARRATIVE_MEMORY",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "MASTER_SHADOW_MEMORY",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "META_EVOLUTION_MEMORY",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "PHASE6_SHADOW_MEMORY",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "PROMOTION_GATE_MEMORY",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "STRATEGY_FAMILY_MEMORY",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "STRATEGY_GENOME_MEMORY",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "TITAN_MASTER_STATUS",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "NEWS_BATCH_STATE",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "NEWS_SEEN_HASHES",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_0",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_1",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_2",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_3",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_4",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_5",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_6",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_7",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_8",
+        "priority": 50.0,
+        "score": 50.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_9",
+        "priority": 50.0,
+        "score": 50.0
+      }
+    ]
+  }
+}

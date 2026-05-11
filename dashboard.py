@@ -29,6 +29,10 @@ st.set_page_config(
 IST = timezone(timedelta(hours=5, minutes=30))
 AUTO_REFRESH_SECONDS = 10
 SCAN_BATCH_SIZE = 50
+TRADE_WINDOW_START_HOUR = 9
+TRADE_WINDOW_START_MINUTE = 15
+TRADE_WINDOW_END_HOUR = 15
+TRADE_WINDOW_END_MINUTE = 30
 
 
 # =========================================================
@@ -281,7 +285,10 @@ GITHUB_TOKEN = get_secret("GITHUB_TOKEN")
 def get_supabase_client():
     if not SUPABASE_URL or not SUPABASE_KEY:
         return None
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+    try:
+        return create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception:
+        return None
 
 
 supabase: Client | None = get_supabase_client()
@@ -305,6 +312,108 @@ def read_csv_safe(paths):
         except Exception:
             continue
     return pd.DataFrame()
+
+
+def safe_load_json(path, default=None):
+    try:
+        if not os.path.exists(path) or os.path.getsize(path) > 5_000_000:
+            return default if default is not None else {}
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if data is not None else (default if default is not None else {})
+    except Exception:
+        return default if default is not None else {}
+
+
+def safe_list(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple) or isinstance(value, set):
+        return list(value)
+    return [value]
+
+
+def file_modified_dt(path):
+    try:
+        if os.path.exists(path):
+            return datetime.fromtimestamp(os.path.getmtime(path), tz=IST)
+    except Exception:
+        pass
+    return None
+
+
+def is_market_open_now(now=None):
+    now = now or datetime.now(IST)
+    if now.weekday() >= 5:
+        return False
+    start = now.replace(hour=TRADE_WINDOW_START_HOUR, minute=TRADE_WINDOW_START_MINUTE, second=0, microsecond=0)
+    end = now.replace(hour=TRADE_WINDOW_END_HOUR, minute=TRADE_WINDOW_END_MINUTE, second=0, microsecond=0)
+    return start <= now <= end
+
+
+def market_mode_label():
+    return "MARKET OPEN" if is_market_open_now() else "MARKET CLOSED / RESEARCH MODE"
+
+
+PHASE_REPORT_PATHS = {
+    "autonomous_research": "data/research/autonomous_research_report.json",
+    "backtesting_validation": "data/research/backtesting_validation_report.json",
+    "paper_account": "data/paper_trading/paper_account.json",
+    "execution_safety": "data/execution_safety/latest_execution_safety_report.json",
+    "smart_execution": "data/execution_safety/latest_smart_execution_report.json",
+    "microstructure": "data/microstructure/latest_microstructure_report.json",
+    "options_flow": "data/options_flow/latest_options_flow_report.json",
+    "news_intelligence_2": "data/news_intelligence/latest_news_intelligence_2_report.json",
+    "economic_calendar": "data/economic_calendar/latest_economic_calendar_report.json",
+    "liquidity_map": "data/liquidity_map/latest_institutional_liquidity_report.json",
+    "scenario_simulation": "data/scenario_simulation/latest_scenario_simulation_report.json",
+    "multi_agent_debate": "data/multi_agent_debate/latest_multi_agent_debate_report.json",
+    "self_reflection": "data/self_reflection/latest_self_reflection_report.json",
+    "confidence_calibration": "data/confidence_calibration/latest_confidence_calibration_report.json",
+    "no_trade": "data/no_trade/latest_no_trade_intelligence_report.json",
+    "memory_consolidation": "data/memory_consolidation/latest_memory_consolidation_report.json",
+    "auto_repair": "data/auto_repair/latest_auto_repair_report.json",
+}
+
+
+def load_phase_reports():
+    reports = {}
+    latest_time = None
+    for key, path in PHASE_REPORT_PATHS.items():
+        data = safe_load_json(path, {})
+        modified = file_modified_dt(path)
+        generated = parse_dt(data.get("generated_at")) if isinstance(data, dict) else None
+        report_time = latest_dt(modified, generated)
+        reports[key] = {
+            "path": path,
+            "data": data if isinstance(data, dict) else {},
+            "exists": os.path.exists(path),
+            "time": report_time,
+            "age": age_text_from_dt(report_time),
+        }
+        if report_time and (latest_time is None or report_time > latest_time):
+            latest_time = report_time
+    return reports, latest_time
+
+
+def get_paper_trading_status(phase_reports=None):
+    phase_reports = phase_reports or {}
+    paper = phase_reports.get("paper_account", {}).get("data", {})
+    if not paper:
+        paper = safe_load_json("data/paper_trading/paper_account.json", {})
+    balance = float(paper.get("balance") or paper.get("cash") or 0.0) if isinstance(paper, dict) else 0.0
+    equity = float(paper.get("equity") or paper.get("account_value") or balance) if isinstance(paper, dict) else 0.0
+    positions = paper.get("positions") if isinstance(paper, dict) else []
+    open_positions = len([p for p in safe_list(positions) if isinstance(p, dict) and str(p.get("status", "OPEN")).upper() in ["OPEN", "ACTIVE", "LIVE"]])
+    status = str(paper.get("status") or paper.get("paper_trading_status") or ("ACTIVE" if paper else "WAITING")).upper() if isinstance(paper, dict) else "WAITING"
+    return {
+        "balance": balance,
+        "equity": equity,
+        "open_positions": open_positions,
+        "status": status,
+    }
 
 
 def get_master_shadow_dashboard_data():
@@ -713,7 +822,12 @@ def age_text_from_dt(dt):
     return f"{days}d ago"
 
 
-def scan_status_from_dt(dt):
+def scan_status_from_dt(dt, market_open=None):
+    market_open = is_market_open_now() if market_open is None else market_open
+
+    if not market_open:
+        return "MARKET CLOSED"
+
     if not dt:
         return "UNKNOWN"
 
@@ -728,12 +842,65 @@ def scan_status_from_dt(dt):
     return "OFFLINE"
 
 
+def last_scan_display_from_dt(dt, market_open=None):
+    market_open = is_market_open_now() if market_open is None else market_open
+    if not market_open:
+        return "Market closed / research mode"
+    return age_text_from_dt(dt)
+
+
+def derive_titan_status(master_activity_time=None, github_data=None, supabase_status="OFFLINE", market_open=None):
+    market_open = is_market_open_now() if market_open is None else market_open
+    github_data = github_data or {}
+    github_status_value = str(github_data.get("status") or "").upper()
+    github_healthy = github_status_value in {"SUCCESS", "RUNNING"}
+    supabase_healthy = supabase_status == "CONNECTED"
+
+    if master_activity_time:
+        age_seconds = (datetime.now(IST) - master_activity_time).total_seconds()
+        if age_seconds <= 2 * 3600:
+            return "ONLINE" if market_open else "RESEARCH MODE"
+        if age_seconds <= 24 * 3600 and (github_healthy or supabase_healthy):
+            return "DELAYED"
+
+    if not market_open and (github_healthy or supabase_healthy):
+        return "RESEARCH MODE"
+    if github_healthy or supabase_healthy:
+        return "DELAYED"
+    return "OFFLINE"
+
+
+def derive_scan_status(scan_time=None, master_activity_time=None, market_open=None):
+    market_open = is_market_open_now() if market_open is None else market_open
+    if not market_open:
+        return "MARKET CLOSED"
+    if scan_time:
+        age_seconds = (datetime.now(IST) - scan_time).total_seconds()
+        if age_seconds <= 420:
+            return "ACTIVE"
+        return "DELAYED"
+    if master_activity_time:
+        return "DELAYED"
+    return "OFFLINE"
+
+
+def derive_upstox_status(scan_health_time=None, stocks_checked=0, market_open=None):
+    market_open = is_market_open_now() if market_open is None else market_open
+    if not market_open:
+        return "MARKET CLOSED"
+    if scan_health_time and stocks_checked > 0:
+        age_seconds = (datetime.now(IST) - scan_health_time).total_seconds()
+        if age_seconds <= 900:
+            return "ACTIVE"
+    return "INACTIVE"
+
+
 def status_html(status):
     status = str(status).upper()
 
     if status in ["ONLINE", "CONNECTED", "SUCCESS", "RUNNING", "ACTIVE", "LEARNING", "OBSERVING"]:
         css = "pill-green"
-    elif status in ["DELAYED", "UNKNOWN", "WAITING", "NOT CONFIGURED", "BUILDING", "STALE"]:
+    elif status in ["DELAYED", "UNKNOWN", "WAITING", "NOT CONFIGURED", "BUILDING", "STALE", "RESEARCH MODE", "MARKET CLOSED", "MARKET CLOSED / RESEARCH MODE", "REVIEW"]:
         css = "pill-yellow"
     else:
         css = "pill-red"
@@ -1159,27 +1326,20 @@ def small_status(name, status, sub=""):
 
 latest_scan = latest_any_table(["scans", "scan_symbols", "scan_health_logs"])
 scan_health = get_latest_scan_health()
+phase_reports, latest_phase_report_time = load_phase_reports()
+paper_trading_data = get_paper_trading_status(phase_reports)
+market_open = is_market_open_now()
 
 latest_scan_time = row_time(latest_scan)
 latest_scan_health_time = row_time(scan_health)
 
 real_latest_scan_time = latest_dt(latest_scan_time, latest_scan_health_time)
 
-last_scan_age = age_text_from_dt(real_latest_scan_time)
-scan_status = scan_status_from_dt(real_latest_scan_time)
-
 github_data = get_github_latest_run()
 github_status = github_data["status"]
 github_age = age_text_from_dt(github_data["last_run_time"])
 
 supabase_status = "CONNECTED" if supabase is not None else "OFFLINE"
-
-if scan_status == "ONLINE" and supabase_status == "CONNECTED" and github_status in ["SUCCESS", "RUNNING"]:
-    titan_status = "ONLINE"
-elif scan_status == "DELAYED":
-    titan_status = "DELAYED"
-else:
-    titan_status = "OFFLINE"
 
 
 # Counts
@@ -1242,10 +1402,21 @@ rr_display = "1:2"
 
 master_brain_data = get_master_brain_status(
     github_time=github_data.get("last_run_time"),
-    scan_time=real_latest_scan_time,
+    scan_time=latest_dt(real_latest_scan_time, latest_phase_report_time),
     outcome_time=trade_result_stats.get("latest_outcome_time"),
 )
 master_shadow_data = get_master_shadow_dashboard_data()
+
+master_activity_time = latest_dt(
+    master_brain_data.get("last_activity"),
+    latest_phase_report_time,
+    github_data.get("last_run_time"),
+    real_latest_scan_time,
+)
+
+last_scan_age = last_scan_display_from_dt(real_latest_scan_time, market_open)
+scan_status = derive_scan_status(real_latest_scan_time, master_activity_time, market_open)
+titan_status = derive_titan_status(master_activity_time, github_data, supabase_status, market_open)
 
 SUPABASE_STORAGE_LIMIT_MB = 500
 
@@ -1270,8 +1441,16 @@ engine_progress = {
 }
 
 news_status = news_memory_data["status"]
+news_report_time = phase_reports.get("news_intelligence_2", {}).get("time")
+if news_report_time and (datetime.now(IST) - news_report_time).total_seconds() <= 6 * 3600:
+    news_status = "ACTIVE"
+
 telegram_status = "ACTIVE" if telegram_alerts > 0 else "WAITING"
+telegram_status_sub = f"Alerts sent: {telegram_alerts:,}" if market_open else "Outside alert window"
+
 learning_status = master_brain_data["evolution_status"]
+if phase_reports.get("memory_consolidation", {}).get("exists") or phase_reports.get("self_reflection", {}).get("exists"):
+    learning_status = "ACTIVE" if closed_trades > 0 else "BUILDING"
 evolution_status = master_brain_data["evolution_status"]
 
 if scan_health:
@@ -1282,17 +1461,8 @@ if scan_health:
     latest_entry_passed = int(scan_health.get("entry_passed") or 0)
     latest_final_passed = int(scan_health.get("final_passed") or 0)
     latest_health_alerts = int(scan_health.get("alerts_sent") or 0)
-    latest_scan_health_age = age_text_from_dt(latest_scan_health_time)
-
-    if latest_scan_health_time and latest_stocks_checked > 0:
-        health_age_seconds = (datetime.now(IST) - latest_scan_health_time).total_seconds()
-
-        if health_age_seconds <= 900:
-            upstox_live_price_status = "ACTIVE"
-        else:
-            upstox_live_price_status = "INACTIVE"
-    else:
-        upstox_live_price_status = "INACTIVE"
+    latest_scan_health_age = last_scan_display_from_dt(latest_scan_health_time, market_open)
+    upstox_live_price_status = derive_upstox_status(latest_scan_health_time, latest_stocks_checked, market_open)
 else:
     latest_stocks_checked = 0
     latest_trend_passed = 0
@@ -1301,8 +1471,8 @@ else:
     latest_entry_passed = 0
     latest_final_passed = 0
     latest_health_alerts = 0
-    latest_scan_health_age = "No live price scan yet"
-    upstox_live_price_status = "INACTIVE"
+    latest_scan_health_age = "Market closed / research mode" if not market_open else "No live price scan yet"
+    upstox_live_price_status = derive_upstox_status(None, 0, market_open)
 
 
 # =========================================================
@@ -1328,7 +1498,7 @@ st.markdown("<div class='section-title'>🧠 Top Control Status</div>", unsafe_a
 c1, c2, c3, c4 = st.columns(4)
 
 with c1:
-    status_card("TITAN Status", titan_status, "Overall bot condition")
+    status_card("TITAN Status", titan_status, market_mode_label())
 
 with c2:
     status_card("GitHub 5-Min Runner", github_status, github_data["message"])
@@ -1562,9 +1732,14 @@ with r1:
 
 with r2:
     small_status("News Engine", news_status, f"News: {news_gathered:,} · Latest: {news_memory_data['age']}")
-    small_status("Telegram Alert Engine", telegram_status, f"Alerts sent: {telegram_alerts:,}")
+    small_status("Telegram Alert Engine", telegram_status, telegram_status_sub)
     small_status("Learning / Evolution", learning_status, master_brain_data["evolution_sub"])
     small_status("Outcome Tracker", "ACTIVE" if open_outcome_trades > 0 or closed_trades > 0 else "WAITING", f"Open: {open_outcome_trades}, Closed: {closed_trades}")
+    small_status(
+        "Paper Trading",
+        paper_trading_data["status"],
+        f"Bal: {paper_trading_data['balance']:,.0f} Â· Eq: {paper_trading_data['equity']:,.0f} Â· Open: {paper_trading_data['open_positions']}",
+    )
 
 st.markdown("</div>", unsafe_allow_html=True)
 

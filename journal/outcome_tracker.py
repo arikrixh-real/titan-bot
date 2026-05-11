@@ -44,13 +44,23 @@ except Exception:
     observe_trade_lifecycle_safely = None
     update_lifecycle_memory_safely = None
 
+try:
+    from engines.reinforcement_learning_layer import build_reinforcement_learning_report
+    print("PHASE 20 REINFORCEMENT LEARNING ACTIVE")
+except Exception:
+    build_reinforcement_learning_report = None
+
 
 IST = ZoneInfo("Asia/Kolkata")
 
 JOURNAL_DIR = Path("data/journals")
+LEARNING_DIR = Path("data/learning")
+MEMORY_DIR = Path("data/memory")
 ACTIVE_TRADES_CSV = JOURNAL_DIR / "active_trades.csv"
 OUTCOMES_CSV = JOURNAL_DIR / "trade_outcomes.csv"
 OUTCOMES_JSONL = JOURNAL_DIR / "trade_outcomes.jsonl"
+REINFORCEMENT_REPORTS_JSONL = LEARNING_DIR / "reinforcement_learning_reports.jsonl"
+REINFORCEMENT_MEMORY_JSON = MEMORY_DIR / "reinforcement_learning_memory.json"
 
 OUTCOME_FIELDS = [
     "closed_at",
@@ -70,6 +80,18 @@ OUTCOME_FIELDS = [
     "exit_price",
     "pnl_points",
     "result_reason",
+    "reinforcement_score",
+    "reinforcement_learning_action",
+    "reinforcement_risk_adjusted_reward",
+    "reinforcement_drawdown_penalty",
+    "reinforcement_false_confidence_penalty",
+    "reinforcement_delayed_reward",
+    "reinforcement_regime_key",
+    "reinforcement_strategy_reward",
+    "reinforcement_memory_priority",
+    "reinforcement_exploration_score",
+    "reinforcement_policy_stability",
+    "reinforcement_explanations",
 ]
 
 
@@ -140,8 +162,83 @@ def _json_safe(value):
     return str(value)
 
 
+def _read_reinforcement_memory():
+    try:
+        if not REINFORCEMENT_MEMORY_JSON.exists() or REINFORCEMENT_MEMORY_JSON.stat().st_size == 0:
+            return {}
+        data = json.loads(REINFORCEMENT_MEMORY_JSON.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _reinforcement_context(row, outcome_row):
+    context = {
+        "market_status": row.get("market_status") or outcome_row.get("market_status"),
+    }
+    market_status = str(context.get("market_status") or "").strip()
+    if market_status:
+        context["market_regime"] = market_status
+    return context
+
+
+def _append_reinforcement_report(report):
+    try:
+        LEARNING_DIR.mkdir(parents=True, exist_ok=True)
+        with open(REINFORCEMENT_REPORTS_JSONL, "a", encoding="utf-8") as f:
+            f.write(json.dumps(_json_safe(report), ensure_ascii=False) + "\n")
+        return True
+    except Exception:
+        return False
+
+
+def _attach_reinforcement_learning_fields(row, outcome_row):
+    """
+    Shadow-only reinforcement learning attachment.
+    Does not mutate live strategy weights, execution, alerts, or policy.
+    """
+    if build_reinforcement_learning_report is None:
+        return outcome_row
+
+    result = dict(outcome_row)
+
+    try:
+        memory = _read_reinforcement_memory()
+        context = _reinforcement_context(row, result)
+        report = build_reinforcement_learning_report(row, result, context=context, memory=memory)
+
+        result["reinforcement_score"] = report.get("final_reinforcement_score")
+        result["reinforcement_learning_action"] = report.get("learning_action")
+        result["reinforcement_risk_adjusted_reward"] = report.get("risk_adjusted_reward")
+        result["reinforcement_drawdown_penalty"] = report.get("drawdown_penalty")
+        result["reinforcement_false_confidence_penalty"] = report.get("false_confidence_penalty")
+        result["reinforcement_delayed_reward"] = report.get("delayed_reward")
+        result["reinforcement_regime_key"] = report.get("regime_reward_key")
+        result["reinforcement_strategy_reward"] = report.get("strategy_reward")
+        result["reinforcement_memory_priority"] = report.get("memory_priority")
+        result["reinforcement_exploration_score"] = report.get("exploration_exploitation_score")
+        result["reinforcement_policy_stability"] = json.dumps(
+            _json_safe(report.get("policy_stability", {})),
+            ensure_ascii=False,
+        )
+        result["reinforcement_explanations"] = json.dumps(
+            _json_safe(report.get("explanations", [])),
+            ensure_ascii=False,
+        )
+
+        stored_report = dict(report)
+        stored_report["trade_id"] = result.get("trade_id")
+        stored_report["closed_at"] = result.get("closed_at")
+        _append_reinforcement_report(stored_report)
+    except Exception as e:
+        result["reinforcement_error"] = str(e)
+
+    return result
+
+
 def _ensure_files():
     JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
+    LEARNING_DIR.mkdir(parents=True, exist_ok=True)
 
     active_fields = [
         "trade_id", "opened_at", "scan_id", "symbol", "side", "entry", "sl",
@@ -161,6 +258,9 @@ def _ensure_files():
 
     if not OUTCOMES_JSONL.exists():
         OUTCOMES_JSONL.touch()
+
+    if not REINFORCEMENT_REPORTS_JSONL.exists():
+        REINFORCEMENT_REPORTS_JSONL.touch()
 
 
 def _check_outcome(row, live_price):
@@ -379,10 +479,11 @@ def _append_outcome(row, outcome, exit_price, pnl_points, reason):
         "pnl_points": pnl_points,
         "result_reason": reason,
     }
+    outcome_row = _attach_reinforcement_learning_fields(row, outcome_row)
 
     with open(OUTCOMES_CSV, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=OUTCOME_FIELDS)
-        writer.writerow(outcome_row)
+        writer.writerow({field: outcome_row.get(field, "") for field in OUTCOME_FIELDS})
 
     with open(OUTCOMES_JSONL, "a", encoding="utf-8") as f:
         f.write(json.dumps(_json_safe(outcome_row), ensure_ascii=False) + "\n")

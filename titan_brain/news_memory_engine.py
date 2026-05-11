@@ -43,3 +43,14 @@ def save_news_memory(
     except Exception as e:
         print(f"❌ News memory save failed: {e}")
         return False
+
+
+def run_news_memory_engine():
+    """
+    Backward-compatible entrypoint for main.py.
+
+    The full news collector lives in intelligence.news_engine. This wrapper
+    keeps the legacy import stable without forcing a network call.
+    """
+    print("[NewsMemory] Legacy entrypoint available. No direct news item supplied.")
+    return {"status": "NO_DIRECT_NEWS_ITEM", "saved": False}

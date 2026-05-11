@@ -1,7 +1,7 @@
 {
   "active_regime": {
     "confidence": 0.45,
-    "previous_primary": null,
+    "previous_primary": "CHOPPY_NO_EDGE",
     "primary": "CHOPPY_NO_EDGE",
     "secondary": [
       "INDEX_DRIVEN",
@@ -12,47 +12,202 @@
     "transition_detected": false,
     "transition_strength": 0.0
   },
-  "generated_at": "2026-05-10 11:47:15",
+  "generated_at": "2026-05-10 23:06:59",
   "history": [
     {
       "confidence": 0.45,
       "generated_at": "2026-05-10 11:47:15",
       "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 16:04:47",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 16:07:19",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 16:20:16",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 16:24:41",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 16:32:34",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 16:46:07",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 16:46:56",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 16:56:45",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 16:57:29",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 17:05:45",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 17:16:02",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 17:26:07",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 17:34:07",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 17:38:23",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 17:45:20",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 17:53:22",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 21:04:33",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 21:05:12",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 21:11:01",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 21:17:06",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 21:23:35",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 21:30:44",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 21:40:21",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 21:45:07",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 21:53:20",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 21:58:56",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 22:23:19",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 22:29:25",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 22:58:25",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 23:04:07",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.45,
+      "generated_at": "2026-05-10 23:06:59",
+      "primary": "CHOPPY_NO_EDGE"
     }
   ],
   "layer_freshness": {
     "cross_setup": {
-      "age_seconds": 2573.012,
+      "age_seconds": 43356.806,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
     },
     "lifecycle": {
-      "age_seconds": 3522.28,
+      "age_seconds": 44306.074,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "market_narrative": {
-      "age_seconds": 3067.801,
+      "age_seconds": 43851.595,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "master_shadow": {
-      "age_seconds": 1770.266,
+      "age_seconds": 0.042,
       "available": true,
       "path": "data\\memory\\master_shadow_memory.json",
       "status": "OK"
     },
     "promotion_gate": {
-      "age_seconds": 1100.1,
+      "age_seconds": 0.001,
       "available": true,
       "path": "data\\memory\\promotion_gate_memory.json",
       "status": "OK"
     },
     "strategy_family": {
-      "age_seconds": 5767.046,
+      "age_seconds": 46550.84,
       "available": true,
       "path": "data\\memory\\strategy_family_memory.json",
       "status": "OK"
@@ -85,7 +240,10 @@
   "runtime_context": {
     "context_mode": null,
     "observed_setups_count": 0,
-    "phase_result_keys": [],
+    "phase_result_keys": [
+      "phase10_master_shadow_result",
+      "phase11_promotion_gate_result"
+    ],
     "selected_decisions_count": 0
   },
   "runtime_ms": 16.0,

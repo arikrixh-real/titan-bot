@@ -12,6 +12,8 @@ Fixes:
 
 import os
 import re
+import csv
+import json
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -83,6 +85,124 @@ except Exception:
     refresh_meta_evolution_intelligence = None
 
 try:
+    from engines.autonomous_research_brain import build_autonomous_research_report
+    print("PHASE 21 AUTONOMOUS RESEARCH BRAIN ACTIVE")
+except Exception:
+    build_autonomous_research_report = None
+
+try:
+    from engines.backtesting_validation_framework import build_validation_report
+    print("PHASE 22 BACKTESTING VALIDATION ACTIVE")
+except Exception:
+    build_validation_report = None
+
+try:
+    from engines.paper_trading_engine import (
+        build_paper_trading_report,
+        load_paper_account,
+        open_paper_position,
+        place_paper_order,
+        save_paper_account,
+        simulate_fill,
+    )
+    print("PHASE 23 PAPER TRADING ACTIVE")
+except Exception:
+    build_paper_trading_report = None
+    load_paper_account = None
+    open_paper_position = None
+    place_paper_order = None
+    save_paper_account = None
+    simulate_fill = None
+
+try:
+    from engines.broker_execution_safety_system import (
+        build_execution_safety_report,
+        run_pre_order_safety_checks,
+    )
+    print("PHASE 24 BROKER EXECUTION SAFETY ACTIVE")
+except Exception:
+    build_execution_safety_report = None
+    run_pre_order_safety_checks = None
+
+try:
+    from engines.smart_execution_engine import build_smart_execution_report
+    print("PHASE 25 SMART EXECUTION ENGINE ACTIVE")
+except Exception:
+    build_smart_execution_report = None
+
+try:
+    from engines.order_book_microstructure_engine import build_microstructure_report
+    print("PHASE 26 MICROSTRUCTURE ENGINE ACTIVE")
+except Exception:
+    build_microstructure_report = None
+
+try:
+    from engines.options_flow_intelligence_engine import build_options_flow_report
+    print("PHASE 27 OPTIONS FLOW ENGINE ACTIVE")
+except Exception:
+    build_options_flow_report = None
+
+try:
+    from engines.news_intelligence_2_engine import build_news_intelligence_report
+    print("PHASE 28 NEWS INTELLIGENCE 2 ACTIVE")
+except Exception:
+    build_news_intelligence_report = None
+
+try:
+    from engines.economic_calendar_intelligence_engine import build_economic_calendar_report
+    print("PHASE 29 ECONOMIC CALENDAR INTELLIGENCE ACTIVE")
+except Exception:
+    build_economic_calendar_report = None
+
+try:
+    from engines.institutional_liquidity_map_engine import build_institutional_liquidity_report
+    print("PHASE 30 INSTITUTIONAL LIQUIDITY MAP ACTIVE")
+except Exception:
+    build_institutional_liquidity_report = None
+
+try:
+    from engines.scenario_simulation_engine import build_scenario_simulation_report
+    print("PHASE 31 SCENARIO SIMULATION ENGINE ACTIVE")
+except Exception:
+    build_scenario_simulation_report = None
+
+try:
+    from engines.multi_agent_debate_engine import build_multi_agent_debate_report
+    print("PHASE 32 MULTI-AGENT DEBATE ENGINE ACTIVE")
+except Exception:
+    build_multi_agent_debate_report = None
+
+try:
+    from engines.self_reflection_meta_cognition_engine import build_self_reflection_report
+    print("PHASE 33 SELF-REFLECTION META-COGNITION ACTIVE")
+except Exception:
+    build_self_reflection_report = None
+
+try:
+    from engines.confidence_calibration_engine import build_confidence_calibration_report
+    print("PHASE 34 CONFIDENCE CALIBRATION ENGINE ACTIVE")
+except Exception:
+    build_confidence_calibration_report = None
+
+try:
+    from engines.no_trade_intelligence_engine import build_no_trade_intelligence_report
+    print("PHASE 35 NO-TRADE INTELLIGENCE ACTIVE")
+except Exception:
+    build_no_trade_intelligence_report = None
+
+try:
+    from engines.memory_consolidation_engine import build_memory_consolidation_report
+    print("PHASE 36 MEMORY CONSOLIDATION ENGINE ACTIVE")
+except Exception:
+    build_memory_consolidation_report = None
+
+try:
+    from engines.auto_repair_assistant_engine import build_auto_repair_report
+    print("PHASE 37 AUTO-REPAIR ASSISTANT ACTIVE")
+except Exception:
+    build_auto_repair_report = None
+
+try:
     from intelligence.news_engine import run_news_engine
 except Exception:
     run_news_engine = None
@@ -114,6 +234,27 @@ MARKET_CLOSE = TRADE_WINDOW_END
 TEST_SYMBOLS = {"TEST", "TESTPY"}
 ADAPTIVE_MEMORY_REFRESH_SECONDS = 3600
 PHASE5_MEMORY_REFRESH_SECONDS = 3600
+RESEARCH_DIR = Path("data/research")
+AUTONOMOUS_RESEARCH_REPORT_PATH = RESEARCH_DIR / "autonomous_research_report.json"
+BACKTESTING_VALIDATION_REPORT_PATH = RESEARCH_DIR / "backtesting_validation_report.json"
+EXECUTION_SAFETY_DIR = Path("data/execution_safety")
+LATEST_EXECUTION_SAFETY_REPORT_PATH = EXECUTION_SAFETY_DIR / "latest_execution_safety_report.json"
+LATEST_SMART_EXECUTION_REPORT_PATH = EXECUTION_SAFETY_DIR / "latest_smart_execution_report.json"
+MAX_RESEARCH_ROWS = 300
+
+TRADE_HISTORY_PATHS = [
+    Path("data/journals/trade_outcomes.jsonl"),
+    Path("data/journals/trade_outcomes.csv"),
+    Path("data/journals/trade_journal.jsonl"),
+    Path("data/journals/trade_journal.csv"),
+]
+
+SCAN_HISTORY_PATHS = [
+    Path("data/journals/scan_journal.jsonl"),
+    Path("data/journals/scan_journal.csv"),
+    Path("journal/scan_journal.json"),
+    Path("journal/scan_journal.csv"),
+]
 
 
 # =========================================================
@@ -233,8 +374,9 @@ def auto_close_live_trades_after_market_close():
     """
     now = _now_ist()
 
-    # Do nothing before market close
-    if now.time() < MARKET_CLOSE:
+    # Do nothing before market close or on non-trading days. This avoids
+    # unnecessary Supabase/socket calls during weekend research-only cycles.
+    if now.weekday() >= 5 or now.time() < MARKET_CLOSE:
         return 0
 
     supabase = _get_supabase()
@@ -277,7 +419,7 @@ def auto_close_live_trades_after_market_close():
             print(f"[MarketClose] Auto-closed LIVE trade: {symbol}")
 
     except Exception as e:
-        print(f"[MarketClose ERROR] {e}")
+        print(f"[MarketClose WARN] Cleanup skipped safely: {e}")
 
     if closed_count:
         print(f"[MarketClose] Auto-closed {closed_count} live trade(s).")
@@ -452,6 +594,773 @@ def run_news_engine_safely():
     except Exception as e:
         print(f"[NewsEngine ERROR] {e}")
         return []
+
+
+def _read_csv_rows_limited(path, limit=MAX_RESEARCH_ROWS):
+    try:
+        if not path.exists() or path.stat().st_size == 0:
+            return []
+        with open(path, "r", newline="", encoding="utf-8-sig") as f:
+            rows = list(csv.DictReader(f))
+        return [row for row in rows if isinstance(row, dict)][-limit:]
+    except Exception:
+        return []
+
+
+def _read_json_rows_limited(path, limit=MAX_RESEARCH_ROWS):
+    try:
+        if not path.exists() or path.stat().st_size == 0:
+            return []
+        if path.suffix == ".jsonl":
+            rows = []
+            for line in path.read_text(encoding="utf-8").splitlines()[-limit:]:
+                try:
+                    item = json.loads(line)
+                except Exception:
+                    continue
+                if isinstance(item, dict):
+                    rows.append(item)
+            return rows[-limit:]
+
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)][-limit:]
+        if isinstance(data, dict):
+            for key in ("trades", "outcomes", "records", "items", "data", "scans"):
+                items = data.get(key)
+                if isinstance(items, list):
+                    return [item for item in items if isinstance(item, dict)][-limit:]
+            return [data]
+    except Exception:
+        return []
+    return []
+
+
+def _read_research_rows(paths, limit=MAX_RESEARCH_ROWS):
+    rows = []
+    for path in paths:
+        if path.suffix == ".csv":
+            rows.extend(_read_csv_rows_limited(path, limit))
+        elif path.suffix in {".json", ".jsonl"}:
+            rows.extend(_read_json_rows_limited(path, limit))
+        if len(rows) >= limit:
+            rows = rows[-limit:]
+    return rows[-limit:]
+
+
+def refresh_phase21_autonomous_research_safely(
+    context=None,
+    news_items=None,
+    evaluated_setups=None,
+    final_decisions=None,
+):
+    """
+    Phase 21 research-only autonomous research report.
+
+    Reads bounded local history and current-cycle context snapshots, writes a
+    JSON research artifact, and never changes live trading rules, ranking,
+    alerts, Telegram, dashboard, broker/execution, or strategy promotion.
+    """
+    if build_autonomous_research_report is None:
+        print("[Phase21] Autonomous research brain not connected.")
+        return None
+
+    try:
+        trade_history = _read_research_rows(TRADE_HISTORY_PATHS)
+        scan_history = _read_research_rows(SCAN_HISTORY_PATHS)
+
+        if evaluated_setups:
+            for setup in evaluated_setups[-MAX_RESEARCH_ROWS:]:
+                if isinstance(setup, dict):
+                    scan_history.append(dict(setup))
+            scan_history = scan_history[-MAX_RESEARCH_ROWS:]
+
+        research_context = deepcopy(context or {})
+        if not isinstance(research_context, dict):
+            research_context = {}
+        research_context["news_items"] = deepcopy(news_items or [])
+        research_context["final_decisions_summary"] = deepcopy(final_decisions or {})
+
+        report = build_autonomous_research_report(
+            trade_history=trade_history,
+            scan_history=scan_history,
+            context=research_context,
+        )
+
+        RESEARCH_DIR.mkdir(parents=True, exist_ok=True)
+        with open(AUTONOMOUS_RESEARCH_REPORT_PATH, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
+
+        mode = report.get("research_mode", "UNKNOWN") if isinstance(report, dict) else "UNKNOWN"
+        score = report.get("research_priority_score", "UNKNOWN") if isinstance(report, dict) else "UNKNOWN"
+        print(f"[Phase21] Autonomous research report saved: {AUTONOMOUS_RESEARCH_REPORT_PATH} | mode={mode} | score={score}")
+        return report
+
+    except Exception as e:
+        print(f"[Phase21 ERROR] Autonomous research failed open: {e}")
+        return {"error": str(e), "failed_open": True}
+
+
+def refresh_phase22_backtesting_validation_safely(
+    autonomous_research_report=None,
+    context=None,
+    trade_history=None,
+    scan_history=None,
+):
+    """
+    Phase 22 validation-only report.
+
+    Consumes research ideas/backtest queue and bounded local history, writes a
+    validation artifact, and never promotes strategies or changes live rules.
+    """
+    if build_validation_report is None:
+        print("[Phase22] Backtesting validation framework not connected.")
+        return None
+
+    try:
+        research_report = autonomous_research_report if isinstance(autonomous_research_report, dict) else {}
+        history = trade_history if isinstance(trade_history, list) else _read_research_rows(TRADE_HISTORY_PATHS)
+        if not history and isinstance(scan_history, list):
+            history = scan_history
+
+        candidates = []
+        for key in ("backtest_queue", "strategy_ideas", "generated_hypotheses"):
+            value = research_report.get(key)
+            if isinstance(value, list):
+                candidates.extend(item for item in value if isinstance(item, dict))
+
+        strategy = candidates[0] if candidates else {"name": "GENERAL_RESEARCH_VALIDATION"}
+        validation_context = deepcopy(context or {})
+        if not isinstance(validation_context, dict):
+            validation_context = {}
+        validation_context["strategy_results"] = candidates[:20]
+
+        report = build_validation_report(
+            strategy=strategy,
+            historical_data=history,
+            context=validation_context,
+        )
+
+        RESEARCH_DIR.mkdir(parents=True, exist_ok=True)
+        with open(BACKTESTING_VALIDATION_REPORT_PATH, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
+
+        status = report.get("validation_status", "UNKNOWN") if isinstance(report, dict) else "UNKNOWN"
+        score = report.get("validation_score", "UNKNOWN") if isinstance(report, dict) else "UNKNOWN"
+        print(f"[Phase22] Backtesting validation report saved: {BACKTESTING_VALIDATION_REPORT_PATH} | status={status} | score={score}")
+        return report
+
+    except Exception as e:
+        print(f"[Phase22 ERROR] Backtesting validation failed open: {e}")
+        return {"error": str(e), "failed_open": True, "live_deployment_allowed": False}
+
+
+def refresh_phase23_paper_trading_safely(final_decisions=None, context=None):
+    """
+    Phase 23 paper-only simulator.
+
+    It may create internal simulated orders from final selected candidates.
+    It never calls broker execution, never sends alerts, and never changes live
+    execution or daily alert behavior.
+    """
+    required = [
+        build_paper_trading_report,
+        load_paper_account,
+        open_paper_position,
+        place_paper_order,
+        simulate_fill,
+    ]
+    if any(item is None for item in required):
+        print("[Phase23] Paper trading engine not connected.")
+        return None
+
+    try:
+        account = load_paper_account()
+        selected = []
+        if isinstance(final_decisions, dict):
+            selected = final_decisions.get("selected") if isinstance(final_decisions.get("selected"), list) else []
+
+        paper_orders = []
+        for candidate in selected:
+            if not isinstance(candidate, dict):
+                continue
+            order = place_paper_order(account, candidate)
+            paper_orders.append(order)
+            if not isinstance(order, dict) or not order.get("accepted"):
+                continue
+            filled = simulate_fill(order, context if isinstance(context, dict) else {})
+            account = open_paper_position(load_paper_account(), filled)
+
+        report = build_paper_trading_report(load_paper_account())
+        print(
+            "[Phase23] Paper trading refreshed. "
+            f"status={report.get('paper_trading_status')} | "
+            f"balance={report.get('current_balance')} | "
+            f"orders={len(paper_orders)}"
+        )
+        report["paper_orders_created"] = paper_orders
+        return report
+
+    except Exception as e:
+        print(f"[Phase23 ERROR] Paper trading failed open: {e}")
+        return {"error": str(e), "failed_open": True, "paper_only": True}
+
+
+def refresh_phase24_execution_safety_safely(final_decisions=None, context=None):
+    """
+    Phase 24 broker execution safety monitoring only.
+
+    Builds and saves a fail-closed broker safety report. It does not place
+    orders, enable live mode, call execution, or alter alert behavior.
+    """
+    if build_execution_safety_report is None or run_pre_order_safety_checks is None:
+        print("[Phase24] Broker execution safety not connected.")
+        return None
+
+    try:
+        selected = []
+        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list):
+            selected = final_decisions.get("selected")
+        sample_order = selected[0] if selected and isinstance(selected[0], dict) else {}
+        account_snapshot = {}
+        if isinstance(context, dict):
+            account_snapshot = {
+                "balance": context.get("account_balance") or context.get("capital") or 100000,
+                "daily_loss_pct": context.get("daily_loss_pct") or 0.0,
+            }
+        order_history = selected if isinstance(selected, list) else []
+        broker_status = {"connected": False, "status": "DISCONNECTED"}
+        pre_order = run_pre_order_safety_checks(
+            order=sample_order,
+            account_snapshot=account_snapshot,
+            order_history=order_history,
+            broker_status=broker_status,
+        )
+        report = build_execution_safety_report(
+            account_snapshot=account_snapshot,
+            order_history=order_history,
+            broker_status=broker_status,
+        )
+        report["pre_order_safety_checks"] = pre_order
+        EXECUTION_SAFETY_DIR.mkdir(parents=True, exist_ok=True)
+        with open(LATEST_EXECUTION_SAFETY_REPORT_PATH, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
+        print(
+            "[Phase24] Execution safety report saved: "
+            f"{LATEST_EXECUTION_SAFETY_REPORT_PATH} | "
+            f"mode={report.get('broker_execution_mode')} | "
+            f"allowed={report.get('execution_allowed')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase24 ERROR] Broker execution safety failed open for TITAN: {e}")
+        return {"error": str(e), "failed_open": True, "execution_allowed": False}
+
+
+def refresh_phase25_smart_execution_safely(final_decisions=None, paper_result=None, context=None):
+    """
+    Phase 25 smart execution analysis only.
+
+    Builds one latest execution-quality report from selected candidates or
+    paper orders. It never places orders or enables live execution.
+    """
+    if build_smart_execution_report is None:
+        print("[Phase25] Smart execution engine not connected.")
+        return None
+
+    try:
+        order = {}
+        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
+            candidate = final_decisions.get("selected")[0]
+            if isinstance(candidate, dict):
+                order = dict(candidate)
+        if not order and isinstance(paper_result, dict):
+            paper_orders = paper_result.get("paper_orders_created")
+            if isinstance(paper_orders, list) and paper_orders and isinstance(paper_orders[0], dict):
+                order = dict(paper_orders[0])
+        report = build_smart_execution_report(order, context if isinstance(context, dict) else {})
+        EXECUTION_SAFETY_DIR.mkdir(parents=True, exist_ok=True)
+        with open(LATEST_SMART_EXECUTION_REPORT_PATH, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
+        print(
+            "[Phase25] Smart execution report saved: "
+            f"{LATEST_SMART_EXECUTION_REPORT_PATH} | "
+            f"recommendation={report.get('execution_recommendation')} | "
+            f"live_allowed={report.get('live_order_allowed')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase25 ERROR] Smart execution failed open: {e}")
+        return {"error": str(e), "failed_open": True, "live_order_allowed": False}
+
+
+def refresh_phase26_microstructure_safely(final_decisions=None, context=None):
+    """
+    Phase 26 microstructure sidecar report.
+
+    Uses selected candidate and any available depth/tick/context data. If no
+    depth exists, the engine falls back to proxy or insufficient mode.
+    """
+    if build_microstructure_report is None:
+        print("[Phase26] Microstructure engine not connected.")
+        return None
+
+    try:
+        setup = {}
+        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
+            candidate = final_decisions.get("selected")[0]
+            if isinstance(candidate, dict):
+                setup = dict(candidate)
+        market_context = context if isinstance(context, dict) else {}
+        depth_data = market_context.get("depth_data") or market_context.get("market_depth")
+        tick_data = market_context.get("tick_data") or market_context.get("ticks")
+        report = build_microstructure_report(setup=setup, depth_data=depth_data, tick_data=tick_data, market_context=market_context)
+        print(
+            "[Phase26] Microstructure report saved: data/microstructure/latest_microstructure_report.json | "
+            f"mode={report.get('data_mode')} | score={report.get('microstructure_score')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase26 ERROR] Microstructure failed open: {e}")
+        return {"error": str(e), "failed_open": True}
+
+
+def refresh_phase27_options_flow_safely(final_decisions=None, context=None):
+    """
+    Phase 27 options-flow sidecar report.
+
+    Uses selected candidate and any available option-chain/context data. If no
+    option chain exists, the engine falls back to proxy or insufficient mode.
+    """
+    if build_options_flow_report is None:
+        print("[Phase27] Options flow engine not connected.")
+        return None
+
+    try:
+        setup = {}
+        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
+            candidate = final_decisions.get("selected")[0]
+            if isinstance(candidate, dict):
+                setup = dict(candidate)
+        market_context = context if isinstance(context, dict) else {}
+        option_chain = setup.get("option_chain") or market_context.get("option_chain")
+        symbol = str(setup.get("symbol") or setup.get("stock") or "").strip()
+        option_chains = market_context.get("option_chains")
+        if option_chain is None and isinstance(option_chains, dict) and symbol:
+            option_chain = option_chains.get(symbol) or option_chains.get(symbol.upper()) or option_chains.get(symbol.lower())
+        report = build_options_flow_report(setup=setup, option_chain=option_chain, context=market_context)
+        print(
+            "[Phase27] Options flow report saved: data/options_flow/latest_options_flow_report.json | "
+            f"mode={report.get('data_mode')} | score={report.get('options_flow_score')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase27 ERROR] Options flow failed open: {e}")
+        return {"error": str(e), "failed_open": True, "live_order_allowed": False}
+
+
+def refresh_phase28_news_intelligence_safely(final_decisions=None, context=None, news_items=None):
+    """
+    Phase 28 news intelligence sidecar report.
+
+    Uses selected candidate and any available real news/context data. If no real
+    news exists, the engine falls back to proxy or insufficient mode.
+    """
+    if build_news_intelligence_report is None:
+        print("[Phase28] News intelligence 2 engine not connected.")
+        return None
+
+    try:
+        setup = {}
+        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
+            candidate = final_decisions.get("selected")[0]
+            if isinstance(candidate, dict):
+                setup = dict(candidate)
+        market_context = context if isinstance(context, dict) else {}
+        candidate_news = setup.get("news_items") or news_items or market_context.get("news_items") or market_context.get("news")
+        report = build_news_intelligence_report(setup=setup, news_items=candidate_news, context=market_context)
+        print(
+            "[Phase28] News intelligence report saved: data/news_intelligence/latest_news_intelligence_2_report.json | "
+            f"mode={report.get('news_data_mode')} | score={report.get('news_intelligence_score')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase28 ERROR] News intelligence failed open: {e}")
+        return {"error": str(e), "failed_open": True, "live_order_allowed": False}
+
+
+def refresh_phase29_economic_calendar_safely(final_decisions=None, context=None):
+    """
+    Phase 29 economic calendar sidecar report.
+
+    Uses selected candidate and any available calendar/context data. If no real
+    calendar exists, the engine falls back to proxy or insufficient mode.
+    """
+    if build_economic_calendar_report is None:
+        print("[Phase29] Economic calendar engine not connected.")
+        return None
+
+    try:
+        setup = {}
+        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
+            candidate = final_decisions.get("selected")[0]
+            if isinstance(candidate, dict):
+                setup = dict(candidate)
+        market_context = context if isinstance(context, dict) else {}
+        calendar_events = setup.get("calendar_events") or market_context.get("calendar_events") or market_context.get("economic_calendar")
+        report = build_economic_calendar_report(setup=setup, calendar_events=calendar_events, context=market_context)
+        print(
+            "[Phase29] Economic calendar report saved: data/economic_calendar/latest_economic_calendar_report.json | "
+            f"mode={report.get('calendar_data_mode')} | score={report.get('calendar_intelligence_score')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase29 ERROR] Economic calendar failed open: {e}")
+        return {"error": str(e), "failed_open": True, "live_order_allowed": False}
+
+
+def refresh_phase30_liquidity_map_safely(final_decisions=None, context=None):
+    """
+    Phase 30 institutional liquidity-map sidecar report.
+
+    Uses selected candidate and any available OHLCV/liquidity/context data. If
+    no real data exists, the engine falls back to proxy or insufficient mode.
+    """
+    if build_institutional_liquidity_report is None:
+        print("[Phase30] Institutional liquidity map engine not connected.")
+        return None
+
+    try:
+        setup = {}
+        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
+            candidate = final_decisions.get("selected")[0]
+            if isinstance(candidate, dict):
+                setup = dict(candidate)
+        market_context = context if isinstance(context, dict) else {}
+        liquidity_data = (
+            setup.get("liquidity_data")
+            or setup.get("ohlcv")
+            or market_context.get("liquidity_data")
+            or market_context.get("ohlcv")
+            or market_context.get("candles")
+        )
+        report = build_institutional_liquidity_report(setup=setup, liquidity_data=liquidity_data, context=market_context)
+        print(
+            "[Phase30] Institutional liquidity report saved: data/liquidity_map/latest_institutional_liquidity_report.json | "
+            f"mode={report.get('liquidity_data_mode')} | score={report.get('liquidity_map_score')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase30 ERROR] Institutional liquidity map failed open: {e}")
+        return {"error": str(e), "failed_open": True, "live_order_allowed": False}
+
+
+def refresh_phase31_scenario_simulation_safely(final_decisions=None, context=None):
+    """
+    Phase 31 scenario simulation sidecar report.
+
+    Uses selected candidate and any available market/context data. If no real
+    market data exists, the engine falls back to proxy or insufficient mode.
+    """
+    if build_scenario_simulation_report is None:
+        print("[Phase31] Scenario simulation engine not connected.")
+        return None
+
+    try:
+        setup = {}
+        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
+            candidate = final_decisions.get("selected")[0]
+            if isinstance(candidate, dict):
+                setup = dict(candidate)
+        market_context = context if isinstance(context, dict) else {}
+        market_data = (
+            setup.get("market_data")
+            or setup.get("ohlcv")
+            or market_context.get("market_data")
+            or market_context.get("ohlcv")
+            or market_context.get("candles")
+        )
+        report = build_scenario_simulation_report(setup=setup, context=market_context, market_data=market_data)
+        print(
+            "[Phase31] Scenario simulation report saved: data/scenario_simulation/latest_scenario_simulation_report.json | "
+            f"mode={report.get('scenario_data_mode')} | score={report.get('scenario_score')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase31 ERROR] Scenario simulation failed open: {e}")
+        return {"error": str(e), "failed_open": True, "live_order_allowed": False}
+
+
+def refresh_phase32_multi_agent_debate_safely(final_decisions=None, context=None):
+    """
+    Phase 32 multi-agent debate sidecar report.
+
+    Uses the selected candidate and full available context. If no rich context
+    exists, the engine falls back to proxy or insufficient mode.
+    """
+    if build_multi_agent_debate_report is None:
+        print("[Phase32] Multi-agent debate engine not connected.")
+        return None
+
+    try:
+        setup = {}
+        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
+            candidate = final_decisions.get("selected")[0]
+            if isinstance(candidate, dict):
+                setup = dict(candidate)
+        market_context = context if isinstance(context, dict) else {}
+        report = build_multi_agent_debate_report(setup=setup, context=market_context)
+        print(
+            "[Phase32] Multi-agent debate report saved: data/multi_agent_debate/latest_multi_agent_debate_report.json | "
+            f"mode={report.get('debate_data_mode')} | score={report.get('debate_score')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase32 ERROR] Multi-agent debate failed open: {e}")
+        return {"error": str(e), "failed_open": True, "live_order_allowed": False}
+
+
+def refresh_phase33_self_reflection_safely(final_decisions=None, context=None):
+    """
+    Phase 33 self-reflection sidecar report.
+
+    Uses the selected candidate plus any available context/trade history. If no
+    rich evidence exists, the engine falls back to proxy or insufficient mode.
+    """
+    if build_self_reflection_report is None:
+        print("[Phase33] Self-reflection meta-cognition engine not connected.")
+        return None
+
+    try:
+        setup = {}
+        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
+            candidate = final_decisions.get("selected")[0]
+            if isinstance(candidate, dict):
+                setup = dict(candidate)
+        market_context = context if isinstance(context, dict) else {}
+        trade_result = (
+            setup.get("trade_result")
+            or market_context.get("latest_trade_result")
+            or market_context.get("trade_result")
+            or {}
+        )
+        trade_history = (
+            market_context.get("trade_history")
+            or market_context.get("trade_results")
+            or market_context.get("closed_trades")
+            or market_context.get("recent_trades")
+            or []
+        )
+        report = build_self_reflection_report(
+            setup=setup,
+            context=market_context,
+            trade_result=trade_result,
+            trade_history=trade_history,
+        )
+        print(
+            "[Phase33] Self-reflection report saved: data/self_reflection/latest_self_reflection_report.json | "
+            f"mode={report.get('reflection_data_mode')} | score={report.get('reflection_score')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase33 ERROR] Self-reflection failed open: {e}")
+        return {"error": str(e), "failed_open": True, "live_order_allowed": False}
+
+
+def refresh_phase34_confidence_calibration_safely(final_decisions=None, context=None):
+    """
+    Phase 34 confidence calibration sidecar report.
+
+    Uses selected candidate plus prediction/outcome history when available. If
+    history is missing, the engine falls back to proxy or insufficient mode.
+    """
+    if build_confidence_calibration_report is None:
+        print("[Phase34] Confidence calibration engine not connected.")
+        return None
+
+    try:
+        setup = {}
+        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
+            candidate = final_decisions.get("selected")[0]
+            if isinstance(candidate, dict):
+                setup = dict(candidate)
+        market_context = context if isinstance(context, dict) else {}
+        prediction_history = (
+            market_context.get("prediction_history")
+            or market_context.get("predictions")
+            or market_context.get("confidence_predictions")
+            or market_context.get("calibration_predictions")
+            or []
+        )
+        outcome_history = (
+            market_context.get("outcome_history")
+            or market_context.get("trade_results")
+            or market_context.get("closed_trades")
+            or market_context.get("recent_trades")
+            or []
+        )
+        report = build_confidence_calibration_report(
+            setup=setup,
+            prediction_history=prediction_history,
+            outcome_history=outcome_history,
+            context=market_context,
+        )
+        print(
+            "[Phase34] Confidence calibration report saved: data/confidence_calibration/latest_confidence_calibration_report.json | "
+            f"mode={report.get('calibration_data_mode')} | score={report.get('calibrated_confidence_score')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase34 ERROR] Confidence calibration failed open: {e}")
+        return {"error": str(e), "failed_open": True, "live_order_allowed": False}
+
+
+def refresh_phase35_no_trade_intelligence_safely(final_decisions=None, context=None):
+    """
+    Phase 35 no-trade intelligence sidecar report.
+
+    Uses selected candidate plus market context/recent setups. If data is
+    missing, the engine stays non-blocking and insufficient-mode.
+    """
+    if build_no_trade_intelligence_report is None:
+        print("[Phase35] No-trade intelligence engine not connected.")
+        return None
+
+    try:
+        setup = {}
+        recent_setups = []
+        if isinstance(final_decisions, dict):
+            recent_setups = final_decisions.get("selected") or final_decisions.get("rejected") or []
+            if isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
+                candidate = final_decisions.get("selected")[0]
+                if isinstance(candidate, dict):
+                    setup = dict(candidate)
+        market_context = context if isinstance(context, dict) else {}
+        recent_setups = market_context.get("recent_setups") or market_context.get("evaluated_setups") or recent_setups
+        report = build_no_trade_intelligence_report(
+            setup=setup,
+            context=market_context,
+            recent_setups=recent_setups,
+        )
+        print(
+            "[Phase35] No-trade intelligence report saved: data/no_trade/latest_no_trade_intelligence_report.json | "
+            f"mode={report.get('no_trade_data_mode')} | score={report.get('no_trade_score')} | permission={report.get('trade_permission')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase35 ERROR] No-trade intelligence failed open: {e}")
+        return {"error": str(e), "failed_open": True, "live_order_allowed": False}
+
+
+def _load_phase36_memory_sources():
+    memory_items = []
+    for directory in [Path("data/memory"), Path("titan_brain/memory")]:
+        try:
+            if not directory.exists():
+                continue
+            for path in directory.glob("*.json"):
+                try:
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                if isinstance(payload, dict):
+                    item = dict(payload)
+                    item.setdefault("memory_key", path.stem)
+                    item.setdefault("source_path", str(path))
+                    memory_items.append(item)
+                elif isinstance(payload, list):
+                    for index, value in enumerate(payload):
+                        if isinstance(value, dict):
+                            item = dict(value)
+                            item.setdefault("memory_key", f"{path.stem}_{index}")
+                            item.setdefault("source_path", str(path))
+                            memory_items.append(item)
+        except Exception:
+            continue
+    return memory_items
+
+
+def _phase36_trade_history(context=None):
+    market_context = context if isinstance(context, dict) else {}
+    for key in ("trade_history", "trade_results", "closed_trades", "recent_trades", "outcome_history"):
+        value = market_context.get(key)
+        if isinstance(value, list) and value:
+            return value
+    return []
+
+
+def refresh_phase36_memory_consolidation_safely(context=None):
+    """
+    Phase 36 memory consolidation sidecar report.
+
+    Reads existing memory snapshots and available trade history, then writes
+    optional consolidation artifacts. Core TITAN memory files are not deleted.
+    """
+    if build_memory_consolidation_report is None:
+        print("[Phase36] Memory consolidation engine not connected.")
+        return None
+
+    try:
+        market_context = context if isinstance(context, dict) else {}
+        memory_data = market_context.get("memory_data") or _load_phase36_memory_sources()
+        trade_history = _phase36_trade_history(market_context)
+        report = build_memory_consolidation_report(
+            memory_data=memory_data,
+            trade_history=trade_history,
+            context=market_context,
+        )
+        print(
+            "[Phase36] Memory consolidation report saved: data/memory_consolidation/latest_memory_consolidation_report.json | "
+            f"mode={report.get('memory_data_mode')} | score={report.get('memory_quality_score')}"
+        )
+        return {
+            "memory_quality_score": report.get("memory_quality_score"),
+            "memory_bias": report.get("memory_bias"),
+            "memory_warning": report.get("memory_warning"),
+            "memory_data_mode": report.get("memory_data_mode"),
+            "strategic_memory_index": report.get("strategic_memory_index"),
+            "adaptive_recall_weights": report.get("adaptive_recall_weights"),
+            "important_patterns": report.get("important_patterns"),
+            "memory_explanations": report.get("explanations", []),
+            "report": report,
+        }
+    except Exception as e:
+        print(f"[Phase36 ERROR] Memory consolidation failed open: {e}")
+        return {"error": str(e), "failed_open": True, "live_order_allowed": False}
+
+
+def refresh_phase37_auto_repair_safely(context=None, github_logs=None):
+    """
+    Phase 37 auto-repair assistant sidecar report.
+
+    Diagnostic and recommendation only. It never edits, deletes, pushes, or
+    enables live trading.
+    """
+    if build_auto_repair_report is None:
+        print("[Phase37] Auto-repair assistant engine not connected.")
+        return None
+
+    try:
+        market_context = context if isinstance(context, dict) else {}
+        error_logs = (
+            market_context.get("runtime_errors")
+            or market_context.get("errors")
+            or market_context.get("last_error")
+            or ["[MarketClose WARN] [WinError 10013]"]
+        )
+        report = build_auto_repair_report(
+            error_logs=error_logs,
+            runtime_context=market_context,
+            github_logs=github_logs or market_context.get("github_logs"),
+        )
+        print(
+            "[Phase37] Auto-repair report saved: data/auto_repair/latest_auto_repair_report.json | "
+            f"status={report.get('repair_status')} | severity={report.get('severity_score')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase37 ERROR] Auto-repair assistant failed open: {e}")
+        return {"error": str(e), "failed_open": True, "live_order_allowed": False, "auto_file_changes_allowed": False}
 
 
 def refresh_adaptive_memory_safely():
@@ -900,6 +1809,76 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
                 "phase13_strategy_genome_result": phase13_strategy_genome_result,
             },
         )
+        phase21_autonomous_research_result = refresh_phase21_autonomous_research_safely(
+            context={},
+            news_items=news_items,
+            evaluated_setups=[],
+            final_decisions={},
+        )
+        phase22_backtesting_validation_result = refresh_phase22_backtesting_validation_safely(
+            autonomous_research_report=phase21_autonomous_research_result,
+            context={},
+        )
+        phase23_paper_trading_result = refresh_phase23_paper_trading_safely(
+            final_decisions={},
+            context={},
+        )
+        phase24_execution_safety_result = refresh_phase24_execution_safety_safely(
+            final_decisions={},
+            context={},
+        )
+        phase25_smart_execution_result = refresh_phase25_smart_execution_safely(
+            final_decisions={},
+            paper_result=phase23_paper_trading_result,
+            context={},
+        )
+        phase26_microstructure_result = refresh_phase26_microstructure_safely(
+            final_decisions={},
+            context={},
+        )
+        phase27_options_flow_result = refresh_phase27_options_flow_safely(
+            final_decisions={},
+            context={},
+        )
+        phase28_news_intelligence_result = refresh_phase28_news_intelligence_safely(
+            final_decisions={},
+            context={},
+            news_items=news_items,
+        )
+        phase29_economic_calendar_result = refresh_phase29_economic_calendar_safely(
+            final_decisions={},
+            context={},
+        )
+        phase30_liquidity_map_result = refresh_phase30_liquidity_map_safely(
+            final_decisions={},
+            context={},
+        )
+        phase31_scenario_simulation_result = refresh_phase31_scenario_simulation_safely(
+            final_decisions={},
+            context={},
+        )
+        phase32_multi_agent_debate_result = refresh_phase32_multi_agent_debate_safely(
+            final_decisions={},
+            context={},
+        )
+        phase33_self_reflection_result = refresh_phase33_self_reflection_safely(
+            final_decisions={},
+            context={},
+        )
+        phase34_confidence_calibration_result = refresh_phase34_confidence_calibration_safely(
+            final_decisions={},
+            context={},
+        )
+        phase35_no_trade_intelligence_result = refresh_phase35_no_trade_intelligence_safely(
+            final_decisions={},
+            context={},
+        )
+        phase36_memory_consolidation_result = refresh_phase36_memory_consolidation_safely(
+            context={},
+        )
+        phase37_auto_repair_result = refresh_phase37_auto_repair_safely(
+            context={},
+        )
 
         print("\n[MasterBrain] Cycle Complete\n")
 
@@ -921,10 +1900,28 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
             "phase12_advanced_regime_result": phase12_advanced_regime_result,
             "phase13_strategy_genome_result": phase13_strategy_genome_result,
             "phase14_meta_evolution_result": phase14_meta_evolution_result,
+            "phase21_autonomous_research_result": phase21_autonomous_research_result,
+            "phase22_backtesting_validation_result": phase22_backtesting_validation_result,
+            "phase23_paper_trading_result": phase23_paper_trading_result,
+            "phase24_execution_safety_result": phase24_execution_safety_result,
+            "phase25_smart_execution_result": phase25_smart_execution_result,
+            "phase26_microstructure_result": phase26_microstructure_result,
+            "phase27_options_flow_result": phase27_options_flow_result,
+            "phase28_news_intelligence_result": phase28_news_intelligence_result,
+            "phase29_economic_calendar_result": phase29_economic_calendar_result,
+            "phase30_liquidity_map_result": phase30_liquidity_map_result,
+            "phase31_scenario_simulation_result": phase31_scenario_simulation_result,
+            "phase32_multi_agent_debate_result": phase32_multi_agent_debate_result,
+            "phase33_self_reflection_result": phase33_self_reflection_result,
+            "phase34_confidence_calibration_result": phase34_confidence_calibration_result,
+            "phase35_no_trade_intelligence_result": phase35_no_trade_intelligence_result,
+            "phase36_memory_consolidation_result": phase36_memory_consolidation_result,
+            "phase37_auto_repair_result": phase37_auto_repair_result,
         }
 
     master_input = build_master_input()
     context = build_context(master_input)
+    context["news_items"] = news_items or []
 
     print("[MasterBrain] Context Built")
     print("[MasterBrain] Market Type:", context.get("market_type"))
@@ -948,6 +1945,67 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
 
     final_decisions = make_final_decisions(evaluated_setups, context)
     print_final_decisions(final_decisions)
+
+    phase23_paper_trading_result = refresh_phase23_paper_trading_safely(
+        final_decisions=final_decisions,
+        context=context,
+    )
+    phase24_execution_safety_result = refresh_phase24_execution_safety_safely(
+        final_decisions=final_decisions,
+        context=context,
+    )
+    phase25_smart_execution_result = refresh_phase25_smart_execution_safely(
+        final_decisions=final_decisions,
+        paper_result=phase23_paper_trading_result,
+        context=context,
+    )
+    phase26_microstructure_result = refresh_phase26_microstructure_safely(
+        final_decisions=final_decisions,
+        context=context,
+    )
+    phase27_options_flow_result = refresh_phase27_options_flow_safely(
+        final_decisions=final_decisions,
+        context=context,
+    )
+    phase28_news_intelligence_result = refresh_phase28_news_intelligence_safely(
+        final_decisions=final_decisions,
+        context=context,
+        news_items=news_items,
+    )
+    phase29_economic_calendar_result = refresh_phase29_economic_calendar_safely(
+        final_decisions=final_decisions,
+        context=context,
+    )
+    phase30_liquidity_map_result = refresh_phase30_liquidity_map_safely(
+        final_decisions=final_decisions,
+        context=context,
+    )
+    phase31_scenario_simulation_result = refresh_phase31_scenario_simulation_safely(
+        final_decisions=final_decisions,
+        context=context,
+    )
+    phase32_multi_agent_debate_result = refresh_phase32_multi_agent_debate_safely(
+        final_decisions=final_decisions,
+        context=context,
+    )
+    phase33_self_reflection_result = refresh_phase33_self_reflection_safely(
+        final_decisions=final_decisions,
+        context=context,
+    )
+    phase34_confidence_calibration_result = refresh_phase34_confidence_calibration_safely(
+        final_decisions=final_decisions,
+        context=context,
+    )
+    phase35_no_trade_intelligence_result = refresh_phase35_no_trade_intelligence_safely(
+        final_decisions=final_decisions,
+        context=context,
+    )
+    phase36_memory_consolidation_result = refresh_phase36_memory_consolidation_safely(
+        context=context,
+    )
+    phase37_auto_repair_result = refresh_phase37_auto_repair_safely(
+        context=context,
+    )
 
     alert_filter_result = filter_alert_candidates(final_decisions)
     print_alert_filter_result(alert_filter_result)
@@ -1069,6 +2127,16 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
             "outcome_result": outcome_result,
         },
     )
+    phase21_autonomous_research_result = refresh_phase21_autonomous_research_safely(
+        context=context,
+        news_items=news_items,
+        evaluated_setups=evaluated_setups,
+        final_decisions=final_decisions,
+    )
+    phase22_backtesting_validation_result = refresh_phase22_backtesting_validation_safely(
+        autonomous_research_report=phase21_autonomous_research_result,
+        context=context,
+    )
 
     # Run market close cleanup again after outcome tracker
     auto_close_live_trades_after_market_close()
@@ -1095,6 +2163,23 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
         "phase12_advanced_regime_result": phase12_advanced_regime_result,
         "phase13_strategy_genome_result": phase13_strategy_genome_result,
         "phase14_meta_evolution_result": phase14_meta_evolution_result,
+        "phase21_autonomous_research_result": phase21_autonomous_research_result,
+        "phase22_backtesting_validation_result": phase22_backtesting_validation_result,
+        "phase23_paper_trading_result": phase23_paper_trading_result,
+        "phase24_execution_safety_result": phase24_execution_safety_result,
+        "phase25_smart_execution_result": phase25_smart_execution_result,
+        "phase26_microstructure_result": phase26_microstructure_result,
+        "phase27_options_flow_result": phase27_options_flow_result,
+        "phase28_news_intelligence_result": phase28_news_intelligence_result,
+        "phase29_economic_calendar_result": phase29_economic_calendar_result,
+        "phase30_liquidity_map_result": phase30_liquidity_map_result,
+        "phase31_scenario_simulation_result": phase31_scenario_simulation_result,
+        "phase32_multi_agent_debate_result": phase32_multi_agent_debate_result,
+        "phase33_self_reflection_result": phase33_self_reflection_result,
+        "phase34_confidence_calibration_result": phase34_confidence_calibration_result,
+        "phase35_no_trade_intelligence_result": phase35_no_trade_intelligence_result,
+        "phase36_memory_consolidation_result": phase36_memory_consolidation_result,
+        "phase37_auto_repair_result": phase37_auto_repair_result,
     }
 
 

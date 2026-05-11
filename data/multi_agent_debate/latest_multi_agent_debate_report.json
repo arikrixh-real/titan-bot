@@ -1,0 +1,99 @@
+{
+  "adversarial_reasoning": {
+    "adversarial_risk_score": 0.0,
+    "failure_modes": [
+      {
+        "area": "none",
+        "risk_score": 0.0,
+        "stance": "LOW"
+      }
+    ],
+    "summary": "Adversarial pass checks how the setup can fail before ranking blend."
+  },
+  "bearish_agent": {
+    "arguments": [
+      "Bearish objection is limited."
+    ],
+    "objection_score": 50.0,
+    "stance": "CHALLENGE"
+  },
+  "bullish_agent": {
+    "arguments": [
+      "Bullish case is present but not decisive."
+    ],
+    "stance": "NEUTRAL",
+    "support_score": 50.0
+  },
+  "confidence_after_debate": 75.07,
+  "contradiction_resolution": {
+    "average_objection_score": 20.17,
+    "contradiction_count": 0,
+    "contradictions_found": false,
+    "max_objection_score": 50.0,
+    "net_support_score": 73.91,
+    "notes": [
+      "No major contradiction detected."
+    ]
+  },
+  "debate_bias": "REVIEW",
+  "debate_data_mode": "INSUFFICIENT",
+  "debate_score": 50.0,
+  "debate_warning": "REVIEW",
+  "execution_objection_agent": {
+    "execution_risks": {
+      "chase_risk_score": 0.0,
+      "slippage_pct": 0.0,
+      "spread_pct": 0.0
+    },
+    "objection_score": 12.0,
+    "stance": "CLEAR"
+  },
+  "explanations": [
+    "Insufficient setup/context data; debate remains neutral and non-blocking.",
+    "No major contradiction detected."
+  ],
+  "final_judge": {
+    "decision": "APPROVE",
+    "judge_score": 75.69,
+    "rationale": "Approve only when support survives bearish, risk, execution, news, portfolio, and regime objections.",
+    "warning": "NONE"
+  },
+  "generated_at": "2026-05-10T17:36:59.805222Z",
+  "live_order_allowed": false,
+  "news_objection_agent": {
+    "news_state": {
+      "credibility_score": 50.0,
+      "sentiment_score": 50.0,
+      "warning": "NONE"
+    },
+    "objection_score": 15.0,
+    "stance": "CLEAR"
+  },
+  "portfolio_objection_agent": {
+    "objection_score": 12.0,
+    "portfolio_state": {
+      "concentration_score": 0.0,
+      "crowding_score": 0.0,
+      "portfolio_heat_score": 0.0
+    },
+    "stance": "CLEAR"
+  },
+  "regime_objection_agent": {
+    "objection_score": 12.0,
+    "regime_state": {
+      "regime_text": "UNKNOWN"
+    },
+    "stance": "CLEAR"
+  },
+  "risk_objection_agent": {
+    "objection_score": 20.0,
+    "risk_factors": {
+      "drawdown_pct": 0.0,
+      "event_risk_score": 0.0,
+      "portfolio_heat_score": 0.0,
+      "rr": 0.0
+    },
+    "stance": "CLEAR"
+  },
+  "symbol": "UNKNOWN"
+}

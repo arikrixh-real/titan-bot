@@ -23,6 +23,7 @@ import os
 import re
 import json
 import hashlib
+import sys
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -36,6 +37,12 @@ except Exception:
 
 
 IST = ZoneInfo("Asia/Kolkata")
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 
 # =========================================================

@@ -105,6 +105,22 @@ def evaluate_single_setup(setup: Dict[str, Any], context: Dict[str, Any]) -> Dic
         "phase5_applied",
         "phase5_blocked",
         "phase5_error",
+        "probability_score",
+        "probability_recommendation",
+        "probability_expected_value",
+        "probability_confidence",
+        "probability_uncertainty",
+        "probability_explanations",
+        "blended_rank_score",
+        "causal_primary_cause",
+        "causal_confidence_score",
+        "causal_event_classification",
+        "causal_market_pressure",
+        "causal_sector_leadership",
+        "causal_delayed_effect",
+        "causal_cascading_risk",
+        "causal_explanations",
+        "new_blended_rank_score",
     ]:
         if key in raw:
             evaluated[key] = raw.get(key)

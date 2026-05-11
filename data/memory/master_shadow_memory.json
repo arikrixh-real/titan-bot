@@ -6,17 +6,23 @@
       "state": "FRAGILE"
     },
     "failed_open": false,
-    "overall_state": "ACTIVE",
-    "warnings": []
+    "overall_state": "DEGRADED_OBSERVING",
+    "warnings": [
+      "phase5_memory_stale",
+      "phase6_memory_stale",
+      "phase7_memory_stale",
+      "phase8_memory_stale",
+      "phase9_memory_stale"
+    ]
   },
   "dashboard_cards": {
     "cross_setup_heat": 0.0,
-    "master_shadow_state": "ACTIVE",
+    "master_shadow_state": "DEGRADED_OBSERVING",
     "narrative": "UNKNOWN",
-    "shadow_warnings": 1,
+    "shadow_warnings": 6,
     "tracked_lifecycle_trades": 0
   },
-  "generated_at": "2026-05-10 11:17:45",
+  "generated_at": "2026-05-10 23:06:59",
   "intelligence_layers": {
     "phase5_strategy_family": {
       "available": true,
@@ -58,31 +64,31 @@
   },
   "layer_freshness": {
     "phase5": {
-      "age_seconds": 3996.765,
+      "age_seconds": 46550.786,
       "available": true,
       "path": "data\\memory\\strategy_family_memory.json",
       "status": "OK"
     },
     "phase6": {
-      "age_seconds": 3054.328,
+      "age_seconds": 45608.35,
       "available": true,
       "path": "data\\memory\\phase6_shadow_memory.json",
       "status": "OK"
     },
     "phase7": {
-      "age_seconds": 1752.001,
+      "age_seconds": 44306.022,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "phase8": {
-      "age_seconds": 1297.522,
+      "age_seconds": 43851.543,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "phase9": {
-      "age_seconds": 802.733,
+      "age_seconds": 43356.755,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
@@ -91,7 +97,13 @@
   "phase10_rank_adjustment": 0.0,
   "phase10_shadow_mode": true,
   "risk_observations": {
-    "data_quality_flags": [],
+    "data_quality_flags": [
+      "phase5_memory_stale",
+      "phase6_memory_stale",
+      "phase7_memory_stale",
+      "phase8_memory_stale",
+      "phase9_memory_stale"
+    ],
     "lifecycle_flags": [],
     "narrative_flags": [
       "risk_state:UNKNOWN"
@@ -102,10 +114,12 @@
   "runtime_context": {
     "context_mode": null,
     "observed_setups_count": 0,
-    "phase_result_keys": [],
+    "phase_result_keys": [
+      "news_items_collected"
+    ],
     "selected_decisions_count": 0
   },
-  "runtime_ms": 0.0,
+  "runtime_ms": 15.0,
   "safety": {
     "broker_api_changes": false,
     "build_master_input_calls": false,

@@ -79,6 +79,20 @@ try:
 except Exception:
     run_news_engine = None
 
+try:
+    from engines.probabilistic_world_model import (
+        build_probability_report,
+        rank_setups_by_probability,
+    )
+except Exception:
+    build_probability_report = None
+    rank_setups_by_probability = None
+
+try:
+    from engines.causal_market_reasoning_engine import build_causal_reasoning_report
+except Exception:
+    build_causal_reasoning_report = None
+
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -138,7 +152,7 @@ def log_scan_to_supabase(
     """
     if supabase is None:
         print("⚠️ Supabase not connected for scan logging")
-        return
+        return []
 
     now_iso = datetime.now(IST).isoformat()
 
@@ -189,6 +203,173 @@ def safe_float(value, default=None):
         return default
 
 
+def _existing_rank_score(setup):
+    if not isinstance(setup, dict):
+        return 0.0
+    return safe_float(
+        setup.get("final_score", setup.get("score", setup.get("rank_score"))),
+        0.0,
+    )
+
+
+def _probability_context(market_status):
+    context = {"market_status": market_status}
+
+    if isinstance(market_status, dict):
+        context["market_regime"] = (
+            market_status.get("regime")
+            or market_status.get("status")
+            or market_status.get("direction")
+            or market_status.get("reason")
+            or "neutral"
+        )
+    else:
+        context["market_regime"] = str(market_status or "neutral")
+
+    return context
+
+
+def apply_probability_fields(setup, context):
+    """
+    Fail-open probability annotation. It never blocks or rejects a setup.
+    """
+    if not isinstance(setup, dict):
+        return setup
+
+    result = dict(setup)
+    existing_score = _existing_rank_score(result)
+
+    if build_probability_report is None:
+        result["blended_rank_score"] = existing_score
+        return result
+
+    try:
+        report = build_probability_report(result, context if isinstance(context, dict) else {})
+        probability_score = safe_float(report.get("final_probability_score"), existing_score)
+
+        result["probability_score"] = probability_score
+        result["probability_recommendation"] = report.get("recommendation")
+        result["probability_expected_value"] = report.get("expected_value")
+        result["probability_confidence"] = report.get("probability_confidence_score")
+        result["probability_uncertainty"] = report.get("uncertainty_score")
+        result["probability_explanations"] = report.get("explanations", [])
+        result["blended_rank_score"] = round((0.70 * existing_score) + (0.30 * probability_score), 4)
+    except Exception as e:
+        result["blended_rank_score"] = existing_score
+        result["probability_error"] = str(e)
+
+    return result
+
+
+def apply_probability_ranking(setups, context):
+    if not isinstance(setups, list):
+        return []
+
+    if rank_setups_by_probability is not None:
+        try:
+            rank_setups_by_probability(setups, context if isinstance(context, dict) else {})
+        except Exception:
+            pass
+
+    ranked = [apply_probability_fields(setup, context) for setup in setups]
+    ranked.sort(
+        key=lambda setup: safe_float(setup.get("blended_rank_score"), _existing_rank_score(setup)),
+        reverse=True,
+    )
+    return ranked
+
+
+def _base_rank_score(setup):
+    if not isinstance(setup, dict):
+        return 0.0
+    return safe_float(
+        setup.get("blended_rank_score", setup.get("final_score", setup.get("score"))),
+        0.0,
+    )
+
+
+def _causal_adjusted_confidence(report):
+    if not isinstance(report, dict):
+        return 0.0
+
+    confidence = safe_float(report.get("cause_confidence_score"), 0.0)
+    event = str(report.get("event_classification") or "").upper()
+    news_chain = report.get("news_to_sector_stock_chain") if isinstance(report.get("news_to_sector_stock_chain"), dict) else {}
+    index_chain = report.get("index_sector_stock_causality") if isinstance(report.get("index_sector_stock_causality"), dict) else {}
+    leadership = report.get("sector_leadership_cause") if isinstance(report.get("sector_leadership_cause"), dict) else {}
+    pressure = report.get("market_wide_pressure") if isinstance(report.get("market_wide_pressure"), dict) else {}
+    false_news = report.get("false_news_caution") if isinstance(report.get("false_news_caution"), dict) else {}
+    cascade = report.get("cascading_event_risk") if isinstance(report.get("cascading_event_risk"), dict) else {}
+    graph = report.get("narrative_causality_graph") if isinstance(report.get("narrative_causality_graph"), dict) else {}
+
+    if safe_float(leadership.get("leadership_score"), 0.0) >= 65.0:
+        confidence += 7.0
+    if safe_float(index_chain.get("causal_score"), 0.0) >= 55.0 or index_chain.get("causal_alignment") == "ALIGNED":
+        confidence += 5.0
+    if safe_float(news_chain.get("chain_strength"), 0.0) >= 50.0:
+        confidence += 6.0
+    if len(graph.get("edges", []) or []) >= 4:
+        confidence += 3.0
+    if cascade.get("active") and safe_float(cascade.get("risk_score"), 0.0) < 40.0:
+        confidence += 2.0
+
+    if false_news.get("active"):
+        confidence -= 8.0
+    if safe_float(report.get("cause_confidence_score"), 0.0) < 35.0:
+        confidence -= 6.0
+    if safe_float(cascade.get("risk_score"), 0.0) >= 55.0:
+        confidence -= 8.0
+    if pressure.get("active") and not index_chain.get("active"):
+        confidence -= 4.0
+    if event in {"NO_CLEAR_EVENT", "UNKNOWN", ""}:
+        confidence -= 3.0
+
+    return max(0.0, min(100.0, round(confidence, 2)))
+
+
+def apply_causal_fields(setup, context, news_items=None):
+    if not isinstance(setup, dict):
+        return setup
+
+    result = dict(setup)
+    existing_rank = _base_rank_score(result)
+
+    if build_causal_reasoning_report is None:
+        result["new_blended_rank_score"] = existing_rank
+        return result
+
+    try:
+        report = build_causal_reasoning_report(result, context if isinstance(context, dict) else {}, news_items=news_items or [])
+        causal_confidence = _causal_adjusted_confidence(report)
+
+        result["causal_primary_cause"] = report.get("primary_cause")
+        result["causal_confidence_score"] = causal_confidence
+        result["causal_event_classification"] = report.get("event_classification")
+        result["causal_market_pressure"] = report.get("market_wide_pressure", {})
+        result["causal_sector_leadership"] = report.get("sector_leadership_cause", {})
+        result["causal_delayed_effect"] = report.get("delayed_effect_tracking", {})
+        result["causal_cascading_risk"] = report.get("cascading_event_risk", {})
+        result["causal_explanations"] = report.get("explanations", [])
+        result["new_blended_rank_score"] = round((existing_rank * 0.85) + (causal_confidence * 0.15), 4)
+    except Exception as e:
+        result["new_blended_rank_score"] = existing_rank
+        result["causal_error"] = str(e)
+
+    return result
+
+
+def apply_causal_ranking(setups, context, news_items=None):
+    if not isinstance(setups, list):
+        return []
+
+    ranked = [apply_causal_fields(setup, context, news_items=news_items) for setup in setups]
+    ranked.sort(
+        key=lambda setup: safe_float(setup.get("new_blended_rank_score"), _base_rank_score(setup)),
+        reverse=True,
+    )
+    return ranked
+
+
 def clean_market_dataframe(df):
     """
     Converts OHLCV columns to numeric.
@@ -218,7 +399,8 @@ def run_news_engine_safely():
 
     try:
         print("📰 Running News Engine...")
-        run_news_engine()
+        news_items = run_news_engine()
+        return news_items or []
         print("✅ News Engine Completed and news_memory updated")
     except Exception as e:
         print(f"⚠️ News Engine Error: {e}")
@@ -367,7 +549,7 @@ def save_selected_alerts_to_trade_results(selected_alerts, scan_id, market_statu
 def scan_for_setups():
     print("🚀 TITAN scan started...")
 
-    run_news_engine_safely()
+    news_items = run_news_engine_safely() or []
 
     if not is_trade_window():
         print(f"🛡️ Outside trade window ({trade_window_text()}). Setup scan, journaling, and outcome tracking skipped.")
@@ -573,6 +755,15 @@ def scan_for_setups():
             continue
 
     eligible_setups = rank_elite_setups(eligible_setups)
+    eligible_setups = apply_probability_ranking(
+        eligible_setups,
+        _probability_context(market_status),
+    )
+    eligible_setups = apply_causal_ranking(
+        eligible_setups,
+        _probability_context(market_status),
+        news_items=news_items,
+    )
 
     print(f"📊 Stocks scanned successfully: {scanned_count}")
     print(f"⚠️ Stocks failed: {error_count}")

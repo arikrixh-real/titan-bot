@@ -1,0 +1,570 @@
+{
+  "historical_backtest": {
+    "available": false,
+    "strategy": "Test: LONG setup quality should be tested separately",
+    "sample_size": 0,
+    "wins": 0,
+    "losses": 0,
+    "win_rate": 0.0,
+    "total_pnl": 0,
+    "expectancy": 0.0,
+    "profit_factor": 0.0,
+    "avg_rr": 0.0,
+    "avg_score": 0.0,
+    "quality_score": 0.0,
+    "status": "NO_DATA"
+  },
+  "walk_forward_test": {
+    "available": true,
+    "windows": [
+      {
+        "window": 1,
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      {
+        "window": 2,
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      {
+        "window": 3,
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      }
+    ],
+    "consistency_score": 0.0,
+    "status": "OK"
+  },
+  "out_of_sample_validation": {
+    "available": false,
+    "train": {
+      "sample_size": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": 0.0,
+      "total_pnl": 0,
+      "expectancy": 0.0,
+      "profit_factor": 0.0,
+      "avg_rr": 0.0,
+      "avg_score": 0.0,
+      "quality_score": 0.0
+    },
+    "test": {
+      "sample_size": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": 0.0,
+      "total_pnl": 0,
+      "expectancy": 0.0,
+      "profit_factor": 0.0,
+      "avg_rr": 0.0,
+      "avg_score": 0.0,
+      "quality_score": 0.0
+    },
+    "degradation": 0.0,
+    "validation_score": 0.0,
+    "status": "NO_TEST_DATA"
+  },
+  "regime_testing": {
+    "available": true,
+    "regimes": {
+      "{\"MARKET_OK\": TRUE, \"REASON\": \"LEVEL 1 MARKET FILTER ACTIVE\"}": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "{'MARKET_OK': TRUE, 'REASON': 'LEVEL 1 MARKET FILTER ACTIVE'}": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      }
+    },
+    "stability_score": 0.0,
+    "group_count": 2
+  },
+  "sector_testing": {
+    "available": true,
+    "sectors": {
+      "UNKNOWN": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      }
+    },
+    "stability_score": 0.0,
+    "group_count": 1
+  },
+  "symbol_testing": {
+    "available": true,
+    "symbols": {
+      "SHRIRAMFIN": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "CHOLAFIN": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "TATASTEEL": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "AXISBANK": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "TCS": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "ABB": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "BANKBARODA": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "INDIGO": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "SIEMENS": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "PIIND": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "TRENT": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "BHARTIARTL": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "BAJAJHLDNG": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "ONGC": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "HAVELLS": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "RECLTD": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "JINDALSTEL": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "HDFCAMC": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "TITAN": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "HAL": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "PFC": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "HEROMOTOCO": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "BAJAJ-AUTO": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "JSWSTEEL": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "BAJFINANCE": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "APOLLOHOSP": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "MARICO": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "RELIANCE": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      }
+    },
+    "stability_score": 0.0,
+    "group_count": 28
+  },
+  "monte_carlo_robustness": {
+    "available": false,
+    "iterations": 100,
+    "robustness_score": 50.0,
+    "status": "NO_DATA"
+  },
+  "overfitting_detection": {
+    "risk_score": 20.0,
+    "gap": 0.0,
+    "state": "LOW"
+  },
+  "strategy_degradation": {
+    "degradation_score": 0.0,
+    "recent": {
+      "sample_size": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": 0.0,
+      "total_pnl": 0,
+      "expectancy": 0.0,
+      "profit_factor": 0.0,
+      "avg_rr": 0.0,
+      "avg_score": 0.0,
+      "quality_score": 0.0
+    },
+    "historical": {
+      "sample_size": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": 0.0,
+      "total_pnl": 0,
+      "expectancy": 0.0,
+      "profit_factor": 0.0,
+      "avg_rr": 0.0,
+      "avg_score": 0.0,
+      "quality_score": 0.0
+    },
+    "state": "STABLE_OR_UNKNOWN"
+  },
+  "false_discovery_control": {
+    "tested_strategies": 12,
+    "strong_results": 0,
+    "false_discovery_risk": 78.0,
+    "control_status": "REVIEW"
+  },
+  "statistical_significance": {
+    "sample_size": 0,
+    "win_rate": 0.0,
+    "significance_score": 60.0,
+    "significant": false
+  },
+  "survivorship_bias_check": {
+    "symbol_count": 28,
+    "delisted_or_inactive_count": 0,
+    "bias_risk_score": 15.0,
+    "status": "REVIEW"
+  },
+  "slippage_simulation": {
+    "slippage_bps": 6.5,
+    "slippage_value": 0.138,
+    "simulation_status": "OK"
+  },
+  "market_replay_test": {
+    "available": false,
+    "replay_score": 0.0,
+    "sample_size": 0,
+    "wins": 0,
+    "losses": 0,
+    "win_rate": 0.0,
+    "total_pnl": 0,
+    "expectancy": 0.0,
+    "profit_factor": 0.0,
+    "avg_rr": 0.0,
+    "avg_score": 0.0,
+    "quality_score": 0.0
+  },
+  "validation_score": 29.0,
+  "validation_status": "FAIL",
+  "live_deployment_allowed": false,
+  "explanations": [
+    "Validation score is 29.0 with status FAIL.",
+    "Statistical significance is not strong enough for deployment.",
+    "Validation only; live deployment is explicitly disabled."
+  ]
+}

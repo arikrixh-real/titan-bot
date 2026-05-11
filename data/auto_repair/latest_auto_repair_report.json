@@ -1,0 +1,48 @@
+{
+  "auto_file_changes_allowed": false,
+  "auto_repair_score": 62.0,
+  "debug_summary": "Detected 1 diagnostic log item(s). Categories: PERMISSION_OR_SOCKET. Suspected modules: market_close, socket, supabase. Highest severity: 38.0.",
+  "dependency_issues": {
+    "dependency_issue_detected": false,
+    "evidence": [],
+    "missing_modules": []
+  },
+  "error_classification": {
+    "count": 1,
+    "items": [
+      {
+        "category": "PERMISSION_OR_SOCKET",
+        "error_excerpt": "[MarketClose WARN] [WinError 10013]"
+      }
+    ]
+  },
+  "explanations": [
+    "REAL_ERRORS repair diagnosis completed with human-review recommendations only.",
+    "WinError 10013 classified as REVIEW unless it blocks the cycle."
+  ],
+  "generated_at": "2026-05-10T17:36:59.855117Z",
+  "github_run_diagnosis": {
+    "issues": [],
+    "log_length": 0,
+    "status": "NO_GITHUB_LOGS"
+  },
+  "live_order_allowed": false,
+  "maintenance_recommendations": [
+    "Keep diagnostic fixes human-reviewed; auto_file_changes_allowed remains false.",
+    "Preserve fail-open behavior for TITAN orchestration and fail-closed behavior for live execution.",
+    "Archive recurring non-blocking warnings separately from blocking failures.",
+    "Add targeted compile/import checks for modules named in suspected_modules."
+  ],
+  "recommended_fixes": [
+    "Human review: inspect market-close/Supabase/socket permissions; keep as REVIEW if cycle completes."
+  ],
+  "repair_data_mode": "REAL_ERRORS",
+  "repair_status": "REVIEW",
+  "severity_score": 38.0,
+  "suspected_modules": [
+    "market_close",
+    "socket",
+    "supabase"
+  ],
+  "urgency": "REVIEW"
+}

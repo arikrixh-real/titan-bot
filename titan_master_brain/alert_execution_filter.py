@@ -36,6 +36,15 @@ def _is_alert_allowed(candidate: Dict[str, Any]) -> tuple[bool, str]:
     Decide if one candidate can move forward to alert/execution.
     """
 
+    trade_permission = str(candidate.get("trade_permission", "")).upper()
+    low_edge_day = candidate.get("low_edge_day") if isinstance(candidate.get("low_edge_day"), dict) else {}
+
+    if candidate.get("no_trade_block_alert") or trade_permission == "BLOCK" or low_edge_day.get("is_low_edge_day"):
+        return False, "Blocked by Phase 35 no-trade intelligence"
+
+    if trade_permission == "WAIT":
+        return False, "Wait mode from Phase 35 no-trade intelligence"
+
     decision = str(candidate.get("decision", "")).upper()
     confidence = str(candidate.get("confidence", "")).upper()
     score = _safe_float(candidate.get("score"))

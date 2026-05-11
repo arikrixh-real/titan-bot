@@ -1,0 +1,14 @@
+{
+  "symbol": "UNKNOWN",
+  "data_mode": "INSUFFICIENT",
+  "options_flow_score": 50.0,
+  "options_flow_bias": "NEUTRAL",
+  "options_warning": "REVIEW",
+  "live_order_allowed": false,
+  "explanations": [
+    "No useful option-chain or proxy context available; score kept neutral."
+  ],
+  "details": {
+    "data_mode": "INSUFFICIENT"
+  }
+}

@@ -1,0 +1,1451 @@
+{
+  "adaptive_recall_weights": {
+    "weight_count": 90,
+    "weights": {
+      "adaptive_intelligence_state": 40.0,
+      "advanced_regime_intelligence_memory": 40.0,
+      "cross_setup_memory": 40.0,
+      "evolution_state": 40.0,
+      "lifecycle_memory": 40.0,
+      "market_narrative_memory": 40.0,
+      "master_shadow_memory": 40.0,
+      "meta_evolution_memory": 40.0,
+      "news_batch_state": 40.0,
+      "news_seen_hashes": 62.5,
+      "phase6_shadow_memory": 40.0,
+      "promotion_gate_memory": 40.0,
+      "scan_memory_0": 40.0,
+      "scan_memory_1": 40.0,
+      "scan_memory_10": 40.0,
+      "scan_memory_11": 40.0,
+      "scan_memory_12": 40.0,
+      "scan_memory_13": 40.0,
+      "scan_memory_14": 40.0,
+      "scan_memory_15": 40.0,
+      "scan_memory_16": 40.0,
+      "scan_memory_17": 40.0,
+      "scan_memory_18": 40.0,
+      "scan_memory_19": 40.0,
+      "scan_memory_2": 40.0,
+      "scan_memory_20": 40.0,
+      "scan_memory_21": 40.0,
+      "scan_memory_22": 40.0,
+      "scan_memory_23": 40.0,
+      "scan_memory_24": 40.0,
+      "scan_memory_25": 40.0,
+      "scan_memory_26": 40.0,
+      "scan_memory_27": 40.0,
+      "scan_memory_28": 40.0,
+      "scan_memory_29": 40.0,
+      "scan_memory_3": 40.0,
+      "scan_memory_30": 40.0,
+      "scan_memory_31": 40.0,
+      "scan_memory_32": 40.0,
+      "scan_memory_33": 40.0,
+      "scan_memory_34": 40.0,
+      "scan_memory_4": 40.0,
+      "scan_memory_5": 40.0,
+      "scan_memory_6": 40.0,
+      "scan_memory_7": 40.0,
+      "scan_memory_8": 40.0,
+      "scan_memory_9": 40.0,
+      "strategy_family_memory": 40.0,
+      "strategy_genome_memory": 40.0,
+      "titan_master_status": 40.0,
+      "trade_memory_0": 40.0,
+      "trade_memory_1": 40.0,
+      "trade_memory_10": 40.0,
+      "trade_memory_11": 40.0,
+      "trade_memory_12": 40.0,
+      "trade_memory_13": 40.0,
+      "trade_memory_14": 40.0,
+      "trade_memory_15": 40.0,
+      "trade_memory_16": 40.0,
+      "trade_memory_17": 40.0,
+      "trade_memory_18": 40.0,
+      "trade_memory_19": 40.0,
+      "trade_memory_2": 40.0,
+      "trade_memory_20": 40.0,
+      "trade_memory_21": 40.0,
+      "trade_memory_22": 40.0,
+      "trade_memory_23": 40.0,
+      "trade_memory_24": 40.0,
+      "trade_memory_25": 40.0,
+      "trade_memory_26": 40.0,
+      "trade_memory_27": 40.0,
+      "trade_memory_28": 40.0,
+      "trade_memory_29": 40.0,
+      "trade_memory_3": 40.0,
+      "trade_memory_30": 40.0,
+      "trade_memory_31": 40.0,
+      "trade_memory_32": 40.0,
+      "trade_memory_33": 40.0,
+      "trade_memory_34": 40.0,
+      "trade_memory_35": 40.0,
+      "trade_memory_36": 40.0,
+      "trade_memory_37": 40.0,
+      "trade_memory_38": 40.0,
+      "trade_memory_39": 40.0,
+      "trade_memory_4": 40.0,
+      "trade_memory_5": 40.0,
+      "trade_memory_6": 40.0,
+      "trade_memory_7": 40.0,
+      "trade_memory_8": 40.0,
+      "trade_memory_9": 40.0
+    }
+  },
+  "bad_pattern_archive": {
+    "bad_pattern_count": 0,
+    "patterns": []
+  },
+  "experience_consolidation": {
+    "bad_pattern_count": 0,
+    "consolidation_state": "REVIEW",
+    "important_pattern_count": 0,
+    "losses": 0,
+    "trade_count": 0,
+    "win_rate": 0.0,
+    "wins": 0
+  },
+  "explanations": [
+    "REAL_MEMORY consolidation used available memory, trade history, and context."
+  ],
+  "generated_at": "2026-05-10T17:36:59.846254Z",
+  "important_patterns": {
+    "important_count": 0,
+    "patterns": []
+  },
+  "live_order_allowed": false,
+  "memory_bias": "STABLE",
+  "memory_compression": {
+    "compressed_count": 90,
+    "original_count": 90,
+    "pattern_summaries": [
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "ADAPTIVE_INTELLIGENCE_STATE"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "ADVANCED_REGIME_INTELLIGENCE_MEMORY"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "CROSS_SETUP_MEMORY"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "EVOLUTION_STATE"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "LIFECYCLE_MEMORY"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "MARKET_NARRATIVE_MEMORY"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "MASTER_SHADOW_MEMORY"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "META_EVOLUTION_MEMORY"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "PHASE6_SHADOW_MEMORY"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "PROMOTION_GATE_MEMORY"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "STRATEGY_FAMILY_MEMORY"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "STRATEGY_GENOME_MEMORY"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "TITAN_MASTER_STATUS"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "NEWS_BATCH_STATE"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "NEWS_SEEN_HASHES"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_0"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_1"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_2"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_3"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_4"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_5"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_6"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_7"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_8"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_9"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_10"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_11"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_12"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_13"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_14"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_15"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_16"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_17"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_18"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_19"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_20"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_21"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_22"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_23"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_24"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_25"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_26"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_27"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_28"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_29"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_30"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_31"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_32"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_33"
+      },
+      {
+        "average_score": 50.0,
+        "count": 1,
+        "examples_kept": 1,
+        "pattern": "SCAN_MEMORY_34"
+      }
+    ]
+  },
+  "memory_data_mode": "REAL_MEMORY",
+  "memory_prioritization": {
+    "item_count": 90,
+    "top_priorities": [
+      {
+        "pattern": "ADAPTIVE_INTELLIGENCE_STATE",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "ADVANCED_REGIME_INTELLIGENCE_MEMORY",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "CROSS_SETUP_MEMORY",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "EVOLUTION_STATE",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "LIFECYCLE_MEMORY",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "MARKET_NARRATIVE_MEMORY",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "MASTER_SHADOW_MEMORY",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "META_EVOLUTION_MEMORY",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "PHASE6_SHADOW_MEMORY",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "PROMOTION_GATE_MEMORY",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "STRATEGY_FAMILY_MEMORY",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "STRATEGY_GENOME_MEMORY",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "TITAN_MASTER_STATUS",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "NEWS_BATCH_STATE",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "NEWS_SEEN_HASHES",
+        "priority": 50.0,
+        "recall_weight": 62.5
+      },
+      {
+        "pattern": "SCAN_MEMORY_0",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_1",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_2",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_3",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_4",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_5",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_6",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_7",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_8",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_9",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_10",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_11",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_12",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_13",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_14",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_15",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_16",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_17",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_18",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_19",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_20",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_21",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_22",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_23",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_24",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_25",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_26",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_27",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_28",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_29",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_30",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_31",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_32",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_33",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      },
+      {
+        "pattern": "SCAN_MEMORY_34",
+        "priority": 50.0,
+        "recall_weight": 40.0
+      }
+    ]
+  },
+  "memory_quality_score": 70.0,
+  "memory_warning": "NONE",
+  "regime_memory_buckets": {
+    "bucket_count": 1,
+    "buckets": {
+      "UNKNOWN": [
+        {
+          "pattern": "ADAPTIVE_INTELLIGENCE_STATE",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "ADVANCED_REGIME_INTELLIGENCE_MEMORY",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "CROSS_SETUP_MEMORY",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "EVOLUTION_STATE",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "LIFECYCLE_MEMORY",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "MARKET_NARRATIVE_MEMORY",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "MASTER_SHADOW_MEMORY",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "META_EVOLUTION_MEMORY",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "PHASE6_SHADOW_MEMORY",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "PROMOTION_GATE_MEMORY",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "STRATEGY_FAMILY_MEMORY",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "STRATEGY_GENOME_MEMORY",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "TITAN_MASTER_STATUS",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "NEWS_BATCH_STATE",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "NEWS_SEEN_HASHES",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "SCAN_MEMORY_0",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "SCAN_MEMORY_1",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "SCAN_MEMORY_2",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "SCAN_MEMORY_3",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "SCAN_MEMORY_4",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "SCAN_MEMORY_5",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "SCAN_MEMORY_6",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "SCAN_MEMORY_7",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "SCAN_MEMORY_8",
+          "priority": 50.0,
+          "score": 50.0
+        },
+        {
+          "pattern": "SCAN_MEMORY_9",
+          "priority": 50.0,
+          "score": 50.0
+        }
+      ]
+    }
+  },
+  "strategic_memory_index": {
+    "index": {
+      "ADAPTIVE_INTELLIGENCE_STATE": [
+        {
+          "memory_key": "adaptive_intelligence_state",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "ADVANCED_REGIME_INTELLIGENCE_MEMORY": [
+        {
+          "memory_key": "advanced_regime_intelligence_memory",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "CROSS_SETUP_MEMORY": [
+        {
+          "memory_key": "cross_setup_memory",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "EVOLUTION_STATE": [
+        {
+          "memory_key": "evolution_state",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "LIFECYCLE_MEMORY": [
+        {
+          "memory_key": "lifecycle_memory",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "MARKET_NARRATIVE_MEMORY": [
+        {
+          "memory_key": "market_narrative_memory",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "MASTER_SHADOW_MEMORY": [
+        {
+          "memory_key": "master_shadow_memory",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "META_EVOLUTION_MEMORY": [
+        {
+          "memory_key": "meta_evolution_memory",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "NEWS_BATCH_STATE": [
+        {
+          "memory_key": "news_batch_state",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "NEWS_SEEN_HASHES": [
+        {
+          "memory_key": "news_seen_hashes",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "PHASE6_SHADOW_MEMORY": [
+        {
+          "memory_key": "phase6_shadow_memory",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "PROMOTION_GATE_MEMORY": [
+        {
+          "memory_key": "promotion_gate_memory",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_0": [
+        {
+          "memory_key": "scan_memory_0",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_1": [
+        {
+          "memory_key": "scan_memory_1",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_10": [
+        {
+          "memory_key": "scan_memory_10",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_11": [
+        {
+          "memory_key": "scan_memory_11",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_12": [
+        {
+          "memory_key": "scan_memory_12",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_13": [
+        {
+          "memory_key": "scan_memory_13",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_14": [
+        {
+          "memory_key": "scan_memory_14",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_15": [
+        {
+          "memory_key": "scan_memory_15",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_16": [
+        {
+          "memory_key": "scan_memory_16",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_17": [
+        {
+          "memory_key": "scan_memory_17",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_18": [
+        {
+          "memory_key": "scan_memory_18",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_19": [
+        {
+          "memory_key": "scan_memory_19",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_2": [
+        {
+          "memory_key": "scan_memory_2",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_20": [
+        {
+          "memory_key": "scan_memory_20",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_21": [
+        {
+          "memory_key": "scan_memory_21",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_22": [
+        {
+          "memory_key": "scan_memory_22",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_23": [
+        {
+          "memory_key": "scan_memory_23",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_24": [
+        {
+          "memory_key": "scan_memory_24",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_25": [
+        {
+          "memory_key": "scan_memory_25",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_26": [
+        {
+          "memory_key": "scan_memory_26",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_27": [
+        {
+          "memory_key": "scan_memory_27",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_28": [
+        {
+          "memory_key": "scan_memory_28",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_29": [
+        {
+          "memory_key": "scan_memory_29",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_3": [
+        {
+          "memory_key": "scan_memory_3",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_30": [
+        {
+          "memory_key": "scan_memory_30",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_31": [
+        {
+          "memory_key": "scan_memory_31",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_32": [
+        {
+          "memory_key": "scan_memory_32",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_33": [
+        {
+          "memory_key": "scan_memory_33",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_34": [
+        {
+          "memory_key": "scan_memory_34",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_4": [
+        {
+          "memory_key": "scan_memory_4",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_5": [
+        {
+          "memory_key": "scan_memory_5",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_6": [
+        {
+          "memory_key": "scan_memory_6",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_7": [
+        {
+          "memory_key": "scan_memory_7",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_8": [
+        {
+          "memory_key": "scan_memory_8",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_9": [
+        {
+          "memory_key": "scan_memory_9",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "STRATEGY_FAMILY_MEMORY": [
+        {
+          "memory_key": "strategy_family_memory",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "STRATEGY_GENOME_MEMORY": [
+        {
+          "memory_key": "strategy_genome_memory",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TITAN_MASTER_STATUS": [
+        {
+          "memory_key": "titan_master_status",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_0": [
+        {
+          "memory_key": "trade_memory_0",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_1": [
+        {
+          "memory_key": "trade_memory_1",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_10": [
+        {
+          "memory_key": "trade_memory_10",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_11": [
+        {
+          "memory_key": "trade_memory_11",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_12": [
+        {
+          "memory_key": "trade_memory_12",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_13": [
+        {
+          "memory_key": "trade_memory_13",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_14": [
+        {
+          "memory_key": "trade_memory_14",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_15": [
+        {
+          "memory_key": "trade_memory_15",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_16": [
+        {
+          "memory_key": "trade_memory_16",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_17": [
+        {
+          "memory_key": "trade_memory_17",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_18": [
+        {
+          "memory_key": "trade_memory_18",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_19": [
+        {
+          "memory_key": "trade_memory_19",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_2": [
+        {
+          "memory_key": "trade_memory_2",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_20": [
+        {
+          "memory_key": "trade_memory_20",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_21": [
+        {
+          "memory_key": "trade_memory_21",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_22": [
+        {
+          "memory_key": "trade_memory_22",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_23": [
+        {
+          "memory_key": "trade_memory_23",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_24": [
+        {
+          "memory_key": "trade_memory_24",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_25": [
+        {
+          "memory_key": "trade_memory_25",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_26": [
+        {
+          "memory_key": "trade_memory_26",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_27": [
+        {
+          "memory_key": "trade_memory_27",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_28": [
+        {
+          "memory_key": "trade_memory_28",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_29": [
+        {
+          "memory_key": "trade_memory_29",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_3": [
+        {
+          "memory_key": "trade_memory_3",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_30": [
+        {
+          "memory_key": "trade_memory_30",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_31": [
+        {
+          "memory_key": "trade_memory_31",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_32": [
+        {
+          "memory_key": "trade_memory_32",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_33": [
+        {
+          "memory_key": "trade_memory_33",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_34": [
+        {
+          "memory_key": "trade_memory_34",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_35": [
+        {
+          "memory_key": "trade_memory_35",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_36": [
+        {
+          "memory_key": "trade_memory_36",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_37": [
+        {
+          "memory_key": "trade_memory_37",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_38": [
+        {
+          "memory_key": "trade_memory_38",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_39": [
+        {
+          "memory_key": "trade_memory_39",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_4": [
+        {
+          "memory_key": "trade_memory_4",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_5": [
+        {
+          "memory_key": "trade_memory_5",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_6": [
+        {
+          "memory_key": "trade_memory_6",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_7": [
+        {
+          "memory_key": "trade_memory_7",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_8": [
+        {
+          "memory_key": "trade_memory_8",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "TRADE_MEMORY_9": [
+        {
+          "memory_key": "trade_memory_9",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ]
+    },
+    "strategy_count": 90
+  }
+}

@@ -1,0 +1,173 @@
+{
+  "generated_hypotheses": [
+    {
+      "title": "LONG setup quality should be tested separately",
+      "type": "SIDE_SENSITIVITY",
+      "evidence": "LONG win rate is 0.0% across 169 trades.",
+      "research_score": 67.5,
+      "status": "RESEARCH_ONLY",
+      "live_change_allowed": false
+    },
+    {
+      "title": "SHORT setup quality should be tested separately",
+      "type": "SIDE_SENSITIVITY",
+      "evidence": "SHORT win rate is 0.0% across 131 trades.",
+      "research_score": 67.5,
+      "status": "RESEARCH_ONLY",
+      "live_change_allowed": false
+    },
+    {
+      "title": "Scan pass-rate may explain setup scarcity",
+      "type": "SCAN_BEHAVIOR",
+      "evidence": "Observed scan pass rate is 0.0%.",
+      "research_score": 55.0,
+      "status": "RESEARCH_ONLY",
+      "live_change_allowed": false
+    }
+  ],
+  "failure_research": [],
+  "strongest_confluences": [],
+  "strategy_ideas": [
+    {
+      "name": "Test: LONG setup quality should be tested separately",
+      "source": "SIDE_SENSITIVITY",
+      "idea_score": 75.5,
+      "validation_required": true,
+      "live_change_allowed": false
+    },
+    {
+      "name": "Test: SHORT setup quality should be tested separately",
+      "source": "SIDE_SENSITIVITY",
+      "idea_score": 75.5,
+      "validation_required": true,
+      "live_change_allowed": false
+    },
+    {
+      "name": "Test: Scan pass-rate may explain setup scarcity",
+      "source": "SCAN_BEHAVIOR",
+      "idea_score": 55.0,
+      "validation_required": true,
+      "live_change_allowed": false
+    }
+  ],
+  "backtest_queue": [
+    {
+      "queue_id": "BT-001",
+      "research_item": "Test: LONG setup quality should be tested separately",
+      "priority_score": 75.5,
+      "minimum_sample_size": 30,
+      "validation_status": "QUEUED",
+      "live_change_allowed": false
+    },
+    {
+      "queue_id": "BT-002",
+      "research_item": "Test: SHORT setup quality should be tested separately",
+      "priority_score": 75.5,
+      "minimum_sample_size": 30,
+      "validation_status": "QUEUED",
+      "live_change_allowed": false
+    },
+    {
+      "queue_id": "BT-004",
+      "research_item": "LONG setup quality should be tested separately",
+      "priority_score": 75.5,
+      "minimum_sample_size": 30,
+      "validation_status": "QUEUED",
+      "live_change_allowed": false
+    },
+    {
+      "queue_id": "BT-005",
+      "research_item": "SHORT setup quality should be tested separately",
+      "priority_score": 75.5,
+      "minimum_sample_size": 30,
+      "validation_status": "QUEUED",
+      "live_change_allowed": false
+    },
+    {
+      "queue_id": "BT-003",
+      "research_item": "Test: Scan pass-rate may explain setup scarcity",
+      "priority_score": 55.0,
+      "minimum_sample_size": 50,
+      "validation_status": "QUEUED",
+      "live_change_allowed": false
+    },
+    {
+      "queue_id": "BT-006",
+      "research_item": "Scan pass-rate may explain setup scarcity",
+      "priority_score": 55.0,
+      "minimum_sample_size": 50,
+      "validation_status": "QUEUED",
+      "live_change_allowed": false
+    }
+  ],
+  "rejected_hypotheses": [],
+  "promoted_hypotheses": [],
+  "anomalies": [
+    {
+      "type": "SCAN_PASS_RATE_EXTREME",
+      "pass_rate": 0.0,
+      "severity_score": 30.0
+    }
+  ],
+  "discovered_edges": [],
+  "experiment_plans": [
+    {
+      "hypothesis": "LONG setup quality should be tested separately",
+      "research_score": 75.5,
+      "steps": [
+        "Collect at least 30 historical or shadow samples.",
+        "Compare win rate, average RR, drawdown, and false-confidence losses.",
+        "Segment results by regime, sector, side, and strategy family.",
+        "Keep result in research review; do not auto-deploy."
+      ],
+      "success_criteria": {
+        "minimum_samples": 30,
+        "minimum_win_rate": 55,
+        "minimum_avg_rr": 1.8,
+        "max_drawdown_flag": "no elevated drawdown cluster"
+      },
+      "live_change_allowed": false
+    },
+    {
+      "hypothesis": "SHORT setup quality should be tested separately",
+      "research_score": 75.5,
+      "steps": [
+        "Collect at least 30 historical or shadow samples.",
+        "Compare win rate, average RR, drawdown, and false-confidence losses.",
+        "Segment results by regime, sector, side, and strategy family.",
+        "Keep result in research review; do not auto-deploy."
+      ],
+      "success_criteria": {
+        "minimum_samples": 30,
+        "minimum_win_rate": 55,
+        "minimum_avg_rr": 1.8,
+        "max_drawdown_flag": "no elevated drawdown cluster"
+      },
+      "live_change_allowed": false
+    },
+    {
+      "hypothesis": "Scan pass-rate may explain setup scarcity",
+      "research_score": 55.0,
+      "steps": [
+        "Collect at least 30 historical or shadow samples.",
+        "Compare win rate, average RR, drawdown, and false-confidence losses.",
+        "Segment results by regime, sector, side, and strategy family.",
+        "Keep result in research review; do not auto-deploy."
+      ],
+      "success_criteria": {
+        "minimum_samples": 50,
+        "minimum_win_rate": 55,
+        "minimum_avg_rr": 1.8,
+        "max_drawdown_flag": "no elevated drawdown cluster"
+      },
+      "live_change_allowed": false
+    }
+  ],
+  "research_priority_score": 66.0,
+  "research_mode": "INVESTIGATE",
+  "explanations": [
+    "Generated 3 research hypotheses from available evidence.",
+    "Anomalies detected and prioritized for investigation.",
+    "No live trading rules or strategy weights were changed."
+  ]
+}

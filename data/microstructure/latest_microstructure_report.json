@@ -1,0 +1,71 @@
+{
+  "symbol": "UNKNOWN",
+  "data_mode": "INSUFFICIENT",
+  "best_bid": 0.0,
+  "best_ask": 0.0,
+  "spread": 0.0,
+  "bid_ask_pressure": {
+    "score": 50.0,
+    "bid_qty": 0.0,
+    "ask_qty": 0.0,
+    "mode": "PROXY"
+  },
+  "order_book_imbalance": {
+    "imbalance_score": 0.0,
+    "direction": "NEUTRAL",
+    "raw_delta": 0.0
+  },
+  "liquidity_sweeps": {
+    "active": false,
+    "risk_score": 0.0
+  },
+  "spoof_like_detection": {
+    "active": false,
+    "risk_score": 0.0,
+    "reason": "no_real_depth"
+  },
+  "queue_imbalance": {
+    "queue_score": 50.0,
+    "direction": "NEUTRAL"
+  },
+  "spread_widening": {
+    "active": false,
+    "spread_bps": 0.0,
+    "risk_score": 0.0
+  },
+  "tick_acceleration": {
+    "active": false,
+    "score": 0.0,
+    "mode": "PROXY"
+  },
+  "absorption_detection": {
+    "active": false,
+    "score": 0.0,
+    "side": "NEUTRAL"
+  },
+  "hidden_liquidity_proxy": {
+    "proxy_score": 0.0,
+    "likely_hidden_liquidity": false
+  },
+  "hf_volatility_burst": {
+    "active": false,
+    "risk_score": 0.0
+  },
+  "aggressive_passive_flow": {
+    "flow": "PASSIVE_OR_MIXED",
+    "pressure_score": 50.0
+  },
+  "smart_money_pressure": {
+    "score": 40.0,
+    "bias": "BEARISH",
+    "imbalance_direction": "NEUTRAL"
+  },
+  "microstructure_score": 50.0,
+  "microstructure_bias": "NEUTRAL",
+  "execution_warning": "NONE",
+  "live_order_allowed": false,
+  "explanations": [
+    "Microstructure data mode: INSUFFICIENT.",
+    "Insufficient depth or proxy data; score kept neutral."
+  ]
+}

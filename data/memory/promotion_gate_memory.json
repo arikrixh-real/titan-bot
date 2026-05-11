@@ -10,34 +10,34 @@
     "win_rate": 0.0,
     "wins": 0
   },
-  "generated_at": "2026-05-10 11:28:55",
+  "generated_at": "2026-05-10 23:06:59",
   "layer_freshness": {
     "phase10": {
-      "age_seconds": 670.129,
+      "age_seconds": 0.001,
       "available": true,
       "path": "data\\memory\\master_shadow_memory.json",
       "status": "OK"
     },
     "phase6": {
-      "age_seconds": 3724.471,
+      "age_seconds": 45608.371,
       "available": true,
       "path": "data\\memory\\phase6_shadow_memory.json",
       "status": "OK"
     },
     "phase7": {
-      "age_seconds": 2422.142,
+      "age_seconds": 44306.044,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "phase8": {
-      "age_seconds": 1967.664,
+      "age_seconds": 43851.565,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "phase9": {
-      "age_seconds": 1472.874,
+      "age_seconds": 43356.776,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
@@ -114,10 +114,12 @@
   "runtime_bounded": true,
   "runtime_context": {
     "observed_setups_count": 0,
-    "phase_result_keys": [],
+    "phase_result_keys": [
+      "phase10_master_shadow_result"
+    ],
     "selected_decisions_count": 0
   },
-  "runtime_ms": 15.0,
+  "runtime_ms": 16.0,
   "safety": {
     "alert_caps_mutated": false,
     "alert_changes": false,

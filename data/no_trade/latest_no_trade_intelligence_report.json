@@ -1,0 +1,69 @@
+{
+  "choppy_market": {
+    "danger_score": 25.0,
+    "is_choppy": false,
+    "regime_text": "UNKNOWN",
+    "volatility_score": 0.0
+  },
+  "contradiction_overload": {
+    "contradiction_count": 0,
+    "danger_score": 0.0,
+    "is_contradiction_overload": false,
+    "warning_count": 0
+  },
+  "explanations": [
+    "Insufficient no-trade data; neutral review state applied without aggressive blocking."
+  ],
+  "generated_at": "2026-05-10T17:36:59.808719Z",
+  "liquidity_danger": {
+    "danger_score": 27.5,
+    "is_liquidity_danger": false,
+    "liquidity_score": 50.0,
+    "spread_pct": 0.0
+  },
+  "live_order_allowed": false,
+  "low_edge_day": {
+    "average_recent_setup_score": 50.0,
+    "danger_score": 50.0,
+    "edge_score": 50.0,
+    "is_low_edge_day": false
+  },
+  "market_toxicity": {
+    "danger_score": 0.0,
+    "is_toxic": false,
+    "market_toxicity_score": 0.0,
+    "vix_or_volatility": 0.0
+  },
+  "news_chaos": {
+    "danger_score": 0.0,
+    "is_news_chaos": false,
+    "news_item_count": 0
+  },
+  "no_trade_data_mode": "INSUFFICIENT",
+  "no_trade_score": 20.0,
+  "no_trade_warning": "REVIEW",
+  "overtrading_risk": {
+    "danger_score": 0.0,
+    "is_overtrading_risk": false,
+    "recent_setup_count": 0,
+    "trades_today": 0.0
+  },
+  "symbol": "UNKNOWN",
+  "trade_permission": "REVIEW",
+  "uncertainty_rules": {
+    "danger_score": 0.0,
+    "rule_triggered": false,
+    "uncertainty_score": 0.0
+  },
+  "wait_mode": {
+    "wait_reasons": [],
+    "wait_recommended": false,
+    "wait_score": 0.0
+  },
+  "weak_breadth": {
+    "advance_decline_ratio": 1.0,
+    "breadth_score": 50.0,
+    "danger_score": 27.5,
+    "is_weak_breadth": false
+  }
+}

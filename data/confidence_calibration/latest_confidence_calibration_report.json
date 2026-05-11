@@ -1,0 +1,101 @@
+{
+  "calibrated_confidence_score": 50.0,
+  "calibration_bias": "REVIEW",
+  "calibration_curve": {
+    "buckets": [
+      {
+        "actual_win_rate": 0.0,
+        "avg_confidence": 0.0,
+        "bucket": "0-20",
+        "count": 0
+      },
+      {
+        "actual_win_rate": 0.0,
+        "avg_confidence": 0.0,
+        "bucket": "20-40",
+        "count": 0
+      },
+      {
+        "actual_win_rate": 0.0,
+        "avg_confidence": 0.0,
+        "bucket": "40-60",
+        "count": 0
+      },
+      {
+        "actual_win_rate": 0.0,
+        "avg_confidence": 0.0,
+        "bucket": "60-80",
+        "count": 0
+      },
+      {
+        "actual_win_rate": 0.0,
+        "avg_confidence": 0.0,
+        "bucket": "80-100",
+        "count": 0
+      }
+    ],
+    "curve_error": 0.0,
+    "populated_bucket_count": 0
+  },
+  "calibration_data_mode": "INSUFFICIENT",
+  "calibration_warning": "REVIEW",
+  "confidence_correction": {
+    "base_confidence": 50.0,
+    "corrected_confidence": 31.5,
+    "decay_points": 0.0,
+    "low_sample_shrinkage_points": 20.0,
+    "overconfidence_penalty_points": 0.0,
+    "reliability_adjustment": 0.0
+  },
+  "confidence_decay": {
+    "decay_points": 0.0,
+    "signal_age_minutes": 0.0,
+    "volatility_score": 0.0
+  },
+  "explanations": [
+    "Insufficient calibration history; neutral non-blocking confidence applied."
+  ],
+  "generated_at": "2026-05-10T17:36:59.807678Z",
+  "live_order_allowed": false,
+  "low_sample_shrinkage": {
+    "sample_size": 0,
+    "shrinkage_points": 20.0,
+    "target_sample_size": 20
+  },
+  "overconfidence_penalty": {
+    "base_confidence": 50.0,
+    "penalty_points": 0.0,
+    "recent_loss_rate": 0.0,
+    "recent_sample_size": 0
+  },
+  "predicted_vs_actual": {
+    "accuracy": 0.0,
+    "calibration_error": 0.0,
+    "mean_actual": 0.0,
+    "mean_confidence": 0.0,
+    "sample_size": 0
+  },
+  "regime_specific_calibration": {
+    "actual_win_rate": 50.0,
+    "avg_confidence": 50.0,
+    "matched_current_regime": false,
+    "regime": "UNKNOWN",
+    "regime_calibration_error": 0.0,
+    "sample_size": 0
+  },
+  "reliability_score": 50.0,
+  "strategy_specific_calibration": {
+    "actual_win_rate": 50.0,
+    "avg_confidence": 50.0,
+    "matched_current_strategy": false,
+    "sample_size": 0,
+    "strategy": "UNKNOWN",
+    "strategy_calibration_error": 0.0
+  },
+  "symbol": "UNKNOWN",
+  "uncertainty_awareness": {
+    "uncertainty_awareness_score": 80.0,
+    "uncertainty_score": 0.0,
+    "warning_count": 0
+  }
+}

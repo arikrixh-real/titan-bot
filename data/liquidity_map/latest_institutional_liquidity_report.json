@@ -1,0 +1,67 @@
+{
+  "symbol": "UNKNOWN",
+  "liquidity_data_mode": "INSUFFICIENT",
+  "high_volume_zones": {
+    "active": false,
+    "zone_count": 0,
+    "nearest_zone_score": 0.0,
+    "zones": []
+  },
+  "previous_day_liquidity": {
+    "active": false,
+    "pdh": 0.0,
+    "pdl": 0.0,
+    "pdc": 0.0,
+    "near_previous_day_liquidity_score": 0.0
+  },
+  "vwap_zones": {
+    "active": false,
+    "vwap": 0.0,
+    "near_vwap_score": 0.0,
+    "supportive": false
+  },
+  "stop_loss_clusters": {
+    "active": false,
+    "cluster_risk_score": 0.0,
+    "near_entry": false,
+    "levels_sample": []
+  },
+  "gap_zones": {
+    "active": false,
+    "gap_count": 0,
+    "near_gap_score": 0.0,
+    "zones": []
+  },
+  "breakout_trap_zones": {
+    "active": false,
+    "trap_risk_score": 0.0,
+    "near_entry": false,
+    "zones": []
+  },
+  "liquidity_magnet_score": 0.0,
+  "accumulation_zones": {
+    "active": false,
+    "score": 0.0,
+    "zones": []
+  },
+  "distribution_zones": {
+    "active": false,
+    "score": 0.0,
+    "zones": []
+  },
+  "smart_money_footprints": {
+    "active": false,
+    "score": 25.0,
+    "bias": "NEUTRAL",
+    "accumulation_score": 0.0,
+    "distribution_score": 0.0
+  },
+  "liquidity_map_score": 50.0,
+  "liquidity_bias": "NEUTRAL",
+  "liquidity_warning": "REVIEW",
+  "live_order_allowed": false,
+  "explanations": [
+    "Liquidity data mode: INSUFFICIENT.",
+    "No useful liquidity/OHLCV/proxy data; score kept neutral."
+  ]
+}

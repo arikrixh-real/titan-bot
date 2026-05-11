@@ -8,15 +8,15 @@ Safety
 - recommended_live_weight: 0.0
 - No forbidden imports detected: True
 
-Updated: 2026-05-10 11:47:15
-Runtime Ms: 16.0 | Bounded: True
+Updated: 2026-05-10 22:23:19
+Runtime Ms: 15.0 | Bounded: True
 
 Active Regime:
 - Primary: CHOPPY_NO_EDGE
 - Secondary: ['INDEX_DRIVEN', 'TRENDING_BREAKOUT', 'MEAN_REVERSION']
 - Confidence: 0.45
 - Transition detected: False | Confirmed: False
-- Previous primary: None
+- Previous primary: CHOPPY_NO_EDGE
 
 Top Regime Scores:
 - CHOPPY_NO_EDGE: 0.45

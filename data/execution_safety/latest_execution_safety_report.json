@@ -1,0 +1,100 @@
+{
+  "broker_execution_mode": "DRY_RUN",
+  "live_trading_enabled": false,
+  "kill_switch_active": false,
+  "emergency_exit_active": false,
+  "daily_loss_check": {
+    "passed": true,
+    "daily_loss_pct": 0.0,
+    "limit_pct": 2.0
+  },
+  "order_count_check": {
+    "passed": true,
+    "order_count": 0,
+    "limit": 3
+  },
+  "position_size_check": {
+    "passed": true,
+    "position_size_pct": 0.0,
+    "limit_pct": 10.0
+  },
+  "duplicate_order_check": {
+    "passed": true,
+    "duplicate_order": false,
+    "symbol": "",
+    "side": ""
+  },
+  "broker_connection_check": {
+    "passed": false,
+    "connected": false,
+    "status": "DISCONNECTED"
+  },
+  "rejected_order_handling": {
+    "passed": true,
+    "rejected": false,
+    "reason": ""
+  },
+  "execution_confirmation_check": {
+    "passed": false,
+    "confirmed": false,
+    "order_id": ""
+  },
+  "order_reconciliation": {
+    "passed": true,
+    "local_count": 0,
+    "broker_count": 0,
+    "missing_at_broker": [],
+    "unexpected_broker": []
+  },
+  "safety_score": 71.43,
+  "execution_allowed": false,
+  "risk_status": "BLOCKED",
+  "explanations": [
+    "Execution is fail-closed by default; no broker orders are allowed.",
+    "Live trading is disabled.",
+    "Broker execution mode is DRY_RUN.",
+    "Broker connection is not confirmed healthy."
+  ],
+  "pre_order_safety_checks": {
+    "execution_allowed": false,
+    "checks": {
+      "live_trading": {
+        "passed": false,
+        "live_trading_enabled": false,
+        "mode": "DRY_RUN"
+      },
+      "kill_switch": {
+        "passed": true,
+        "kill_switch_active": false,
+        "emergency_exit_active": false
+      },
+      "daily_loss": {
+        "passed": true,
+        "daily_loss_pct": 0.0,
+        "limit_pct": 2.0
+      },
+      "order_count": {
+        "passed": true,
+        "order_count": 0,
+        "limit": 3
+      },
+      "position_size": {
+        "passed": true,
+        "position_size_pct": 0.0,
+        "limit_pct": 10.0
+      },
+      "duplicate_order": {
+        "passed": true,
+        "duplicate_order": false,
+        "symbol": "",
+        "side": ""
+      },
+      "broker_connection": {
+        "passed": false,
+        "connected": false,
+        "status": "DISCONNECTED"
+      }
+    },
+    "fail_closed": true
+  }
+}

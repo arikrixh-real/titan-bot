@@ -1,0 +1,76 @@
+{
+  "execution_mode": "ANALYSIS_ONLY",
+  "symbol": "UNKNOWN",
+  "slippage_prediction": {
+    "slippage_bps": 6.8,
+    "slippage_value": 0.0,
+    "risk_level": "LOW"
+  },
+  "liquidity_timing": {
+    "liquidity_score": 50.0,
+    "timing_score": 50.0,
+    "preferred_timing": "OK_TO_ANALYZE",
+    "liquidity_state": "NORMAL"
+  },
+  "chase_entry_risk": {
+    "move_from_entry_pct": 0.0,
+    "momentum_extension_pct": 0.0,
+    "risk_score": 0.0,
+    "state": "LOW"
+  },
+  "vwap_plan": {
+    "method": "VWAP",
+    "slices": 1,
+    "participation_rate_pct": 10,
+    "use_only_in_paper": true
+  },
+  "twap_plan": {
+    "method": "TWAP",
+    "slices": 1,
+    "interval_minutes": 3,
+    "use_only_in_paper": true
+  },
+  "spread_risk_score": 19.5,
+  "bad_fill_risk": {
+    "adverse_fill_pct": 0.0,
+    "risk_score": 5.85,
+    "state": "LOW"
+  },
+  "retry_skip_logic": {
+    "max_attempts": 2,
+    "current_attempts": 0,
+    "action": "RETRY_PAPER_ONLY",
+    "reason": "within_retry_limit"
+  },
+  "scaling_plan": {
+    "scale_in_percentages": [
+      100
+    ],
+    "condition": "paper_only_limit_entries",
+    "cancel_if_chase_risk_high": true
+  },
+  "partial_fill_analysis": {
+    "ordered_qty": 0.0,
+    "filled_qty": 0,
+    "fill_pct": 0.0,
+    "state": "NONE"
+  },
+  "adaptive_execution_timing": {
+    "timing_action": "PAPER_EXECUTION_WINDOW_OK",
+    "recheck_seconds": 0
+  },
+  "order_slicing_plan": {
+    "method": "TWAP",
+    "slices": 1,
+    "interval_minutes": 3,
+    "use_only_in_paper": true,
+    "reason": "reduce_spread_and_timing_risk"
+  },
+  "execution_quality_score": 85.99,
+  "execution_recommendation": "EXECUTE_PAPER",
+  "live_order_allowed": false,
+  "explanations": [
+    "Analysis-only smart execution; live orders are disabled.",
+    "Quality is sufficient for paper execution only."
+  ]
+}

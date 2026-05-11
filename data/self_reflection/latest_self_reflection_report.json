@@ -1,0 +1,57 @@
+{
+  "confidence_calibration": {
+    "calibration_gap": 0.0,
+    "calibration_label": "CALIBRATED",
+    "calibration_score": 100.0,
+    "confidence_score": 50.0,
+    "evidence_score": 50.0
+  },
+  "decision_regret_analysis": {
+    "notes": [
+      "Regret risk rises when confidence exceeds evidence or recent outcome is adverse."
+    ],
+    "regret_level": "LOW",
+    "regret_risk_score": 15.0
+  },
+  "explanations": [
+    "Insufficient reflection data; neutral non-blocking reflection applied."
+  ],
+  "generated_at": "2026-05-10T17:36:59.806259Z",
+  "hallucination_detection": {
+    "evidence_gap_detected": true,
+    "hallucination_risk_score": 10.0,
+    "overconfidence_detected": false,
+    "risk_label": "LOW"
+  },
+  "live_order_allowed": false,
+  "mistake_patterns": {
+    "history_count": 0,
+    "loss_count": 0,
+    "patterns": [],
+    "repeat_mistake_score": 0.0
+  },
+  "reasoning_quality": {
+    "evidence_count": 0,
+    "quality_label": "ADEQUATE",
+    "reasoning_quality_score": 45.0,
+    "warning_count": 0
+  },
+  "reflection_bias": "REVIEW",
+  "reflection_data_mode": "INSUFFICIENT",
+  "reflection_score": 50.0,
+  "reflection_warning": "REVIEW",
+  "self_critique": {
+    "critique_score": 70.0,
+    "strengths": [
+      "No decisive strengths detected."
+    ],
+    "weaknesses": [
+      "No major weakness detected."
+    ]
+  },
+  "self_improvement_suggestions": [
+    "Improve reasoning trace quality before treating the decision as high confidence."
+  ],
+  "symbol": "UNKNOWN",
+  "thought_quality_score": 73.75
+}
