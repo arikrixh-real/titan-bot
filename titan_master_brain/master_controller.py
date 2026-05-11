@@ -39,6 +39,8 @@ from titan_master_brain.execution_engine import (
 from journal.outcome_tracker import track_trade_outcomes
 from utils.market_hours import TRADE_WINDOW_END, TRADE_WINDOW_START, is_trade_window
 
+_SUPABASE_WARNED = set()
+
 try:
     from engines.multi_agent_reasoning_engine import apply_multi_agent_reasoning
 except Exception:
@@ -104,6 +106,7 @@ try:
         place_paper_order,
         save_paper_account,
         simulate_fill,
+        sync_paper_account_from_trade_results,
     )
     print("PHASE 23 PAPER TRADING ACTIVE")
 except Exception:
@@ -113,6 +116,7 @@ except Exception:
     place_paper_order = None
     save_paper_account = None
     simulate_fill = None
+    sync_paper_account_from_trade_results = None
 
 try:
     from engines.broker_execution_safety_system import (
@@ -308,7 +312,14 @@ def _get_supabase():
         return create_client(url, key)
 
     except Exception as e:
-        print(f"[Supabase ERROR] Connection failed: {e}")
+        text = str(e)
+        if "WinError 10013" in text:
+            key = "socket"
+            if key not in _SUPABASE_WARNED:
+                _SUPABASE_WARNED.add(key)
+                print("[Supabase WARN] socket unavailable; DB actions skipped.")
+        else:
+            print(f"[Supabase ERROR] Connection failed: {e}")
         return None
 
 
@@ -334,7 +345,13 @@ def _safe_supabase_insert(client, table_name, payload):
                 clean.pop(missing_col, None)
                 continue
 
-            print(f"[Supabase ERROR] {table_name} insert failed: {e}")
+            if "WinError 10013" in str(e):
+                key = f"{table_name}:insert:socket"
+                if key not in _SUPABASE_WARNED:
+                    _SUPABASE_WARNED.add(key)
+                    print(f"[Supabase WARN] {table_name} insert skipped; socket unavailable.")
+            else:
+                print(f"[Supabase ERROR] {table_name} insert failed: {e}")
             return False
 
     print(f"[Supabase ERROR] {table_name} insert failed after schema cleanup retries.")
@@ -356,7 +373,13 @@ def _safe_supabase_update(client, table_name, payload, match_column, match_value
                 clean.pop(missing_col, None)
                 continue
 
-            print(f"[Supabase ERROR] {table_name} update failed: {e}")
+            if "WinError 10013" in str(e):
+                key = f"{table_name}:update:socket"
+                if key not in _SUPABASE_WARNED:
+                    _SUPABASE_WARNED.add(key)
+                    print(f"[Supabase WARN] {table_name} update skipped; socket unavailable.")
+            else:
+                print(f"[Supabase ERROR] {table_name} update failed: {e}")
             return False
 
     print(f"[Supabase ERROR] {table_name} update failed after schema cleanup retries.")
@@ -366,6 +389,16 @@ def _safe_supabase_update(client, table_name, payload, match_column, match_value
 # =========================================================
 # MARKET CLOSE HANDLER
 # =========================================================
+
+_MARKET_CLOSE_WARNED_KEYS = set()
+
+
+def _market_close_warn_once(key, message):
+    if key in _MARKET_CLOSE_WARNED_KEYS:
+        return
+    _MARKET_CLOSE_WARNED_KEYS.add(key)
+    print(message)
+
 
 def auto_close_live_trades_after_market_close():
     """
@@ -419,7 +452,14 @@ def auto_close_live_trades_after_market_close():
             print(f"[MarketClose] Auto-closed LIVE trade: {symbol}")
 
     except Exception as e:
-        print(f"[MarketClose WARN] Cleanup skipped safely: {e}")
+        error_text = str(e)
+        if "WinError 10013" in error_text:
+            _market_close_warn_once(
+                "winerror_10013",
+                "[MarketClose WARN] skipped safely during market-closed/off-hours",
+            )
+        else:
+            _market_close_warn_once("cleanup", f"[MarketClose WARN] Cleanup skipped safely: {e}")
 
     if closed_count:
         print(f"[MarketClose] Auto-closed {closed_count} live trade(s).")
@@ -790,6 +830,9 @@ def refresh_phase23_paper_trading_safely(final_decisions=None, context=None):
                 continue
             filled = simulate_fill(order, context if isinstance(context, dict) else {})
             account = open_paper_position(load_paper_account(), filled)
+
+        if sync_paper_account_from_trade_results is not None:
+            sync_paper_account_from_trade_results()
 
         report = build_paper_trading_report(load_paper_account())
         print(
@@ -1346,7 +1389,7 @@ def refresh_phase37_auto_repair_safely(context=None, github_logs=None):
             market_context.get("runtime_errors")
             or market_context.get("errors")
             or market_context.get("last_error")
-            or ["[MarketClose WARN] [WinError 10013]"]
+            or ["[MarketClose WARN] skipped safely during market-closed/off-hours"]
         )
         report = build_auto_repair_report(
             error_logs=error_logs,
@@ -1744,8 +1787,19 @@ def refresh_phase14_meta_evolution_safely(evaluated_setups, context, final_decis
 # MAIN MASTER BRAIN
 # =========================================================
 
-def run_master_brain(send_telegram=True, run_outcome_tracker=True):
+def run_master_brain(send_telegram=True, run_outcome_tracker=True, health_check=False):
     print("[MasterBrain] Step 9B Final Master Controller Running...")
+
+    if health_check:
+        print("[MasterBrain] Health check mode: read-only status checks only.")
+        return {
+            "mode": "HEALTH_CHECK",
+            "trade_window_open": _is_market_alert_time(),
+            "supabase_configured": bool(os.getenv("SUPABASE_URL") and (os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY"))),
+            "telegram_enabled": bool(send_telegram),
+            "outcome_tracker_enabled": bool(run_outcome_tracker),
+            "status": "OK",
+        }
 
     trade_window_open = _is_market_alert_time()
 
@@ -2048,6 +2102,10 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True):
         print("\n[MasterBrain] Running Outcome Tracker...")
         try:
             outcome_result = track_trade_outcomes()
+            if sync_paper_account_from_trade_results is not None:
+                paper_sync_result = sync_paper_account_from_trade_results()
+                if isinstance(outcome_result, dict):
+                    outcome_result["paper_account_sync"] = paper_sync_result
         except Exception as e:
             print(f"[MasterBrain ERROR] Outcome tracker failed: {e}")
             outcome_result = {"error": str(e)}

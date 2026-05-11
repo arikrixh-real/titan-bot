@@ -50,6 +50,11 @@ try:
 except Exception:
     build_reinforcement_learning_report = None
 
+try:
+    from engines.paper_trading_engine import sync_paper_account_from_trade_results
+except Exception:
+    sync_paper_account_from_trade_results = None
+
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -489,6 +494,11 @@ def _append_outcome(row, outcome, exit_price, pnl_points, reason):
         f.write(json.dumps(_json_safe(outcome_row), ensure_ascii=False) + "\n")
 
     _save_trade_result_to_supabase(outcome_row)
+    if sync_paper_account_from_trade_results is not None:
+        try:
+            sync_paper_account_from_trade_results(outcome_row)
+        except Exception as e:
+            print(f"[OutcomeTracker WARN] Paper account sync skipped: {e}")
 
 
 def track_trade_outcomes(limit=None):

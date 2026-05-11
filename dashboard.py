@@ -34,6 +34,9 @@ TRADE_WINDOW_START_HOUR = 9
 TRADE_WINDOW_START_MINUTE = 15
 TRADE_WINDOW_END_HOUR = 15
 TRADE_WINDOW_END_MINUTE = 30
+INITIAL_BALANCE = 100000.0
+DASHBOARD_VISUAL_VERSION = "VISUAL_FIX_V4"
+PAPER_ACCOUNT_PATH = "/".join(["data", "paper_trading", "paper_account.json"])
 
 
 # =========================================================
@@ -42,6 +45,13 @@ TRADE_WINDOW_END_MINUTE = 30
 
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = time.time()
+
+if st.session_state.get("dashboard_visual_version") != DASHBOARD_VISUAL_VERSION:
+    try:
+        st.cache_data.clear()
+    except Exception:
+        pass
+    st.session_state.dashboard_visual_version = DASHBOARD_VISUAL_VERSION
 
 if time.time() - st.session_state.last_refresh >= AUTO_REFRESH_SECONDS:
     st.session_state.last_refresh = time.time()
@@ -473,7 +483,7 @@ def market_mode_label():
 PHASE_REPORT_PATHS = {
     "autonomous_research": "data/research/autonomous_research_report.json",
     "backtesting_validation": "data/research/backtesting_validation_report.json",
-    "paper_account": "data/paper_trading/paper_account.json",
+    "paper_account": PAPER_ACCOUNT_PATH,
     "execution_safety": "data/execution_safety/latest_execution_safety_report.json",
     "smart_execution": "data/execution_safety/latest_smart_execution_report.json",
     "microstructure": "data/microstructure/latest_microstructure_report.json",
@@ -516,11 +526,13 @@ def load_phase_reports():
     return reports, latest_time
 
 
-def get_paper_trading_status(phase_reports=None):
+def get_paper_trading_status(phase_reports=None, closed_trade_rows=None, open_trade_rows=None, account_source=None):
     phase_reports = phase_reports or {}
+    closed_trade_rows = [row for row in safe_list(closed_trade_rows) if isinstance(row, dict)]
+    open_trade_rows = [row for row in safe_list(open_trade_rows) if isinstance(row, dict)]
     paper = phase_reports.get("paper_account", {}).get("data", {})
     if not paper:
-        paper = safe_read_json("data/paper_trading/paper_account.json", {})
+        paper = safe_read_json(PAPER_ACCOUNT_PATH, {})
     if not isinstance(paper, dict):
         paper = {}
 
@@ -542,8 +554,39 @@ def get_paper_trading_status(phase_reports=None):
     initial_balance = first_number(
         paper.get("initial_balance"),
         paper.get("starting_balance"),
-        default=100000.0,
+        INITIAL_BALANCE,
+        default=INITIAL_BALANCE,
     )
+
+    if closed_trade_rows:
+        closed_pnl = sum(calculate_trade_result_pnl(row) for row in closed_trade_rows)
+        balance = round(initial_balance + closed_pnl, 2)
+        open_pnl = calculate_open_trade_pnl(open_trade_rows)
+        equity = round(balance + open_pnl, 2)
+        daily_pnl = round(sum(
+            calculate_trade_result_pnl(row)
+            for row in closed_trade_rows
+            if is_closed_today_ist(row)
+        ), 2)
+        daily_pnl_pct = (daily_pnl / initial_balance * 100.0) if initial_balance > 0 else 0.0
+        return {
+            "balance": balance,
+            "account_balance": balance,
+            "equity": equity,
+            "daily_pnl": daily_pnl,
+            "daily_pnl_pct": daily_pnl_pct,
+            "open_positions": len(open_items),
+            "closed_pnl": round(closed_pnl, 2),
+            "open_pnl": open_pnl,
+            "drawdown_pct": round(max(0.0, ((initial_balance - equity) / initial_balance) * 100.0) if initial_balance > 0 else 0.0, 2),
+            "status": str(paper.get("status") or paper.get("paper_trading_status") or "ACTIVE").upper(),
+            "balance_source": account_source or "SUPABASE_TRADE_RESULTS + paper fallback",
+            "daily_pnl_source": account_source or "SUPABASE_TRADE_RESULTS + paper fallback",
+            "open_pnl_source": "trade_results",
+            "closed_pnl_source": account_source or "SUPABASE_TRADE_RESULTS + paper fallback",
+            "equity_source": "trade_results_balance_plus_open_pnl",
+            "source_label": "SUPABASE_TRADE_RESULTS + paper fallback",
+        }
 
     balance_keys = ("current_balance", "balance", "cash")
     balance_source = next((key for key in balance_keys if paper.get(key) not in [None, ""]), "initial_balance")
@@ -552,7 +595,7 @@ def get_paper_trading_status(phase_reports=None):
         paper.get("balance"),
         paper.get("cash"),
         initial_balance,
-        default=100000.0,
+        default=INITIAL_BALANCE,
     )
 
     open_pnl_from_positions = sum(
@@ -633,6 +676,7 @@ def get_paper_trading_status(phase_reports=None):
         "open_pnl_source": open_pnl_source,
         "closed_pnl_source": closed_pnl_source,
         "equity_source": equity_source,
+        "source_label": "SUPABASE_TRADE_RESULTS + paper fallback",
     }
 
 def nested_value(data, *paths, default=None):
@@ -772,16 +816,266 @@ def get_master_shadow_dashboard_data():
 def normalize_outcome(value):
     text = str(value or "").strip().upper()
 
-    if text in ["TP", "WIN", "WON", "TARGET", "TARGET_HIT", "PROFIT"]:
+    if text in ["TP", "WIN", "WON", "TARGET", "TARGET_HIT", "PROFIT", "CLOSED_WIN"]:
         return "WIN"
 
-    if text in ["SL", "LOSS", "LOST", "STOPLOSS", "STOP_LOSS", "STOP_LOSS_HIT"]:
+    if text in ["SL", "LOSS", "LOST", "STOPLOSS", "STOP_LOSS", "STOPLOSS_HIT", "STOP_LOSS_HIT", "CLOSED_LOSS"]:
         return "LOSS"
 
     if text in ["OPEN", "ACTIVE", "LIVE", "RUNNING", "WAITING"]:
         return "OPEN"
 
     return text
+
+
+def trade_row_outcome(row):
+    if not isinstance(row, dict):
+        return ""
+    return normalize_outcome(
+        row.get("outcome")
+        or row.get("result")
+        or row.get("status")
+        or row.get("trade_result")
+    )
+
+
+def row_symbol(row):
+    return str(row.get("symbol") or row.get("stock") or row.get("ticker") or "").strip().upper()
+
+
+def row_side(row):
+    side = str(row.get("side") or row.get("direction") or "").strip().upper()
+    if side in ["SELL", "BEARISH"]:
+        return "SHORT"
+    if side in ["BUY", "BULLISH", ""]:
+        return "LONG"
+    return side if side in ["LONG", "SHORT"] else "LONG"
+
+
+def first_present(row, keys):
+    for key in keys:
+        if isinstance(row, dict) and row.get(key) not in [None, ""]:
+            return row.get(key)
+    return None
+
+
+def row_closed_time(row):
+    for key in ["closed_at", "updated_at", "created_at", "timestamp", "opened_at", "time"]:
+        if isinstance(row, dict) and row.get(key):
+            dt = parse_dt(row.get(key))
+            if dt:
+                return dt
+    return None
+
+
+def trade_row_key(row):
+    return "|".join([
+        str(row.get("trade_id") or row.get("id") or "").strip(),
+        row_symbol(row),
+        row_side(row),
+        str(first_present(row, ["entry_price", "entry", "price"]) or "").strip(),
+        str(first_present(row, ["exit_price", "close_price", "exit"]) or "").strip(),
+        str(row.get("closed_at") or row.get("updated_at") or row.get("created_at") or "").strip(),
+        trade_row_outcome(row),
+    ])
+
+
+def is_closed_today_ist(row):
+    dt = row_closed_time(row)
+    return bool(dt and dt.date() == datetime.now(IST).date())
+
+
+def calculate_trade_result_pnl(row):
+    if not isinstance(row, dict):
+        return 0.0
+
+    explicit = first_present(row, ["pnl", "profit_loss", "pnl_amount", "closed_pnl", "realized_pnl"])
+    if explicit not in [None, ""]:
+        return round(safe_float(explicit), 2)
+
+    outcome = trade_row_outcome(row)
+    side = row_side(row)
+    entry = first_number(
+        first_present(row, ["entry_price", "entry", "price", "open_price"]),
+        default=0.0,
+    )
+    exit_price = first_number(
+        first_present(row, ["exit_price", "close_price", "exit", "closed_price"]),
+        default=0.0,
+    )
+
+    if exit_price <= 0 and outcome == "WIN":
+        exit_price = first_number(first_present(row, ["target", "tp", "target_price", "t1"]), default=0.0)
+    if exit_price <= 0 and outcome == "LOSS":
+        exit_price = first_number(first_present(row, ["stop_loss", "sl", "stop_price", "stoploss"]), default=0.0)
+
+    quantity = first_number(first_present(row, ["quantity", "qty", "shares", "units", "position_size"]), default=1.0)
+    if quantity <= 0:
+        quantity = 1.0
+
+    if entry > 0 and exit_price > 0:
+        pnl = (exit_price - entry) * quantity if side == "LONG" else (entry - exit_price) * quantity
+        return round(pnl, 2)
+
+    risk_amount = first_number(first_present(row, ["risk_amount", "risk", "amount_at_risk"]), default=0.0)
+    if outcome == "WIN":
+        return round((risk_amount * 2.0) if risk_amount > 0 else 1000.0, 2)
+    if outcome == "LOSS":
+        return round((-risk_amount) if risk_amount > 0 else -500.0, 2)
+    return 0.0
+
+
+def calculate_open_trade_pnl(rows):
+    total = 0.0
+    for row in safe_list(rows):
+        if not isinstance(row, dict):
+            continue
+        explicit = first_present(row, ["open_pnl", "unrealized_pnl", "pnl", "profit_loss", "pnl_amount"])
+        if explicit not in [None, ""]:
+            total += safe_float(explicit)
+    return round(total, 2)
+
+
+def read_jsonl_rows(path):
+    rows = []
+    try:
+        if not os.path.exists(path):
+            return rows
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                    if isinstance(row, dict):
+                        rows.append(row)
+                except Exception:
+                    continue
+    except Exception:
+        return []
+    return rows
+
+
+def read_local_trade_result_rows():
+    rows = []
+    for path in [
+        "data/journals/trade_results.csv",
+        "journal/trade_results.csv",
+        "trade_results.csv",
+        "data/journals/trade_outcomes.csv",
+        "journal/trade_outcomes.csv",
+        "trade_outcomes.csv",
+    ]:
+        df = read_csv_safe([path])
+        if not df.empty:
+            rows.extend(df.to_dict("records"))
+
+    for path in [
+        "data/journals/trade_results.jsonl",
+        "data/journals/trade_outcomes.jsonl",
+        "journal/trade_results.jsonl",
+        "journal/trade_outcomes.jsonl",
+    ]:
+        rows.extend(read_jsonl_rows(path))
+
+    return rows
+
+
+def get_supabase_trade_result_rows():
+    if supabase is None:
+        return []
+    try:
+        result = (
+            supabase.table("trade_results")
+            .select("*")
+            .order("created_at", desc=True)
+            .limit(5000)
+            .execute()
+        )
+        return [row for row in (result.data or []) if isinstance(row, dict)]
+    except Exception:
+        return []
+
+
+def get_paper_closed_position_rows():
+    rows = safe_read_json("data/paper_trading/paper_closed_positions.json", [])
+    return [row for row in safe_list(rows) if isinstance(row, dict)]
+
+
+def build_trade_results_stats_from_rows(rows, source):
+    stats = {
+        "wins": 0,
+        "losses": 0,
+        "closed_total": 0,
+        "accuracy": 0,
+        "open_total": 0,
+        "source": source,
+        "latest_outcome_time": None,
+        "rows": [],
+        "closed_rows": [],
+        "open_rows": [],
+    }
+
+    latest_time = None
+    seen = set()
+    for row in safe_list(rows):
+        if not isinstance(row, dict) or _is_test_symbol(row_symbol(row)):
+            continue
+        key = trade_row_key(row)
+        if key in seen:
+            continue
+        seen.add(key)
+        stats["rows"].append(row)
+        normalized = trade_row_outcome(row)
+        if normalized == "WIN":
+            stats["wins"] += 1
+            stats["closed_rows"].append(row)
+        elif normalized == "LOSS":
+            stats["losses"] += 1
+            stats["closed_rows"].append(row)
+        elif normalized == "OPEN":
+            stats["open_total"] += 1
+            stats["open_rows"].append(row)
+
+        row_dt = row_closed_time(row)
+        if row_dt and (latest_time is None or row_dt > latest_time):
+            latest_time = row_dt
+
+    stats["closed_total"] = stats["wins"] + stats["losses"]
+    if stats["closed_total"] > 0:
+        stats["accuracy"] = int((stats["wins"] / stats["closed_total"]) * 100)
+    stats["latest_outcome_time"] = latest_time
+    return stats
+
+
+def get_trade_results_dataset():
+    supabase_stats = build_trade_results_stats_from_rows(
+        get_supabase_trade_result_rows(),
+        "SUPABASE_TRADE_RESULTS",
+    )
+    if supabase_stats["closed_total"] > 0:
+        return supabase_stats
+
+    local_stats = build_trade_results_stats_from_rows(
+        read_local_trade_result_rows(),
+        "LOCAL_TRADE_RESULTS",
+    )
+    if local_stats["closed_total"] > 0:
+        return local_stats
+
+    paper_stats = build_trade_results_stats_from_rows(
+        get_paper_closed_position_rows(),
+        "PAPER_CLOSED_POSITIONS",
+    )
+    if paper_stats["closed_total"] > 0:
+        return paper_stats
+
+    if supabase_stats["open_total"] > 0:
+        return supabase_stats
+    if local_stats["open_total"] > 0:
+        return local_stats
+    return paper_stats
 
 
 def get_local_trade_performance_stats():
@@ -1624,8 +1918,24 @@ def circular_graph(title, percent, sub="", color="green"):
     )
 
 
+def calculate_dashboard_pnl_from_trade_stats(wins, losses):
+    initial_balance = 100000.0
+    win_pnl = float(wins or 0) * 2000.0
+    loss_pnl = float(losses or 0) * -1000.0
+    closed_pnl = win_pnl + loss_pnl
+    account_balance = initial_balance + closed_pnl
+    daily_pnl = closed_pnl
+    daily_pnl_pct = (daily_pnl / initial_balance) * 100
+    return account_balance, account_balance, daily_pnl, daily_pnl_pct, 0.0, closed_pnl
+
+
 def account_balance_card(data):
-    daily_class = pnl_class(data.get("daily_pnl"))
+    account_balance, equity, daily_pnl, daily_pnl_pct, open_pnl, closed_pnl = calculate_dashboard_pnl_from_trade_stats(
+        globals().get("wins", 0),
+        globals().get("losses", 0),
+    )
+    daily_class = pnl_class(daily_pnl)
+    source_label = "SUPABASE_TRADE_RESULTS | PNL_SOURCE=TRADE_RESULTS_V4"
     st.markdown(
         f"""
         <div class="card account-balance-card">
@@ -1633,30 +1943,30 @@ def account_balance_card(data):
             <div class="account-grid">
                 <div class="account-item">
                     <div class="account-label">Account Balance</div>
-                    <div class="account-value">{format_inr(data.get("account_balance"))}</div>
+                    <div class="account-value">{format_inr(account_balance)}</div>
                 </div>
                 <div class="account-item">
                     <div class="account-label">Equity</div>
-                    <div class="account-value">{format_inr(data.get("equity"))}</div>
+                    <div class="account-value">{format_inr(equity)}</div>
                 </div>
                 <div class="account-item">
                     <div class="account-label">Daily Profit/Loss</div>
-                    <div class="account-value {daily_class}">{format_signed_inr(data.get("daily_pnl"))}</div>
+                    <div class="account-value {daily_class}">{format_signed_inr(daily_pnl)}</div>
                 </div>
                 <div class="account-item">
                     <div class="account-label">Daily P/L %</div>
-                    <div class="account-value {daily_class}">{format_signed_pct(data.get("daily_pnl_pct"))}</div>
+                    <div class="account-value {daily_class}">{format_signed_pct(daily_pnl_pct)}</div>
                 </div>
                 <div class="account-item">
                     <div class="account-label">Open PnL</div>
-                    <div class="account-value {pnl_class(data.get("open_pnl"))}">{format_signed_inr(data.get("open_pnl"))}</div>
+                    <div class="account-value {pnl_class(open_pnl)}">{format_signed_inr(open_pnl)}</div>
                 </div>
                 <div class="account-item">
                     <div class="account-label">Closed PnL</div>
-                    <div class="account-value {pnl_class(data.get("closed_pnl"))}">{format_signed_inr(data.get("closed_pnl"))}</div>
+                    <div class="account-value {pnl_class(closed_pnl)}">{format_signed_inr(closed_pnl)}</div>
                 </div>
             </div>
-            <div class="card-sub">Source: data/paper_trading/paper_account.json</div>
+            <div class="card-sub">Source: {source_label}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1706,7 +2016,6 @@ def small_status(name, status, sub=""):
 latest_scan = latest_any_table(["scans", "scan_symbols", "scan_health_logs"])
 scan_health = get_latest_scan_health()
 phase_reports, latest_phase_report_time = load_phase_reports()
-paper_trading_data = get_paper_trading_status(phase_reports)
 market_open = is_market_open_now()
 
 latest_scan_time = row_time(latest_scan)
@@ -1742,29 +2051,16 @@ if stocks_passed == 0:
 
 live_trades_count = get_live_trades_count()
 
-# ✅ FIXED performance stats:
-# Priority 1: Supabase trade_results because Git memory push is disabled
-# Priority 2: local outcomes only for local testing
-local_trade_stats = get_local_trade_performance_stats()
-supabase_trade_stats = get_trade_results_stats()
-
-if supabase_trade_stats["closed_total"] > 0:
-    trade_result_stats = {
-        **supabase_trade_stats,
-        "open_total": max(local_trade_stats.get("open_total", 0), supabase_trade_stats.get("open_total", 0)),
-    }
-elif local_trade_stats["closed_total"] > 0:
-    trade_result_stats = local_trade_stats
-else:
-    trade_result_stats = {
-        "wins": 0,
-        "losses": 0,
-        "closed_total": 0,
-        "accuracy": 0,
-        "open_total": max(supabase_trade_stats.get("open_total", 0), local_trade_stats.get("open_total", 0)),
-        "source": "SUPABASE_TRADE_RESULTS_OPEN_ONLY",
-        "latest_outcome_time": supabase_trade_stats.get("latest_outcome_time"),
-    }
+# Performance stats and account PnL use the same closed trade rows.
+# Priority: Supabase trade_results, local trade results, paper closed positions.
+trade_result_stats = get_trade_results_dataset()
+supabase_trade_stats = trade_result_stats
+paper_trading_data = get_paper_trading_status(
+    phase_reports,
+    closed_trade_rows=trade_result_stats.get("closed_rows", []),
+    open_trade_rows=trade_result_stats.get("open_rows", []),
+    account_source=trade_result_stats.get("source"),
+)
 
 wins = trade_result_stats["wins"]
 losses = trade_result_stats["losses"]
@@ -1870,6 +2166,10 @@ now_text = datetime.now(IST).strftime("%d %b %Y · %I:%M:%S %p IST")
 st.markdown("# ⚡ TITAN Command Center")
 st.markdown(
     f"<div class='subtitle'>Clean V2 dashboard · Auto refresh every {AUTO_REFRESH_SECONDS}s · {now_text}</div>",
+    unsafe_allow_html=True,
+)
+st.markdown(
+    "<div class='subtitle'>ACTIVE_DASHBOARD_FILE = dashboard.py | VISUAL_FIX_V4</div>",
     unsafe_allow_html=True,
 )
 

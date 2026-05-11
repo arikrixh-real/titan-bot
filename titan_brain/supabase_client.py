@@ -1,6 +1,21 @@
+import os
+
 from supabase import create_client
 
-SUPABASE_URL = "https://magbeetjwngehqccsduu.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hZ2JlZXRqd25nZWhxY2NzZHV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4MTE2MTgsImV4cCI6MjA5MzM4NzYxOH0.SXzltJcrXVqrTgcz-fdvkSBA7Y-pbvrOcCXiixzgClA"
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+def get_supabase_client():
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_KEY")
+
+    if not url or not key:
+        print("[Supabase] Supabase config missing or disabled. DB actions skipped.")
+        return None
+
+    try:
+        return create_client(url, key)
+    except Exception:
+        print("[Supabase] Supabase config missing or disabled. DB actions skipped.")
+        return None
+
+
+supabase = get_supabase_client()

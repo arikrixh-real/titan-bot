@@ -3,6 +3,25 @@ from datetime import datetime
 import json
 
 
+_DB_WARNED = set()
+
+
+def _db_available():
+    return supabase is not None
+
+
+def _log_db_error(scope, error):
+    text = str(error)
+    if "WinError 10013" in text:
+        key = (scope, "socket")
+        if key in _DB_WARNED:
+            return
+        _DB_WARNED.add(key)
+        print(f"[DB WARN - {scope}] Supabase socket unavailable; DB write skipped.")
+        return
+    print(f"[DB ERROR - {scope}] {text}")
+
+
 def _safe_json(data):
     """
     Converts non-serializable values safely for Supabase.
@@ -17,6 +36,8 @@ def _safe_json(data):
 
 
 def insert_scan(scan_data):
+    if not _db_available():
+        return None
     try:
         payload = _safe_json({
             "scan_time": datetime.now().isoformat(),
@@ -34,11 +55,13 @@ def insert_scan(scan_data):
         return None
 
     except Exception as e:
-        print(f"[DB ERROR - SCAN] {e}")
+        _log_db_error("SCAN", e)
         return None
 
 
 def insert_scan_symbol(scan_id, symbol_data):
+    if not _db_available():
+        return None
     try:
         payload = _safe_json({
             "scan_id": scan_id,
@@ -57,20 +80,24 @@ def insert_scan_symbol(scan_id, symbol_data):
         supabase.table("scan_symbols").insert(payload).execute()
 
     except Exception as e:
-        print(f"[DB ERROR - SYMBOL] {e}")
+        _log_db_error("SYMBOL", e)
 
 
 def insert_setup(setup_data):
+    if not _db_available():
+        return None
     try:
         payload = _safe_json(setup_data)
 
         supabase.table("setups").insert(payload).execute()
 
     except Exception as e:
-        print(f"[DB ERROR - SETUP] {e}")
+        _log_db_error("SETUP", e)
 
 
 def insert_trade(trade_data):
+    if not _db_available():
+        return None
     try:
         trade_data = trade_data or {}
 
@@ -94,10 +121,12 @@ def insert_trade(trade_data):
         supabase.table("trades").insert(payload).execute()
 
     except Exception as e:
-        print(f"[DB ERROR - TRADE] {e}")
+        _log_db_error("TRADE", e)
 
 
 def insert_trade_result(result_data):
+    if not _db_available():
+        return None
     try:
         result_data = result_data or {}
 
@@ -126,24 +155,28 @@ def insert_trade_result(result_data):
         supabase.table("trade_results").insert(payload).execute()
 
     except Exception as e:
-        print(f"[DB ERROR - TRADE RESULT] {e}")
+        _log_db_error("TRADE RESULT", e)
 
 
 def insert_learning(learning_data):
+    if not _db_available():
+        return None
     try:
         payload = _safe_json(learning_data)
 
         supabase.table("learning_memory").insert(payload).execute()
 
     except Exception as e:
-        print(f"[DB ERROR - LEARNING] {e}")
+        _log_db_error("LEARNING", e)
 
 
 def insert_strategy_weights(weight_data):
+    if not _db_available():
+        return None
     try:
         payload = _safe_json(weight_data)
 
         supabase.table("strategy_weights").insert(payload).execute()
 
     except Exception as e:
-        print(f"[DB ERROR - STRATEGY WEIGHTS] {e}")
+        _log_db_error("STRATEGY WEIGHTS", e)
