@@ -1,5 +1,6 @@
 import os
 import json
+import glob
 import time
 from datetime import datetime, timezone, timedelta
 
@@ -118,6 +119,39 @@ st.markdown(
         font-size: 13px;
         margin-top: 6px;
     }
+
+    .account-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 8px;
+        text-align: left;
+    }
+
+    .account-item {
+        background: #0f172a;
+        border: 1px solid #253044;
+        border-radius: 10px;
+        padding: 10px 12px;
+    }
+
+    .account-label {
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+
+    .account-value {
+        color: #ffffff;
+        font-size: 16px;
+        font-weight: 900;
+        overflow-wrap: anywhere;
+    }
+
+    .account-value.positive { color: #22c55e; }
+    .account-value.negative { color: #ef4444; }
+    .account-value.neutral { color: #e5e7eb; }
 
     .pill-green {
         display: inline-block;
@@ -294,6 +328,17 @@ def get_supabase_client():
 supabase: Client | None = get_supabase_client()
 
 
+@st.cache_data(ttl=60)
+def get_supabase_connection_status():
+    if supabase is None:
+        return "OFFLINE"
+    try:
+        supabase.table("scans").select("created_at").limit(1).execute()
+        return "CONNECTED"
+    except Exception:
+        return "DEGRADED"
+
+
 # =========================================================
 # SAFE LOCAL FILE HELPERS
 # =========================================================
@@ -314,15 +359,72 @@ def read_csv_safe(paths):
     return pd.DataFrame()
 
 
-def safe_load_json(path, default=None):
+def safe_read_json(path, default=None):
+    fallback = default if default is not None else {}
     try:
         if not os.path.exists(path) or os.path.getsize(path) > 5_000_000:
-            return default if default is not None else {}
+            return fallback
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return data if data is not None else (default if default is not None else {})
+        return data if data is not None else fallback
+    except Exception as exc:
+        print(f"[Dashboard WARN] JSON skipped safely: {path} ({exc})")
+        return fallback
+
+
+def safe_load_json(path, default=None):
+    return safe_read_json(path, default)
+
+
+def safe_float(value, default=0.0):
+    try:
+        if value is None or value == "":
+            return float(default)
+        return float(value)
     except Exception:
-        return default if default is not None else {}
+        return float(default)
+
+
+def first_number(*values, default=0.0):
+    for value in values:
+        if value is None or value == "":
+            continue
+        try:
+            return float(value)
+        except Exception:
+            continue
+    return float(default)
+
+
+def format_inr(value):
+    return f"₹{safe_float(value):,.2f}"
+
+
+def format_signed_inr(value):
+    amount = safe_float(value)
+    if amount > 0:
+        return f"+{format_inr(amount)}"
+    if amount < 0:
+        return f"-{format_inr(abs(amount))}"
+    return format_inr(0)
+
+
+def format_signed_pct(value):
+    amount = safe_float(value)
+    if amount > 0:
+        return f"+{amount:.2f}%"
+    if amount < 0:
+        return f"-{abs(amount):.2f}%"
+    return "0.00%"
+
+
+def pnl_class(value):
+    amount = safe_float(value)
+    if amount > 0:
+        return "positive"
+    if amount < 0:
+        return "negative"
+    return "neutral"
 
 
 def safe_list(value):
@@ -381,8 +483,13 @@ PHASE_REPORT_PATHS = {
 def load_phase_reports():
     reports = {}
     latest_time = None
-    for key, path in PHASE_REPORT_PATHS.items():
-        data = safe_load_json(path, {})
+    report_paths = dict(PHASE_REPORT_PATHS)
+    for path in glob.glob("data/*/latest_*.json"):
+        key = os.path.splitext(os.path.basename(path))[0]
+        report_paths.setdefault(key, path.replace("\\", "/"))
+
+    for key, path in report_paths.items():
+        data = safe_read_json(path, {})
         modified = file_modified_dt(path)
         generated = parse_dt(data.get("generated_at")) if isinstance(data, dict) else None
         report_time = latest_dt(modified, generated)
@@ -402,28 +509,142 @@ def get_paper_trading_status(phase_reports=None):
     phase_reports = phase_reports or {}
     paper = phase_reports.get("paper_account", {}).get("data", {})
     if not paper:
-        paper = safe_load_json("data/paper_trading/paper_account.json", {})
-    balance = float(paper.get("balance") or paper.get("cash") or 0.0) if isinstance(paper, dict) else 0.0
-    equity = float(paper.get("equity") or paper.get("account_value") or balance) if isinstance(paper, dict) else 0.0
-    positions = paper.get("positions") if isinstance(paper, dict) else []
-    open_positions = len([p for p in safe_list(positions) if isinstance(p, dict) and str(p.get("status", "OPEN")).upper() in ["OPEN", "ACTIVE", "LIVE"]])
-    status = str(paper.get("status") or paper.get("paper_trading_status") or ("ACTIVE" if paper else "WAITING")).upper() if isinstance(paper, dict) else "WAITING"
+        paper = safe_read_json("data/paper_trading/paper_account.json", {})
+    if not isinstance(paper, dict):
+        paper = {}
+
+    positions = paper.get("open_positions")
+    if positions is None:
+        positions = paper.get("positions")
+    if positions is None:
+        positions = safe_read_json("data/paper_trading/paper_positions.json", [])
+    closed_positions = paper.get("closed_positions")
+    if closed_positions is None:
+        closed_positions = safe_read_json("data/paper_trading/paper_closed_positions.json", [])
+
+    open_items = [
+        p for p in safe_list(positions)
+        if isinstance(p, dict) and str(p.get("status", "OPEN")).upper() in ["OPEN", "ACTIVE", "LIVE", "FILLED"]
+    ]
+    closed_items = [p for p in safe_list(closed_positions) if isinstance(p, dict)]
+
+    initial_balance = first_number(
+        paper.get("initial_balance"),
+        paper.get("starting_balance"),
+        default=100000.0,
+    )
+
+    balance_keys = ("current_balance", "balance", "cash")
+    balance_source = next((key for key in balance_keys if paper.get(key) not in [None, ""]), "initial_balance")
+    balance = first_number(
+        paper.get("current_balance"),
+        paper.get("balance"),
+        paper.get("cash"),
+        initial_balance,
+        default=100000.0,
+    )
+
+    open_pnl_from_positions = sum(
+        first_number(
+            p.get("open_pnl"),
+            p.get("unrealized_pnl"),
+            p.get("pnl"),
+            default=0.0,
+        )
+        for p in open_items
+    )
+    open_pnl_source = "account" if paper.get("open_pnl") not in [None, ""] or paper.get("unrealized_pnl") not in [None, ""] else "positions"
+    open_pnl = first_number(
+        paper.get("open_pnl"),
+        paper.get("unrealized_pnl"),
+        open_pnl_from_positions,
+        default=0.0,
+    )
+
+    closed_pnl_from_positions = sum(
+        first_number(
+            p.get("closed_pnl"),
+            p.get("realized_pnl"),
+            p.get("pnl"),
+            default=0.0,
+        )
+        for p in closed_items
+    )
+    closed_pnl_source = "account" if paper.get("closed_pnl") not in [None, ""] else "positions"
+    closed_pnl = first_number(
+        paper.get("closed_pnl"),
+        paper.get("realized_pnl"),
+        closed_pnl_from_positions,
+        default=0.0,
+    )
+
+    equity_source = "account" if paper.get("equity") not in [None, ""] or paper.get("account_value") not in [None, ""] else "balance_plus_open_pnl"
+    equity = first_number(
+        paper.get("equity"),
+        paper.get("account_value"),
+        balance + open_pnl,
+        default=balance + open_pnl,
+    )
+
+    daily_start_balance = first_number(
+        paper.get("daily_start_balance"),
+        initial_balance,
+        default=100000.0,
+    )
+    daily_pnl_source = "account" if paper.get("daily_pnl") not in [None, ""] else "balance_minus_daily_start"
+    daily_pnl = first_number(
+        paper.get("daily_pnl"),
+        balance - daily_start_balance,
+        default=0.0,
+    )
+    daily_pnl_pct = (daily_pnl / daily_start_balance * 100.0) if daily_start_balance > 0 else 0.0
+
+    drawdown_pct = first_number(
+        paper.get("drawdown_pct"),
+        paper.get("drawdown"),
+        max(0.0, ((initial_balance - equity) / initial_balance) * 100.0) if initial_balance > 0 else 0.0,
+        default=0.0,
+    )
+    status = str(paper.get("status") or paper.get("paper_trading_status") or ("ACTIVE" if paper else "WAITING")).upper()
     return {
         "balance": balance,
+        "account_balance": balance,
         "equity": equity,
-        "open_positions": open_positions,
+        "daily_pnl": daily_pnl,
+        "daily_pnl_pct": daily_pnl_pct,
+        "open_positions": len(open_items),
+        "closed_pnl": closed_pnl,
+        "open_pnl": open_pnl,
+        "drawdown_pct": round(drawdown_pct, 2),
         "status": status,
+        "balance_source": balance_source,
+        "daily_pnl_source": daily_pnl_source,
+        "open_pnl_source": open_pnl_source,
+        "closed_pnl_source": closed_pnl_source,
+        "equity_source": equity_source,
     }
+
+def nested_value(data, *paths, default=None):
+    for path in paths:
+        current = data
+        for key in path:
+            if not isinstance(current, dict) or key not in current:
+                current = None
+                break
+            current = current.get(key)
+        if current not in [None, ""]:
+            return current
+    return default
 
 
 def get_master_shadow_dashboard_data():
     """
-    Reads Phase 10 command-center memory only.
+    Reads local Phase report and memory artifacts only.
     No report generation, network calls, Supabase writes, scans, or live prices.
     """
     neutral = {
         "status": "WAITING",
-        "narrative": "UNKNOWN",
+        "narrative": "RESEARCH MODE" if not is_market_open_now() else "NEUTRAL",
         "cross_setup_heat": 0.0,
         "tracked_lifecycle_trades": 0,
         "shadow_warnings": 0,
@@ -431,28 +652,107 @@ def get_master_shadow_dashboard_data():
         "updated_at": "No data yet",
     }
 
-    path = "data/memory/master_shadow_memory.json"
     try:
-        if not os.path.exists(path) or os.path.getsize(path) > 1_000_000:
-            return neutral
+        report_paths = set(PHASE_REPORT_PATHS.values())
+        report_paths.update(glob.glob("data/*/latest_*.json"))
+        memory_paths = set(glob.glob("data/memory/*.json"))
+        memory_paths.update(glob.glob("data/memory_consolidation/*.json"))
+        existing_reports = [path for path in report_paths if os.path.exists(path)]
+        existing_memory = [path for path in memory_paths if os.path.exists(path)]
+        artifact_count = len(existing_reports) + len(existing_memory)
 
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
+        master_path = "data/memory/master_shadow_memory.json"
+        data = safe_read_json(master_path, {})
         if not isinstance(data, dict):
+            data = {}
+
+        if not data and artifact_count == 0:
             return neutral
+
+        narrative_memory = safe_read_json("data/memory/market_narrative_memory.json", {})
+        cross_setup_memory = safe_read_json("data/memory/cross_setup_memory.json", {})
+        lifecycle_memory = safe_read_json("data/memory/lifecycle_memory.json", {})
+        no_trade_report = safe_read_json("data/no_trade/latest_no_trade_intelligence_report.json", {})
+        scenario_report = safe_read_json("data/scenario_simulation/latest_scenario_simulation_report.json", {})
+        liquidity_report = safe_read_json("data/liquidity_map/latest_institutional_liquidity_report.json", {})
 
         cards = data.get("dashboard_cards") if isinstance(data.get("dashboard_cards"), dict) else {}
         command = data.get("command_status") if isinstance(data.get("command_status"), dict) else {}
 
+        master_brain_memory = safe_read_json("data/memory/titan_master_status.json", {})
+        master_brain_active = bool(master_brain_memory) or bool(existing_reports) or bool(existing_memory)
+
+        status = str(cards.get("master_shadow_state") or command.get("overall_state") or "").upper()
+        if status in ["", "UNKNOWN", "DEGRADED_OBSERVING", "WAITING"] and master_brain_active:
+            status = "ACTIVE"
+        elif not status:
+            status = neutral["status"]
+
+        raw_narrative = str(
+            cards.get("narrative")
+            or nested_value(narrative_memory, ("current_narrative", "narrative_type"))
+            or nested_value(narrative_memory, ("current_narrative", "market_direction"))
+            or scenario_report.get("scenario_bias")
+            or ""
+        ).upper()
+        no_trade_permission = str(no_trade_report.get("trade_permission") or "").upper()
+        no_trade_warning = str(no_trade_report.get("no_trade_warning") or "").upper()
+        if no_trade_permission in ["BLOCK", "WAIT"] or no_trade_warning not in ["", "NONE"]:
+            narrative = "NO-TRADE"
+        elif "NEUTRAL" in raw_narrative or raw_narrative in ["CHOPPY", "SIDEWAYS"]:
+            narrative = "NEUTRAL"
+        elif raw_narrative:
+            narrative = raw_narrative
+        else:
+            narrative = "MARKET ACTIVE" if is_market_open_now() else "RESEARCH MODE"
+
+        heat_candidates = [
+            cards.get("cross_setup_heat"),
+            nested_value(cross_setup_memory, ("current_snapshot", "portfolio_heat_score")),
+            cross_setup_memory.get("portfolio_heat_score"),
+            no_trade_report.get("no_trade_score"),
+            nested_value(scenario_report, ("stress_case_simulation", "stress_risk_score")),
+            liquidity_report.get("liquidity_map_score"),
+        ]
+        if str(liquidity_report.get("liquidity_warning") or "").upper() not in ["", "NONE"]:
+            heat_candidates.append(50.0)
+        heat_values = [safe_float(value) for value in heat_candidates if value not in [None, ""]]
+        cross_setup_heat = max(0.0, min(100.0, max(heat_values) if heat_values else 0.0))
+
+        trade_lifecycle = lifecycle_memory.get("trade_lifecycle")
+        lifecycle_count = first_number(
+            cards.get("tracked_lifecycle_trades"),
+            nested_value(lifecycle_memory, ("setup_family_stats", "GENERAL", "observations")),
+            len(trade_lifecycle) if isinstance(trade_lifecycle, dict) else None,
+            artifact_count,
+            default=0.0,
+        )
+        lifecycle_count = max(int(lifecycle_count), artifact_count if artifact_count else 0)
+
+        risk_flags = nested_value(data, ("risk_observations", "systemic_flags"), default=[])
+        warning_count = int(first_number(
+            cards.get("shadow_warnings"),
+            len(command.get("warnings", [])) if isinstance(command.get("warnings"), list) else None,
+            len(risk_flags) if isinstance(risk_flags, list) else None,
+            default=0,
+        ))
+
+        updated_dt = latest_dt(
+            file_modified_dt(master_path),
+            parse_dt(data.get("generated_at")),
+            parse_dt(nested_value(narrative_memory, ("current_narrative", "generated_at"))),
+            parse_dt(cross_setup_memory.get("last_updated")),
+            parse_dt(lifecycle_memory.get("last_updated")),
+        )
+
         return {
-            "status": str(cards.get("master_shadow_state") or command.get("overall_state") or "WAITING"),
-            "narrative": str(cards.get("narrative") or "UNKNOWN"),
-            "cross_setup_heat": float(cards.get("cross_setup_heat") or 0.0),
-            "tracked_lifecycle_trades": int(cards.get("tracked_lifecycle_trades") or 0),
-            "shadow_warnings": int(cards.get("shadow_warnings") or 0),
+            "status": status,
+            "narrative": narrative,
+            "cross_setup_heat": cross_setup_heat,
+            "tracked_lifecycle_trades": lifecycle_count,
+            "shadow_warnings": warning_count,
             "runtime_bounded": bool(data.get("runtime_bounded", True)),
-            "updated_at": str(data.get("generated_at") or "No data yet"),
+            "updated_at": age_text_from_dt(updated_dt) if updated_dt else "No data yet",
         }
     except Exception:
         return neutral
@@ -858,7 +1158,7 @@ def derive_titan_status(master_activity_time=None, github_data=None, supabase_st
 
     if master_activity_time:
         age_seconds = (datetime.now(IST) - master_activity_time).total_seconds()
-        if age_seconds <= 2 * 3600:
+        if age_seconds <= 6 * 3600:
             return "ONLINE" if market_open else "RESEARCH MODE"
         if age_seconds <= 24 * 3600 and (github_healthy or supabase_healthy):
             return "DELAYED"
@@ -884,6 +1184,20 @@ def derive_scan_status(scan_time=None, master_activity_time=None, market_open=No
     return "OFFLINE"
 
 
+def derive_activity_status(activity_time=None, market_open=None, active_seconds=900, delayed_seconds=3600):
+    market_open = is_market_open_now() if market_open is None else market_open
+    if not market_open:
+        return "RESEARCH MODE"
+    if not activity_time:
+        return "WAITING"
+    age_seconds = (datetime.now(IST) - activity_time).total_seconds()
+    if age_seconds <= active_seconds:
+        return "ACTIVE"
+    if age_seconds <= delayed_seconds:
+        return "DELAYED"
+    return "OFFLINE"
+
+
 def derive_upstox_status(scan_health_time=None, stocks_checked=0, market_open=None):
     market_open = is_market_open_now() if market_open is None else market_open
     if not market_open:
@@ -892,7 +1206,18 @@ def derive_upstox_status(scan_health_time=None, stocks_checked=0, market_open=No
         age_seconds = (datetime.now(IST) - scan_health_time).total_seconds()
         if age_seconds <= 900:
             return "ACTIVE"
-    return "INACTIVE"
+        return "DELAYED"
+    return "OFFLINE"
+
+
+def market_aware_status(status, market_open=None, closed_status="RESEARCH MODE"):
+    market_open = is_market_open_now() if market_open is None else market_open
+    text = str(status or "WAITING").upper()
+    if market_open:
+        return text
+    if text in {"OFFLINE", "ERROR", "FAILED", "INACTIVE", "UNKNOWN", "STALE", "DELAYED"}:
+        return closed_status
+    return text
 
 
 def status_html(status):
@@ -1284,6 +1609,49 @@ def circular_graph(title, percent, sub="", color="green"):
     )
 
 
+def account_balance_card(data):
+    daily_class = pnl_class(data.get("daily_pnl"))
+    st.markdown(
+        f"""
+        <div class="card">
+            <div class="card-title">Account Balance</div>
+            <div class="account-grid">
+                <div class="account-item">
+                    <div class="account-label">Account Balance</div>
+                    <div class="account-value">{format_inr(data.get("account_balance"))}</div>
+                </div>
+                <div class="account-item">
+                    <div class="account-label">Equity</div>
+                    <div class="account-value">{format_inr(data.get("equity"))}</div>
+                </div>
+                <div class="account-item">
+                    <div class="account-label">Daily Profit/Loss</div>
+                    <div class="account-value {daily_class}">{format_signed_inr(data.get("daily_pnl"))}</div>
+                </div>
+                <div class="account-item">
+                    <div class="account-label">Daily P/L %</div>
+                    <div class="account-value {daily_class}">{format_signed_pct(data.get("daily_pnl_pct"))}</div>
+                </div>
+                <div class="account-item">
+                    <div class="account-label">Open PnL</div>
+                    <div class="account-value {pnl_class(data.get("open_pnl"))}">{format_signed_inr(data.get("open_pnl"))}</div>
+                </div>
+                <div class="account-item">
+                    <div class="account-label">Closed PnL</div>
+                    <div class="account-value {pnl_class(data.get("closed_pnl"))}">{format_signed_inr(data.get("closed_pnl"))}</div>
+                </div>
+                <div class="account-item">
+                    <div class="account-label">Drawdown %</div>
+                    <div class="account-value">{safe_float(data.get("drawdown_pct")):.2f}%</div>
+                </div>
+            </div>
+            <div class="card-sub">Source: data/paper_trading/paper_account.json</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def progress_bar(label, percent):
     percent = max(0, min(100, int(percent)))
 
@@ -1339,7 +1707,7 @@ github_data = get_github_latest_run()
 github_status = github_data["status"]
 github_age = age_text_from_dt(github_data["last_run_time"])
 
-supabase_status = "CONNECTED" if supabase is not None else "OFFLINE"
+supabase_status = get_supabase_connection_status()
 
 
 # Counts
@@ -1417,6 +1785,8 @@ master_activity_time = latest_dt(
 last_scan_age = last_scan_display_from_dt(real_latest_scan_time, market_open)
 scan_status = derive_scan_status(real_latest_scan_time, master_activity_time, market_open)
 titan_status = derive_titan_status(master_activity_time, github_data, supabase_status, market_open)
+github_display_status = market_aware_status(github_status, market_open, "WAITING")
+master_brain_display_status = market_aware_status(master_brain_data["master_status"], market_open, "RESEARCH MODE")
 
 SUPABASE_STORAGE_LIMIT_MB = 500
 
@@ -1444,14 +1814,19 @@ news_status = news_memory_data["status"]
 news_report_time = phase_reports.get("news_intelligence_2", {}).get("time")
 if news_report_time and (datetime.now(IST) - news_report_time).total_seconds() <= 6 * 3600:
     news_status = "ACTIVE"
+news_status = market_aware_status(news_status, market_open, "RESEARCH MODE")
 
 telegram_status = "ACTIVE" if telegram_alerts > 0 else "WAITING"
 telegram_status_sub = f"Alerts sent: {telegram_alerts:,}" if market_open else "Outside alert window"
+telegram_status = market_aware_status(telegram_status, market_open, "WAITING")
 
 learning_status = master_brain_data["evolution_status"]
 if phase_reports.get("memory_consolidation", {}).get("exists") or phase_reports.get("self_reflection", {}).get("exists"):
     learning_status = "ACTIVE" if closed_trades > 0 else "BUILDING"
 evolution_status = master_brain_data["evolution_status"]
+outcome_tracker_status = derive_activity_status(trade_result_stats.get("latest_outcome_time"), market_open)
+if open_outcome_trades > 0 or closed_trades > 0:
+    outcome_tracker_status = "ACTIVE" if market_open else "RESEARCH MODE"
 
 if scan_health:
     latest_stocks_checked = int(scan_health.get("stocks_checked") or 0)
@@ -1488,6 +1863,9 @@ st.markdown(
 )
 
 
+st.markdown("<div class='subtitle'>Dashboard Visual Fix V2</div>", unsafe_allow_html=True)
+
+
 # =========================================================
 # 1. TOP STATUS
 # =========================================================
@@ -1501,7 +1879,7 @@ with c1:
     status_card("TITAN Status", titan_status, market_mode_label())
 
 with c2:
-    status_card("GitHub 5-Min Runner", github_status, github_data["message"])
+    status_card("GitHub 5-Min Runner", github_display_status, github_data["message"])
 
 with c3:
     status_card("Supabase Status", supabase_status, "Memory database connection")
@@ -1539,12 +1917,7 @@ with p4:
 g1, g2 = st.columns(2)
 
 with g1:
-    circular_graph(
-        "Overall Trade Performance",
-        trade_performance_percent,
-        f"Closed only · Open ignored: {open_outcome_trades}",
-        "blue",
-    )
+    account_balance_card(paper_trading_data)
 
 with g2:
     circular_graph(
@@ -1569,7 +1942,7 @@ mb1, mb2, mb3, mb4 = st.columns(4)
 with mb1:
     status_card(
         "Master Brain",
-        master_brain_data["master_status"],
+        master_brain_display_status,
         f"Last brain activity: {master_brain_data['last_activity_age']}",
     )
 
@@ -1726,20 +2099,15 @@ r1, r2 = st.columns(2)
 
 with r1:
     small_status("Scan Engine", scan_status, f"Last scan: {last_scan_age}")
-    small_status("GitHub 5-Min Runner", github_status, f"Last run: {github_age}")
+    small_status("GitHub 5-Min Runner", github_display_status, f"Last run: {github_age}")
     small_status("Supabase Memory", supabase_status, "Database connection")
-    small_status("Master Brain", master_brain_data["master_status"], f"Last activity: {master_brain_data['last_activity_age']}")
+    small_status("Master Brain", master_brain_display_status, f"Last activity: {master_brain_data['last_activity_age']}")
 
 with r2:
     small_status("News Engine", news_status, f"News: {news_gathered:,} · Latest: {news_memory_data['age']}")
     small_status("Telegram Alert Engine", telegram_status, telegram_status_sub)
     small_status("Learning / Evolution", learning_status, master_brain_data["evolution_sub"])
-    small_status("Outcome Tracker", "ACTIVE" if open_outcome_trades > 0 or closed_trades > 0 else "WAITING", f"Open: {open_outcome_trades}, Closed: {closed_trades}")
-    small_status(
-        "Paper Trading",
-        paper_trading_data["status"],
-        f"Bal: {paper_trading_data['balance']:,.0f} Â· Eq: {paper_trading_data['equity']:,.0f} Â· Open: {paper_trading_data['open_positions']}",
-    )
+    small_status("Outcome Tracker", outcome_tracker_status, f"Open: {open_outcome_trades}, Closed: {closed_trades}")
 
 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1787,7 +2155,7 @@ if scan_health:
         metric_card("Alerts This Scan", f"{latest_health_alerts:,}", "Real alerts only")
 
     with h3:
-        metric_card("Live Trades Count", f"{live_trades_count:,}", "From Supabase trade_results")
+        metric_card("Live Trades Count", f"{live_trades_count:,}", "Open trades only")
 
 else:
     st.info("No scan breakdown data yet. Wait for the next GitHub 5-minute scan after scan health logging is pushed.")
@@ -1800,3 +2168,4 @@ st.markdown("</div>", unsafe_allow_html=True)
 # =========================================================
 
 st.caption("TITAN Dashboard V2 · Streamlit Cloud · GitHub Actions · Supabase Memory")
+st.caption("DASHBOARD_VISUAL_FIX_V2_ACTIVE")
