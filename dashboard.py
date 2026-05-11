@@ -153,6 +153,17 @@ st.markdown(
     .account-value.negative { color: #ef4444; }
     .account-value.neutral { color: #e5e7eb; }
 
+    .account-balance-card,
+    .accuracy-card {
+        min-height: 286px;
+    }
+
+    .accuracy-card {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
     .pill-green {
         display: inline-block;
         background: rgba(34,197,94,0.15);
@@ -1585,6 +1596,10 @@ def status_card(title, status, sub=""):
 def circular_graph(title, percent, sub="", color="green"):
     percent = max(0, min(100, int(percent)))
     css_class = "circle"
+    card_class = "card"
+
+    if title == "TITAN Overall Accuracy":
+        card_class = "card accuracy-card"
 
     if color == "blue":
         css_class = "circle circle-blue"
@@ -1595,7 +1610,7 @@ def circular_graph(title, percent, sub="", color="green"):
 
     st.markdown(
         f"""
-        <div class="card">
+        <div class="{card_class}">
             <div class="card-title">{title}</div>
             <div class="circle-wrap">
                 <div class="{css_class}" style="--value:{percent}%;">
@@ -1613,7 +1628,7 @@ def account_balance_card(data):
     daily_class = pnl_class(data.get("daily_pnl"))
     st.markdown(
         f"""
-        <div class="card">
+        <div class="card account-balance-card">
             <div class="card-title">Account Balance</div>
             <div class="account-grid">
                 <div class="account-item">
@@ -1639,10 +1654,6 @@ def account_balance_card(data):
                 <div class="account-item">
                     <div class="account-label">Closed PnL</div>
                     <div class="account-value {pnl_class(data.get("closed_pnl"))}">{format_signed_inr(data.get("closed_pnl"))}</div>
-                </div>
-                <div class="account-item">
-                    <div class="account-label">Drawdown %</div>
-                    <div class="account-value">{safe_float(data.get("drawdown_pct")):.2f}%</div>
                 </div>
             </div>
             <div class="card-sub">Source: data/paper_trading/paper_account.json</div>
