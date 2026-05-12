@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 import math
+import csv
+import hashlib
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +24,9 @@ ACCOUNT_PATH = PAPER_DIR / "paper_account.json"
 POSITIONS_PATH = PAPER_DIR / "paper_positions.json"
 CLOSED_POSITIONS_PATH = PAPER_DIR / "paper_closed_positions.json"
 AUDIT_LOG_PATH = PAPER_DIR / "paper_audit_log.json"
+PROCESSED_RESULTS_PATH = PAPER_DIR / "paper_processed_results.json"
+TRADE_OUTCOMES_CSV = Path("data/journals/trade_outcomes.csv")
+TRADE_OUTCOMES_JSONL = Path("data/journals/trade_outcomes.jsonl")
 
 DEFAULT_INITIAL_BALANCE = 100000.0
 DEFAULT_CURRENCY = "INR"
@@ -75,6 +80,7 @@ def _ensure_storage() -> None:
         (POSITIONS_PATH, []),
         (CLOSED_POSITIONS_PATH, []),
         (AUDIT_LOG_PATH, []),
+        (PROCESSED_RESULTS_PATH, []),
     ):
         if not path.exists():
             path.write_text(json.dumps(default, indent=2), encoding="utf-8")
@@ -102,7 +108,11 @@ def _write_json(path: Path, data: Any) -> bool:
 def _normalize_account(account: Any) -> Dict[str, Any]:
     account = account if isinstance(account, dict) else {}
     initial = safe_float(account.get("initial_balance"), DEFAULT_INITIAL_BALANCE)
-    balance = safe_float(account.get("current_balance"), initial)
+    balance = safe_float(account.get("current_balance") or account.get("balance"), initial)
+    open_pnl = safe_float(account.get("open_pnl"), 0.0)
+    closed_pnl = safe_float(account.get("closed_pnl"), 0.0)
+    daily_start_balance = safe_float(account.get("daily_start_balance"), balance)
+    daily_pnl = safe_float(account.get("daily_pnl"), balance - daily_start_balance)
     status = safe_text(account.get("paper_trading_status"), "ACTIVE").upper()
     if status not in {"ACTIVE", "LOCKED"}:
         status = "ACTIVE"
@@ -111,6 +121,11 @@ def _normalize_account(account: Any) -> Dict[str, Any]:
         "initial_balance": initial,
         "currency": safe_text(account.get("currency"), DEFAULT_CURRENCY),
         "current_balance": balance,
+        "balance": balance,
+        "equity": safe_float(account.get("equity"), balance + open_pnl),
+        "open_pnl": open_pnl,
+        "closed_pnl": closed_pnl,
+        "daily_pnl": round(daily_pnl, 2),
         "created_at": account.get("created_at") or _now(),
         "updated_at": _now(),
         "risk_rules": {
@@ -127,7 +142,7 @@ def _normalize_account(account: Any) -> Dict[str, Any]:
                 MAX_DRAWDOWN_PCT,
             ),
         },
-        "daily_start_balance": safe_float(account.get("daily_start_balance"), balance),
+        "daily_start_balance": daily_start_balance,
         "daily_start_date": account.get("daily_start_date") or _today(),
         "last_error": account.get("last_error"),
     }
@@ -141,18 +156,64 @@ def _list(value: Any) -> List[Any]:
     return value if isinstance(value, list) else []
 
 
+def migrate_open_positions_quantity(account: Dict[str, Any], positions: List[Any]) -> List[Dict[str, Any]]:
+    migrated: List[Dict[str, Any]] = []
+    changed = False
+    for item in _list(positions):
+        if not isinstance(item, dict):
+            continue
+        position = dict(item)
+        entry = safe_float(position.get("entry_price") or position.get("entry"), 0.0)
+        qty = safe_int(position.get("quantity") or position.get("qty"), 0)
+        if qty <= 0:
+            sizing = calculate_paper_trade_sizing(account, position)
+            qty = safe_int(sizing.get("quantity"), 0)
+            if qty > 0:
+                position["quantity"] = qty
+                position["qty"] = qty
+                position["position_size"] = sizing.get("position_size")
+                position["risk_amount"] = sizing.get("risk_amount")
+                position["risk_per_trade_pct"] = sizing.get("risk_per_trade_pct")
+                changed = True
+        if entry > 0 and safe_float(position.get("position_size"), 0.0) <= 0 and qty > 0:
+            position["position_size"] = round(entry * qty, 2)
+            changed = True
+        position.setdefault("entry_price", entry)
+        position.setdefault("stop_loss", position.get("sl"))
+        position.setdefault("tp", position.get("target"))
+        position.setdefault("is_paper_trade", True)
+        migrated.append(position)
+    if changed:
+        _write_json(POSITIONS_PATH, migrated)
+    return migrated
+
+
 def load_paper_account() -> Dict[str, Any]:
     _ensure_storage()
     if not ACCOUNT_PATH.exists():
         return initialize_paper_account(DEFAULT_INITIAL_BALANCE)
     account = _normalize_account(_read_json(ACCOUNT_PATH, {}))
-    positions = _read_json(POSITIONS_PATH, [])
+    positions = migrate_open_positions_quantity(account, _read_json(POSITIONS_PATH, []))
     closed = _read_json(CLOSED_POSITIONS_PATH, [])
     account["open_positions"] = [item for item in _list(positions) if isinstance(item, dict)]
     account["closed_positions"] = [item for item in _list(closed) if isinstance(item, dict)]
     if account.get("daily_start_date") != _today():
         account["daily_start_date"] = _today()
         account["daily_start_balance"] = account.get("current_balance", DEFAULT_INITIAL_BALANCE)
+    account["open_pnl"] = calculate_open_pnl(account)
+    account["closed_pnl"] = calculate_closed_pnl(account)
+    account["balance"] = safe_float(account.get("current_balance"), DEFAULT_INITIAL_BALANCE)
+    account["equity"] = round(account["balance"] + account["open_pnl"], 2)
+    today_pnl = round(sum(
+        safe_float(position.get("closed_pnl"), 0.0)
+        for position in account["closed_positions"]
+        if safe_text(position.get("closed_at"))[:10] == _today()
+    ), 2)
+    if today_pnl:
+        account["daily_pnl"] = today_pnl
+        account["daily_start_balance"] = round(account["balance"] - today_pnl, 2)
+    else:
+        account["daily_pnl"] = round(account["balance"] - safe_float(account.get("daily_start_balance"), account["balance"]), 2)
     return account
 
 
@@ -209,6 +270,10 @@ def _trade_side(trade: Dict[str, Any]) -> str:
 
 
 def calculate_position_size(account: Dict[str, Any], trade: Dict[str, Any]) -> int:
+    return int(calculate_paper_trade_sizing(account, trade).get("quantity", 0))
+
+
+def calculate_paper_trade_sizing(account: Dict[str, Any], trade: Dict[str, Any]) -> Dict[str, Any]:
     account = _normalize_account(account)
     trade = _dict(trade)
     balance = safe_float(account.get("current_balance"), DEFAULT_INITIAL_BALANCE)
@@ -218,11 +283,60 @@ def calculate_position_size(account: Dict[str, Any], trade: Dict[str, Any]) -> i
     entry = safe_float(trade.get("entry") or trade.get("entry_price") or trade.get("price"), 0.0)
     stop = safe_float(trade.get("sl") or trade.get("stop_loss") or trade.get("stoploss"), 0.0)
     per_share_risk = abs(entry - stop)
+    quantity = 0
     if entry <= 0:
-        return 0
-    if per_share_risk <= 0:
-        return max(1, int(risk_amount / max(entry * 0.01, 1.0)))
-    return max(0, int(risk_amount / per_share_risk))
+        position_size = 0.0
+    elif per_share_risk > 0:
+        quantity = int(math.floor(risk_amount / per_share_risk))
+        if quantity <= 0 and entry <= balance:
+            quantity = 1
+        position_size = quantity * entry
+        if quantity > 0 and position_size > balance:
+            quantity = int(math.floor(balance / entry))
+            position_size = quantity * entry
+        if quantity <= 0:
+            position_size = 0.0
+    else:
+        position_size = 0.0
+    return {
+        "quantity": int(quantity),
+        "qty": int(quantity),
+        "position_size": round(position_size, 2),
+        "risk_amount": round(risk_amount, 2),
+        "risk_per_trade_pct": risk_pct,
+        "risk_per_share": round(per_share_risk, 4),
+        "account_balance": round(balance, 2),
+    }
+
+
+def prepare_paper_trade_fields(trade: Dict[str, Any], account: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    account = load_paper_account() if account is None else account
+    trade = dict(_dict(trade))
+    sizing = calculate_paper_trade_sizing(account, trade)
+    entry = safe_float(trade.get("entry") or trade.get("entry_price") or trade.get("price"), 0.0)
+    stop = safe_float(trade.get("sl") or trade.get("stop_loss") or trade.get("stoploss"), 0.0)
+    target = safe_float(trade.get("target") or trade.get("tp") or trade.get("target_price") or trade.get("t1"), 0.0)
+    paper_trade_id = safe_text(trade.get("paper_trade_id") or trade.get("trade_id") or trade.get("id"))
+    if not paper_trade_id:
+        paper_trade_id = f"PT-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+    trade.update({
+        "entry_price": entry,
+        "entry": entry,
+        "stop_loss": stop,
+        "sl": stop,
+        "target": target,
+        "tp": target,
+        "side": _trade_side(trade),
+        "symbol": _trade_symbol(trade),
+        "quantity": sizing["quantity"],
+        "qty": sizing["qty"],
+        "position_size": sizing["position_size"],
+        "risk_amount": sizing["risk_amount"],
+        "risk_per_trade_pct": sizing["risk_per_trade_pct"],
+        "paper_trade_id": paper_trade_id,
+        "is_paper_trade": True,
+    })
+    return trade
 
 
 def place_paper_order(account: Dict[str, Any], trade: Dict[str, Any]) -> Dict[str, Any]:
@@ -235,24 +349,34 @@ def place_paper_order(account: Dict[str, Any], trade: Dict[str, Any]) -> Dict[st
         save_paper_account(account)
         return {"accepted": False, "reason": "RISK_LIMIT_LOCKED"}
 
-    qty = calculate_position_size(account, trade)
-    entry = safe_float(trade.get("entry") or trade.get("entry_price") or trade.get("price"), 0.0)
+    trade = prepare_paper_trade_fields(trade, account)
+    qty = safe_int(trade.get("quantity"), 0)
+    entry = safe_float(trade.get("entry_price") or trade.get("entry") or trade.get("price"), 0.0)
     if qty <= 0 or entry <= 0:
         return {"accepted": False, "reason": "INVALID_SIZE_OR_ENTRY"}
 
     order = {
         "paper_order_id": f"PO-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+        "paper_trade_id": trade.get("paper_trade_id"),
         "created_at": _now(),
         "symbol": _trade_symbol(trade),
         "side": _trade_side(trade),
         "entry": entry,
+        "entry_price": entry,
         "sl": safe_float(trade.get("sl") or trade.get("stop_loss") or trade.get("stoploss"), 0.0),
+        "stop_loss": safe_float(trade.get("sl") or trade.get("stop_loss") or trade.get("stoploss"), 0.0),
         "target": safe_float(trade.get("target") or trade.get("tp") or trade.get("t1"), 0.0),
+        "tp": safe_float(trade.get("target") or trade.get("tp") or trade.get("t1"), 0.0),
         "quantity": qty,
+        "qty": qty,
+        "position_size": safe_float(trade.get("position_size"), 0.0),
+        "risk_amount": safe_float(trade.get("risk_amount"), 0.0),
+        "risk_per_trade_pct": safe_float(trade.get("risk_per_trade_pct"), MAX_RISK_PER_TRADE_PCT),
         "status": "PENDING",
         "source": "TITAN_PAPER_ONLY",
         "accepted": True,
         "live_order": False,
+        "is_paper_trade": True,
     }
     generate_paper_audit_log({"event": "PAPER_ORDER_CREATED", "order": order})
     return order
@@ -304,18 +428,27 @@ def open_paper_position(account: Dict[str, Any], order: Dict[str, Any]) -> Dict[
     position = {
         "paper_position_id": f"PP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
         "paper_order_id": order.get("paper_order_id"),
+        "paper_trade_id": order.get("paper_trade_id"),
         "opened_at": _now(),
         "symbol": order.get("symbol"),
         "side": order.get("side"),
-        "entry": order.get("fill_price"),
+        "entry": order.get("entry_price") or order.get("entry") or order.get("fill_price"),
+        "entry_price": order.get("entry_price") or order.get("entry") or order.get("fill_price"),
         "sl": order.get("sl"),
+        "stop_loss": order.get("stop_loss") or order.get("sl"),
         "target": order.get("target"),
+        "tp": order.get("tp") or order.get("target"),
         "quantity": order.get("quantity"),
+        "qty": order.get("qty") or order.get("quantity"),
+        "position_size": order.get("position_size"),
+        "risk_amount": order.get("risk_amount"),
+        "risk_per_trade_pct": order.get("risk_per_trade_pct"),
         "brokerage": order.get("brokerage"),
         "status": "OPEN",
-        "last_price": order.get("fill_price"),
+        "last_price": order.get("fill_price") or order.get("entry_price"),
         "open_pnl": 0.0,
         "live_order": False,
+        "is_paper_trade": True,
     }
     positions.append(position)
     account["open_positions"] = positions
@@ -333,14 +466,13 @@ def close_paper_position(account: Dict[str, Any], position: Dict[str, Any], outc
     entry = safe_float(position.get("entry"), 0.0)
     side = safe_text(position.get("side"), "LONG").upper()
     pnl = (exit_price - entry) * qty if side == "LONG" else (entry - exit_price) * qty
-    pnl -= safe_float(position.get("brokerage"), 0.0)
-    pnl -= simulate_brokerage({"entry": exit_price, "quantity": qty})
     position.update({
         "closed_at": _now(),
         "exit_price": exit_price,
         "status": "CLOSED",
         "outcome": outcome.get("outcome") or outcome.get("result") or "MANUAL",
         "closed_pnl": round(pnl, 2),
+        "realized_pnl": round(pnl, 2),
     })
     account["open_positions"] = [p for p in _list(account.get("open_positions")) if p.get("paper_position_id") != position.get("paper_position_id")]
     account["closed_positions"] = _list(account.get("closed_positions")) + [position]
@@ -351,8 +483,20 @@ def close_paper_position(account: Dict[str, Any], position: Dict[str, Any], outc
 
 
 def update_paper_balance(account: Dict[str, Any], pnl: Any) -> Dict[str, Any]:
-    account = _normalize_account(account)
+    source = account if isinstance(account, dict) else {}
+    open_positions = _list(source.get("open_positions"))
+    closed_positions = _list(source.get("closed_positions"))
+    account = _normalize_account(source)
+    account["open_positions"] = open_positions
+    account["closed_positions"] = closed_positions
     account["current_balance"] = round(safe_float(account.get("current_balance"), DEFAULT_INITIAL_BALANCE) + safe_float(pnl), 2)
+    account["balance"] = account["current_balance"]
+    account["open_pnl"] = calculate_open_pnl(account)
+    account["closed_pnl"] = calculate_closed_pnl(account)
+    account["equity"] = round(account["current_balance"] + account["open_pnl"], 2)
+    if not account.get("daily_start_balance"):
+        account["daily_start_balance"] = account["current_balance"] - safe_float(pnl)
+    account["daily_pnl"] = round(account["current_balance"] - safe_float(account.get("daily_start_balance"), account["current_balance"]), 2)
     if check_max_drawdown(account).get("limit_hit"):
         account["paper_trading_status"] = "LOCKED"
     return account
@@ -393,6 +537,322 @@ def check_max_drawdown(account: Dict[str, Any]) -> Dict[str, Any]:
     drawdown = calculate_drawdown(account)
     limit = safe_float(rules.get("max_drawdown_pct"), MAX_DRAWDOWN_PCT)
     return {"drawdown_pct": drawdown, "limit_pct": limit, "limit_hit": bool(drawdown >= limit)}
+
+
+def _closed_outcome(row: Dict[str, Any]) -> str:
+    value = safe_text(
+        row.get("outcome")
+        or row.get("result")
+        or row.get("status")
+        or row.get("trade_result")
+    ).upper()
+    if value in {"TP", "WIN", "TARGET", "TARGET_HIT", "PROFIT"}:
+        return "TP"
+    if value in {"SL", "LOSS", "STOP_LOSS", "STOPLOSS", "SL_HIT"}:
+        return "SL"
+    return ""
+
+
+def _trade_sync_key(row: Dict[str, Any]) -> str:
+    paper_trade_id = safe_text(row.get("paper_trade_id"))
+    if paper_trade_id:
+        return paper_trade_id
+    symbol = _trade_symbol(row)
+    side = _trade_side(row)
+    status = _closed_outcome(row) or safe_text(row.get("status")).upper()
+    timestamp = safe_text(row.get("closed_at") or row.get("updated_at") or row.get("created_at") or row.get("opened_at"))
+    trade_id = safe_text(row.get("trade_id") or row.get("id"))
+    entry = safe_text(row.get("entry") or row.get("entry_price") or row.get("buy_price") or row.get("signal_entry"))
+    exit_price = safe_text(row.get("exit") or row.get("exit_price") or row.get("close_price") or row.get("closed_price"))
+    quantity = safe_text(row.get("quantity") or row.get("qty"))
+    return "|".join([trade_id, symbol, side, timestamp, status, entry, exit_price, quantity])
+
+
+def _paper_sync_position_id(sync_key: str) -> str:
+    digest = hashlib.sha1(sync_key.encode("utf-8")).hexdigest()[:16]
+    return f"PSYNC-{digest.upper()}"
+
+
+def _closed_position_keys(closed_positions: List[Dict[str, Any]]) -> set:
+    keys = set(safe_text(item) for item in _list(_read_json(PROCESSED_RESULTS_PATH, [])) if safe_text(item))
+    for item in closed_positions:
+        if not isinstance(item, dict):
+            continue
+        for key_name in ("paper_sync_key", "trade_id", "paper_trade_id"):
+            value = safe_text(item.get(key_name))
+            if value:
+                keys.add(value)
+        keys.add(_trade_sync_key(item))
+    return keys
+
+
+def _read_local_trade_result_rows() -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    try:
+        if TRADE_OUTCOMES_JSONL.exists():
+            for line in TRADE_OUTCOMES_JSONL.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                    if isinstance(row, dict):
+                        rows.append(row)
+                except Exception:
+                    continue
+    except Exception:
+        pass
+
+    try:
+        if TRADE_OUTCOMES_CSV.exists():
+            with open(TRADE_OUTCOMES_CSV, "r", newline="", encoding="utf-8") as f:
+                rows.extend(dict(row) for row in csv.DictReader(f))
+    except Exception:
+        pass
+
+    return rows
+
+
+def _get_supabase_trade_results() -> List[Dict[str, Any]]:
+    try:
+        try:
+            from titan_master_brain.supabase_client import supabase
+        except Exception:
+            supabase = None
+        if supabase is None:
+            try:
+                from titan_brain.supabase_client import supabase
+            except Exception:
+                supabase = None
+        if supabase is None:
+            return []
+
+        result = (
+            supabase.table("trade_results")
+            .select("*")
+            .in_("outcome", ["TP", "SL"])
+            .order("closed_at", desc=False)
+            .limit(500)
+            .execute()
+        )
+        return [row for row in (result.data or []) if isinstance(row, dict)]
+    except Exception:
+        return []
+
+
+def _resolve_exit_price(row: Dict[str, Any], outcome: str) -> float:
+    exit_price = safe_float(row.get("exit") or row.get("exit_price") or row.get("close_price") or row.get("closed_price"), 0.0)
+    if exit_price > 0:
+        return exit_price
+    if outcome == "TP":
+        return safe_float(row.get("target") or row.get("tp") or row.get("target_price") or row.get("t1"), 0.0)
+    if outcome == "SL":
+        return safe_float(row.get("stop_loss") or row.get("sl") or row.get("stop_price") or row.get("stoploss"), 0.0)
+    return 0.0
+
+
+def _estimate_quantity(account: Dict[str, Any], row: Dict[str, Any], matched_position: Dict[str, Any] | None = None) -> float:
+    if matched_position:
+        qty = safe_float(matched_position.get("quantity"), 0.0)
+        if qty > 0:
+            return qty
+
+    for key in ("quantity", "qty", "shares"):
+        qty = safe_float(row.get(key), 0.0)
+        if qty > 0:
+            return qty
+
+    entry = safe_float(row.get("entry") or row.get("entry_price") or row.get("buy_price") or row.get("signal_entry"), 0.0)
+    position_size = safe_float(row.get("position_size"), 0.0)
+    if entry > 0 and position_size > 0:
+        return position_size / entry
+
+    row["skipped_pnl_reason"] = "MISSING_QUANTITY"
+    return 0.0
+
+
+def _find_matching_open_position(open_positions: List[Dict[str, Any]], row: Dict[str, Any]) -> Dict[str, Any] | None:
+    symbol = _trade_symbol(row)
+    side = _trade_side(row)
+    entry = safe_float(row.get("entry") or row.get("entry_price") or row.get("buy_price") or row.get("signal_entry"), 0.0)
+
+    for position in open_positions:
+        if not isinstance(position, dict):
+            continue
+        if safe_text(position.get("status"), "OPEN").upper() not in {"OPEN", "FILLED", "PENDING"}:
+            continue
+        if _trade_symbol(position) != symbol or _trade_side(position) != side:
+            continue
+        position_entry = safe_float(position.get("entry") or position.get("fill_price"), 0.0)
+        if entry <= 0 or position_entry <= 0 or abs(position_entry - entry) <= max(0.05, entry * 0.005):
+            return position
+    return None
+
+
+def _calculate_trade_pnl(row: Dict[str, Any], quantity: float, exit_price: float) -> float:
+    entry = safe_float(row.get("entry") or row.get("entry_price") or row.get("buy_price") or row.get("signal_entry"), 0.0)
+    side = _trade_side(row)
+    if entry <= 0 or exit_price <= 0 or quantity <= 0:
+        return 0.0
+    pnl = (exit_price - entry) * quantity if side == "LONG" else (entry - exit_price) * quantity
+    return round(pnl, 2)
+
+
+def _recalculate_account_totals(account: Dict[str, Any]) -> Dict[str, Any]:
+    for position in _list(account.get("closed_positions")):
+        if not isinstance(position, dict):
+            continue
+        sync_key = safe_text(position.get("paper_sync_key"))
+        if sync_key and safe_text(position.get("source")) == "TRADE_RESULTS_SYNC":
+            position["paper_position_id"] = _paper_sync_position_id(sync_key)
+    account["open_pnl"] = calculate_open_pnl(account)
+    account["closed_pnl"] = calculate_closed_pnl(account)
+    account["balance"] = safe_float(account.get("current_balance"), DEFAULT_INITIAL_BALANCE)
+    account["equity"] = round(account["balance"] + account["open_pnl"], 2)
+    today_pnl = round(sum(
+        safe_float(position.get("closed_pnl"), 0.0)
+        for position in _list(account.get("closed_positions"))
+        if safe_text(position.get("closed_at"))[:10] == _today()
+    ), 2)
+    account["daily_pnl"] = today_pnl
+    account["daily_start_date"] = _today()
+    account["daily_start_balance"] = round(account["balance"] - today_pnl, 2)
+    return account
+
+
+def sync_paper_account_from_trade_results(trade_rows: Any = None) -> Dict[str, Any]:
+    """
+    Reconciles closed TP/SL trade outcomes into paper account files exactly once.
+
+    Sources are Supabase trade_results when available plus local journal outcomes.
+    Passing trade_rows lets the outcome tracker sync the just-closed row without
+    waiting for Supabase or CSV rereads.
+    """
+    account = load_paper_account()
+    open_positions = [p for p in _list(account.get("open_positions")) if isinstance(p, dict)]
+    closed_positions = [p for p in _list(account.get("closed_positions")) if isinstance(p, dict)]
+
+    rows: List[Dict[str, Any]] = []
+    if isinstance(trade_rows, dict):
+        rows.append(trade_rows)
+    elif isinstance(trade_rows, list):
+        rows.extend(row for row in trade_rows if isinstance(row, dict))
+    else:
+        # Use Supabase trade_results only.
+        # Do NOT fallback to old local CSV outcomes.
+        # Otherwise clearing Supabase rebuilds old wins/losses/PnL from trade_outcomes.csv.
+        rows.extend(_get_supabase_trade_results())
+
+    seen_input_keys = set()
+    processed_keys = _closed_position_keys(closed_positions)
+    synced = 0
+    skipped_duplicates = 0
+    skipped_invalid = 0
+    total_pnl = 0.0
+
+    for row in rows:
+        outcome = _closed_outcome(row)
+        if outcome not in {"TP", "SL"}:
+            continue
+
+        key = _trade_sync_key(row)
+        trade_id = safe_text(row.get("trade_id") or row.get("id"))
+        duplicate_tokens = {key}
+        if trade_id:
+            duplicate_tokens.add(trade_id)
+
+        if duplicate_tokens & processed_keys or key in seen_input_keys:
+            skipped_duplicates += 1
+            continue
+        seen_input_keys.add(key)
+
+        exit_price = _resolve_exit_price(row, outcome)
+        entry = safe_float(row.get("entry") or row.get("entry_price") or row.get("buy_price") or row.get("signal_entry"), 0.0)
+        if entry <= 0:
+            row["skipped_pnl_reason"] = "MISSING_ENTRY_PRICE"
+            skipped_invalid += 1
+            continue
+        if exit_price <= 0:
+            row["skipped_pnl_reason"] = "MISSING_EXIT_PRICE"
+            skipped_invalid += 1
+            continue
+
+        matched_position = _find_matching_open_position(open_positions, row)
+        quantity = _estimate_quantity(account, row, matched_position)
+        pnl = _calculate_trade_pnl(row, quantity, exit_price)
+        if quantity <= 0:
+            skipped_invalid += 1
+            continue
+
+        closed_position = dict(matched_position or {})
+        closed_position.update({
+            "paper_position_id": closed_position.get("paper_position_id") or _paper_sync_position_id(key),
+            "paper_sync_key": key,
+            "trade_id": trade_id,
+            "paper_trade_id": row.get("paper_trade_id") or closed_position.get("paper_trade_id") or trade_id or _paper_sync_position_id(key),
+            "symbol": _trade_symbol(row),
+            "side": _trade_side(row),
+            "entry": entry,
+            "entry_price": entry,
+            "sl": safe_float(row.get("sl") or row.get("stop_loss") or row.get("stoploss"), 0.0),
+            "stop_loss": safe_float(row.get("sl") or row.get("stop_loss") or row.get("stoploss"), 0.0),
+            "target": safe_float(row.get("target") or row.get("tp") or row.get("target_price") or row.get("t1"), 0.0),
+            "tp": safe_float(row.get("target") or row.get("tp") or row.get("target_price") or row.get("t1"), 0.0),
+            "quantity": quantity,
+            "qty": quantity,
+            "position_size": round(entry * quantity, 2),
+            "risk_amount": row.get("risk_amount") or closed_position.get("risk_amount"),
+            "risk_per_trade_pct": row.get("risk_per_trade_pct") or closed_position.get("risk_per_trade_pct"),
+            "closed_at": row.get("closed_at") or _now(),
+            "exit_price": exit_price,
+            "status": "CLOSED",
+            "outcome": outcome,
+            "result": "WIN" if outcome == "TP" else "LOSS",
+            "closed_pnl": pnl,
+            "realized_pnl": pnl,
+            "source": "TRADE_RESULTS_SYNC",
+            "live_order": False,
+            "is_paper_trade": True,
+        })
+
+        match_id = safe_text(closed_position.get("paper_position_id"))
+        if match_id:
+            open_positions = [
+                p for p in open_positions
+                if safe_text(p.get("paper_position_id")) != match_id
+            ]
+
+        closed_positions.append(closed_position)
+        processed_keys.update(duplicate_tokens)
+        processed_keys.add(key)
+        account["current_balance"] = round(safe_float(account.get("current_balance"), DEFAULT_INITIAL_BALANCE) + pnl, 2)
+        total_pnl = round(total_pnl + pnl, 2)
+        synced += 1
+
+    account["open_positions"] = open_positions
+    account["closed_positions"] = closed_positions
+    account = _recalculate_account_totals(account)
+    save_paper_account(account)
+    _write_json(PROCESSED_RESULTS_PATH, sorted(processed_keys))
+
+    if synced:
+        generate_paper_audit_log({
+            "event": "PAPER_ACCOUNT_SYNC_FROM_TRADE_RESULTS",
+            "synced": synced,
+            "pnl": total_pnl,
+            "current_balance": account.get("current_balance"),
+            "closed_pnl": account.get("closed_pnl"),
+            "daily_pnl": account.get("daily_pnl"),
+        })
+
+    return {
+        "synced": synced,
+        "skipped_duplicates": skipped_duplicates,
+        "skipped_invalid": skipped_invalid,
+        "current_balance": account.get("current_balance"),
+        "closed_pnl": account.get("closed_pnl"),
+        "daily_pnl": account.get("daily_pnl"),
+    }
 
 
 def calculate_paper_portfolio_metrics(account: Dict[str, Any]) -> Dict[str, Any]:
