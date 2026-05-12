@@ -35,6 +35,7 @@ TRADE_WINDOW_START_MINUTE = 15
 TRADE_WINDOW_END_HOUR = 15
 TRADE_WINDOW_END_MINUTE = 30
 INITIAL_BALANCE = 100000.0
+REAL_PNL_SOURCE_LABEL = "REAL_STOCK_WISE_PNL | QTY_SYNC_ACTIVE"
 DASHBOARD_VISUAL_VERSION = "VISUAL_FIX_V4"
 PAPER_ACCOUNT_PATH = "/".join(["data", "paper_trading", "paper_account.json"])
 
@@ -536,6 +537,40 @@ def get_paper_trading_status(phase_reports=None, closed_trade_rows=None, open_tr
     if not isinstance(paper, dict):
         paper = {}
 
+    # Cloud source-of-truth fix:
+    # When Trading Performance is sourced from Supabase trade_results and Supabase
+    # has zero closed rows, do not use old local paper_account / paper_closed_positions
+    # values for account balance or PnL. This keeps the cloud dashboard at zero
+    # after trade_results is cleared.
+    if str(account_source or "").upper() == "SUPABASE_TRADE_RESULTS" and not closed_trade_rows:
+        initial_balance = first_number(
+            paper.get("initial_balance"),
+            paper.get("starting_balance"),
+            INITIAL_BALANCE,
+            default=INITIAL_BALANCE,
+        )
+        open_pnl = calculate_open_trade_pnl(open_trade_rows)
+        equity = round(initial_balance + open_pnl, 2)
+        return {
+            "balance": initial_balance,
+            "account_balance": initial_balance,
+            "equity": equity,
+            "daily_pnl": 0.0,
+            "daily_pnl_pct": 0.0,
+            "open_positions": len(open_trade_rows),
+            "closed_pnl": 0.0,
+            "open_pnl": open_pnl,
+            "pnl_report": build_real_closed_pnl_report([]),
+            "drawdown_pct": round(max(0.0, ((initial_balance - equity) / initial_balance) * 100.0) if initial_balance > 0 else 0.0, 2),
+            "status": str(paper.get("status") or paper.get("paper_trading_status") or "ACTIVE").upper(),
+            "balance_source": "SUPABASE_TRADE_RESULTS_ZERO",
+            "daily_pnl_source": "SUPABASE_TRADE_RESULTS_ZERO",
+            "open_pnl_source": "SUPABASE_TRADE_RESULTS_ZERO",
+            "closed_pnl_source": "SUPABASE_TRADE_RESULTS_ZERO",
+            "equity_source": "initial_balance_plus_open_pnl",
+            "source_label": "SUPABASE_TRADE_RESULTS | ZERO_CLOSED_TRADES",
+        }
+
     positions = paper.get("open_positions")
     if positions is None:
         positions = paper.get("positions")
@@ -558,17 +593,23 @@ def get_paper_trading_status(phase_reports=None, closed_trade_rows=None, open_tr
         default=INITIAL_BALANCE,
     )
 
-    if closed_trade_rows:
-        closed_pnl = sum(calculate_trade_result_pnl(row) for row in closed_trade_rows)
+    pnl_rows = closed_trade_rows if closed_trade_rows else closed_items
+    if pnl_rows:
+        pnl_report = build_real_closed_pnl_report(pnl_rows)
+        closed_pnl = pnl_report["closed_pnl"]
         balance = round(initial_balance + closed_pnl, 2)
-        open_pnl = calculate_open_trade_pnl(open_trade_rows)
+        open_pnl = calculate_open_trade_pnl(open_trade_rows if open_trade_rows else open_items)
         equity = round(balance + open_pnl, 2)
         daily_pnl = round(sum(
             calculate_trade_result_pnl(row)
-            for row in closed_trade_rows
+            for row in pnl_rows
             if is_closed_today_ist(row)
         ), 2)
         daily_pnl_pct = (daily_pnl / initial_balance * 100.0) if initial_balance > 0 else 0.0
+        pnl_report.update({
+            "daily_pnl": daily_pnl,
+            "account_balance": balance,
+        })
         return {
             "balance": balance,
             "account_balance": balance,
@@ -578,14 +619,15 @@ def get_paper_trading_status(phase_reports=None, closed_trade_rows=None, open_tr
             "open_positions": len(open_items),
             "closed_pnl": round(closed_pnl, 2),
             "open_pnl": open_pnl,
+            "pnl_report": pnl_report,
             "drawdown_pct": round(max(0.0, ((initial_balance - equity) / initial_balance) * 100.0) if initial_balance > 0 else 0.0, 2),
             "status": str(paper.get("status") or paper.get("paper_trading_status") or "ACTIVE").upper(),
-            "balance_source": account_source or "SUPABASE_TRADE_RESULTS + paper fallback",
-            "daily_pnl_source": account_source or "SUPABASE_TRADE_RESULTS + paper fallback",
-            "open_pnl_source": "trade_results",
-            "closed_pnl_source": account_source or "SUPABASE_TRADE_RESULTS + paper fallback",
+            "balance_source": REAL_PNL_SOURCE_LABEL,
+            "daily_pnl_source": REAL_PNL_SOURCE_LABEL,
+            "open_pnl_source": REAL_PNL_SOURCE_LABEL,
+            "closed_pnl_source": REAL_PNL_SOURCE_LABEL,
             "equity_source": "trade_results_balance_plus_open_pnl",
-            "source_label": "SUPABASE_TRADE_RESULTS + paper fallback",
+            "source_label": REAL_PNL_SOURCE_LABEL,
         }
 
     balance_keys = ("current_balance", "balance", "cash")
@@ -660,6 +702,20 @@ def get_paper_trading_status(phase_reports=None, closed_trade_rows=None, open_tr
         default=0.0,
     )
     status = str(paper.get("status") or paper.get("paper_trading_status") or ("ACTIVE" if paper else "WAITING")).upper()
+    pnl_report = build_real_closed_pnl_report([])
+    closed_pnl = round(first_number(paper.get("closed_pnl"), paper.get("realized_pnl"), default=0.0), 2)
+    balance = first_number(paper.get("current_balance"), paper.get("balance"), initial_balance + closed_pnl, default=initial_balance)
+    open_pnl = calculate_open_trade_pnl(open_items)
+    if open_pnl == 0.0:
+        open_pnl = first_number(paper.get("open_pnl"), paper.get("unrealized_pnl"), default=0.0)
+    equity = round(balance + open_pnl, 2)
+    daily_pnl = first_number(paper.get("daily_pnl"), balance - daily_start_balance, default=0.0)
+    daily_pnl_pct = (daily_pnl / daily_start_balance * 100.0) if daily_start_balance > 0 else 0.0
+    drawdown_pct = round(max(0.0, ((initial_balance - equity) / initial_balance) * 100.0) if initial_balance > 0 else 0.0, 2)
+    pnl_report.update({
+        "daily_pnl": daily_pnl,
+        "account_balance": balance,
+    })
     return {
         "balance": balance,
         "account_balance": balance,
@@ -669,14 +725,15 @@ def get_paper_trading_status(phase_reports=None, closed_trade_rows=None, open_tr
         "open_positions": len(open_items),
         "closed_pnl": closed_pnl,
         "open_pnl": open_pnl,
+        "pnl_report": pnl_report,
         "drawdown_pct": round(drawdown_pct, 2),
         "status": status,
-        "balance_source": balance_source,
-        "daily_pnl_source": daily_pnl_source,
-        "open_pnl_source": open_pnl_source,
-        "closed_pnl_source": closed_pnl_source,
+        "balance_source": REAL_PNL_SOURCE_LABEL,
+        "daily_pnl_source": REAL_PNL_SOURCE_LABEL,
+        "open_pnl_source": REAL_PNL_SOURCE_LABEL,
+        "closed_pnl_source": REAL_PNL_SOURCE_LABEL,
         "equity_source": equity_source,
-        "source_label": "SUPABASE_TRADE_RESULTS + paper fallback",
+        "source_label": REAL_PNL_SOURCE_LABEL,
     }
 
 def nested_value(data, *paths, default=None):
@@ -859,6 +916,27 @@ def first_present(row, keys):
     return None
 
 
+def first_positive_number(row, keys):
+    value = first_present(row, keys)
+    if value in [None, ""]:
+        return None
+    try:
+        number = float(value)
+        return number if number > 0 else None
+    except Exception:
+        return None
+
+
+def first_real_pnl_number(row):
+    value = first_present(row, ["realized_pnl", "closed_pnl", "pnl", "profit_loss", "pnl_amount"])
+    if value in [None, ""]:
+        return None
+    try:
+        return round(float(value), 2)
+    except Exception:
+        return None
+
+
 def row_closed_time(row):
     for key in ["closed_at", "updated_at", "created_at", "timestamp", "opened_at", "time"]:
         if isinstance(row, dict) and row.get(key):
@@ -886,43 +964,71 @@ def is_closed_today_ist(row):
 
 
 def calculate_trade_result_pnl(row):
-    if not isinstance(row, dict):
-        return 0.0
+    detail = calculate_trade_result_pnl_detail(row)
+    return detail["pnl"] if detail["has_real_pnl"] else 0.0
 
-    explicit = first_present(row, ["pnl", "profit_loss", "pnl_amount", "closed_pnl", "realized_pnl"])
-    if explicit not in [None, ""]:
-        return round(safe_float(explicit), 2)
+
+def calculate_trade_result_pnl_detail(row):
+    if not isinstance(row, dict):
+        return {"pnl": 0.0, "has_real_pnl": False, "skipped_pnl_reason": "INVALID_TRADE_ROW"}
+
+    explicit_pnl = first_real_pnl_number(row)
+    if explicit_pnl is not None:
+        row.pop("skipped_pnl_reason", None)
+        return {"pnl": explicit_pnl, "has_real_pnl": True, "skipped_pnl_reason": ""}
 
     outcome = trade_row_outcome(row)
     side = row_side(row)
-    entry = first_number(
-        first_present(row, ["entry_price", "entry", "price", "open_price"]),
-        default=0.0,
-    )
-    exit_price = first_number(
-        first_present(row, ["exit_price", "close_price", "exit", "closed_price"]),
-        default=0.0,
-    )
+    entry = first_positive_number(row, ["entry", "entry_price", "buy_price", "signal_entry", "price", "open_price"])
+    if entry is None:
+        row["skipped_pnl_reason"] = "MISSING_ENTRY_PRICE"
+        return {"pnl": 0.0, "has_real_pnl": False, "skipped_pnl_reason": row["skipped_pnl_reason"]}
 
-    if exit_price <= 0 and outcome == "WIN":
-        exit_price = first_number(first_present(row, ["target", "tp", "target_price", "t1"]), default=0.0)
-    if exit_price <= 0 and outcome == "LOSS":
-        exit_price = first_number(first_present(row, ["stop_loss", "sl", "stop_price", "stoploss"]), default=0.0)
+    exit_price = first_positive_number(row, ["exit", "exit_price", "close_price", "closed_price"])
+    if exit_price is None and outcome == "WIN":
+        exit_price = first_positive_number(row, ["target", "tp", "target_price", "t1"])
+    if exit_price is None and outcome == "LOSS":
+        exit_price = first_positive_number(row, ["stop_loss", "sl", "stop_price", "stoploss"])
+    if exit_price is None:
+        row["skipped_pnl_reason"] = "MISSING_EXIT_PRICE"
+        return {"pnl": 0.0, "has_real_pnl": False, "skipped_pnl_reason": row["skipped_pnl_reason"]}
 
-    quantity = first_number(first_present(row, ["quantity", "qty", "shares", "units", "position_size"]), default=1.0)
-    if quantity <= 0:
-        quantity = 1.0
+    quantity = first_positive_number(row, ["quantity", "qty", "shares"])
+    if quantity is None:
+        position_size = first_positive_number(row, ["position_size"])
+        if position_size is not None:
+            quantity = position_size / entry
+    if quantity is None or quantity <= 0:
+        row["skipped_pnl_reason"] = "MISSING_QUANTITY"
+        return {"pnl": 0.0, "has_real_pnl": False, "skipped_pnl_reason": row["skipped_pnl_reason"]}
 
-    if entry > 0 and exit_price > 0:
-        pnl = (exit_price - entry) * quantity if side == "LONG" else (entry - exit_price) * quantity
-        return round(pnl, 2)
+    pnl = (exit_price - entry) * quantity if side == "LONG" else (entry - exit_price) * quantity
+    row.pop("skipped_pnl_reason", None)
+    return {"pnl": round(pnl, 2), "has_real_pnl": True, "skipped_pnl_reason": ""}
 
-    risk_amount = first_number(first_present(row, ["risk_amount", "risk", "amount_at_risk"]), default=0.0)
-    if outcome == "WIN":
-        return round((risk_amount * 2.0) if risk_amount > 0 else 1000.0, 2)
-    if outcome == "LOSS":
-        return round((-risk_amount) if risk_amount > 0 else -500.0, 2)
-    return 0.0
+
+def build_real_closed_pnl_report(rows):
+    report = {
+        "total_closed_trades": 0,
+        "trades_with_real_pnl": 0,
+        "trades_skipped_missing_price_qty": 0,
+        "closed_pnl": 0.0,
+        "skipped_pnl_reasons": {},
+    }
+    for row in safe_list(rows):
+        if not isinstance(row, dict):
+            continue
+        report["total_closed_trades"] += 1
+        detail = calculate_trade_result_pnl_detail(row)
+        if detail["has_real_pnl"]:
+            report["trades_with_real_pnl"] += 1
+            report["closed_pnl"] += detail["pnl"]
+        else:
+            report["trades_skipped_missing_price_qty"] += 1
+            reason = detail["skipped_pnl_reason"]
+            report["skipped_pnl_reasons"][reason] = report["skipped_pnl_reasons"].get(reason, 0) + 1
+    report["closed_pnl"] = round(report["closed_pnl"], 2)
+    return report
 
 
 def calculate_open_trade_pnl(rows):
@@ -930,9 +1036,19 @@ def calculate_open_trade_pnl(rows):
     for row in safe_list(rows):
         if not isinstance(row, dict):
             continue
-        explicit = first_present(row, ["open_pnl", "unrealized_pnl", "pnl", "profit_loss", "pnl_amount"])
-        if explicit not in [None, ""]:
-            total += safe_float(explicit)
+        entry = first_positive_number(row, ["entry", "entry_price", "buy_price", "signal_entry", "price", "open_price"])
+        live_price = first_positive_number(row, ["live_price", "last_price", "current_price", "ltp", "market_price"])
+        if entry is None or live_price is None:
+            continue
+        quantity = first_positive_number(row, ["quantity", "qty", "shares"])
+        if quantity is None:
+            position_size = first_positive_number(row, ["position_size"])
+            if position_size is not None:
+                quantity = position_size / entry
+        if quantity is None or quantity <= 0:
+            continue
+        side = row_side(row)
+        total += (live_price - entry) * quantity if side == "LONG" else (entry - live_price) * quantity
     return round(total, 2)
 
 
@@ -1050,32 +1166,18 @@ def build_trade_results_stats_from_rows(rows, source):
 
 
 def get_trade_results_dataset():
-    supabase_stats = build_trade_results_stats_from_rows(
+    """
+    Cloud dashboard source-of-truth fix.
+
+    Trading Performance must use Supabase trade_results only.
+    Do NOT fallback to paper_closed_positions or local CSV/JSONL rows when
+    Supabase is empty, because Streamlit Cloud can contain old committed local
+    files that recreate fake wins/losses/PnL after Supabase is cleared.
+    """
+    return build_trade_results_stats_from_rows(
         get_supabase_trade_result_rows(),
         "SUPABASE_TRADE_RESULTS",
     )
-    if supabase_stats["closed_total"] > 0:
-        return supabase_stats
-
-    local_stats = build_trade_results_stats_from_rows(
-        read_local_trade_result_rows(),
-        "LOCAL_TRADE_RESULTS",
-    )
-    if local_stats["closed_total"] > 0:
-        return local_stats
-
-    paper_stats = build_trade_results_stats_from_rows(
-        get_paper_closed_position_rows(),
-        "PAPER_CLOSED_POSITIONS",
-    )
-    if paper_stats["closed_total"] > 0:
-        return paper_stats
-
-    if supabase_stats["open_total"] > 0:
-        return supabase_stats
-    if local_stats["open_total"] > 0:
-        return local_stats
-    return paper_stats
 
 
 def get_local_trade_performance_stats():
@@ -1918,24 +2020,19 @@ def circular_graph(title, percent, sub="", color="green"):
     )
 
 
-def calculate_dashboard_pnl_from_trade_stats(wins, losses):
-    initial_balance = 100000.0
-    win_pnl = float(wins or 0) * 2000.0
-    loss_pnl = float(losses or 0) * -1000.0
-    closed_pnl = win_pnl + loss_pnl
-    account_balance = initial_balance + closed_pnl
-    daily_pnl = closed_pnl
-    daily_pnl_pct = (daily_pnl / initial_balance) * 100
-    return account_balance, account_balance, daily_pnl, daily_pnl_pct, 0.0, closed_pnl
-
-
 def account_balance_card(data):
-    account_balance, equity, daily_pnl, daily_pnl_pct, open_pnl, closed_pnl = calculate_dashboard_pnl_from_trade_stats(
-        globals().get("wins", 0),
-        globals().get("losses", 0),
-    )
+    data = data if isinstance(data, dict) else {}
+    account_balance = first_number(data.get("account_balance"), data.get("balance"), INITIAL_BALANCE, default=INITIAL_BALANCE)
+    equity = first_number(data.get("equity"), account_balance, default=account_balance)
+    daily_pnl = first_number(data.get("daily_pnl"), default=0.0)
+    daily_pnl_pct = first_number(data.get("daily_pnl_pct"), default=0.0)
+    open_pnl = first_number(data.get("open_pnl"), default=0.0)
+    closed_pnl = first_number(data.get("closed_pnl"), default=0.0)
     daily_class = pnl_class(daily_pnl)
-    source_label = "SUPABASE_TRADE_RESULTS | PNL_SOURCE=TRADE_RESULTS_V4"
+    source_label = data.get("source_label") or REAL_PNL_SOURCE_LABEL
+    pnl_report = data.get("pnl_report") if isinstance(data.get("pnl_report"), dict) else {}
+    real_pnl_trades = int(first_number(pnl_report.get("trades_with_real_pnl"), default=0))
+    skipped_pnl_trades = int(first_number(pnl_report.get("trades_skipped_missing_price_qty"), default=0))
     st.markdown(
         f"""
         <div class="card account-balance-card">
@@ -1967,6 +2064,7 @@ def account_balance_card(data):
                 </div>
             </div>
             <div class="card-sub">Source: {source_label}</div>
+            <div class="card-sub">Real PnL trades count: {real_pnl_trades} | Skipped missing quantity count: {skipped_pnl_trades}</div>
         </div>
         """,
         unsafe_allow_html=True,
