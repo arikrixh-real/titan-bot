@@ -20,21 +20,33 @@ def position_sizing(entry, stop_loss, capital=100000, risk_percent=1):
         risk_amount = capital * (risk_percent / 100)
         risk_per_share = abs(entry - stop_loss)
 
-        if risk_per_share == 0:
+        if risk_per_share <= 0:
             return {
                 "qty": 0,
-                "risk_amount": risk_amount
+                "quantity": 0,
+                "position_size": 0,
+                "risk_amount": round(risk_amount, 2)
             }
 
         qty = int(risk_amount / risk_per_share)
 
+        if qty * entry > capital:
+            qty = int(capital / entry)
+
+        if qty < 0:
+            qty = 0
+
         return {
             "qty": qty,
-            "risk_amount": risk_amount
+            "quantity": qty,
+            "position_size": round(qty * entry, 2),
+            "risk_amount": round(risk_amount, 2)
         }
 
     except Exception:
         return {
             "qty": 0,
+            "quantity": 0,
+            "position_size": 0,
             "risk_amount": 0
         }

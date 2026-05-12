@@ -76,6 +76,16 @@ OUTCOME_FIELDS = [
     "entry",
     "sl",
     "target",
+    "entry_price",
+    "stop_loss",
+    "tp",
+    "quantity",
+    "qty",
+    "position_size",
+    "risk_amount",
+    "risk_per_trade_pct",
+    "paper_trade_id",
+    "is_paper_trade",
     "rr",
     "score",
     "rank_score",
@@ -83,6 +93,7 @@ OUTCOME_FIELDS = [
     "market_status",
     "outcome",
     "exit_price",
+    "realized_pnl",
     "pnl_points",
     "result_reason",
     "reinforcement_score",
@@ -146,6 +157,16 @@ def _safe_float(value, default=0.0):
         return round(float(value), 4)
     except Exception:
         return default
+
+
+def _calc_realized_pnl(row, exit_price):
+    entry = _safe_float(row.get("entry_price") or row.get("entry"))
+    quantity = _safe_float(row.get("quantity") or row.get("qty"))
+    side = str(row.get("side") or "LONG").upper().strip()
+    if entry <= 0 or exit_price <= 0 or quantity <= 0:
+        return ""
+    pnl = (exit_price - entry) * quantity if side == "LONG" else (entry - exit_price) * quantity
+    return round(pnl, 2)
 
 
 def _json_safe(value):
@@ -247,7 +268,9 @@ def _ensure_files():
 
     active_fields = [
         "trade_id", "opened_at", "scan_id", "symbol", "side", "entry", "sl",
-        "target", "rr", "score", "rank_score", "alert_sent", "market_status",
+        "target", "entry_price", "stop_loss", "tp", "rr", "score", "rank_score",
+        "quantity", "qty", "position_size", "risk_amount", "risk_per_trade_pct",
+        "paper_trade_id", "is_paper_trade", "alert_sent", "market_status",
         "status", "last_checked_at", "last_price", "pnl_points", "result_reason"
     ]
 
@@ -255,17 +278,42 @@ def _ensure_files():
         with open(ACTIVE_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=active_fields)
             writer.writeheader()
+    else:
+        _ensure_csv_columns(ACTIVE_TRADES_CSV, active_fields)
 
     if not OUTCOMES_CSV.exists():
         with open(OUTCOMES_CSV, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=OUTCOME_FIELDS)
             writer.writeheader()
+    else:
+        _ensure_csv_columns(OUTCOMES_CSV, OUTCOME_FIELDS)
 
     if not OUTCOMES_JSONL.exists():
         OUTCOMES_JSONL.touch()
 
     if not REINFORCEMENT_REPORTS_JSONL.exists():
         REINFORCEMENT_REPORTS_JSONL.touch()
+
+
+def _ensure_csv_columns(path, required_fields):
+    try:
+        if not path.exists() or path.stat().st_size == 0:
+            return
+        with open(path, "r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            existing_fields = reader.fieldnames or []
+            rows = list(reader)
+        missing = [field for field in required_fields if field not in existing_fields]
+        if not missing:
+            return
+        fields = existing_fields + missing
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fields)
+            writer.writeheader()
+            for row in rows:
+                writer.writerow({field: row.get(field, "") for field in fields})
+    except Exception:
+        pass
 
 
 def _check_outcome(row, live_price):
@@ -430,6 +478,15 @@ def _save_trade_result_to_supabase(outcome_row):
         "result": result,
         "outcome": outcome,
         "pnl_points": _safe_float(outcome_row.get("pnl_points")),
+        "pnl": _safe_float(outcome_row.get("realized_pnl")),
+        "realized_pnl": _safe_float(outcome_row.get("realized_pnl")),
+        "quantity": _safe_float(outcome_row.get("quantity") or outcome_row.get("qty")),
+        "qty": _safe_float(outcome_row.get("quantity") or outcome_row.get("qty")),
+        "position_size": _safe_float(outcome_row.get("position_size")),
+        "risk_amount": _safe_float(outcome_row.get("risk_amount")),
+        "risk_per_trade_pct": _safe_float(outcome_row.get("risk_per_trade_pct"), 1.0),
+        "paper_trade_id": outcome_row.get("paper_trade_id"),
+        "is_paper_trade": outcome_row.get("is_paper_trade"),
         "closed_at": outcome_row.get("closed_at"),
         "opened_at": outcome_row.get("opened_at"),
         "reason": outcome_row.get("result_reason", ""),
@@ -465,6 +522,7 @@ def _save_trade_result_to_supabase(outcome_row):
 
 
 def _append_outcome(row, outcome, exit_price, pnl_points, reason):
+    realized_pnl = _calc_realized_pnl(row, _safe_float(exit_price))
     outcome_row = {
         "closed_at": _now(),
         "trade_id": row.get("trade_id", ""),
@@ -474,6 +532,16 @@ def _append_outcome(row, outcome, exit_price, pnl_points, reason):
         "entry": row.get("entry", ""),
         "sl": row.get("sl", ""),
         "target": row.get("target", ""),
+        "entry_price": row.get("entry_price") or row.get("entry", ""),
+        "stop_loss": row.get("stop_loss") or row.get("sl", ""),
+        "tp": row.get("tp") or row.get("target", ""),
+        "quantity": row.get("quantity") or row.get("qty", ""),
+        "qty": row.get("qty") or row.get("quantity", ""),
+        "position_size": row.get("position_size", ""),
+        "risk_amount": row.get("risk_amount", ""),
+        "risk_per_trade_pct": row.get("risk_per_trade_pct", ""),
+        "paper_trade_id": row.get("paper_trade_id") or row.get("trade_id", ""),
+        "is_paper_trade": row.get("is_paper_trade") or "true",
         "rr": row.get("rr", ""),
         "score": row.get("score", ""),
         "rank_score": row.get("rank_score", ""),
@@ -481,6 +549,7 @@ def _append_outcome(row, outcome, exit_price, pnl_points, reason):
         "market_status": row.get("market_status", ""),
         "outcome": outcome,
         "exit_price": exit_price,
+        "realized_pnl": realized_pnl,
         "pnl_points": pnl_points,
         "result_reason": reason,
     }
@@ -594,7 +663,9 @@ def track_trade_outcomes(limit=None):
 
     default_fields = [
         "trade_id", "opened_at", "scan_id", "symbol", "side", "entry", "sl",
-        "target", "rr", "score", "rank_score", "alert_sent", "market_status",
+        "target", "entry_price", "stop_loss", "tp", "rr", "score", "rank_score",
+        "quantity", "qty", "position_size", "risk_amount", "risk_per_trade_pct",
+        "paper_trade_id", "is_paper_trade", "alert_sent", "market_status",
         "status", "last_checked_at", "last_price", "pnl_points", "result_reason"
     ]
 
