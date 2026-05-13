@@ -21,6 +21,13 @@ DAILY_ALERT_LIMIT = 3
 ALERT_STATE_FILE = "data/daily_alert_state.json"
 
 
+def _mask_secret(value):
+    text = str(value or "")
+    if len(text) <= 8:
+        return "***" if text else "missing"
+    return f"{text[:4]}...{text[-4:]}"
+
+
 def _today_ist():
     return datetime.now(IST).strftime("%Y-%m-%d")
 
@@ -125,8 +132,8 @@ def send_telegram_message(message):
 
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("❌ Telegram secrets missing. Alert not sent.")
-        print(f"BOT_TOKEN: {TELEGRAM_BOT_TOKEN}")
-        print(f"CHAT_ID: {TELEGRAM_CHAT_ID}")
+        print(f"BOT_TOKEN: {_mask_secret(TELEGRAM_BOT_TOKEN)}")
+        print(f"CHAT_ID: {_mask_secret(TELEGRAM_CHAT_ID)}")
         return False
 
     try:

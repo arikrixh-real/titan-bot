@@ -1,6 +1,8 @@
 {
-  "symbol": "RELIANCE",
-  "status": "MARKET_CLOSED",
-  "message": "Market closed; using cache if available",
-  "price": 1463.1
+  "symbol": "JINDALSTEL",
+  "status": "UNMAPPED",
+  "last_price": null,
+  "source": "NONE",
+  "timestamp": "2026-05-13T12:33:31.464179",
+  "reason": "Instrument key missing"
 }

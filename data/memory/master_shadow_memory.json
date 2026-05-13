@@ -1,94 +1,108 @@
 {
   "command_status": {
-    "confidence": 20.0,
+    "confidence": 53.43,
     "confidence_stability": {
-      "score": 20.0,
-      "state": "FRAGILE"
+      "score": 53.43,
+      "state": "MIXED"
     },
     "failed_open": false,
-    "overall_state": "DEGRADED_OBSERVING",
-    "warnings": [
-      "phase5_memory_stale",
-      "phase6_memory_stale",
-      "phase7_memory_stale",
-      "phase8_memory_stale",
-      "phase9_memory_stale"
-    ]
+    "overall_state": "ACTIVE",
+    "warnings": []
   },
   "dashboard_cards": {
-    "cross_setup_heat": 0.0,
-    "master_shadow_state": "DEGRADED_OBSERVING",
-    "narrative": "UNKNOWN",
-    "shadow_warnings": 6,
-    "tracked_lifecycle_trades": 0
+    "cross_setup_heat": 94.38,
+    "master_shadow_state": "ACTIVE",
+    "narrative": "EVENT_CAUTION",
+    "shadow_warnings": 8,
+    "tracked_lifecycle_trades": 25
   },
-  "generated_at": "2026-05-10 23:06:59",
+  "generated_at": "2026-05-13 12:33:31",
   "intelligence_layers": {
     "phase5_strategy_family": {
       "available": true,
       "setup_family_strength": [],
-      "total_closed_trades": 85,
+      "total_closed_trades": 88,
       "weak_families": []
     },
     "phase6_multi_agent": {
       "available": true,
-      "average_conflict_score": 0.0,
-      "average_consensus_score": 0.0,
+      "average_conflict_score": 19.1113,
+      "average_consensus_score": 60.2375,
       "contradiction_count": 0,
       "contradiction_frequency": 0.0,
-      "observed_setups": 0
+      "observed_setups": 8
     },
     "phase7_lifecycle": {
       "available": true,
-      "failure_cause_counts": {},
-      "lifecycle_degradation": [],
-      "tracked_trades": 0
+      "failure_cause_counts": {
+        "bad_entry": 2,
+        "successful_follow_through": 3,
+        "unclassified_shadow": 19,
+        "weak_setup_quality": 1
+      },
+      "lifecycle_degradation": [
+        {
+          "drift": -55.0,
+          "health": 25.0,
+          "symbol": "TATASTEEL"
+        },
+        {
+          "drift": -27.5,
+          "health": 70.0,
+          "symbol": "RELIANCE"
+        }
+      ],
+      "tracked_trades": 25
     },
     "phase8_market_narrative": {
       "available": true,
-      "contradiction_count": 0,
-      "market_direction": "UNKNOWN",
-      "narrative_confidence": 0.0,
-      "narrative_type": "UNKNOWN",
-      "risk_state": "UNKNOWN",
-      "risk_tone_score": 50.0
+      "contradiction_count": 5,
+      "market_direction": "NEUTRAL",
+      "narrative_confidence": 0.72,
+      "narrative_type": "EVENT_CAUTION",
+      "risk_state": "RISK_OFF",
+      "risk_tone_score": 37.12
     },
     "phase9_cross_setup": {
       "available": true,
-      "concentration_warnings": [],
-      "observed_setup_count": 0,
-      "portfolio_heat_score": 0.0,
-      "relational_state": "UNKNOWN",
-      "systemic_contradiction_count": 0
+      "concentration_warnings": [
+        "long crowding conflicts with risk-off narrative",
+        "same cluster contains opposing trade directions",
+        "dominant sector concentration detected"
+      ],
+      "observed_setup_count": 8,
+      "portfolio_heat_score": 94.38,
+      "relational_state": "HIGH_CONCENTRATION",
+      "systemic_contradiction_count": 3
     }
   },
   "layer_freshness": {
     "phase5": {
-      "age_seconds": 46550.786,
+      "age_seconds": 820.727,
       "available": true,
       "path": "data\\memory\\strategy_family_memory.json",
       "status": "OK"
     },
     "phase6": {
-      "age_seconds": 45608.35,
+      "age_seconds": 828.05,
       "available": true,
       "path": "data\\memory\\phase6_shadow_memory.json",
       "status": "OK"
     },
     "phase7": {
-      "age_seconds": 44306.022,
+      "age_seconds": 0.228,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "phase8": {
-      "age_seconds": 43851.543,
+      "age_seconds": 7.07,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "phase9": {
-      "age_seconds": 43356.755,
+      "age_seconds": 826.027,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
@@ -97,25 +111,33 @@
   "phase10_rank_adjustment": 0.0,
   "phase10_shadow_mode": true,
   "risk_observations": {
-    "data_quality_flags": [
-      "phase5_memory_stale",
-      "phase6_memory_stale",
-      "phase7_memory_stale",
-      "phase8_memory_stale",
-      "phase9_memory_stale"
+    "data_quality_flags": [],
+    "lifecycle_flags": [
+      "TATASTEEL:health=25.0",
+      "RELIANCE:health=70.0"
     ],
-    "lifecycle_flags": [],
     "narrative_flags": [
-      "risk_state:UNKNOWN"
+      "risk_state:RISK_OFF"
     ],
-    "systemic_flags": []
+    "systemic_flags": [
+      "long crowding conflicts with risk-off narrative",
+      "same cluster contains opposing trade directions",
+      "dominant sector concentration detected",
+      "shadow_contradictions_detected:8",
+      "portfolio_heat_high"
+    ]
   },
   "runtime_bounded": true,
   "runtime_context": {
-    "context_mode": null,
-    "observed_setups_count": 0,
+    "context_mode": "SELECTIVE",
+    "observed_setups_count": 8,
     "phase_result_keys": [
-      "news_items_collected"
+      "adaptive_memory_result",
+      "outcome_result",
+      "phase5_memory_result",
+      "phase6_shadow_report_result",
+      "phase8_market_narrative_result",
+      "phase9_cross_setup_result"
     ],
     "selected_decisions_count": 0
   },

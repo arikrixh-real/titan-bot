@@ -1,12 +1,50 @@
 {
-  "agent_stance_distributions": {},
-  "average_agreement_confidence": 0.0,
-  "average_conflict_score": 0.0,
-  "average_consensus_score": 0.0,
+  "agent_stance_distributions": {
+    "execution_agent": {
+      "CAUTION": 2,
+      "NEUTRAL": 5,
+      "SUPPORT": 1
+    },
+    "memory_agent": {
+      "NEUTRAL": 8
+    },
+    "news_agent": {
+      "NEUTRAL": 8
+    },
+    "regime_agent": {
+      "NEUTRAL": 8
+    },
+    "risk_agent": {
+      "SUPPORT": 8
+    },
+    "scenario_agent": {
+      "NEUTRAL": 8
+    },
+    "technical_agent": {
+      "NEUTRAL": 1,
+      "SUPPORT": 7
+    }
+  },
+  "average_agreement_confidence": 53.5475,
+  "average_conflict_score": 19.1113,
+  "average_consensus_score": 60.2375,
   "contradiction_frequency": 0.0,
-  "generated_at": "not yet refreshed",
-  "most_common_weak_setup_patterns": [],
-  "observed_setup_count": 0,
+  "generated_at": "2026-05-13T12:19:43.647061+05:30",
+  "most_common_weak_setup_patterns": [
+    {
+      "count": 8,
+      "pattern": "confirmation count is low"
+    },
+    {
+      "count": 8,
+      "pattern": "normal follow-through failure after entry"
+    },
+    {
+      "count": 2,
+      "pattern": "execution quality is weak"
+    }
+  ],
+  "observed_setup_count": 8,
   "strongest_agreement_patterns": [],
   "top_contradiction_types": []
 }

@@ -13,6 +13,11 @@
     "status": "OPEN",
     "last_price": 3901.4235,
     "open_pnl": 0.0,
-    "live_order": false
+    "live_order": false,
+    "position_size": 97535.59,
+    "entry_price": 3901.4235,
+    "stop_loss": 3860.0,
+    "tp": 3980.0,
+    "is_paper_trade": true
   }
 ]

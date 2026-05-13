@@ -140,7 +140,10 @@ def save_scan_health_log(
         print("✅ Scan health saved")
 
     except Exception as e:
-        print(f"❌ Scan health save failed: {e}")
+        if "WinError 10013" in str(e):
+            print("[Supabase WARN - scan_health] socket unavailable; scan health not saved.")
+        else:
+            print(f"❌ Scan health save failed: {e}")
 
 
 def safe_trade_levels(symbol, side, live_price, data):
@@ -240,11 +243,24 @@ def safe_position_sizing(entry, stop_loss):
     This always returns a safe dict.
     """
     try:
+        from engines.paper_trading_engine import load_paper_account, calculate_paper_trade_sizing
+        sizing = calculate_paper_trade_sizing(
+            load_paper_account(),
+            {"entry": entry, "sl": stop_loss},
+        )
+        if int(sizing.get("quantity", 0)) > 0:
+            return {**sizing, "raw": "PAPER_RISK_1PCT"}
+    except Exception:
+        pass
+
+    try:
         pos_data = position_sizing(entry, stop_loss)
 
         if isinstance(pos_data, dict):
             return {
-                "qty": pos_data.get("qty") or pos_data.get("quantity") or pos_data.get("position_size") or 0,
+                "qty": pos_data.get("qty") or pos_data.get("quantity") or 0,
+                "quantity": pos_data.get("qty") or pos_data.get("quantity") or 0,
+                "position_size": pos_data.get("position_size") or 0,
                 "risk_amount": pos_data.get("risk_amount") or pos_data.get("risk") or 0,
                 "raw": pos_data
             }
@@ -252,12 +268,16 @@ def safe_position_sizing(entry, stop_loss):
         if isinstance(pos_data, (tuple, list)):
             return {
                 "qty": pos_data[0] if len(pos_data) > 0 else 0,
+                "quantity": pos_data[0] if len(pos_data) > 0 else 0,
+                "position_size": (pos_data[0] if len(pos_data) > 0 else 0) * entry,
                 "risk_amount": pos_data[1] if len(pos_data) > 1 else 0,
                 "raw": list(pos_data)
             }
 
         return {
             "qty": 0,
+            "quantity": 0,
+            "position_size": 0,
             "risk_amount": 0,
             "raw": pos_data
         }
@@ -266,6 +286,8 @@ def safe_position_sizing(entry, stop_loss):
         titan_log(f"POSITION SIZE ERROR → {e}")
         return {
             "qty": 0,
+            "quantity": 0,
+            "position_size": 0,
             "risk_amount": 0,
             "raw": None
         }
@@ -926,7 +948,8 @@ def scan_for_setups():
                 continue
 
             pos_data = safe_position_sizing(entry, stop_loss)
-            position_size = pos_data.get("qty", 0)
+            quantity = pos_data.get("quantity") or pos_data.get("qty", 0)
+            position_size = pos_data.get("position_size", 0)
             risk_amount = pos_data.get("risk_amount", 0)
 
             reason = build_reason(
@@ -960,7 +983,14 @@ def scan_for_setups():
                 "score": final_score,
                 "rank_score": final_score,
                 "position_size": position_size,
+                "quantity": quantity,
+                "qty": quantity,
                 "risk_amount": risk_amount,
+                "risk_per_trade_pct": pos_data.get("risk_per_trade_pct", 1.0),
+                "entry_price": entry,
+                "sl": stop_loss,
+                "tp": target,
+                "is_paper_trade": True,
                 "scores": {
                     "volume_score": volume_score,
                     "strength_score": strength_score,
@@ -1045,7 +1075,10 @@ def scan_for_setups():
                 "target": target,
                 "rr": rr,
                 "position_size": position_size,
+                "quantity": quantity,
+                "qty": quantity,
                 "risk_amount": risk_amount,
+                "risk_per_trade_pct": pos_data.get("risk_per_trade_pct", 1.0),
                 "scores": trade_payload.get("scores", {
                     "volume_score": volume_score,
                     "strength_score": strength_score,
@@ -1077,7 +1110,10 @@ def scan_for_setups():
                 "target": target,
                 "rr": rr,
                 "position_size": position_size,
+                "quantity": quantity,
+                "qty": quantity,
                 "risk_amount": risk_amount,
+                "risk_per_trade_pct": pos_data.get("risk_per_trade_pct", 1.0),
                 "scores": trade_payload.get("scores", {
                     "volume_score": volume_score,
                     "strength_score": strength_score,

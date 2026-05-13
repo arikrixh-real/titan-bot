@@ -1,10 +1,10 @@
 TITAN PHASE 5 SELF-EVALUATION REPORT
 ============================================================
-Updated: 2026-05-10 10:11:08
-Closed trades: 85
-Wins: 34
-Losses: 51
-Global calibrated quality: 40.45
+Updated: 2026-05-13 12:19:50
+Closed trades: 88
+Wins: 36
+Losses: 52
+Global calibrated quality: 41.3
 
 WHAT TITAN LEARNED
 ------------------------------------------------------------
@@ -12,26 +12,27 @@ WHAT TITAN LEARNED
 
 STRONGEST STRATEGY FAMILIES
 ------------------------------------------------------------
-GENERAL: trades=48.217, wins=18.4313, losses=29.7857, posterior=0.3913, quality=39.13
+GENERAL: trades=49.0349, wins=19.5845, losses=29.4503, posterior=0.407, quality=40.7
 
 WEAKEST SETUPS TO AVOID
 ------------------------------------------------------------
-GENERAL: trades=48.217, posterior=0.3913, quality=39.13, active=True
+GENERAL: trades=49.0349, posterior=0.407, quality=40.7, active=True
 
 STRONGEST SYMBOLS
 ------------------------------------------------------------
-HEROMOTOCO: trades=7.9215, posterior=0.3298, quality=45.5
-INFY: trades=6.0252, posterior=0.1995, quality=43.96
-BHARTIARTL: trades=5.9913, posterior=0.722, quality=54.43
-PFC: trades=5.4869, posterior=0.2428, quality=45.3
-BAJAJ-AUTO: trades=5.0698, posterior=0.2205, quality=45.28
-AXISBANK: trades=3.97, posterior=0.6984, quality=52.63
-ONGC: trades=3.4139, posterior=0.7302, quality=52.62
-TITAN: trades=3.4093, posterior=0.3913, quality=48.77
+HEROMOTOCO: trades=7.5704, posterior=0.3324, quality=45.77
+INFY: trades=5.7581, posterior=0.205, quality=44.34
+BHARTIARTL: trades=5.7258, posterior=0.7179, quality=54.16
+PFC: trades=5.2437, posterior=0.2477, quality=45.59
+BAJAJ-AUTO: trades=4.8451, posterior=0.2261, quality=45.58
+AXISBANK: trades=3.794, posterior=0.6939, quality=52.45
+ONGC: trades=3.2626, posterior=0.7246, quality=52.44
+TITAN: trades=3.2581, posterior=0.394, quality=48.85
 
 REGIME PERFORMANCE SUMMARY
 ------------------------------------------------------------
-UNKNOWN: trades=48.217, posterior=0.3913, quality=39.13
+UNKNOWN: trades=46.0796, posterior=0.3917, quality=39.17
+{"market_ok": true, "reason": "Phase 4 data advantage market filter active", "di: trades=2.9552, posterior=0.5708, quality=50.7
 
 CONFIDENCE CALIBRATION SUMMARY
 ------------------------------------------------------------

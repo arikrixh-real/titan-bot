@@ -44,6 +44,12 @@ jobs:
           echo "Checking TITAN files..."
           test -f titan_master_brain/master_controller.py
 
+      - name: Safe Python preflight
+        run: |
+          python -m py_compile dashboard.py
+          python -m py_compile titan_master_brain/master_controller.py
+          python -m py_compile titan_master_brain/final_decision_engine.py
+
       - name: Run TITAN Master Brain
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

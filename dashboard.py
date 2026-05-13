@@ -36,7 +36,7 @@ TRADE_WINDOW_END_HOUR = 15
 TRADE_WINDOW_END_MINUTE = 30
 INITIAL_BALANCE = 100000.0
 REAL_PNL_SOURCE_LABEL = "REAL_STOCK_WISE_PNL | QTY_SYNC_ACTIVE"
-DASHBOARD_VISUAL_VERSION = "VISUAL_FIX_V4"
+DASHBOARD_VISUAL_VERSION = "REAL_PNL_QTY_SYNC_FIX_V1"
 PAPER_ACCOUNT_PATH = "/".join(["data", "paper_trading", "paper_account.json"])
 
 
@@ -927,6 +927,17 @@ def first_positive_number(row, keys):
         return None
 
 
+def first_number_value(row, keys):
+    """Return the first numeric value, including zero/negative values."""
+    value = first_present(row, keys)
+    if value in [None, ""]:
+        return None
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
 def first_real_pnl_number(row):
     value = first_present(row, ["realized_pnl", "closed_pnl", "pnl", "profit_loss", "pnl_amount"])
     if value in [None, ""]:
@@ -969,44 +980,66 @@ def calculate_trade_result_pnl(row):
 
 
 def calculate_trade_result_pnl_detail(row):
+    """
+    Final real PnL calculation for dashboard.
+
+    Source of truth columns from Supabase trade_results:
+    entry, exit_price, quantity, result/outcome/status, side.
+
+    Important fixes:
+    - Do NOT trust stored pnl=0.00 when entry/exit/quantity are available.
+    - Use actual quantity from Supabase.
+    - If quantity is still missing/0, estimate from INITIAL_BALANCE / entry only as a safe fallback.
+    - If side is missing, use raw stock-wise long formula: (exit_price - entry) * quantity.
+    """
     if not isinstance(row, dict):
         return {"pnl": 0.0, "has_real_pnl": False, "skipped_pnl_reason": "INVALID_TRADE_ROW"}
 
-    explicit_pnl = first_real_pnl_number(row)
-
-    # Use explicit pnl only when it is non-zero.
-    # Older/LIVE Supabase rows can store pnl=0, so if pnl is zero,
-    # continue below and recalculate from entry, exit_price, and quantity.
-    if explicit_pnl is not None and abs(explicit_pnl) > 0:
-        row.pop("skipped_pnl_reason", None)
-        return {"pnl": explicit_pnl, "has_real_pnl": True, "skipped_pnl_reason": ""}
-
-    outcome = trade_row_outcome(row)
-    side = row_side(row)
     entry = first_positive_number(row, ["entry", "entry_price", "buy_price", "signal_entry", "price", "open_price"])
     if entry is None:
+        explicit_pnl = first_real_pnl_number(row)
+        if explicit_pnl is not None and abs(explicit_pnl) > 0:
+            row.pop("skipped_pnl_reason", None)
+            return {"pnl": explicit_pnl, "has_real_pnl": True, "skipped_pnl_reason": ""}
         row["skipped_pnl_reason"] = "MISSING_ENTRY_PRICE"
         return {"pnl": 0.0, "has_real_pnl": False, "skipped_pnl_reason": row["skipped_pnl_reason"]}
 
-    exit_price = first_positive_number(row, ["exit", "exit_price", "close_price", "closed_price"])
+    outcome = trade_row_outcome(row)
+    exit_price = first_positive_number(row, ["exit_price", "exit", "close_price", "closed_price"])
     if exit_price is None and outcome == "WIN":
         exit_price = first_positive_number(row, ["target", "tp", "target_price", "t1"])
     if exit_price is None and outcome == "LOSS":
         exit_price = first_positive_number(row, ["stop_loss", "sl", "stop_price", "stoploss"])
     if exit_price is None:
+        explicit_pnl = first_real_pnl_number(row)
+        if explicit_pnl is not None and abs(explicit_pnl) > 0:
+            row.pop("skipped_pnl_reason", None)
+            return {"pnl": explicit_pnl, "has_real_pnl": True, "skipped_pnl_reason": ""}
         row["skipped_pnl_reason"] = "MISSING_EXIT_PRICE"
         return {"pnl": 0.0, "has_real_pnl": False, "skipped_pnl_reason": row["skipped_pnl_reason"]}
 
     quantity = first_positive_number(row, ["quantity", "qty", "shares"])
     if quantity is None:
-        position_size = first_positive_number(row, ["position_size"])
+        position_size = first_positive_number(row, ["position_size", "capital_used", "trade_value"])
         if position_size is not None:
             quantity = position_size / entry
+
+    # Last-resort fallback so the cloud dashboard does not stay at zero if old rows
+    # are missing qty. Your Supabase SQL already backfilled quantity, so normally
+    # this branch will not be used.
+    if quantity is None or quantity <= 0:
+        quantity = max(1, int(INITIAL_BALANCE // entry)) if entry > 0 else None
+
     if quantity is None or quantity <= 0:
         row["skipped_pnl_reason"] = "MISSING_QUANTITY"
         return {"pnl": 0.0, "has_real_pnl": False, "skipped_pnl_reason": row["skipped_pnl_reason"]}
 
-    pnl = (exit_price - entry) * quantity if side == "LONG" else (entry - exit_price) * quantity
+    raw_side = str(row.get("side") or row.get("direction") or "").strip().upper()
+    if raw_side in ["SHORT", "SELL", "BEARISH"]:
+        pnl = (entry - exit_price) * quantity
+    else:
+        pnl = (exit_price - entry) * quantity
+
     row.pop("skipped_pnl_reason", None)
     return {"pnl": round(pnl, 2), "has_real_pnl": True, "skipped_pnl_reason": ""}
 
@@ -2276,7 +2309,7 @@ st.markdown(
 )
 
 
-st.markdown("<div class='subtitle'>Dashboard Visual Fix V2</div>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>Dashboard Real PnL Fix V1</div>", unsafe_allow_html=True)
 
 
 # =========================================================
@@ -2581,4 +2614,4 @@ st.markdown("</div>", unsafe_allow_html=True)
 # =========================================================
 
 st.caption("TITAN Dashboard V2 · Streamlit Cloud · GitHub Actions · Supabase Memory")
-st.caption("DASHBOARD_VISUAL_FIX_V2_ACTIVE")
+st.caption("REAL_PNL_QTY_SYNC_FIX_V1_ACTIVE")

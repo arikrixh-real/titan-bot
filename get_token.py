@@ -1,10 +1,18 @@
 import requests
 import webbrowser
+import os
 
-API_KEY = "4f5acbf7-73b5-4437-a692-8e5b8fde9d8a"
-API_SECRET = "73unm2ly3u"
+API_KEY = os.getenv("UPSTOX_API_KEY", "")
+API_SECRET = os.getenv("UPSTOX_API_SECRET", "")
 
 REDIRECT_URI = "http://localhost"
+
+
+def mask_secret(value):
+    text = str(value or "")
+    if len(text) <= 8:
+        return "***" if text else "missing"
+    return f"{text[:4]}...{text[-4:]}"
 
 auth_url = (
     "https://api.upstox.com/v2/login/authorization/dialog"
@@ -12,6 +20,10 @@ auth_url = (
     f"&client_id={API_KEY}"
     f"&redirect_uri={REDIRECT_URI}"
 )
+
+if not API_KEY or not API_SECRET:
+    print("Upstox API key/secret missing. Set UPSTOX_API_KEY and UPSTOX_API_SECRET.")
+    raise SystemExit
 
 print("\nOpening Upstox login page...")
 webbrowser.open(auth_url)
@@ -36,11 +48,10 @@ headers = {
     "Content-Type": "application/x-www-form-urlencoded",
 }
 
-response = requests.post(token_url, data=payload, headers=headers)
+response = requests.post(token_url, data=payload, headers=headers, timeout=15)
 
 print("\nSTATUS CODE:", response.status_code)
-print("RAW RESPONSE:")
-print(response.text)
+print("RAW RESPONSE: suppressed to avoid printing tokens")
 
 try:
     data = response.json()
@@ -53,6 +64,7 @@ access_token = data.get("access_token")
 
 if access_token:
     print("\n✅ COPY THIS INTO .env:\n")
-    print(f"UPSTOX_ACCESS_TOKEN={access_token}")
+    print(f"UPSTOX_ACCESS_TOKEN={mask_secret(access_token)}")
+    print("Full token received. Store it securely in .env; it is intentionally not printed.")
 else:
     print("\n❌ Access token not found.")

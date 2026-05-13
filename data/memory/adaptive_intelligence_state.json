@@ -1,22 +1,22 @@
 {
   "version": "3.0",
-  "last_updated": "2026-05-10 02:03:38",
-  "total_closed_trades": 85,
-  "total_wins": 34,
-  "total_losses": 51,
+  "last_updated": "2026-05-13 12:19:50",
+  "total_closed_trades": 88,
+  "total_wins": 36,
+  "total_losses": 52,
   "bayesian_prior": {
     "alpha": 2.0,
     "beta": 2.0
   },
   "global_confidence": {
-    "trades": 85,
-    "wins": 34,
-    "losses": 51,
-    "win_rate": 0.4,
-    "posterior_win_rate": 0.4045,
+    "trades": 88,
+    "wins": 36,
+    "losses": 52,
+    "win_rate": 0.4091,
+    "posterior_win_rate": 0.413,
     "sample_confidence": 1.0,
-    "weight": 0.9522,
-    "adaptive_confidence_score": 40.45
+    "weight": 0.9565,
+    "adaptive_confidence_score": 41.3
   },
   "feature_memory": {
     "market_filter": {
@@ -36,6 +36,15 @@
       "posterior_win_rate": 0.4045,
       "sample_confidence": 1.0,
       "weight": 0.9522
+    },
+    "general": {
+      "trades": 3,
+      "wins": 2,
+      "losses": 1,
+      "win_rate": 0.6667,
+      "posterior_win_rate": 0.5714,
+      "sample_confidence": 0.1,
+      "weight": 1.0036
     }
   },
   "regime_memory": {
@@ -47,6 +56,15 @@
       "posterior_win_rate": 0.4045,
       "sample_confidence": 1.0,
       "weight": 0.9522
+    },
+    "TRENDING": {
+      "trades": 3,
+      "wins": 2,
+      "losses": 1,
+      "win_rate": 0.6667,
+      "posterior_win_rate": 0.5714,
+      "sample_confidence": 0.1,
+      "weight": 1.0036
     }
   },
   "sector_memory": {
@@ -60,13 +78,13 @@
       "weight": 1.0036
     },
     "IT": {
-      "trades": 17,
-      "wins": 2,
+      "trades": 18,
+      "wins": 3,
       "losses": 15,
-      "win_rate": 0.1176,
-      "posterior_win_rate": 0.1905,
-      "sample_confidence": 0.5667,
-      "weight": 0.9123
+      "win_rate": 0.1667,
+      "posterior_win_rate": 0.2273,
+      "sample_confidence": 0.6,
+      "weight": 0.9182
     },
     "Auto": {
       "trades": 23,
@@ -78,13 +96,13 @@
       "weight": 0.9219
     },
     "Energy / Telecom / Retail": {
-      "trades": 1,
-      "wins": 1,
-      "losses": 0,
-      "win_rate": 1.0,
-      "posterior_win_rate": 0.6,
-      "sample_confidence": 0.0333,
-      "weight": 1.0017
+      "trades": 3,
+      "wins": 2,
+      "losses": 1,
+      "win_rate": 0.6667,
+      "posterior_win_rate": 0.5714,
+      "sample_confidence": 0.1,
+      "weight": 1.0036
     },
     "UNKNOWN": {
       "trades": 10,
@@ -276,6 +294,24 @@
       "posterior_win_rate": 0.3,
       "sample_confidence": 0.2,
       "weight": 0.98
+    },
+    "LONG|TRENDING|ENERGY_TELECOM_RETAIL|general": {
+      "trades": 2,
+      "wins": 1,
+      "losses": 1,
+      "win_rate": 0.5,
+      "posterior_win_rate": 0.5,
+      "sample_confidence": 0.0667,
+      "weight": 1.0
+    },
+    "SHORT|TRENDING|IT|general": {
+      "trades": 1,
+      "wins": 1,
+      "losses": 0,
+      "win_rate": 1.0,
+      "posterior_win_rate": 0.6,
+      "sample_confidence": 0.0333,
+      "weight": 1.0017
     }
   },
   "symbol_memory": {
@@ -289,13 +325,13 @@
       "weight": 1.0056
     },
     "TCS": {
-      "trades": 4,
-      "wins": 1,
+      "trades": 5,
+      "wins": 2,
       "losses": 3,
-      "win_rate": 0.25,
-      "posterior_win_rate": 0.375,
-      "sample_confidence": 0.1333,
-      "weight": 0.9917
+      "win_rate": 0.4,
+      "posterior_win_rate": 0.4444,
+      "sample_confidence": 0.1667,
+      "weight": 0.9954
     },
     "M&M": {
       "trades": 3,
@@ -316,13 +352,13 @@
       "weight": 0.9481
     },
     "RELIANCE": {
-      "trades": 1,
-      "wins": 1,
-      "losses": 0,
-      "win_rate": 1.0,
-      "posterior_win_rate": 0.6,
-      "sample_confidence": 0.0333,
-      "weight": 1.0017
+      "trades": 3,
+      "wins": 2,
+      "losses": 1,
+      "win_rate": 0.6667,
+      "posterior_win_rate": 0.5714,
+      "sample_confidence": 0.1,
+      "weight": 1.0036
     },
     "PFC": {
       "trades": 10,
@@ -426,28 +462,180 @@
   },
   "side_memory": {
     "SHORT": {
-      "trades": 70,
-      "wins": 31,
+      "trades": 71,
+      "wins": 32,
       "losses": 39,
-      "win_rate": 0.4429,
-      "posterior_win_rate": 0.4459,
+      "win_rate": 0.4507,
+      "posterior_win_rate": 0.4533,
       "sample_confidence": 1.0,
-      "weight": 0.973
+      "weight": 0.9767
     },
     "LONG": {
-      "trades": 15,
-      "wins": 3,
-      "losses": 12,
-      "win_rate": 0.2,
-      "posterior_win_rate": 0.2632,
-      "sample_confidence": 0.5,
-      "weight": 0.9408
+      "trades": 17,
+      "wins": 4,
+      "losses": 13,
+      "win_rate": 0.2353,
+      "posterior_win_rate": 0.2857,
+      "sample_confidence": 0.5667,
+      "weight": 0.9393
     }
   },
   "news_reaction_memory": {
-    "seen_news_hashes": [],
-    "symbol_sentiment": {},
-    "sector_sentiment": {}
+    "seen_news_hashes": [
+      "59c941c196c7f3db1c3c031b757a353864dc0c93981bec14006f2123bbac2116",
+      "fa1fbe4f24c2f4332858d898d0fa68387071d8d80173a740a71c775cf8bde4a3",
+      "db45e8a6eb8255f9699106e6700450b81183d2330e0125671eb0bf339a37eb92",
+      "ea3ab373a918be5e2c2b6154cbcea2f92fc7b4ca92c294b4adc8f42d816e2bc1",
+      "82d819b0262c862f44018ebf68bae1d26c5cb86e08f0563a2434fe040249526e",
+      "bedde6e2221d7122e856f6d286a2e983ee1cf61cf13d698f9b8f1a02f696ffd5",
+      "0ea7109cba4f33de43755c078aaf1583d39a91f19b7b141334bb1bea80a09137",
+      "c9317f88ad1ac515fd39ef07a51c04150c0c2e1c11f5bd2f4ea9f60fe37a04de",
+      "795e22696d2aed9f047153fca6eb09baf50ed827e6ae0d2b593bd9d451181ab5",
+      "da4a5e2a2d92de8c38c36d8d5084f2d4e84679317636a26122b39bb99a9cf1ec",
+      "c7fe60f8dd90e3be4b72a00e8f3ac6b73f3a6629835956c2846b329268057f61",
+      "01c3475bee3b08da440f36fc7f0cd4868865ec64a3acc840a8e93a7a52b1efdf",
+      "284a4b0b7a6529fdddfab8ed51b3322cad8c8c7f559fa85f609d325f770c0072",
+      "987921aafbd4ca8c79e7411dc8917b6be6ac98a4ce021b4bbc3e64f67f96c19a",
+      "65b2d9c061d3599e1b55d70601a253c25cb61ff29125da0e90cc876b6f16eb06",
+      "cb52b37f3238b3c727165448c525b0b1f9105fbbc0622a8887340ffda7467ffd",
+      "eb3072b16f0b884fd7415de1c5305a02f4d715345368b1d155d1c6584471ce85",
+      "9ccb4d8d4012fa54eca61a9c6d143cdfc8b5525235ece62817b5d93bd8e2c1b4",
+      "f1583f4cec553e66cfb7ca41d057f2e6c589f5719d72add7350f62907eead122",
+      "b55806f9919411dc2966ac197e1a5a79d543542585307ce2654fa715325f30a0",
+      "4c143b296528302b44f6dddf5ffb4a2fc16ef3886a7631c21be12b29bb93eac3",
+      "badea3130f64d421d20ed9f8c194bc538e65bfcba6e3c1a20ae502e57e816ef7",
+      "9efe9b4eadfa5e407c0b4b836bd189f7aa7dd11dde3453e0043408591119b00f",
+      "513ed5eda95823844b50bb21ccece76514aa5daf4cec379fe7328a89e20a0448",
+      "bca855f098aa4ba99c6c314ca5cd94adf109011e9a20a878aac5162ad7f1427b",
+      "aa846ae8e60ad9e27435ad2ebb744f3f4662dcfa6f852a3bde0fbc6f8d91c0b9",
+      "bc5eb230533fd60844ff84f1ecc69e9f27af010d787c726cb110482e71206e97",
+      "39c66495149207bdb9f1b682f78ecdb4eead69656dc73baead24eb71953780b0",
+      "41469cd36120860da49e08bc7f488ee669595f9f371f426a7afce93d692b7f5b",
+      "71b91830f3bcbda09bc0f8ab2207014c33f1ef69bd9c7e42b8e1cddbe2269d47",
+      "abff09599f1987da5eb7657033a162d98347f19baa4deb8f7793a329ec4437a9",
+      "2cee94f45e7799617d20ec01e87ba952ec430b6448bbee2e29b616c8436d9c54",
+      "2d1f79f551b79cee2cc6d643410fbbd885ea8c49096baf5a9db44d53e2450df6"
+    ],
+    "symbol_sentiment": {
+      "TATACONSUM": {
+        "items": 2,
+        "sentiment_score": 0.3333
+      },
+      "HINDUNILVR": {
+        "items": 1,
+        "sentiment_score": -1.0
+      },
+      "LTIM": {
+        "items": 1,
+        "sentiment_score": 0.3333
+      },
+      "LT": {
+        "items": 1,
+        "sentiment_score": 0.0
+      },
+      "BHARTIARTL": {
+        "items": 2,
+        "sentiment_score": 0.1667
+      },
+      "RELIANCE": {
+        "items": 3,
+        "sentiment_score": 0.2222
+      },
+      "MARUTI": {
+        "items": 2,
+        "sentiment_score": 0.3333
+      },
+      "SUNPHARMA": {
+        "items": 1,
+        "sentiment_score": 0.3333
+      },
+      "HCLTECH": {
+        "items": 1,
+        "sentiment_score": 0.3333
+      },
+      "GRASIM": {
+        "items": 1,
+        "sentiment_score": 0.3333
+      },
+      "HINDALCO": {
+        "items": 1,
+        "sentiment_score": 0.3333
+      },
+      "NESTLEIND": {
+        "items": 1,
+        "sentiment_score": 0.3333
+      },
+      "SBIN": {
+        "items": 1,
+        "sentiment_score": -0.3333
+      },
+      "WIPRO": {
+        "items": 1,
+        "sentiment_score": 0.0
+      }
+    },
+    "sector_sentiment": {
+      "FMCG": {
+        "items": 10,
+        "sentiment_score": -0.0
+      },
+      "IT": {
+        "items": 3,
+        "sentiment_score": 0.2222
+      },
+      "Capital Goods / Infrastructure": {
+        "items": 1,
+        "sentiment_score": 0.0
+      },
+      "Banking": {
+        "items": 4,
+        "sentiment_score": 0.0
+      },
+      "Telecom": {
+        "items": 4,
+        "sentiment_score": 0.1667
+      },
+      "Auto": {
+        "items": 4,
+        "sentiment_score": 0.1667
+      },
+      "Cement / Chemicals": {
+        "items": 1,
+        "sentiment_score": 0.3333
+      },
+      "Energy / Telecom / Retail": {
+        "items": 3,
+        "sentiment_score": 0.2222
+      },
+      "Market Index": {
+        "items": 6,
+        "sentiment_score": 0.2778
+      },
+      "Metals": {
+        "items": 2,
+        "sentiment_score": 0.6667
+      },
+      "Pharma": {
+        "items": 1,
+        "sentiment_score": 0.3333
+      },
+      "Global Macro": {
+        "items": 9,
+        "sentiment_score": 0.0
+      },
+      "Cement": {
+        "items": 1,
+        "sentiment_score": 1.0
+      },
+      "Oil & Gas": {
+        "items": 6,
+        "sentiment_score": 0.0
+      },
+      "Infrastructure": {
+        "items": 1,
+        "sentiment_score": 0.3333
+      }
+    }
   },
   "builder_notes": [
     "Adaptive memory is available for conservative post-score ranking adjustments.",

@@ -1,6 +1,235 @@
 {
-  "version": "9.0",
-  "last_updated": null,
-  "current_snapshot": {},
-  "history": []
+  "current_snapshot": {
+    "analyzed_setup_limit": 30,
+    "context_snapshot": {
+      "risk_level": "MEDIUM",
+      "setup_environment": "NORMAL_SETUP_PHASE",
+      "trading_mode": "SELECTIVE"
+    },
+    "correlated_weakness_memory": {
+      "memory_available": true,
+      "weak_patterns": []
+    },
+    "correlation_pressure": {
+      "overlap_pairs": [
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "HAVELLS",
+            "BAJFINANCE"
+          ]
+        },
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "HAVELLS",
+            "SHRIRAMFIN"
+          ]
+        },
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "HAVELLS",
+            "CHOLAFIN"
+          ]
+        },
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "HAVELLS",
+            "ABB"
+          ]
+        },
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "HAVELLS",
+            "SIEMENS"
+          ]
+        },
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "BAJFINANCE",
+            "SHRIRAMFIN"
+          ]
+        },
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "BAJFINANCE",
+            "CHOLAFIN"
+          ]
+        },
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "BAJFINANCE",
+            "ABB"
+          ]
+        },
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "BAJFINANCE",
+            "SIEMENS"
+          ]
+        },
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "SHRIRAMFIN",
+            "CHOLAFIN"
+          ]
+        }
+      ],
+      "score": 100.0
+    },
+    "directional_crowding": {
+      "counts": {
+        "LONG": 7,
+        "SHORT": 1
+      },
+      "score": 87.5
+    },
+    "diversification_advisory": [
+      "High setup heat: treat clustered exposure as one risk bucket.",
+      "Review systemic contradiction flags before increasing exposure."
+    ],
+    "generated_at": "2026-05-13 12:19:45",
+    "isolated_best_setups": [],
+    "narrative_dependency_groups": {
+      "dominant_families": [
+        {
+          "count": 7,
+          "name": "TREND_CONTINUATION"
+        },
+        {
+          "count": 1,
+          "name": "NEWS_DRIVEN"
+        }
+      ],
+      "narrative_type": "EVENT_CAUTION",
+      "risk_state": "RISK_OFF"
+    },
+    "observed_setup_count": 8,
+    "overlap_conflict_detection": {
+      "conflict_count": 6,
+      "conflict_pairs": [
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "HAVELLS",
+            "TCS"
+          ]
+        },
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "BAJFINANCE",
+            "TCS"
+          ]
+        },
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "SHRIRAMFIN",
+            "TCS"
+          ]
+        },
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "CHOLAFIN",
+            "TCS"
+          ]
+        },
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "ABB",
+            "TCS"
+          ]
+        },
+        {
+          "family_overlap": true,
+          "sector_overlap": false,
+          "symbols": [
+            "TCS",
+            "SIEMENS"
+          ]
+        }
+      ]
+    },
+    "pairwise_comparisons": 28,
+    "phase9_applied": true,
+    "phase9_rank_adjustment": 0.0,
+    "phase9_shadow_mode": true,
+    "portfolio_heat_score": 94.38,
+    "relational_state": "HIGH_CONCENTRATION",
+    "runtime_bounded": true,
+    "runtime_ms": 16.0,
+    "sector_concentration": {
+      "score": 100.0,
+      "top": []
+    },
+    "setup_clustering": {
+      "family_clusters": [
+        {
+          "count": 7,
+          "name": "TREND_CONTINUATION",
+          "symbols": [
+            "HAVELLS",
+            "BAJFINANCE",
+            "SHRIRAMFIN",
+            "CHOLAFIN",
+            "ABB",
+            "TCS",
+            "SIEMENS"
+          ]
+        }
+      ],
+      "sector_clusters": []
+    },
+    "systemic_contradiction_flags": [
+      "long crowding conflicts with risk-off narrative",
+      "same cluster contains opposing trade directions",
+      "dominant sector concentration detected"
+    ],
+    "version": "9.0",
+    "warnings": []
+  },
+  "history": [
+    {
+      "contradiction_count": 2,
+      "generated_at": "2026-05-11 10:43:43",
+      "observed_setup_count": 8,
+      "portfolio_heat_score": 96.88,
+      "relational_state": "HIGH_CONCENTRATION"
+    },
+    {
+      "contradiction_count": 3,
+      "generated_at": "2026-05-13 12:19:45",
+      "observed_setup_count": 8,
+      "portfolio_heat_score": 94.38,
+      "relational_state": "HIGH_CONCENTRATION"
+    }
+  ],
+  "last_updated": "2026-05-13 12:19:45",
+  "version": "9.0"
 }

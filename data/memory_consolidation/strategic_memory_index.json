@@ -287,6 +287,41 @@
         "score": 50.0
       }
     ],
+    "SCAN_MEMORY_35": [
+      {
+        "memory_key": "scan_memory_35",
+        "regime": "UNKNOWN",
+        "score": 50.0
+      }
+    ],
+    "SCAN_MEMORY_36": [
+      {
+        "memory_key": "scan_memory_36",
+        "regime": "UNKNOWN",
+        "score": 50.0
+      }
+    ],
+    "SCAN_MEMORY_37": [
+      {
+        "memory_key": "scan_memory_37",
+        "regime": "UNKNOWN",
+        "score": 50.0
+      }
+    ],
+    "SCAN_MEMORY_38": [
+      {
+        "memory_key": "scan_memory_38",
+        "regime": "UNKNOWN",
+        "score": 50.0
+      }
+    ],
+    "SCAN_MEMORY_39": [
+      {
+        "memory_key": "scan_memory_39",
+        "regime": "UNKNOWN",
+        "score": 50.0
+      }
+    ],
     "SCAN_MEMORY_4": [
       {
         "memory_key": "scan_memory_4",
@@ -631,5 +666,5 @@
       }
     ]
   },
-  "strategy_count": 90
+  "strategy_count": 95
 }

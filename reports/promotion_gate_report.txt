@@ -7,27 +7,27 @@ Safety
 - recommended_live_weight remains pinned at 0.00.
 - No forbidden imports detected: True
 
-Updated: 2026-05-10 22:23:19
-Status: NEUTRAL_OBSERVING
-Runtime Ms: 15.0 | Bounded: True
+Updated: 2026-05-13 12:19:51
+Status: ACTIVE
+Runtime Ms: 31.0 | Bounded: True
 
 Actual Outcome Baseline:
 - Source: data\journals\trade_outcomes.jsonl
-- Closed samples: 0
-- Wins/Losses: 0/0
-- Win rate: 0.0
+- Closed samples: 3
+- Wins/Losses: 2/1
+- Win rate: 0.6667
 
 Promotion Summary:
-- Best candidate: phase6
-- Max promotion score: 0.0
+- Best candidate: phase7
+- Max promotion score: 0.2438
 - Any live influence: False
 - Recommended live weight: 0.0
 
 Layer Metrics:
-- phase6: samples=0, usefulness=0.5, stability=1.0, promotion=0.0, live_weight=0.0, recommendation=INSUFFICIENT_SAMPLE_SHADOW_ONLY
-- phase7: samples=0, usefulness=0.25, stability=0.5, promotion=0.0, live_weight=0.0, recommendation=INSUFFICIENT_SAMPLE_SHADOW_ONLY
-- phase8: samples=0, usefulness=0.2083, stability=0.5, promotion=0.0, live_weight=0.0, recommendation=INSUFFICIENT_SAMPLE_SHADOW_ONLY
-- phase9: samples=0, usefulness=0.2333, stability=0.5, promotion=0.0, live_weight=0.0, recommendation=INSUFFICIENT_SAMPLE_SHADOW_ONLY
+- phase6: samples=8, usefulness=0.4821, stability=0.7944, promotion=0.11, live_weight=0.0, recommendation=INSUFFICIENT_SAMPLE_SHADOW_ONLY
+- phase7: samples=17, usefulness=0.5288, stability=0.9, promotion=0.2438, live_weight=0.0, recommendation=INSUFFICIENT_SAMPLE_SHADOW_ONLY
+- phase8: samples=4, usefulness=0.2904, stability=1.0, promotion=0.0394, live_weight=0.0, recommendation=INSUFFICIENT_SAMPLE_SHADOW_ONLY
+- phase9: samples=8, usefulness=0.2001, stability=0.9875, promotion=0.0754, live_weight=0.0, recommendation=INSUFFICIENT_SAMPLE_SHADOW_ONLY
 
 Warnings:
 - None observed

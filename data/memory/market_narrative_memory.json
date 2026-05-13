@@ -1,6 +1,117 @@
 {
-  "current_narrative": {},
-  "history": [],
-  "last_updated": "not yet refreshed",
+  "current_narrative": {
+    "breadth_pressure": {
+      "raw": {},
+      "score": 48.05,
+      "state": "MIXED_BREADTH"
+    },
+    "contradiction_flags": [
+      "HAVELLS LONG conflicts with risk-off narrative",
+      "JINDALSTEL LONG conflicts with risk-off narrative",
+      "SHRIRAMFIN LONG conflicts with risk-off narrative",
+      "SIEMENS LONG conflicts with risk-off narrative",
+      "BAJAJHLDNG LONG conflicts with risk-off narrative"
+    ],
+    "event_pressure": {
+      "keywords": [
+        "cpi",
+        "election",
+        "inflation",
+        "policy",
+        "rbi"
+      ],
+      "score": 60.0,
+      "state": "HIGH"
+    },
+    "generated_at": "2026-05-13 12:33:24",
+    "macro_narrative_memory": {
+      "learning_environment": "LEARNING_NOT_READY",
+      "lifecycle_memory_available": true,
+      "news_memory_available": true,
+      "setup_environment": "NORMAL_SETUP_PHASE"
+    },
+    "market_direction": "NEUTRAL",
+    "narrative_adjustment": 0.0,
+    "narrative_confidence": 0.72,
+    "narrative_type": "EVENT_CAUTION",
+    "panic_euphoria_detection": {
+      "euphoria": false,
+      "panic": false
+    },
+    "phase8_applied": true,
+    "phase8_shadow_mode": true,
+    "regime_transition_detection": {
+      "changed": false,
+      "from": "EVENT_CAUTION",
+      "to": "EVENT_CAUTION"
+    },
+    "risk_on_risk_off_state": "RISK_OFF",
+    "risk_tone_score": 37.12,
+    "sector_leadership": [],
+    "sector_weakness": [],
+    "setup_alignment": {
+      "aligned_setups": 3,
+      "average_alignment_score": 45.5,
+      "conflicting_setups": 5,
+      "contradiction_flags": [
+        "HAVELLS LONG conflicts with risk-off narrative",
+        "JINDALSTEL LONG conflicts with risk-off narrative",
+        "SHRIRAMFIN LONG conflicts with risk-off narrative",
+        "SIEMENS LONG conflicts with risk-off narrative",
+        "BAJAJHLDNG LONG conflicts with risk-off narrative"
+      ],
+      "neutral_setups": 0,
+      "observed_setups": 8
+    },
+    "version": "8.0",
+    "volatility_pressure": {
+      "score": 50.0,
+      "state": "CALM"
+    },
+    "warnings": []
+  },
+  "history": [
+    {
+      "contradiction_count": 0,
+      "generated_at": "2026-05-11 10:43:42",
+      "narrative_confidence": 0.72,
+      "narrative_type": "CHOPPY_NEUTRAL",
+      "risk_on_risk_off_state": "NEUTRAL",
+      "risk_tone_score": 49.12
+    },
+    {
+      "contradiction_count": 0,
+      "generated_at": "2026-05-11 11:00:36",
+      "narrative_confidence": 0.72,
+      "narrative_type": "CHOPPY_NEUTRAL",
+      "risk_on_risk_off_state": "NEUTRAL",
+      "risk_tone_score": 49.12
+    },
+    {
+      "contradiction_count": 0,
+      "generated_at": "2026-05-11 11:02:20",
+      "narrative_confidence": 0.72,
+      "narrative_type": "CHOPPY_NEUTRAL",
+      "risk_on_risk_off_state": "NEUTRAL",
+      "risk_tone_score": 49.12
+    },
+    {
+      "contradiction_count": 8,
+      "generated_at": "2026-05-13 12:19:43",
+      "narrative_confidence": 0.72,
+      "narrative_type": "EVENT_CAUTION",
+      "risk_on_risk_off_state": "RISK_OFF",
+      "risk_tone_score": 37.12
+    },
+    {
+      "contradiction_count": 5,
+      "generated_at": "2026-05-13 12:33:24",
+      "narrative_confidence": 0.72,
+      "narrative_type": "EVENT_CAUTION",
+      "risk_on_risk_off_state": "RISK_OFF",
+      "risk_tone_score": 37.12
+    }
+  ],
+  "last_updated": "2026-05-13 12:33:24",
   "version": "8.0"
 }

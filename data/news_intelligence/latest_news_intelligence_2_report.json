@@ -1,47 +1,112 @@
 {
   "symbol": "UNKNOWN",
-  "news_data_mode": "INSUFFICIENT",
-  "overall_news_sentiment_score": 50.0,
-  "event_classification": "NO_NEWS_DATA",
+  "news_data_mode": "REAL_NEWS",
+  "overall_news_sentiment_score": 60.29,
+  "event_classification": "EARNINGS",
   "impact_half_life": {
-    "event_type": "NO_NEWS_DATA",
-    "half_life_hours": 0.0,
-    "impact_remaining_score": 50.0
+    "event_type": "EARNINGS",
+    "half_life_hours": 18.0,
+    "age_hours": 0.0,
+    "impact_remaining_score": 100.0
   },
-  "stock_relevance_score": 50.0,
-  "sector_relevance_score": 50.0,
+  "stock_relevance_score": 35.0,
+  "sector_relevance_score": 35.0,
   "duplicate_fake_news_control": {
     "active": false,
     "duplicate_count": 0,
+    "low_credibility_count": 0,
     "risk_score": 0.0
   },
   "panic_news_detection": {
-    "active": false,
-    "panic_hits": 0,
-    "panic_score": 0.0
+    "active": true,
+    "panic_hits": 3,
+    "panic_score": 90.0
   },
   "positive_news_exhaustion": {
     "active": false,
     "positive_news_count": 0,
     "risk_score": 0.0
   },
-  "earnings_event_tags": [],
+  "earnings_event_tags": [
+    {
+      "title": "Sensex, Nifty gain for third day in a row; easing volatility to support bull trend",
+      "source": "https://www.moneycontrol.com/rss/marketreports.xml",
+      "tag": "EARNINGS",
+      "sentiment_score": 62.0
+    },
+    {
+      "title": "Sensex, Nifty extend gains to 3rd day, Q4 results to guide stock-specific action",
+      "source": "https://www.moneycontrol.com/rss/marketreports.xml",
+      "tag": "EARNINGS",
+      "sentiment_score": 50.0
+    },
+    {
+      "title": "HPCL Q4 Results: Net profit jumps 46% YoY to Rs 4,902 crore; Rs 19.25/sh dividend declared",
+      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "tag": "EARNINGS",
+      "sentiment_score": 86.0
+    },
+    {
+      "title": "Smallcaps rally! IIFL Finance, Hindustan Copper, Meesho, other stocks jump up to 7%",
+      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "tag": "EARNINGS",
+      "sentiment_score": 74.0
+    },
+    {
+      "title": "Sensex to hit 89,000? Why Morgan Stanley is betting big on India Inc after 6-quarter slowdown",
+      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "tag": "EARNINGS",
+      "sentiment_score": 86.0
+    },
+    {
+      "title": "Berger Paints shares soar over 9% after Q4 net profit jumps 27% to Rs 335 crore",
+      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "tag": "EARNINGS",
+      "sentiment_score": 98.0
+    },
+    {
+      "title": "Market under pressure: IT stocks face long-term headwinds as oil crisis and AI shift weigh on sentiment: Vinit Bolinjkar",
+      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "tag": "EARNINGS",
+      "sentiment_score": 50.0
+    },
+    {
+      "title": "SBI shares extend fall to 20% from peak after Q4 NIMs contraction rattles investors. What's ahead for investors?",
+      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "tag": "EARNINGS",
+      "sentiment_score": 74.0
+    }
+  ],
   "news_reaction_memory": {
-    "news_items_observed": 0,
+    "news_items_observed": 28,
+    "average_recent_sentiment": 60.29,
+    "historical_news_trade_count": 0,
+    "historical_news_win_rate": 0.0,
     "memory_confidence": 0.0
   },
   "market_narrative": {
-    "narrative_type": "NO_REAL_NEWS",
-    "dominant_event": "NONE",
-    "headline_count": 0
+    "narrative_type": "RISK_ON_NEWS",
+    "dominant_event": "MACRO",
+    "headline_count": 28,
+    "event_counts": {
+      "ORDER_CONTRACT": 3,
+      "EARNINGS": 8,
+      "GENERAL_NEWS": 3,
+      "MACRO": 9,
+      "REGULATORY": 4,
+      "M&A": 1
+    },
+    "average_sentiment": 60.29
   },
-  "credibility_score": 50.0,
-  "source_weight_score": 50.0,
-  "news_intelligence_score": 50.0,
-  "news_bias": "NEUTRAL",
-  "news_warning": "REVIEW",
+  "credibility_score": 78.29,
+  "source_weight_score": 65.29,
+  "news_intelligence_score": 41.41,
+  "news_bias": "BEARISH",
+  "news_warning": "SKIP",
   "live_order_allowed": false,
   "explanations": [
-    "No useful real news or proxy news context available; score kept neutral."
+    "Real news items were analyzed for sentiment, relevance, credibility, and narrative.",
+    "Dominant event classification: EARNINGS.",
+    "Market narrative: RISK_ON_NEWS."
   ]
 }

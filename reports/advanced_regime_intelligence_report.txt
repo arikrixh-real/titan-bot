@@ -8,32 +8,32 @@ Safety
 - recommended_live_weight: 0.0
 - No forbidden imports detected: True
 
-Updated: 2026-05-10 22:23:19
-Runtime Ms: 15.0 | Bounded: True
+Updated: 2026-05-13 12:19:51
+Runtime Ms: 31.0 | Bounded: True
 
 Active Regime:
-- Primary: CHOPPY_NO_EDGE
-- Secondary: ['INDEX_DRIVEN', 'TRENDING_BREAKOUT', 'MEAN_REVERSION']
-- Confidence: 0.45
-- Transition detected: False | Confirmed: False
-- Previous primary: CHOPPY_NO_EDGE
+- Primary: RISK_OFF
+- Secondary: ['SECTOR_ROTATION', 'INDEX_DRIVEN', 'NEWS_SHOCK']
+- Confidence: 0.8072
+- Transition detected: True | Confirmed: False
+- Previous primary: SECTOR_ROTATION
 
 Top Regime Scores:
-- CHOPPY_NO_EDGE: 0.45
-- INDEX_DRIVEN: 0.35
-- TRENDING_BREAKOUT: 0.3175
-- MEAN_REVERSION: 0.25
-- LOW_LIQUIDITY: 0.25
-- RISK_ON: 0.225
-- RISK_OFF: 0.225
-- PANIC_VOLATILITY: 0.2062
-- SECTOR_ROTATION: 0.0
-- NEWS_SHOCK: 0.0
+- RISK_OFF: 0.8072
+- SECTOR_ROTATION: 0.6416
+- INDEX_DRIVEN: 0.5696
+- NEWS_SHOCK: 0.56
+- CHOPPY_NO_EDGE: 0.4782
+- PANIC_VOLATILITY: 0.4462
+- LOW_LIQUIDITY: 0.2588
+- RISK_ON: 0.1834
+- TRENDING_BREAKOUT: 0.1511
+- MEAN_REVERSION: 0.07
 
 Promotion Gate Compatibility:
-- Samples: 0
-- Stability score: 0.45
-- Family regime edge quality: 0.0
+- Samples: 3
+- Stability score: 0.8072
+- Family regime edge quality: 0.15
 - Promotion eligible: False
 - Recommended live weight: 0.0
 

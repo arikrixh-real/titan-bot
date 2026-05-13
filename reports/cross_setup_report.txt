@@ -6,4 +6,27 @@ Safety
 - No ranking, decision, alert, execution, broker, market data, or daily-cap integration.
 - Uses already-produced setup/context/memory metadata only.
 
-Status: Not yet refreshed.
+Updated: 2026-05-13 12:19:45
+Observed Setups: 8
+Relational State: HIGH_CONCENTRATION
+Portfolio Heat Score: 94.38
+Runtime Ms: 16.0
+
+Sector Concentration Score: 100.0
+Directional Crowding Score: 87.5
+Correlation Pressure Score: 100.0
+
+Sector Clusters:
+- None observed
+
+Family Clusters:
+- TREND_CONTINUATION
+
+Diversification Advisory:
+- High setup heat: treat clustered exposure as one risk bucket.
+- Review systemic contradiction flags before increasing exposure.
+
+Systemic Contradiction Flags:
+- long crowding conflicts with risk-off narrative
+- same cluster contains opposing trade directions
+- dominant sector concentration detected

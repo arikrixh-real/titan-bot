@@ -15,6 +15,7 @@ Fix included:
 import os
 import json
 import requests
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load .env from project root
@@ -33,14 +34,16 @@ from utils.market_hours import is_trade_window
 STATUS_FILE = "data/live_price_status.json"
 
 
-def _write_status(symbol, status, message="", price=None):
+def _write_status(symbol, status, message="", price=None, source="UNKNOWN"):
     try:
         os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
         payload = {
             "symbol": normalize_symbol(symbol),
             "status": status,
-            "message": message,
-            "price": price,
+            "last_price": price,
+            "source": source,
+            "timestamp": datetime.now().isoformat(),
+            "reason": message,
         }
         with open(STATUS_FILE, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
@@ -117,13 +120,13 @@ def fetch_price_from_upstox(symbol, use_cache=True, debug=False):
 
     # No spam. Cached data fallback will be used.
     if not instrument_key:
-        _write_status(symbol, "UNMAPPED", "Instrument key missing")
+        _write_status(symbol, "UNMAPPED", "Instrument key missing", None, "NONE")
         return None
 
     cached_price = safe_float(get_cached_price(symbol)) if use_cache else None
 
     if not is_trade_window():
-        _write_status(symbol, "MARKET_CLOSED", "Market closed; using cache if available", cached_price)
+        _write_status(symbol, "MARKET_CLOSED", "Market closed; using cache if available", cached_price, "CACHE" if cached_price is not None else "NONE")
         return cached_price
 
     access_token = get_upstox_token()
@@ -131,7 +134,7 @@ def fetch_price_from_upstox(symbol, use_cache=True, debug=False):
     if not access_token:
         if debug:
             print("Upstox skipped: UPSTOX_ACCESS_TOKEN missing")
-        _write_status(symbol, "TOKEN_MISSING", "UPSTOX_ACCESS_TOKEN missing; using cache if available", cached_price)
+        _write_status(symbol, "TOKEN_MISSING", "UPSTOX_ACCESS_TOKEN missing; using cache if available", cached_price, "CACHE" if cached_price is not None else "NONE")
         return cached_price
 
     try:
@@ -153,7 +156,7 @@ def fetch_price_from_upstox(symbol, use_cache=True, debug=False):
         except Exception:
             if debug:
                 print("Upstox error: response was not valid JSON")
-            _write_status(symbol, "BAD_RESPONSE", "Response was not valid JSON; using cache if available", cached_price)
+            _write_status(symbol, "BAD_RESPONSE", "Response was not valid JSON; using cache if available", cached_price, "CACHE" if cached_price is not None else "NONE")
             return cached_price
 
         if response.status_code != 200:
@@ -162,11 +165,11 @@ def fetch_price_from_upstox(symbol, use_cache=True, debug=False):
             if response.status_code == 401 or "Invalid token" in message or "invalid token" in message.lower():
                 if debug:
                     print("Upstox token invalid/expired. Update UPSTOX_ACCESS_TOKEN.")
-                _write_status(symbol, "TOKEN_INVALID", "Upstox token invalid/expired; using cache if available", cached_price)
+                _write_status(symbol, "TOKEN_INVALID", "Upstox token invalid/expired; using cache if available", cached_price, "CACHE" if cached_price is not None else "NONE")
             else:
                 if debug:
                     print(f"Upstox error: HTTP {response.status_code}")
-                _write_status(symbol, "HTTP_ERROR", f"HTTP {response.status_code}; using cache if available", cached_price)
+                _write_status(symbol, "HTTP_ERROR", f"HTTP {response.status_code}; using cache if available", cached_price, "CACHE" if cached_price is not None else "NONE")
 
             return cached_price
 
@@ -174,15 +177,16 @@ def fetch_price_from_upstox(symbol, use_cache=True, debug=False):
         price = safe_float(ltp)
         if price is not None:
             update_cached_price(symbol, price)
-            _write_status(symbol, "ACTIVE", "Live price fetched", price)
+            _write_status(symbol, "ACTIVE", "Live price fetched", price, "UPSTOX")
             return price
-        _write_status(symbol, "NO_PRICE", "Upstox response had no price; using cache if available", cached_price)
+        _write_status(symbol, "NO_PRICE", "Upstox response had no price; using cache if available", cached_price, "CACHE" if cached_price is not None else "NONE")
         return cached_price
 
     except Exception as e:
         if debug:
             print(f"Upstox live price error: {e}")
-        _write_status(symbol, "ERROR", f"{e}; using cache if available", cached_price)
+        reason = "API/socket failure; using cache if available" if "WinError 10013" in str(e) else f"{e}; using cache if available"
+        _write_status(symbol, "ERROR", reason, cached_price, "CACHE" if cached_price is not None else "NONE")
         return cached_price
 
 

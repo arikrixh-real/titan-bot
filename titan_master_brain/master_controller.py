@@ -520,6 +520,11 @@ def save_sent_packets_to_trade_results(sent_packets, context=None):
             if not isinstance(packet, dict):
                 print(f"[TradeResults] Skipped non-dict packet: {packet}")
                 continue
+            try:
+                from engines.paper_trading_engine import load_paper_account, prepare_paper_trade_fields
+                packet = prepare_paper_trade_fields(packet, load_paper_account())
+            except Exception:
+                pass
 
             symbol = _deep_get(packet, ["symbol", "stock", "ticker", "name"])
             side = _deep_get(packet, ["side", "direction", "trade_side"])
@@ -527,12 +532,16 @@ def save_sent_packets_to_trade_results(sent_packets, context=None):
             entry = _safe_float(_deep_get(packet, ["entry", "entry_price", "price"]))
             sl = _safe_float(_deep_get(packet, ["sl", "stop_loss", "stoploss"]))
             tp = _safe_float(_deep_get(packet, ["tp", "target", "target_price", "t1"]))
+            quantity = _safe_float(_deep_get(packet, ["quantity", "qty"]), 0)
+            position_size = _safe_float(_deep_get(packet, ["position_size"]), 0)
+            risk_amount = _safe_float(_deep_get(packet, ["risk_amount"]), 0)
+            risk_pct = _safe_float(_deep_get(packet, ["risk_per_trade_pct"]), 1.0)
 
             rr = _safe_float(_deep_get(packet, ["rr", "risk_reward", "actual_rr"]), 0)
             score = _safe_float(_deep_get(packet, ["score", "final_score", "rank_score"]), 0)
             reason = _deep_get(packet, ["reason", "reasoning", "message", "note"], "")
 
-            if not symbol or not side or entry is None or sl is None or tp is None:
+            if not symbol or not side or entry is None or sl is None or tp is None or quantity <= 0:
                 print(f"[TradeResults] Skipped invalid packet: {packet}")
                 continue
 
@@ -552,10 +561,18 @@ def save_sent_packets_to_trade_results(sent_packets, context=None):
                 "symbol": symbol,
                 "side": side,
                 "entry": entry,
+                "entry_price": entry,
                 "sl": sl,
                 "tp": tp,
                 "target_price": tp,
                 "stop_loss": sl,
+                "quantity": quantity,
+                "qty": quantity,
+                "position_size": position_size,
+                "risk_amount": risk_amount,
+                "risk_per_trade_pct": risk_pct,
+                "paper_trade_id": packet.get("paper_trade_id"),
+                "is_paper_trade": True,
                 "status": "LIVE",
                 "result": None,
                 "outcome": None,

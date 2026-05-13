@@ -1,17 +1,17 @@
 {
   "generated_hypotheses": [
     {
-      "title": "LONG setup quality should be tested separately",
+      "title": "SHORT setup quality should be tested separately",
       "type": "SIDE_SENSITIVITY",
-      "evidence": "LONG win rate is 0.0% across 169 trades.",
+      "evidence": "SHORT win rate is 0.0% across 122 trades.",
       "research_score": 67.5,
       "status": "RESEARCH_ONLY",
       "live_change_allowed": false
     },
     {
-      "title": "SHORT setup quality should be tested separately",
+      "title": "LONG setup quality should be tested separately",
       "type": "SIDE_SENSITIVITY",
-      "evidence": "SHORT win rate is 0.0% across 131 trades.",
+      "evidence": "LONG win rate is 0.0% across 178 trades.",
       "research_score": 67.5,
       "status": "RESEARCH_ONLY",
       "live_change_allowed": false
@@ -29,14 +29,14 @@
   "strongest_confluences": [],
   "strategy_ideas": [
     {
-      "name": "Test: LONG setup quality should be tested separately",
+      "name": "Test: SHORT setup quality should be tested separately",
       "source": "SIDE_SENSITIVITY",
       "idea_score": 75.5,
       "validation_required": true,
       "live_change_allowed": false
     },
     {
-      "name": "Test: SHORT setup quality should be tested separately",
+      "name": "Test: LONG setup quality should be tested separately",
       "source": "SIDE_SENSITIVITY",
       "idea_score": 75.5,
       "validation_required": true,
@@ -53,14 +53,6 @@
   "backtest_queue": [
     {
       "queue_id": "BT-001",
-      "research_item": "Test: LONG setup quality should be tested separately",
-      "priority_score": 75.5,
-      "minimum_sample_size": 30,
-      "validation_status": "QUEUED",
-      "live_change_allowed": false
-    },
-    {
-      "queue_id": "BT-002",
       "research_item": "Test: SHORT setup quality should be tested separately",
       "priority_score": 75.5,
       "minimum_sample_size": 30,
@@ -68,8 +60,16 @@
       "live_change_allowed": false
     },
     {
+      "queue_id": "BT-002",
+      "research_item": "Test: LONG setup quality should be tested separately",
+      "priority_score": 75.5,
+      "minimum_sample_size": 30,
+      "validation_status": "QUEUED",
+      "live_change_allowed": false
+    },
+    {
       "queue_id": "BT-004",
-      "research_item": "LONG setup quality should be tested separately",
+      "research_item": "SHORT setup quality should be tested separately",
       "priority_score": 75.5,
       "minimum_sample_size": 30,
       "validation_status": "QUEUED",
@@ -77,7 +77,7 @@
     },
     {
       "queue_id": "BT-005",
-      "research_item": "SHORT setup quality should be tested separately",
+      "research_item": "LONG setup quality should be tested separately",
       "priority_score": 75.5,
       "minimum_sample_size": 30,
       "validation_status": "QUEUED",
@@ -112,7 +112,7 @@
   "discovered_edges": [],
   "experiment_plans": [
     {
-      "hypothesis": "LONG setup quality should be tested separately",
+      "hypothesis": "SHORT setup quality should be tested separately",
       "research_score": 75.5,
       "steps": [
         "Collect at least 30 historical or shadow samples.",
@@ -129,7 +129,7 @@
       "live_change_allowed": false
     },
     {
-      "hypothesis": "SHORT setup quality should be tested separately",
+      "hypothesis": "LONG setup quality should be tested separately",
       "research_score": 75.5,
       "steps": [
         "Collect at least 30 historical or shadow samples.",

@@ -1,7 +1,7 @@
 {
   "historical_backtest": {
     "available": false,
-    "strategy": "Test: LONG setup quality should be tested separately",
+    "strategy": "Test: SHORT setup quality should be tested separately",
     "sample_size": 0,
     "wins": 0,
     "losses": 0,
@@ -116,10 +116,58 @@
         "avg_rr": 0.0,
         "avg_score": 0.0,
         "quality_score": 0.0
+      },
+      "{\"MARKET_OK\": TRUE, \"REASON\": \"PHASE 4 DATA ADVANTAGE MARKET FILTER ACTIVE\", \"DIRECTION\": \"NEUTRAL\", \"REGIME\": \"MIXED\", \"STATUS\": \"MIXED\", \"VOLATILITY\": \"LOW\", \"NIFTY_TREND\": \"NEUTRAL\", \"SENSEX_TREND\": \"UNKNOWN\", \"RISK_TONE\": \"NEUTRAL\", \"RISK_TONE_SCORE\": 50.32, \"BREADTH_SCORE\": 50.71, \"DATA_ADVANTAGE_SCORE\": 50.43, \"WARNINGS\": [\"SENSEX_PROXY_UNAVAILABLE\"]}": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "{\"MARKET_OK\": TRUE, \"REASON\": \"PHASE 4 DATA ADVANTAGE MARKET FILTER ACTIVE\", \"DIRECTION\": \"NEUTRAL\", \"REGIME\": \"MIXED\", \"STATUS\": \"MIXED\", \"VOLATILITY\": \"LOW\", \"NIFTY_TREND\": \"NEUTRAL\", \"SENSEX_TREND\": \"UNKNOWN\", \"RISK_TONE\": \"NEUTRAL\", \"RISK_TONE_SCORE\": 50.05, \"BREADTH_SCORE\": 50.1, \"DATA_ADVANTAGE_SCORE\": 50.06, \"WARNINGS\": [\"SENSEX_PROXY_UNAVAILABLE\"]}": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "{\"MARKET_OK\": TRUE, \"REASON\": \"PHASE 4 DATA ADVANTAGE MARKET FILTER ACTIVE\", \"DIRECTION\": \"NEUTRAL\", \"REGIME\": \"CAUTION\", \"STATUS\": \"CAUTION\", \"VOLATILITY\": \"LOW\", \"NIFTY_TREND\": \"NEUTRAL\", \"SENSEX_TREND\": \"UNKNOWN\", \"RISK_TONE\": \"CAUTION\", \"RISK_TONE_SCORE\": 36.78, \"BREADTH_SCORE\": 47.3, \"DATA_ADVANTAGE_SCORE\": 42.56, \"WARNINGS\": [\"SENSEX_PROXY_UNAVAILABLE\", \"EVENT_DAY_CAUTION_PROXY\"]}": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "{\"MARKET_OK\": TRUE, \"REASON\": \"PHASE 4 DATA ADVANTAGE MARKET FILTER ACTIVE\", \"DIRECTION\": \"NEUTRAL\", \"REGIME\": \"CAUTION\", \"STATUS\": \"CAUTION\", \"VOLATILITY\": \"LOW\", \"NIFTY_TREND\": \"NEUTRAL\", \"SENSEX_TREND\": \"UNKNOWN\", \"RISK_TONE\": \"CAUTION\", \"RISK_TONE_SCORE\": 38.54, \"BREADTH_SCORE\": 51.2, \"DATA_ADVANTAGE_SCORE\": 44.93, \"WARNINGS\": [\"SENSEX_PROXY_UNAVAILABLE\", \"EVENT_DAY_CAUTION_PROXY\"]}": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
       }
     },
     "stability_score": 0.0,
-    "group_count": 2
+    "group_count": 6
   },
   "sector_testing": {
     "available": true,
@@ -143,126 +191,6 @@
   "symbol_testing": {
     "available": true,
     "symbols": {
-      "SHRIRAMFIN": {
-        "sample_size": 0,
-        "wins": 0,
-        "losses": 0,
-        "win_rate": 0.0,
-        "total_pnl": 0,
-        "expectancy": 0.0,
-        "profit_factor": 0.0,
-        "avg_rr": 0.0,
-        "avg_score": 0.0,
-        "quality_score": 0.0
-      },
-      "CHOLAFIN": {
-        "sample_size": 0,
-        "wins": 0,
-        "losses": 0,
-        "win_rate": 0.0,
-        "total_pnl": 0,
-        "expectancy": 0.0,
-        "profit_factor": 0.0,
-        "avg_rr": 0.0,
-        "avg_score": 0.0,
-        "quality_score": 0.0
-      },
-      "TATASTEEL": {
-        "sample_size": 0,
-        "wins": 0,
-        "losses": 0,
-        "win_rate": 0.0,
-        "total_pnl": 0,
-        "expectancy": 0.0,
-        "profit_factor": 0.0,
-        "avg_rr": 0.0,
-        "avg_score": 0.0,
-        "quality_score": 0.0
-      },
-      "AXISBANK": {
-        "sample_size": 0,
-        "wins": 0,
-        "losses": 0,
-        "win_rate": 0.0,
-        "total_pnl": 0,
-        "expectancy": 0.0,
-        "profit_factor": 0.0,
-        "avg_rr": 0.0,
-        "avg_score": 0.0,
-        "quality_score": 0.0
-      },
-      "TCS": {
-        "sample_size": 0,
-        "wins": 0,
-        "losses": 0,
-        "win_rate": 0.0,
-        "total_pnl": 0,
-        "expectancy": 0.0,
-        "profit_factor": 0.0,
-        "avg_rr": 0.0,
-        "avg_score": 0.0,
-        "quality_score": 0.0
-      },
-      "ABB": {
-        "sample_size": 0,
-        "wins": 0,
-        "losses": 0,
-        "win_rate": 0.0,
-        "total_pnl": 0,
-        "expectancy": 0.0,
-        "profit_factor": 0.0,
-        "avg_rr": 0.0,
-        "avg_score": 0.0,
-        "quality_score": 0.0
-      },
-      "BANKBARODA": {
-        "sample_size": 0,
-        "wins": 0,
-        "losses": 0,
-        "win_rate": 0.0,
-        "total_pnl": 0,
-        "expectancy": 0.0,
-        "profit_factor": 0.0,
-        "avg_rr": 0.0,
-        "avg_score": 0.0,
-        "quality_score": 0.0
-      },
-      "INDIGO": {
-        "sample_size": 0,
-        "wins": 0,
-        "losses": 0,
-        "win_rate": 0.0,
-        "total_pnl": 0,
-        "expectancy": 0.0,
-        "profit_factor": 0.0,
-        "avg_rr": 0.0,
-        "avg_score": 0.0,
-        "quality_score": 0.0
-      },
-      "SIEMENS": {
-        "sample_size": 0,
-        "wins": 0,
-        "losses": 0,
-        "win_rate": 0.0,
-        "total_pnl": 0,
-        "expectancy": 0.0,
-        "profit_factor": 0.0,
-        "avg_rr": 0.0,
-        "avg_score": 0.0,
-        "quality_score": 0.0
-      },
-      "PIIND": {
-        "sample_size": 0,
-        "wins": 0,
-        "losses": 0,
-        "win_rate": 0.0,
-        "total_pnl": 0,
-        "expectancy": 0.0,
-        "profit_factor": 0.0,
-        "avg_rr": 0.0,
-        "avg_score": 0.0,
-        "quality_score": 0.0
-      },
       "TRENT": {
         "sample_size": 0,
         "wins": 0,
@@ -299,7 +227,7 @@
         "avg_score": 0.0,
         "quality_score": 0.0
       },
-      "ONGC": {
+      "HAVELLS": {
         "sample_size": 0,
         "wins": 0,
         "losses": 0,
@@ -311,7 +239,7 @@
         "avg_score": 0.0,
         "quality_score": 0.0
       },
-      "HAVELLS": {
+      "HAL": {
         "sample_size": 0,
         "wins": 0,
         "losses": 0,
@@ -335,7 +263,43 @@
         "avg_score": 0.0,
         "quality_score": 0.0
       },
-      "JINDALSTEL": {
+      "SHRIRAMFIN": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "CHOLAFIN": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "TCS": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "ABB": {
         "sample_size": 0,
         "wins": 0,
         "losses": 0,
@@ -371,7 +335,19 @@
         "avg_score": 0.0,
         "quality_score": 0.0
       },
-      "HAL": {
+      "INDIGO": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "PIIND": {
         "sample_size": 0,
         "wins": 0,
         "losses": 0,
@@ -384,6 +360,54 @@
         "quality_score": 0.0
       },
       "PFC": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "JINDALSTEL": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "TATASTEEL": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "BANKBARODA": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "SIEMENS": {
         "sample_size": 0,
         "wins": 0,
         "losses": 0,
@@ -408,6 +432,18 @@
         "quality_score": 0.0
       },
       "BAJAJ-AUTO": {
+        "sample_size": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "total_pnl": 0,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_rr": 0.0,
+        "avg_score": 0.0,
+        "quality_score": 0.0
+      },
+      "AXISBANK": {
         "sample_size": 0,
         "wins": 0,
         "losses": 0,
@@ -481,7 +517,7 @@
       }
     },
     "stability_score": 0.0,
-    "group_count": 28
+    "group_count": 27
   },
   "monte_carlo_robustness": {
     "available": false,
@@ -535,14 +571,14 @@
     "significant": false
   },
   "survivorship_bias_check": {
-    "symbol_count": 28,
+    "symbol_count": 27,
     "delisted_or_inactive_count": 0,
     "bias_risk_score": 15.0,
     "status": "REVIEW"
   },
   "slippage_simulation": {
     "slippage_bps": 6.5,
-    "slippage_value": 0.138,
+    "slippage_value": 0.8219,
     "simulation_status": "OK"
   },
   "market_replay_test": {

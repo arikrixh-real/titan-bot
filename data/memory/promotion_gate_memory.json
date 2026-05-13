@@ -1,43 +1,43 @@
 {
   "actual_outcomes": {
-    "closed_samples": 0,
-    "loss_rate": 0.0,
-    "losses": 0,
+    "closed_samples": 5,
+    "loss_rate": 0.4,
+    "losses": 2,
     "open": 0,
-    "other": 300,
+    "other": 295,
     "rows": 300,
     "source": "data\\journals\\trade_outcomes.jsonl",
-    "win_rate": 0.0,
-    "wins": 0
+    "win_rate": 0.6,
+    "wins": 3
   },
-  "generated_at": "2026-05-10 23:06:59",
+  "generated_at": "2026-05-13 12:33:31",
   "layer_freshness": {
     "phase10": {
-      "age_seconds": 0.001,
+      "age_seconds": 0.024,
       "available": true,
       "path": "data\\memory\\master_shadow_memory.json",
       "status": "OK"
     },
     "phase6": {
-      "age_seconds": 45608.371,
+      "age_seconds": 828.123,
       "available": true,
       "path": "data\\memory\\phase6_shadow_memory.json",
       "status": "OK"
     },
     "phase7": {
-      "age_seconds": 44306.044,
+      "age_seconds": 0.301,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "phase8": {
-      "age_seconds": 43851.565,
+      "age_seconds": 7.131,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "phase9": {
-      "age_seconds": 43356.776,
+      "age_seconds": 826.088,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
@@ -45,81 +45,86 @@
   },
   "phase11_shadow_mode": true,
   "phase6": {
-    "agreement_quality": 1.0,
-    "confidence_quality": 1.0,
-    "contradiction_accuracy": 1.0,
-    "drift_score": 0.0,
-    "false_negative_rate": 0.0,
-    "false_positive_rate": 0.0,
-    "promotion_score": 0.0,
+    "agreement_quality": 0.9976,
+    "confidence_quality": 0.9316,
+    "contradiction_accuracy": 0.6,
+    "drift_score": 0.2056,
+    "false_negative_rate": 0.2386,
+    "false_positive_rate": 0.2409,
+    "promotion_score": 0.1096,
     "recommendation": "INSUFFICIENT_SAMPLE_SHADOW_ONLY",
     "recommended_live_weight": 0.0,
     "regime_consistency": 0.5,
-    "samples": 0,
-    "stability_score": 1.0,
-    "usefulness_score": 0.5
+    "samples": 8,
+    "stability_score": 0.7944,
+    "usefulness_score": 0.489
   },
   "phase7": {
-    "agreement_quality": 0.5,
-    "confidence_quality": 0.5,
-    "contradiction_accuracy": 0.5,
-    "drift_score": 0.0,
-    "false_negative_rate": 0.0,
-    "false_positive_rate": 0.0,
-    "promotion_score": 0.0,
+    "agreement_quality": 0.8147,
+    "confidence_quality": 0.6735,
+    "contradiction_accuracy": 0.8147,
+    "drift_score": 0.0685,
+    "false_negative_rate": 0.1288,
+    "false_positive_rate": 0.3141,
+    "promotion_score": 0.3483,
     "recommendation": "INSUFFICIENT_SAMPLE_SHADOW_ONLY",
     "recommended_live_weight": 0.0,
     "regime_consistency": 0.5,
-    "samples": 0,
-    "stability_score": 0.5,
-    "usefulness_score": 0.25
+    "samples": 25,
+    "stability_score": 0.8213,
+    "usefulness_score": 0.5757
   },
   "phase8": {
-    "agreement_quality": 0.5,
-    "confidence_quality": 0.25,
-    "contradiction_accuracy": 1.0,
-    "drift_score": 0.5,
-    "false_negative_rate": 0.5,
-    "false_positive_rate": 0.0,
-    "promotion_score": 0.0,
+    "agreement_quality": 0.68,
+    "confidence_quality": 0.7,
+    "contradiction_accuracy": 0.7,
+    "drift_score": 0.0,
+    "false_negative_rate": 0.112,
+    "false_positive_rate": 0.432,
+    "promotion_score": 0.0549,
     "recommendation": "INSUFFICIENT_SAMPLE_SHADOW_ONLY",
     "recommended_live_weight": 0.0,
-    "regime_consistency": 0.5,
-    "samples": 0,
-    "stability_score": 0.5,
-    "usefulness_score": 0.2083
+    "regime_consistency": 0.4,
+    "samples": 5,
+    "stability_score": 1.0,
+    "usefulness_score": 0.3263
   },
   "phase9": {
-    "agreement_quality": 0.0,
-    "confidence_quality": 0.4,
-    "contradiction_accuracy": 1.0,
-    "drift_score": 0.5,
-    "false_negative_rate": 0.0,
-    "false_positive_rate": 0.0,
-    "promotion_score": 0.0,
+    "agreement_quality": 0.4562,
+    "confidence_quality": 0.2962,
+    "contradiction_accuracy": 0.4562,
+    "drift_score": 0.0125,
+    "false_negative_rate": 0.0225,
+    "false_positive_rate": 0.5663,
+    "promotion_score": 0.0809,
     "recommendation": "INSUFFICIENT_SAMPLE_SHADOW_ONLY",
     "recommended_live_weight": 0.0,
-    "regime_consistency": 1.0,
-    "samples": 0,
-    "stability_score": 0.5,
-    "usefulness_score": 0.2333
+    "regime_consistency": 0.7,
+    "samples": 8,
+    "stability_score": 0.9875,
+    "usefulness_score": 0.2337
   },
   "promotion_summary": {
     "any_live_influence": false,
-    "best_candidate": "phase6",
-    "max_promotion_score": 0.0,
+    "best_candidate": "phase7",
+    "max_promotion_score": 0.3483,
     "minimum_samples_required": 50,
     "recommended_live_weight": 0.0
   },
   "runtime_bounded": true,
   "runtime_context": {
-    "observed_setups_count": 0,
+    "observed_setups_count": 8,
     "phase_result_keys": [
-      "phase10_master_shadow_result"
+      "outcome_result",
+      "phase10_master_shadow_result",
+      "phase5_memory_result",
+      "phase6_shadow_report_result",
+      "phase8_market_narrative_result",
+      "phase9_cross_setup_result"
     ],
     "selected_decisions_count": 0
   },
-  "runtime_ms": 16.0,
+  "runtime_ms": 31.0,
   "safety": {
     "alert_caps_mutated": false,
     "alert_changes": false,
@@ -140,7 +145,7 @@
     "telegram_changes": false,
     "tp_sl_changes": false
   },
-  "status": "NEUTRAL_OBSERVING",
+  "status": "ACTIVE",
   "version": "11.0",
   "warnings": []
 }

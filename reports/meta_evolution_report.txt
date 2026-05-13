@@ -8,35 +8,35 @@ Safety
 - recommended_live_weight: 0.0
 - No forbidden imports detected: True
 
-Updated: 2026-05-10 22:23:19
+Updated: 2026-05-13 12:19:51
 Runtime Ms: 32.0 | Bounded: True
 
 Meta State:
 - Overall usefulness: 0.4109
-- Overall stability: 0.6094
-- Overall drift: 0.0
-- Overall overfit risk: 0.2432
-- Contradiction pressure: 0.0175
+- Overall stability: 0.5901
+- Overall drift: 0.0482
+- Overall overfit risk: 0.3834
+- Contradiction pressure: 0.0225
 
 Layer Scores:
-- phase5_strategy_family: usefulness=0.7052, stability=0.9475, drift=0.0, overfit=0.0, recommendation=PROMOTION_CANDIDATE_REVIEW_ONLY
-- phase11_promotion_gate: usefulness=0.7, stability=0.725, drift=0.0, overfit=0.07, recommendation=PROMOTION_CANDIDATE_REVIEW_ONLY
-- phase6_multi_agent: usefulness=0.4, stability=0.55, drift=0.0, overfit=0.14, recommendation=INSUFFICIENT_DATA
-- phase8_market_narrative: usefulness=0.4, stability=0.55, drift=0.0, overfit=0.14, recommendation=INSUFFICIENT_DATA
-- phase9_cross_setup: usefulness=0.4, stability=0.55, drift=0.0, overfit=0.14, recommendation=INSUFFICIENT_DATA
-- phase12_regime: usefulness=0.319, stability=0.64, drift=0.0, overfit=0.4042, recommendation=INSUFFICIENT_DATA
-- phase7_lifecycle: usefulness=0.31, stability=0.65, drift=0.0, overfit=0.4335, recommendation=INSUFFICIENT_DATA
-- phase10_master_shadow: usefulness=0.232, stability=0.32, drift=0.0, overfit=0.2112, recommendation=INSUFFICIENT_DATA
-- phase13_strategy_genome: usefulness=0.2315, stability=0.5525, drift=0.0, overfit=0.6498, recommendation=INSUFFICIENT_DATA
+- phase5_strategy_family: usefulness=0.7501, stability=0.958, drift=0.0182, overfit=0.0, recommendation=PROMOTION_CANDIDATE_REVIEW_ONLY
+- phase11_promotion_gate: usefulness=0.4851, stability=0.7738, drift=0.0297, overfit=0.0, recommendation=KEEP_OBSERVING
+- phase7_lifecycle: usefulness=0.4058, stability=0.7095, drift=0.0483, overfit=0.297, recommendation=INSUFFICIENT_DATA
+- phase6_multi_agent: usefulness=0.3828, stability=0.6575, drift=0.0065, overfit=0.4455, recommendation=INSUFFICIENT_DATA
+- phase9_cross_setup: usefulness=0.36, stability=0.4542, drift=0.0332, overfit=0.6595, recommendation=INSUFFICIENT_DATA
+- phase13_strategy_genome: usefulness=0.3572, stability=0.511, drift=0.0297, overfit=0.6133, recommendation=INSUFFICIENT_DATA
+- phase12_regime: usefulness=0.3428, stability=0.5991, drift=0.034, overfit=0.6147, recommendation=INSUFFICIENT_DATA
+- phase10_master_shadow: usefulness=0.3374, stability=0.3876, drift=0.0792, overfit=0.2954, recommendation=INSUFFICIENT_DATA
+- phase8_market_narrative: usefulness=0.2767, stability=0.26, drift=0.1547, overfit=0.5248, recommendation=INSUFFICIENT_DATA
 
 Contradictions: 1
 
 Promotion Gate Compatibility:
-- Samples: 0
-- Meta stability score: 0.6094
+- Samples: 3
+- Meta stability score: 0.5901
 - Layer usefulness quality: 0.4109
-- Overfit control score: 0.7568
-- Contradiction control score: 0.9825
+- Overfit control score: 0.6166
+- Contradiction control score: 0.9775
 - Promotion eligible: False
 - Recommended live weight: 0.0
 

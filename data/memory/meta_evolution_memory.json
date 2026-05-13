@@ -1,13 +1,13 @@
 {
   "contradictions": [
     {
-      "left": "phase11_promotion_gate",
-      "right": "phase13_strategy_genome",
-      "severity": 0.35,
-      "type": "family_stability_vs_insufficient_promotion"
+      "left": "phase9_cross_setup",
+      "right": "phase10_master_shadow",
+      "severity": 0.45,
+      "type": "active_shadow_with_high_concentration"
     }
   ],
-  "generated_at": "2026-05-10 23:06:59",
+  "generated_at": "2026-05-13 12:33:32",
   "history": [
     {
       "contradiction_pressure": 0.0175,
@@ -200,59 +200,101 @@
       "generated_at": "2026-05-10 23:06:59",
       "overall_drift_score": 0.0,
       "overall_usefulness_score": 0.4109
+    },
+    {
+      "contradiction_pressure": 0.0175,
+      "generated_at": "2026-05-11 08:34:23",
+      "overall_drift_score": 0.0,
+      "overall_usefulness_score": 0.4109
+    },
+    {
+      "contradiction_pressure": 0.0175,
+      "generated_at": "2026-05-11 08:40:54",
+      "overall_drift_score": 0.0,
+      "overall_usefulness_score": 0.4109
+    },
+    {
+      "contradiction_pressure": 0.0225,
+      "generated_at": "2026-05-11 10:43:44",
+      "overall_drift_score": 0.0993,
+      "overall_usefulness_score": 0.3947
+    },
+    {
+      "contradiction_pressure": 0.0225,
+      "generated_at": "2026-05-11 11:00:38",
+      "overall_drift_score": 0.0025,
+      "overall_usefulness_score": 0.3969
+    },
+    {
+      "contradiction_pressure": 0.0225,
+      "generated_at": "2026-05-11 11:02:21",
+      "overall_drift_score": 0.0006,
+      "overall_usefulness_score": 0.3975
+    },
+    {
+      "contradiction_pressure": 0.0225,
+      "generated_at": "2026-05-13 12:19:51",
+      "overall_drift_score": 0.0482,
+      "overall_usefulness_score": 0.4109
+    },
+    {
+      "contradiction_pressure": 0.0225,
+      "generated_at": "2026-05-13 12:33:32",
+      "overall_drift_score": 0.0253,
+      "overall_usefulness_score": 0.4271
     }
   ],
   "layer_freshness": {
     "phase10_master_shadow": {
-      "age_seconds": 0.106,
+      "age_seconds": 0.283,
       "available": true,
       "path": "data\\memory\\master_shadow_memory.json",
       "status": "OK"
     },
     "phase11_promotion_gate": {
-      "age_seconds": 0.076,
+      "age_seconds": 0.186,
       "available": true,
       "path": "data\\memory\\promotion_gate_memory.json",
       "status": "OK"
     },
     "phase12_regime": {
-      "age_seconds": 0.042,
+      "age_seconds": 0.114,
       "available": true,
       "path": "data\\memory\\advanced_regime_intelligence_memory.json",
       "status": "OK"
     },
     "phase13_strategy_genome": {
-      "age_seconds": 0.005,
+      "age_seconds": 0.029,
       "available": true,
       "path": "data\\memory\\strategy_genome_memory.json",
       "status": "OK"
     },
     "phase5_strategy_family": {
-      "age_seconds": 46550.913,
+      "age_seconds": 821.06,
       "available": true,
       "path": "data\\memory\\strategy_family_memory.json",
       "status": "OK"
     },
     "phase6_multi_agent": {
-      "age_seconds": 45608.476,
+      "age_seconds": 828.381,
       "available": true,
       "path": "data\\memory\\phase6_shadow_memory.json",
       "status": "OK"
     },
     "phase7_lifecycle": {
-      "age_seconds": 44306.149,
+      "age_seconds": 0.561,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "phase8_market_narrative": {
-      "age_seconds": 43851.67,
+      "age_seconds": 7.39,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "phase9_cross_setup": {
-      "age_seconds": 43356.88,
+      "age_seconds": 826.346,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
@@ -260,202 +302,207 @@
   },
   "layers": {
     "phase10_master_shadow": {
-      "drift_score": 0.0,
-      "loser_warning_quality": 0.4,
-      "overfit_risk": 0.2112,
+      "drift_score": 0.0384,
+      "loser_warning_quality": 0.6,
+      "overfit_risk": 0.2263,
       "promotion_recommendation": "INSUFFICIENT_DATA",
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
-      "sample_confidence": 0.0,
-      "samples": 0,
-      "stability_score": 0.32,
-      "usefulness_score": 0.232,
-      "winner_alignment": 0.8
+      "sample_confidence": 0.25,
+      "samples": 25,
+      "stability_score": 0.3706,
+      "usefulness_score": 0.3687,
+      "winner_alignment": 0.9343
     },
     "phase11_promotion_gate": {
-      "drift_score": 0.0,
-      "loser_warning_quality": 1.0,
-      "overfit_risk": 0.07,
-      "promotion_recommendation": "PROMOTION_CANDIDATE_REVIEW_ONLY",
+      "drift_score": 0.0237,
+      "loser_warning_quality": 0.6,
+      "overfit_risk": 0.0079,
+      "promotion_recommendation": "KEEP_OBSERVING",
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
       "sample_confidence": 0.5,
       "samples": 50,
-      "stability_score": 0.725,
-      "usefulness_score": 0.7,
-      "winner_alignment": 1.0
+      "stability_score": 0.7947,
+      "usefulness_score": 0.5227,
+      "winner_alignment": 0.7483
     },
     "phase12_regime": {
-      "drift_score": 0.0,
-      "loser_warning_quality": 1.0,
-      "overfit_risk": 0.4042,
+      "drift_score": 0.0147,
+      "loser_warning_quality": 0.6,
+      "overfit_risk": 0.5901,
       "promotion_recommendation": "INSUFFICIENT_DATA",
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
-      "sample_confidence": 0.0,
-      "samples": 0,
-      "stability_score": 0.64,
-      "usefulness_score": 0.319,
-      "winner_alignment": 0.55
+      "sample_confidence": 0.05,
+      "samples": 5,
+      "stability_score": 0.6061,
+      "usefulness_score": 0.3297,
+      "winner_alignment": 0.7928
     },
     "phase13_strategy_genome": {
-      "drift_score": 0.0,
-      "loser_warning_quality": 0.95,
-      "overfit_risk": 0.6498,
+      "drift_score": 0.0157,
+      "loser_warning_quality": 0.85,
+      "overfit_risk": 0.5865,
       "promotion_recommendation": "INSUFFICIENT_DATA",
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
-      "sample_confidence": 0.0,
-      "samples": 0,
-      "stability_score": 0.5525,
-      "usefulness_score": 0.2315,
-      "winner_alignment": 0.125
+      "sample_confidence": 0.05,
+      "samples": 5,
+      "stability_score": 0.4967,
+      "usefulness_score": 0.3489,
+      "winner_alignment": 0.8087
     },
     "phase5_strategy_family": {
-      "drift_score": 0.0,
-      "loser_warning_quality": 1.0,
+      "drift_score": 0.0025,
+      "loser_warning_quality": 0.6,
       "overfit_risk": 0.0,
       "promotion_recommendation": "PROMOTION_CANDIDATE_REVIEW_ONLY",
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
-      "sample_confidence": 0.85,
-      "samples": 85,
-      "stability_score": 0.9475,
-      "usefulness_score": 0.7052,
-      "winner_alignment": 0.5
+      "sample_confidence": 0.88,
+      "samples": 88,
+      "stability_score": 0.958,
+      "usefulness_score": 0.7563,
+      "winner_alignment": 0.9
     },
     "phase6_multi_agent": {
-      "drift_score": 0.0,
-      "loser_warning_quality": 1.0,
-      "overfit_risk": 0.14,
+      "drift_score": 0.001,
+      "loser_warning_quality": 0.6,
+      "overfit_risk": 0.4462,
       "promotion_recommendation": "INSUFFICIENT_DATA",
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
-      "sample_confidence": 0.0,
-      "samples": 0,
-      "stability_score": 0.55,
-      "usefulness_score": 0.4,
-      "winner_alignment": 1.0
+      "sample_confidence": 0.08,
+      "samples": 8,
+      "stability_score": 0.6575,
+      "usefulness_score": 0.3848,
+      "winner_alignment": 0.9976
     },
     "phase7_lifecycle": {
-      "drift_score": 0.0,
-      "loser_warning_quality": 1.0,
-      "overfit_risk": 0.4335,
+      "drift_score": 0.0449,
+      "loser_warning_quality": 0.6,
+      "overfit_risk": 0.2319,
       "promotion_recommendation": "INSUFFICIENT_DATA",
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
-      "sample_confidence": 0.0,
-      "samples": 0,
-      "stability_score": 0.65,
-      "usefulness_score": 0.31,
-      "winner_alignment": 0.5
+      "sample_confidence": 0.25,
+      "samples": 25,
+      "stability_score": 0.7375,
+      "usefulness_score": 0.4482,
+      "winner_alignment": 0.9
     },
     "phase8_market_narrative": {
-      "drift_score": 0.0,
-      "loser_warning_quality": 1.0,
-      "overfit_risk": 0.14,
+      "drift_score": 0.0749,
+      "loser_warning_quality": 0.9,
+      "overfit_risk": 0.54,
       "promotion_recommendation": "INSUFFICIENT_DATA",
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
-      "sample_confidence": 0.0,
-      "samples": 0,
-      "stability_score": 0.55,
-      "usefulness_score": 0.4,
-      "winner_alignment": 1.0
+      "sample_confidence": 0.05,
+      "samples": 5,
+      "stability_score": 0.3985,
+      "usefulness_score": 0.3487,
+      "winner_alignment": 0.88
     },
     "phase9_cross_setup": {
-      "drift_score": 0.0,
-      "loser_warning_quality": 1.0,
-      "overfit_risk": 0.14,
+      "drift_score": 0.0121,
+      "loser_warning_quality": 0.9,
+      "overfit_risk": 0.6511,
       "promotion_recommendation": "INSUFFICIENT_DATA",
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
-      "sample_confidence": 0.0,
-      "samples": 0,
-      "stability_score": 0.55,
-      "usefulness_score": 0.4,
-      "winner_alignment": 1.0
+      "sample_confidence": 0.08,
+      "samples": 8,
+      "stability_score": 0.4542,
+      "usefulness_score": 0.3361,
+      "winner_alignment": 0.6562
     }
   },
   "meta_state": {
-    "contradiction_pressure": 0.0175,
-    "overall_drift_score": 0.0,
-    "overall_intelligence_stability": 0.6094,
-    "overall_overfit_risk": 0.2432,
-    "overall_usefulness_score": 0.4109,
+    "contradiction_pressure": 0.0225,
+    "overall_drift_score": 0.0253,
+    "overall_intelligence_stability": 0.6082,
+    "overall_overfit_risk": 0.3644,
+    "overall_usefulness_score": 0.4271,
     "rank_adjustment": 0.0,
     "recommended_live_weight": 0.0
   },
   "phase14_shadow_mode": true,
   "promotion_gate_features": {
-    "contradiction_control_score": 0.9825,
-    "layer_usefulness_quality": 0.4109,
-    "meta_stability_score": 0.6094,
-    "overfit_control_score": 0.7568,
+    "contradiction_control_score": 0.9775,
+    "layer_usefulness_quality": 0.4271,
+    "meta_stability_score": 0.6082,
+    "overfit_control_score": 0.6356,
     "promotion_eligible": false,
     "recommended_live_weight": 0.0,
-    "samples": 0
+    "samples": 5
   },
   "rank_adjustment": 0.0,
   "recommended_live_weight": 0.0,
   "regime_layer_usefulness": {
-    "CHOPPY_NO_EDGE": {
+    "RISK_OFF": {
       "phase10_master_shadow": {
-        "confidence": 0.0,
-        "samples": 0,
-        "usefulness_score": 0.232
+        "confidence": 0.1667,
+        "samples": 5,
+        "usefulness_score": 0.3687
       },
       "phase11_promotion_gate": {
-        "confidence": 0.0,
-        "samples": 0,
-        "usefulness_score": 0.7
+        "confidence": 0.1667,
+        "samples": 5,
+        "usefulness_score": 0.5227
       },
       "phase12_regime": {
-        "confidence": 0.0,
-        "samples": 0,
-        "usefulness_score": 0.319
+        "confidence": 0.1667,
+        "samples": 5,
+        "usefulness_score": 0.3297
       },
       "phase13_strategy_genome": {
-        "confidence": 0.0,
-        "samples": 0,
-        "usefulness_score": 0.2315
+        "confidence": 0.1667,
+        "samples": 5,
+        "usefulness_score": 0.3489
       },
       "phase5_strategy_family": {
-        "confidence": 0.0,
-        "samples": 0,
-        "usefulness_score": 0.7052
+        "confidence": 0.1667,
+        "samples": 5,
+        "usefulness_score": 0.7563
       },
       "phase6_multi_agent": {
-        "confidence": 0.0,
-        "samples": 0,
-        "usefulness_score": 0.4
+        "confidence": 0.1667,
+        "samples": 5,
+        "usefulness_score": 0.3848
       },
       "phase7_lifecycle": {
-        "confidence": 0.0,
-        "samples": 0,
-        "usefulness_score": 0.31
+        "confidence": 0.1667,
+        "samples": 5,
+        "usefulness_score": 0.4482
       },
       "phase8_market_narrative": {
-        "confidence": 0.0,
-        "samples": 0,
-        "usefulness_score": 0.4
+        "confidence": 0.1667,
+        "samples": 5,
+        "usefulness_score": 0.3487
       },
       "phase9_cross_setup": {
-        "confidence": 0.0,
-        "samples": 0,
-        "usefulness_score": 0.4
+        "confidence": 0.1667,
+        "samples": 5,
+        "usefulness_score": 0.3361
       }
     }
   },
   "runtime_bounded": true,
   "runtime_context": {
-    "context_mode": null,
-    "observed_setups_count": 0,
+    "context_mode": "SELECTIVE",
+    "observed_setups_count": 8,
     "phase_result_keys": [
+      "outcome_result",
       "phase10_master_shadow_result",
       "phase11_promotion_gate_result",
       "phase12_advanced_regime_result",
-      "phase13_strategy_genome_result"
+      "phase13_strategy_genome_result",
+      "phase5_memory_result",
+      "phase6_shadow_report_result",
+      "phase8_market_narrative_result",
+      "phase9_cross_setup_result"
     ],
     "selected_decisions_count": 0
   },

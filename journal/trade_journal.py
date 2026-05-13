@@ -55,9 +55,19 @@ ACTIVE_FIELDS = [
     "entry",
     "sl",
     "target",
+    "entry_price",
+    "stop_loss",
+    "tp",
     "rr",
     "score",
     "rank_score",
+    "quantity",
+    "qty",
+    "position_size",
+    "risk_amount",
+    "risk_per_trade_pct",
+    "paper_trade_id",
+    "is_paper_trade",
     "alert_sent",
     "market_status",
     "status",
@@ -122,6 +132,32 @@ def _ensure_csv(path, fields):
         with open(path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fields)
             writer.writeheader()
+        return
+
+    try:
+        with open(path, "r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            existing_fields = reader.fieldnames or []
+            rows = list(reader)
+        missing = [field for field in fields if field not in existing_fields]
+        if not missing:
+            return
+        merged_fields = existing_fields + missing
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=merged_fields)
+            writer.writeheader()
+            for row in rows:
+                writer.writerow({field: row.get(field, "") for field in merged_fields})
+    except Exception:
+        pass
+
+
+def _paper_fields(setup):
+    try:
+        from engines.paper_trading_engine import prepare_paper_trade_fields
+        return prepare_paper_trade_fields(setup if isinstance(setup, dict) else {})
+    except Exception:
+        return setup if isinstance(setup, dict) else {}
 
 
 def ensure_files():
@@ -168,6 +204,7 @@ def _build_trade_id(scan_id, symbol, side, entry, sl, target):
 
 def _build_rows(setup, scan_id, alert_sent, market_status):
     timestamp = _now()
+    setup = _paper_fields(setup)
 
     symbol = _symbol(_safe_get(setup, "symbol", "stock", "ticker"))
     side = _side(_safe_get(setup, "side", "direction"))
@@ -175,6 +212,11 @@ def _build_rows(setup, scan_id, alert_sent, market_status):
     entry = _float_text(_safe_get(setup, "entry", "entry_price"))
     sl = _float_text(_safe_get(setup, "sl", "stop_loss", "stoploss"))
     target = _float_text(_safe_get(setup, "target", "tp", "t1", "target1"))
+    quantity = _float_text(_safe_get(setup, "quantity", "qty"))
+    position_size = _float_text(_safe_get(setup, "position_size"))
+    risk_amount = _float_text(_safe_get(setup, "risk_amount"))
+    risk_pct = _float_text(_safe_get(setup, "risk_per_trade_pct", default=1.0))
+    paper_trade_id = _text(_safe_get(setup, "paper_trade_id", "trade_id", default=""))
 
     rr = _float_text(_safe_get(setup, "rr", "risk_reward"))
     score = _float_text(_safe_get(setup, "score", "final_score"))
@@ -212,9 +254,19 @@ def _build_rows(setup, scan_id, alert_sent, market_status):
         "entry": entry,
         "sl": sl,
         "target": target,
+        "entry_price": entry,
+        "stop_loss": sl,
+        "tp": target,
         "rr": rr,
         "score": score,
         "rank_score": rank_score,
+        "quantity": quantity,
+        "qty": quantity,
+        "position_size": position_size,
+        "risk_amount": risk_amount,
+        "risk_per_trade_pct": risk_pct,
+        "paper_trade_id": paper_trade_id,
+        "is_paper_trade": "true",
         "alert_sent": alert_text,
         "market_status": market_text,
         "status": "OPEN",

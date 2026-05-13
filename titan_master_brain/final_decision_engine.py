@@ -621,6 +621,40 @@ def _pre_no_trade_rank_score(setup: Dict[str, Any]) -> float:
     )
 
 
+def _final_master_rank_score(setup: Dict[str, Any]) -> float:
+    raw = setup.get("raw") if isinstance(setup.get("raw"), dict) else {}
+    for key in (
+        "final_no_trade_rank",
+        "final_calibration_rank",
+        "final_reflection_rank",
+        "final_debate_rank",
+        "final_scenario_rank",
+        "final_liquidity_rank",
+        "final_calendar_rank",
+        "final_news_intelligence_rank",
+        "final_options_rank",
+        "final_microstructure_rank",
+        "final_portfolio_rank",
+        "final_cross_asset_rank",
+        "new_blended_rank_score",
+        "blended_rank_score",
+        "final_score",
+        "score",
+        "rank_score",
+    ):
+        if setup.get(key) is not None:
+            return _safe_float(setup.get(key), 0.0)
+        if raw.get(key) is not None:
+            return _safe_float(raw.get(key), 0.0)
+    return 0.0
+
+
+def _attach_final_master_rank(setup: Dict[str, Any]) -> Dict[str, Any]:
+    result = dict(setup)
+    result["final_master_rank"] = round(_final_master_rank_score(result), 4)
+    return result
+
+
 def _open_status(value: Any, default_open: bool = True) -> bool:
     if value is None or value == "":
         return default_open
@@ -1752,6 +1786,7 @@ def make_final_decisions(
     evaluated_setups = _attach_reflection_to_candidates(evaluated_setups, context)
     evaluated_setups = _attach_calibration_to_candidates(evaluated_setups, context)
     evaluated_setups = _attach_no_trade_to_candidates(evaluated_setups, context)
+    evaluated_setups = [_attach_final_master_rank(setup) for setup in evaluated_setups]
 
     for setup in evaluated_setups:
         decision = str(setup.get("decision", "REJECT")).upper()
@@ -1776,6 +1811,7 @@ def make_final_decisions(
             _decision_rank(s.get("decision")),
             _confidence_rank(s.get("confidence")),
             _bounded_meta_rank_points(s),
+            _safe_float(s.get("final_master_rank"), _final_master_rank_score(s)),
             _safe_float(s.get("final_no_trade_rank"), _pre_no_trade_rank_score(s)),
             _safe_float(s.get("final_calibration_rank"), _pre_calibration_rank_score(s)),
             _safe_float(s.get("final_reflection_rank"), _pre_reflection_rank_score(s)),

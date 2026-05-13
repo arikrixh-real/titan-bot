@@ -1,5 +1,413 @@
 {
-  "updated_at": "2026-05-10 23:06:59",
-  "news_count": 0,
-  "news": []
+  "updated_at": "2026-05-13 12:32:43",
+  "news_count": 28,
+  "news": [
+    {
+      "news_hash": "c9317f88ad1ac515fd39ef07a51c04150c0c2e1c11f5bd2f4ea9f60fe37a04de",
+      "title": "Taking Stock: Market fails to hold on to day#39;s gains, ends marginally higher",
+      "summary": "<img align=\" left\" alt=\"Taking Stock: Market fails to hold on to day#39;s gains, ends marginally higher\" border=\"0\" height=\"75\" hspace=\"5\" src=\"https://www.moneycontrol.com/news_image_files/2024/200x200/v/volatile_market1_200.jpg\" title=\"Taking Stock: Market fails to hold on to day#39;s gains, ends marginally higher\" width=\"75\" /> Grasim Industries, Bharti Airtel, Nestle India, Maruti Suzuki and HCL Technologies were the biggest Nifty gainers, while losers included Sun Pharma, BPCL, Reliance Industries, MM and Hindalco Industries",
+      "link": "https://www.moneycontrol.com/news/local-markets/taking-stock-market-fails-to-holdto-day39s-gains-ends-marginally-higher_17531871.html",
+      "detected_symbols": [
+        "RELIANCE",
+        "BHARTIARTL",
+        "MARUTI",
+        "SUNPHARMA",
+        "HCLTECH",
+        "GRASIM",
+        "HINDALCO",
+        "NESTLEIND"
+      ],
+      "sectors": [
+        "Auto",
+        "Cement / Chemicals",
+        "Energy / Telecom / Retail",
+        "FMCG",
+        "IT",
+        "Market Index",
+        "Metals",
+        "Pharma",
+        "Telecom"
+      ],
+      "source": "https://www.moneycontrol.com/rss/marketreports.xml",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.421163+05:30"
+    },
+    {
+      "news_hash": "795e22696d2aed9f047153fca6eb09baf50ed827e6ae0d2b593bd9d451181ab5",
+      "title": "Sensex, Nifty gain for third day in a row; easing volatility to support bull trend",
+      "summary": "<img align=\" left\" alt=\"Sensex, Nifty gain for third day in a row; easing volatility to support bull trend\" border=\"0\" height=\"75\" hspace=\"5\" src=\"https://www.moneycontrol.com/news_image_files/2024/200x200/S/Share-Market-New-4-4_200.jpg\" title=\"Sensex, Nifty gain for third day in a row; easing volatility to support bull trend\" width=\"75\" /> Analysts expect the market to maintain the bullish undertone as elections and corporate earnings season continue",
+      "link": "https://www.moneycontrol.com/news/local-markets/sensex-nifty-gain-for-third-daya-row-easing-volatility-to-support-bull-trend_17531821.html",
+      "detected_symbols": [],
+      "sectors": [
+        "Market Index"
+      ],
+      "source": "https://www.moneycontrol.com/rss/marketreports.xml",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.422352+05:30"
+    },
+    {
+      "news_hash": "da4a5e2a2d92de8c38c36d8d5084f2d4e84679317636a26122b39bb99a9cf1ec",
+      "title": "Mid-day Mood | Cooling volatility sparks market rally, India VIX sees steepest fall in 4 years",
+      "summary": "<img align=\" left\" alt=\"Mid-day Mood | Cooling volatility sparks market rally, India VIX sees steepest fall in 4 years\" border=\"0\" height=\"75\" hspace=\"5\" src=\"https://www.moneycontrol.com/news_image_files/2024/200x200/N/Nifty_sensex_marketup-4_200.jpg\" title=\"Mid-day Mood | Cooling volatility sparks market rally, India VIX sees steepest fall in 4 years\" width=\"75\" /> Broader markets outperformed benchmarks, with the BSE Midcap and BSE Smallcap rising up to 0.9 percent",
+      "link": "https://www.moneycontrol.com/news/local-markets/mid-day-mood-|-cooling-volatility-sparks-market-rally-india-vix-sees-steepest-fall4-years_17531481.html",
+      "detected_symbols": [],
+      "sectors": [
+        "Market Index"
+      ],
+      "source": "https://www.moneycontrol.com/rss/marketreports.xml",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.422352+05:30"
+    },
+    {
+      "news_hash": "c7fe60f8dd90e3be4b72a00e8f3ac6b73f3a6629835956c2846b329268057f61",
+      "title": "Sensex, Nifty extend gains to 3rd day, Q4 results to guide stock-specific action",
+      "summary": "<img align=\" left\" alt=\"Sensex, Nifty extend gains to 3rd day, Q4 results to guide stock-specific action\" border=\"0\" height=\"75\" hspace=\"5\" src=\"https://www.moneycontrol.com/news_image_files/2024/200x200/M/Market_up_200.jpg\" title=\"Sensex, Nifty extend gains to 3rd day, Q4 results to guide stock-specific action\" width=\"75\" /> India VIX, which measures near-term volatility saw a sharp fall of 18 percent to trade around 10.42",
+      "link": "https://www.moneycontrol.com/news/local-markets/sensex-nifty-extend-gains-to-3rd-day-q4-results-to-guide-stock-specific-action_17530901.html",
+      "detected_symbols": [],
+      "sectors": [
+        "Market Index"
+      ],
+      "source": "https://www.moneycontrol.com/rss/marketreports.xml",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.423783+05:30"
+    },
+    {
+      "news_hash": "17e4ab9697c1136b3e35ae0b5984962b13bea78c00686f79b557e94ccb3ed19e",
+      "title": "HPCL Q4 Results: Net profit jumps 46% YoY to Rs 4,902 crore; Rs 19.25/sh dividend declared",
+      "summary": "Hindustan Petroleum Corporation Limited (HPCL) reported a significant 46% surge in consolidated net profit to Rs 4,902 crore for the fourth quarter of FY26. The oil marketing giant also announced a final dividend of Rs 19.25 per share.  Standalone total income saw a 4.5% year-on-year increase to Rs 1.24 lakh crore during the same period.",
+      "link": "https://economictimes.indiatimes.com/markets/stocks/earnings/hpcl-q4-results-net-profit-jumps-46-yoy-to-rs-4902-crore-rs-19-25/sh-dividend-declared/articleshow/131057465.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "Oil & Gas"
+      ],
+      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.647669+05:30"
+    },
+    {
+      "news_hash": "a24637e7203e81000b55b944a9fc3c9cd14d3aabcbac4acf1910323d599b82fc",
+      "title": "Why gold’s Rs 10,000 spike after import duty increase is a one-off move",
+      "summary": "Gold and silver prices staged a sharp comeback on Wednesday, with MCX futures for both metals surging nearly 6% in a single session after the government raised customs duty on precious metal imports. Gold prices jumped about Rs 9,600, while silver soared nearly Rs 17,000, marking one of the biggest one-day rallies in recent months amid lingering volatility from Middle East tensions and tariff uncertainty.",
+      "link": "https://economictimes.indiatimes.com/markets/stocks/news/why-golds-rs-10000-spike-after-import-duty-increase-is-a-one-off-move/articleshow/131057505.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "Metals",
+        "Telecom"
+      ],
+      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.648903+05:30"
+    },
+    {
+      "news_hash": "ab06509232ed663eab9dd7b4677e1e254d5db5e21ccbb49b26df7d64ac3a3cd1",
+      "title": "Smallcaps rally! IIFL Finance, Hindustan Copper, Meesho, other stocks jump up to 7%",
+      "summary": "Smallcap stocks, including IIFL Finance, Meesho, and GRSE, surged up to 7% on Wednesday, outperforming benchmark indices. This rally occurred despite broader market caution, with the Nifty Smallcap 100 index showing robust gains. Experts remain optimistic about mid and smallcap earnings, viewing recent corrections as opportunities.",
+      "link": "https://economictimes.indiatimes.com/markets/stocks/news/smallcaps-rally-iifl-finance-hindustan-copper-meesho-other-stocks-jump-up-to-7/articleshow/131057350.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "Market Index",
+        "Metals"
+      ],
+      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.649922+05:30"
+    },
+    {
+      "news_hash": "01c3475bee3b08da440f36fc7f0cd4868865ec64a3acc840a8e93a7a52b1efdf",
+      "title": "Bitcoin holds above $80K despite hot US inflation data, signalling strong buyer confidence",
+      "summary": "Bitcoin held above the $80,000 mark despite hotter-than-expected U.S. inflation data, reflecting resilient investor sentiment in the crypto market. While Ethereum and select altcoins traded lower, analysts highlighted improving on-chain activity, institutional inflows and active buyer support, even as macroeconomic uncertainty and interest rate concerns kept broader market sentiment cautious.",
+      "link": "https://economictimes.indiatimes.com/markets/cryptocurrency/bitcoin-holds-above-80k-despite-hot-us-inflation-data-signalling-strong-buyer-confidence/articleshow/131057265.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "FMCG",
+        "Global Macro"
+      ],
+      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.649922+05:30"
+    },
+    {
+      "news_hash": "284a4b0b7a6529fdddfab8ed51b3322cad8c8c7f559fa85f609d325f770c0072",
+      "title": "Sensex to hit 89,000? Why Morgan Stanley is betting big on India Inc after 6-quarter slowdown",
+      "summary": "Morgan Stanley has turned more bullish on India, forecasting the BSE Sensex could rise to 89,000 by June 2027, implying around 15% upside from current levels. Strategist Ridham Desai said India is emerging from a six-quarter earnings slowdown into a stronger growth phase after a “mid-cycle” pause.",
+      "link": "https://economictimes.indiatimes.com/markets/stocks/news/sensex-to-hit-89000-why-morgan-stanley-is-betting-big-on-india-inc-after-6-quarter-slowdown/articleshow/131057093.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "Market Index"
+      ],
+      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.650924+05:30"
+    },
+    {
+      "news_hash": "987921aafbd4ca8c79e7411dc8917b6be6ac98a4ce021b4bbc3e64f67f96c19a",
+      "title": "Berger Paints shares soar over 9% after Q4 net profit jumps 27% to Rs 335 crore",
+      "summary": "Berger Paints India saw its shares surge following a robust Q4 FY26 profit jump of over 27%, driven by strong sales volumes and better margins. Despite global uncertainties, the company anticipates continued growth fueled by construction chemicals and new product launches, with price adjustments expected to bolster profitability.",
+      "link": "https://economictimes.indiatimes.com/markets/stocks/news/berger-paints-shares-soar-over-9-after-q4-net-profit-jumps-27-to-rs-335-crore/articleshow/131056215.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "Cement"
+      ],
+      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.651925+05:30"
+    },
+    {
+      "news_hash": "65b2d9c061d3599e1b55d70601a253c25cb61ff29125da0e90cc876b6f16eb06",
+      "title": "Market under pressure: IT stocks face long-term headwinds as oil crisis and AI shift weigh on sentiment: Vinit Bolinjkar",
+      "summary": "Vinit Bolinjkar of Ventura Securities advises selling IT stocks. He highlights market risks from the Hormuz Strait crisis, foreign investor selling, as well as the global AI shift. Bolinjkar sees pressure on IT revenues and margins. He prefers Vodafone Idea in telecom. The consumer sector shows surprising strength this earnings season.",
+      "link": "https://economictimes.indiatimes.com/markets/expert-view/market-under-pressure-it-stocks-face-long-term-headwinds-as-oil-crisis-and-ai-shift-weigh-on-sentiment-vinit-bolinjkar/articleshow/131056106.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "Oil & Gas",
+        "Telecom"
+      ],
+      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.652925+05:30"
+    },
+    {
+      "news_hash": "cb52b37f3238b3c727165448c525b0b1f9105fbbc0622a8887340ffda7467ffd",
+      "title": "Hindustan Zinc shares surge 5% as silver prices near Rs 3 lakh/kg after import duty hike; Vedanta shares jump 4%",
+      "summary": "Government has raised import duties on gold and silver to 15 percent. This move has caused precious metal prices to surge. Hindustan Zinc and Vedanta shares saw significant jumps following the announcement. The government aims to curb imports and stabilize the rupee. Hindustan Zinc, India's largest silver producer, is expected to benefit from higher silver prices.",
+      "link": "https://economictimes.indiatimes.com/markets/stocks/news/hindustan-zinc-shares-surge-5-as-silver-prices-near-rs-3-lakh/kg-after-import-duty-hike-vedanta-shares-jump-4/articleshow/131056130.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "Metals"
+      ],
+      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.653925+05:30"
+    },
+    {
+      "news_hash": "eb3072b16f0b884fd7415de1c5305a02f4d715345368b1d155d1c6584471ce85",
+      "title": "SBI shares extend fall to 20% from peak after Q4 NIMs contraction rattles investors. What's ahead for investors?",
+      "summary": "SBI shares have fallen over 20% from their peak after Q4 earnings revealed margin contraction and a sequential drop in net interest income. Despite this, brokerages maintain a positive outlook, citing strong fundamentals and recommending a 'Buy' rating with revised price targets.",
+      "link": "https://economictimes.indiatimes.com/markets/stocks/news/sbi-shares-extend-fall-to-20-from-peak-after-q4-nims-contraction-rattles-investors-whats-ahead-for-investors/articleshow/131055513.cms",
+      "detected_symbols": [
+        "SBIN"
+      ],
+      "sectors": [
+        "Banking"
+      ],
+      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.655055+05:30"
+    },
+    {
+      "news_hash": "f1583f4cec553e66cfb7ca41d057f2e6c589f5719d72add7350f62907eead122",
+      "title": "Fuel price pass-through needs monitoring as weather risks also posing pressure on inflation: BoB report",
+      "summary": "Rising fuel prices and weather uncertainties could push India's inflation higher in FY27, despite current low CPI levels. Bank of Baroda warns that global energy costs impacting food prices, coupled with domestic weather challenges like heatwaves and El Nino, necessitate close monitoring of food inflation. Core inflation remains stable, but vigilance is advised.",
+      "link": "https://economictimes.indiatimes.com/news/economy/indicators/fuel-price-pass-through-needs-monitoring-as-weather-risks-also-posing-pressure-on-inflation-bob-report/articleshow/131056302.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "Banking",
+        "FMCG",
+        "Global Macro"
+      ],
+      "source": "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.867781+05:30"
+    },
+    {
+      "news_hash": "b55806f9919411dc2966ac197e1a5a79d543542585307ce2654fa715325f30a0",
+      "title": "West Asia crisis yet to impact inflation, but fuel prices pass-through to shape outlook: Report",
+      "summary": "India's retail inflation remains stable despite global tensions. Future price trends will depend on fuel price pass-through and summer crop coverage. Imported inflation has slightly eased. Restaurants and accommodation saw price rises due to LPG shortages. Softening gold and silver prices helped ease personal care inflation. Retail inflation is under control for now.",
+      "link": "https://economictimes.indiatimes.com/news/economy/indicators/west-asia-crisis-yet-to-impact-inflation-but-fuel-prices-pass-through-to-shape-outlook-report/articleshow/131055909.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "FMCG",
+        "Global Macro"
+      ],
+      "source": "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.868807+05:30"
+    },
+    {
+      "news_hash": "4c143b296528302b44f6dddf5ffb4a2fc16ef3886a7631c21be12b29bb93eac3",
+      "title": "India’s economic strength defies foreign outflow fears, S&amp;P Says",
+      "summary": "S&amp;P Global Ratings said India is coping with global financial pressures better than headline data indicate, adding that concerns over foreign investment outflows are overstated. The agency said India has enough buffers to manage a wider current-account deficit caused by rising oil prices.",
+      "link": "https://economictimes.indiatimes.com/news/economy/indicators/indias-economic-strength-defies-foreign-outflow-fears-sp-says/articleshow/131052474.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "Oil & Gas"
+      ],
+      "source": "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.869839+05:30"
+    },
+    {
+      "news_hash": "badea3130f64d421d20ed9f8c194bc538e65bfcba6e3c1a20ae502e57e816ef7",
+      "title": "India books phosphate fertilizer at 40% above pre-war prices",
+      "summary": "India has contracted diammonium phosphate (DAP) fertilizer at prices nearly 40% higher than pre-war levels as the Middle East conflict disrupts supplies and lifts global prices. Indian Potash Ltd. agreed to buy about 1.35 million tons of DAP for delivery on the west and east coasts at around $930-$935 per ton, exceeding the 1.2 million tons sought in last week’s tender.",
+      "link": "https://economictimes.indiatimes.com/news/economy/agriculture/india-books-phosphate-fertilizer-at-40-above-pre-war-prices/articleshow/131052337.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "Global Macro"
+      ],
+      "source": "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.869839+05:30"
+    },
+    {
+      "news_hash": "9efe9b4eadfa5e407c0b4b836bd189f7aa7dd11dde3453e0043408591119b00f",
+      "title": "Inflation in driver’s seat likely to stall discretionary spend",
+      "summary": "While consumer demand had started improving over the past four months after a prolonged slowdown, rising crude oil prices, supply disruptions and Prime Minister Narendra Modi’s recent call for austerity could threaten to derail that recovery, said executives and analysts. The impact is expected to be sharpest in electronics.",
+      "link": "https://economictimes.indiatimes.com/news/economy/indicators/inflation-in-drivers-seat-likely-to-stall-discretionary-spend/articleshow/131048854.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "FMCG",
+        "Global Macro",
+        "Oil & Gas"
+      ],
+      "source": "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.870910+05:30"
+    },
+    {
+      "news_hash": "513ed5eda95823844b50bb21ccece76514aa5daf4cec379fe7328a89e20a0448",
+      "title": "Containing war impact on growth, current account: PMO stitching up plan to boost foreign fund flow",
+      "summary": "Officials at both the finance ministry and Niti Aayog are identifying economic opportunities presented by the Iran conflict, as well as gauging the impact of the surge in global oil prices on the economy under different price bands. Niti Aayog will likely draw up a report on matter.",
+      "link": "https://economictimes.indiatimes.com/news/economy/policy/containing-war-impact-on-growth-current-account-pmo-stitching-up-plan-to-boost-foreign-fund-flow/articleshow/131048609.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "Global Macro",
+        "Oil & Gas"
+      ],
+      "source": "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.870910+05:30"
+    },
+    {
+      "news_hash": "bca855f098aa4ba99c6c314ca5cd94adf109011e9a20a878aac5162ad7f1427b",
+      "title": "Retail inflation up a tad on rise in food, bullion prices",
+      "summary": "Retail inflation reached a four-month peak of 3.5% in April. This rise was fueled by increasing food and gold/silver prices. Economists anticipate further inflationary pressures ahead. The Reserve Bank of India is expected to maintain its current policy rate. Inflation is nearing the RBI's target, suggesting a pause in rate hikes for now.",
+      "link": "https://economictimes.indiatimes.com/news/economy/indicators/retail-inflation-up-a-tad-on-rise-in-food-bullion-prices/articleshow/131048362.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "Banking",
+        "FMCG",
+        "Global Macro"
+      ],
+      "source": "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.873232+05:30"
+    },
+    {
+      "news_hash": "aa846ae8e60ad9e27435ad2ebb744f3f4662dcfa6f852a3bde0fbc6f8d91c0b9",
+      "title": "CEA Nageswaran says West Asia crisis a balance of payments stress test; to impact CAD, inflation &amp; exchange rate",
+      "summary": "Large companies must pay micro and small enterprises on time. This eases their working capital and reduces funding costs. Managing the current account, financing it, and preventing currency depreciation are key macroeconomic goals for FY27. The West Asia crisis presents a balance of payments stress test.",
+      "link": "https://economictimes.indiatimes.com/news/economy/policy/cea-nageswaran-says-west-asia-crisis-a-balance-of-payments-stress-test-to-impact-cad-inflation-exchange-rate/articleshow/131048230.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "FMCG",
+        "Global Macro"
+      ],
+      "source": "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.873232+05:30"
+    },
+    {
+      "news_hash": "bc5eb230533fd60844ff84f1ecc69e9f27af010d787c726cb110482e71206e97",
+      "title": "West Asia crisis a wake-up call for self-reliance: Commerce and industry minister Piyush Goyal",
+      "summary": "The West Asia crisis serves as a crucial reminder for Indian industries to boost self-reliance and efficiency. Commerce Minister Piyush Goyal urged businesses to reduce import dependency and focus on indigenous design and manufacturing. He also highlighted the need for faster electric vehicle adoption to cut oil bills.",
+      "link": "https://economictimes.indiatimes.com/news/economy/policy/west-asia-crisis-a-wake-up-call-for-self-reliance-commerce-and-industry-minister-piyush-goyal/articleshow/131048149.cms",
+      "detected_symbols": [
+        "RELIANCE"
+      ],
+      "sectors": [
+        "Auto",
+        "Energy / Telecom / Retail",
+        "Oil & Gas"
+      ],
+      "source": "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.874251+05:30"
+    },
+    {
+      "news_hash": "39c66495149207bdb9f1b682f78ecdb4eead69656dc73baead24eb71953780b0",
+      "title": "Global turmoil is India’s 'wake-up call' to cut import dependence: Piyush Goyal",
+      "summary": "India's Commerce Minister Piyush Goyal urges domestic industry to embrace self-reliance amid global challenges. He calls for increased productivity and better use of trade agreements. The minister emphasizes reducing import dependence to bolster the economy. He also highlights the potential of electric vehicles and advanced technologies like AI for growth. This presents a significant opportunity for India to emerge stronger.",
+      "link": "https://economictimes.indiatimes.com/news/economy/foreign-trade/global-turmoil-is-indias-wake-up-call-to-cut-import-dependence-piyush-goyal/articleshow/131045713.cms",
+      "detected_symbols": [
+        "RELIANCE"
+      ],
+      "sectors": [
+        "Energy / Telecom / Retail"
+      ],
+      "source": "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms",
+      "fetched_at": "2026-05-13 12:32:42",
+      "fetched_at_iso": "2026-05-13T12:32:42.875375+05:30"
+    },
+    {
+      "news_hash": "41469cd36120860da49e08bc7f488ee669595f9f371f426a7afce93d692b7f5b",
+      "title": "Maruti Suzuki earmarks Rs 1,372 crore on green logistics, crosses 30 lakh dispatches via rail",
+      "summary": "Maruti Suzuki is investing Rs 1,372 crore in green logistics infrastructure. The company plans to increase vehicle dispatches by rail to 35 percent by fiscal year 2030-31. This initiative will reduce carbon footprint and fuel consumption. The carmaker has already achieved significant growth in rail-based dispatches over the past decade.",
+      "link": "https://economictimes.indiatimes.com/industry/auto/auto-news/maruti-suzuki-earmarks-rs-1372-crore-on-green-logistics-crosses-30-lakh-dispatches-via-rail/articleshow/131056568.cms",
+      "detected_symbols": [
+        "MARUTI"
+      ],
+      "sectors": [
+        "Auto",
+        "Infrastructure"
+      ],
+      "source": "https://economictimes.indiatimes.com/industry/rssfeeds/13352306.cms",
+      "fetched_at": "2026-05-13 12:32:43",
+      "fetched_at_iso": "2026-05-13T12:32:43.042261+05:30"
+    },
+    {
+      "news_hash": "71b91830f3bcbda09bc0f8ab2207014c33f1ef69bd9c7e42b8e1cddbe2269d47",
+      "title": "Moi Soi raises first institutional round from GVFL, Wipro Consumer Ventures",
+      "summary": "Pan-Asian food and beverage brand Moi Soi, owned by Ceres Foods, has raised its first institutional funding round from GVFL and Wipro Consumer Ventures, according to people aware of the development. The investors have collectively picked up about 17% stake, while founder Deb Mukherjee retains majority ownership.",
+      "link": "https://economictimes.indiatimes.com/industry/cons-products/food/moi-soi-raises-first-institutional-round-from-gvfl-wipro-consumer-ventures/articleshow/131055320.cms",
+      "detected_symbols": [
+        "WIPRO"
+      ],
+      "sectors": [
+        "IT"
+      ],
+      "source": "https://economictimes.indiatimes.com/industry/rssfeeds/13352306.cms",
+      "fetched_at": "2026-05-13 12:32:43",
+      "fetched_at_iso": "2026-05-13T12:32:43.044616+05:30"
+    },
+    {
+      "news_hash": "abff09599f1987da5eb7657033a162d98347f19baa4deb8f7793a329ec4437a9",
+      "title": "From India to China, a look at what governments worldwide are doing to shield households from rising energy costs",
+      "summary": "Governments globally are implementing diverse strategies to mitigate soaring energy costs stemming from the U.S.-Israeli war on Iran. Measures include fuel tax adjustments, reserve releases, external financing, subsidies, tax cuts, and energy conservation efforts. Countries are also exploring increased use of domestic resources and alternative energy sources.",
+      "link": "https://economictimes.indiatimes.com/industry/energy/oil-gas/from-india-to-china-a-look-at-what-governments-worldwide-are-doing-to-shield-households-from-rising-energy-costs/articleshow/131053919.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "Global Macro"
+      ],
+      "source": "https://economictimes.indiatimes.com/industry/rssfeeds/13352306.cms",
+      "fetched_at": "2026-05-13 12:32:43",
+      "fetched_at_iso": "2026-05-13T12:32:43.044616+05:30"
+    },
+    {
+      "news_hash": "2cee94f45e7799617d20ec01e87ba952ec430b6448bbee2e29b616c8436d9c54",
+      "title": "India raises gold import duty back to 15%: What’s behind the move",
+      "summary": "India has significantly raised import duties on gold, silver, and platinum. This move aims to safeguard the nation's economy and foreign exchange reserves. The government prioritises essential imports like crude oil and fertilisers. This decision reflects a proactive approach to manage external risks.",
+      "link": "https://economictimes.indiatimes.com/industry/cons-products/fashion-/-cosmetics-/-jewellery/heres-why-india-has-increased-import-duty-on-gold-silver-and-platinum/articleshow/131053156.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "Oil & Gas"
+      ],
+      "source": "https://economictimes.indiatimes.com/industry/rssfeeds/13352306.cms",
+      "fetched_at": "2026-05-13 12:32:43",
+      "fetched_at_iso": "2026-05-13T12:32:43.047181+05:30"
+    },
+    {
+      "news_hash": "2d1f79f551b79cee2cc6d643410fbbd885ea8c49096baf5a9db44d53e2450df6",
+      "title": "Noida airport: Regulator AERA fixes Rs 490 UDF for departing domestic passengers",
+      "summary": "Airports tariff regulator AERA has set the User Development Fee (UDF) for Noida International Airport at Rs 490 for departing domestic and Rs 980 for international passengers for the 2026-27 period. These rates are comparable to national averages and aim to encourage airline expansion. The airport, set to begin operations on June 15, will see gradual UDF increases through 2031.",
+      "link": "https://economictimes.indiatimes.com/industry/transportation/airlines-/-aviation/noida-airport-regulator-aera-fixes-rs-490-udf-for-departing-domestic-passengers/articleshow/131052127.cms",
+      "detected_symbols": [],
+      "sectors": [
+        "Telecom"
+      ],
+      "source": "https://economictimes.indiatimes.com/industry/rssfeeds/13352306.cms",
+      "fetched_at": "2026-05-13 12:32:43",
+      "fetched_at_iso": "2026-05-13T12:32:43.047181+05:30"
+    }
+  ]
 }

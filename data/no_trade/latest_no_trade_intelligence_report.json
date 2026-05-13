@@ -2,7 +2,7 @@
   "choppy_market": {
     "danger_score": 25.0,
     "is_choppy": false,
-    "regime_text": "UNKNOWN",
+    "regime_text": "NORMAL_SETUP_PHASE",
     "volatility_score": 0.0
   },
   "contradiction_overload": {
@@ -12,9 +12,10 @@
     "warning_count": 0
   },
   "explanations": [
-    "Insufficient no-trade data; neutral review state applied without aggressive blocking."
+    "REAL_CONTEXT no-trade scan evaluated market safety and setup contradiction risk.",
+    "Low-edge day detected; alerts should be blocked while research continues."
   ],
-  "generated_at": "2026-05-10T17:36:59.808719Z",
+  "generated_at": "2026-05-13T07:03:25.265364Z",
   "liquidity_danger": {
     "danger_score": 27.5,
     "is_liquidity_danger": false,
@@ -23,10 +24,10 @@
   },
   "live_order_allowed": false,
   "low_edge_day": {
-    "average_recent_setup_score": 50.0,
-    "danger_score": 50.0,
-    "edge_score": 50.0,
-    "is_low_edge_day": false
+    "average_recent_setup_score": 3.12,
+    "danger_score": 100.0,
+    "edge_score": 3.12,
+    "is_low_edge_day": true
   },
   "market_toxicity": {
     "danger_score": 0.0,
@@ -35,30 +36,32 @@
     "vix_or_volatility": 0.0
   },
   "news_chaos": {
-    "danger_score": 0.0,
+    "danger_score": 12.0,
     "is_news_chaos": false,
-    "news_item_count": 0
+    "news_item_count": 28
   },
-  "no_trade_data_mode": "INSUFFICIENT",
-  "no_trade_score": 20.0,
-  "no_trade_warning": "REVIEW",
+  "no_trade_data_mode": "REAL_CONTEXT",
+  "no_trade_score": 30.5,
+  "no_trade_warning": "SKIP",
   "overtrading_risk": {
-    "danger_score": 0.0,
-    "is_overtrading_risk": false,
-    "recent_setup_count": 0,
-    "trades_today": 0.0
+    "danger_score": 93.0,
+    "is_overtrading_risk": true,
+    "recent_setup_count": 8,
+    "trades_today": 8.0
   },
   "symbol": "UNKNOWN",
-  "trade_permission": "REVIEW",
+  "trade_permission": "BLOCK",
   "uncertainty_rules": {
     "danger_score": 0.0,
     "rule_triggered": false,
     "uncertainty_score": 0.0
   },
   "wait_mode": {
-    "wait_reasons": [],
+    "wait_reasons": [
+      "trading_mode"
+    ],
     "wait_recommended": false,
-    "wait_score": 0.0
+    "wait_score": 20.0
   },
   "weak_breadth": {
     "advance_decline_ratio": 1.0,

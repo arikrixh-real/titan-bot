@@ -2,20 +2,20 @@
   "paper_trading_status": "ACTIVE",
   "initial_balance": 100000.0,
   "currency": "INR",
-  "current_balance": 100000.0,
-  "balance": 100000.0,
-  "equity": 100000.0,
+  "current_balance": 100497.14,
+  "balance": 100497.14,
+  "equity": 100497.14,
   "open_pnl": 0.0,
-  "closed_pnl": 0,
-  "daily_pnl": 0.0,
+  "closed_pnl": 220.44,
+  "daily_pnl": 220.44,
   "created_at": "2026-05-10 17:33:46",
-  "updated_at": "2026-05-11 13:05:08",
+  "updated_at": "2026-05-13 12:33:31",
   "risk_rules": {
     "max_risk_per_trade_pct": 1.0,
     "daily_loss_limit_pct": 2.0,
     "max_drawdown_pct": 10.0
   },
-  "daily_start_balance": 100000.0,
-  "daily_start_date": "2026-05-11",
+  "daily_start_balance": 100276.7,
+  "daily_start_date": "2026-05-13",
   "last_error": null
 }

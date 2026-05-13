@@ -79,5 +79,50 @@
       "open_pnl": 0.0,
       "live_order": false
     }
+  },
+  {
+    "timestamp": "2026-05-11 13:03:23",
+    "event": "PAPER_ACCOUNT_SYNC_FROM_TRADE_RESULTS",
+    "synced": 86,
+    "pnl": 26619.24,
+    "current_balance": 126619.24,
+    "closed_pnl": 26619.24,
+    "daily_pnl": 26619.24
+  },
+  {
+    "timestamp": "2026-05-13 12:19:47",
+    "event": "PAPER_ACCOUNT_SYNC_FROM_TRADE_RESULTS",
+    "synced": 1,
+    "pnl": -75.9,
+    "current_balance": 99924.1,
+    "closed_pnl": -75.9,
+    "daily_pnl": -75.9
+  },
+  {
+    "timestamp": "2026-05-13 12:19:50",
+    "event": "PAPER_ACCOUNT_SYNC_FROM_TRADE_RESULTS",
+    "synced": 1,
+    "pnl": 352.6,
+    "current_balance": 100276.7,
+    "closed_pnl": 276.7,
+    "daily_pnl": 276.7
+  },
+  {
+    "timestamp": "2026-05-13 12:33:28",
+    "event": "PAPER_ACCOUNT_SYNC_FROM_TRADE_RESULTS",
+    "synced": 1,
+    "pnl": -132.16,
+    "current_balance": 100144.54,
+    "closed_pnl": -132.16,
+    "daily_pnl": -132.16
+  },
+  {
+    "timestamp": "2026-05-13 12:33:31",
+    "event": "PAPER_ACCOUNT_SYNC_FROM_TRADE_RESULTS",
+    "synced": 1,
+    "pnl": 352.6,
+    "current_balance": 100497.14,
+    "closed_pnl": 220.44,
+    "daily_pnl": 220.44
   }
 ]

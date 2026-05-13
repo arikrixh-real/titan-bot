@@ -7,33 +7,33 @@ Safety
 - phase10_rank_adjustment: 0.0
 - No forbidden imports detected: True
 
-Updated: 2026-05-10 22:23:18
-Overall Shadow Health: DEGRADED_OBSERVING
-Confidence Stability: 20.0
-Runtime Ms: 0.0 | Bounded: True
+Updated: 2026-05-13 12:19:51
+Overall Shadow Health: ACTIVE
+Confidence Stability: 53.43
+Runtime Ms: 46.0 | Bounded: True
 
 Dashboard Cards:
-- Shadow State: DEGRADED_OBSERVING
-- Market Narrative: UNKNOWN
-- Cross-Setup Heat: 0.0
-- Lifecycle Trades Tracked: 0
-- Shadow Warnings: 6
+- Shadow State: ACTIVE
+- Market Narrative: EVENT_CAUTION
+- Cross-Setup Heat: 94.38
+- Lifecycle Trades Tracked: 17
+- Shadow Warnings: 7
 
 Layer Summary:
 - Phase 5 setup-family strengths: None observed
-- Phase 7 lifecycle degradation: None observed
-- Phase 8 narrative: UNKNOWN | Risk: UNKNOWN
-- Phase 9 relational state: UNKNOWN | Heat: 0.0
+- Phase 7 lifecycle degradation: [{'symbol': 'RELIANCE', 'health': 70.0, 'drift': -27.5}]
+- Phase 8 narrative: EVENT_CAUTION | Risk: RISK_OFF
+- Phase 9 relational state: HIGH_CONCENTRATION | Heat: 94.38
 
 Systemic Warnings:
-- None observed
+- long crowding conflicts with risk-off narrative
+- same cluster contains opposing trade directions
+- dominant sector concentration detected
+- shadow_contradictions_detected:11
+- portfolio_heat_high
 
 Lifecycle Warnings:
-- None observed
+- RELIANCE:health=70.0
 
 Data Quality Warnings:
-- phase5_memory_stale
-- phase6_memory_stale
-- phase7_memory_stale
-- phase8_memory_stale
-- phase9_memory_stale
+- None observed

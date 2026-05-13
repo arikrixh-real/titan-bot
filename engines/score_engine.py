@@ -7,12 +7,17 @@ DEFAULT_WEIGHTS = {
     "compression_weight": 1.0,
 }
 
+_WARNED_WEIGHT_ERRORS = set()
+
 
 def get_latest_strategy_weights():
     """
     Fetch latest active strategy weights from Supabase.
     If Supabase fails or no weights exist, TITAN safely uses default weights.
     """
+    if supabase is None:
+        return DEFAULT_WEIGHTS
+
     try:
         result = (
             supabase
@@ -36,7 +41,13 @@ def get_latest_strategy_weights():
         }
 
     except Exception as e:
-        print(f"[ADAPTIVE SCORE ERROR] Using default weights: {e}")
+        text = str(e)
+        if "WinError 10013" in text:
+            if "socket" not in _WARNED_WEIGHT_ERRORS:
+                _WARNED_WEIGHT_ERRORS.add("socket")
+                print("[ADAPTIVE SCORE WARN] Supabase socket unavailable; using default weights.")
+        else:
+            print(f"[ADAPTIVE SCORE ERROR] Using default weights: {e}")
         return DEFAULT_WEIGHTS
 
 

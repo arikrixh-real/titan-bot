@@ -127,6 +127,40 @@ def get_supabase():
 supabase = get_supabase()
 
 
+_SUPABASE_WARNED = set()
+
+
+def _log_supabase_warning(scope, error):
+    text = str(error)
+    if "WinError 10013" in text:
+        key = (scope, "socket")
+        if key in _SUPABASE_WARNED:
+            return
+        _SUPABASE_WARNED.add(key)
+        print(f"[Supabase WARN - {scope}] socket unavailable; DB action skipped.")
+        return
+    print(f"[Supabase WARN - {scope}] {text}")
+
+
+def _live_trade_exists(symbol, side):
+    if supabase is None:
+        return False
+    try:
+        result = (
+            supabase.table("trade_results")
+            .select("id")
+            .eq("symbol", str(symbol).upper())
+            .eq("side", str(side).upper())
+            .in_("status", ["LIVE", "OPEN", "ACTIVE"])
+            .limit(1)
+            .execute()
+        )
+        return bool(result.data)
+    except Exception as e:
+        _log_supabase_warning("duplicate_check", e)
+        return False
+
+
 def log_scan_to_supabase(
     scan_id,
     scanned_count,
@@ -498,16 +532,29 @@ def save_selected_alerts_to_trade_results(selected_alerts, scan_id, market_statu
 
     for setup in selected_alerts:
         try:
-            symbol = setup.get("symbol")
-            side = setup.get("side")
+            try:
+                from engines.paper_trading_engine import load_paper_account, prepare_paper_trade_fields
+                setup = prepare_paper_trade_fields(setup, load_paper_account())
+            except Exception:
+                pass
+            symbol = str(setup.get("symbol") or "").upper()
+            side = str(setup.get("side") or "").upper()
             entry = safe_float(setup.get("entry"))
             sl = safe_float(setup.get("sl"))
             tp = safe_float(setup.get("target") or setup.get("tp"))
+            quantity = safe_float(setup.get("quantity") or setup.get("qty"), 0.0)
+            position_size = safe_float(setup.get("position_size"), 0.0)
+            risk_amount = safe_float(setup.get("risk_amount"), 0.0)
+            risk_pct = safe_float(setup.get("risk_per_trade_pct"), 1.0)
             rr = safe_float(setup.get("rr"), 0.0)
             score = safe_float(setup.get("score"), 0.0)
 
-            if not symbol or not side or entry is None or sl is None or tp is None:
+            if not symbol or not side or entry is None or sl is None or tp is None or quantity <= 0:
                 print(f"⚠️ trade_results skipped invalid setup: {setup}")
+                continue
+
+            if _live_trade_exists(symbol, side):
+                print(f"trade_results duplicate skipped: {symbol} {side}")
                 continue
 
             now_iso = datetime.now(IST).isoformat()
@@ -516,8 +563,18 @@ def save_selected_alerts_to_trade_results(selected_alerts, scan_id, market_statu
                 "symbol": symbol,
                 "side": side,
                 "entry": entry,
+                "entry_price": entry,
                 "sl": sl,
+                "stop_loss": sl,
                 "tp": tp,
+                "target": tp,
+                "quantity": quantity,
+                "qty": quantity,
+                "position_size": position_size,
+                "risk_amount": risk_amount,
+                "risk_per_trade_pct": risk_pct,
+                "paper_trade_id": setup.get("paper_trade_id"),
+                "is_paper_trade": True,
                 "status": "LIVE",
                 "result": None,
                 "pnl": 0,
