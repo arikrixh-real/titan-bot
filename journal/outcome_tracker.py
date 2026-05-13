@@ -406,12 +406,13 @@ def _update_trade_result_payload(payload):
                         "position_size": update_payload.get("position_size"),
                         "risk_amount": update_payload.get("risk_amount"),
                         "risk_per_trade_pct": update_payload.get("risk_per_trade_pct"),
-                        "pnl": update_payload.get("pnl"),
+                        "pnl": update_payload.get("realized_pnl"),
                         "realized_pnl": update_payload.get("realized_pnl"),
                         "pnl_points": update_payload.get("pnl_points"),
                         "closed_at": update_payload.get("closed_at"),
                         "reason": update_payload.get("reason"),
                         "market_status": update_payload.get("market_status"),
+                        "updated_at": _now(),
                     }).eq("id", row_id).execute()
                     return True
 
@@ -440,12 +441,13 @@ def _update_trade_result_payload(payload):
                     "position_size": update_payload.get("position_size"),
                     "risk_amount": update_payload.get("risk_amount"),
                     "risk_per_trade_pct": update_payload.get("risk_per_trade_pct"),
-                    "pnl": update_payload.get("pnl"),
+                    "pnl": update_payload.get("realized_pnl"),
                     "realized_pnl": update_payload.get("realized_pnl"),
                     "pnl_points": update_payload.get("pnl_points"),
                     "closed_at": update_payload.get("closed_at"),
                     "reason": update_payload.get("reason"),
                     "market_status": update_payload.get("market_status"),
+                    "updated_at": _now(),
                 }).eq("id", row_id).execute()
                 return True
 
@@ -486,12 +488,13 @@ def _update_trade_result_payload(payload):
                             "position_size": update_payload.get("position_size"),
                             "risk_amount": update_payload.get("risk_amount"),
                             "risk_per_trade_pct": update_payload.get("risk_per_trade_pct"),
-                            "pnl": update_payload.get("pnl"),
+                            "pnl": update_payload.get("realized_pnl"),
                             "realized_pnl": update_payload.get("realized_pnl"),
                             "pnl_points": update_payload.get("pnl_points"),
                             "closed_at": update_payload.get("closed_at"),
                             "reason": update_payload.get("reason"),
                             "market_status": update_payload.get("market_status"),
+                            "updated_at": _now(),
                         }).eq("id", row_id).execute()
                         return True
 
