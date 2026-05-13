@@ -393,7 +393,26 @@ def _update_trade_result_payload(payload):
 
                 if existing_by_trade_id.data:
                     row_id = existing_by_trade_id.data[0].get("id")
-                    SUPABASE.table("trade_results").update(_json_safe(update_payload)).eq("id", row_id).execute()
+                    SUPABASE.table("trade_results").update({
+                        "status": update_payload.get("status"),
+                        "result": update_payload.get("result"),
+                        "outcome": update_payload.get("outcome"),
+                        "entry": update_payload.get("entry"),
+                        "exit_price": update_payload.get("exit_price"),
+                        "stop_loss": update_payload.get("stop_loss"),
+                        "target": update_payload.get("target"),
+                        "quantity": update_payload.get("quantity"),
+                        "qty": update_payload.get("qty"),
+                        "position_size": update_payload.get("position_size"),
+                        "risk_amount": update_payload.get("risk_amount"),
+                        "risk_per_trade_pct": update_payload.get("risk_per_trade_pct"),
+                        "pnl": update_payload.get("pnl"),
+                        "realized_pnl": update_payload.get("realized_pnl"),
+                        "pnl_points": update_payload.get("pnl_points"),
+                        "closed_at": update_payload.get("closed_at"),
+                        "reason": update_payload.get("reason"),
+                        "market_status": update_payload.get("market_status"),
+                    }).eq("id", row_id).execute()
                     return True
 
             existing_live = (
@@ -408,7 +427,26 @@ def _update_trade_result_payload(payload):
 
             if existing_live.data:
                 row_id = existing_live.data[0].get("id")
-                SUPABASE.table("trade_results").update(_json_safe(update_payload)).eq("id", row_id).execute()
+                SUPABASE.table("trade_results").update({
+                    "status": update_payload.get("status"),
+                    "result": update_payload.get("result"),
+                    "outcome": update_payload.get("outcome"),
+                    "entry": update_payload.get("entry"),
+                    "exit_price": update_payload.get("exit_price"),
+                    "stop_loss": update_payload.get("stop_loss"),
+                    "target": update_payload.get("target"),
+                    "quantity": update_payload.get("quantity"),
+                    "qty": update_payload.get("qty"),
+                    "position_size": update_payload.get("position_size"),
+                    "risk_amount": update_payload.get("risk_amount"),
+                    "risk_per_trade_pct": update_payload.get("risk_per_trade_pct"),
+                    "pnl": update_payload.get("pnl"),
+                    "realized_pnl": update_payload.get("realized_pnl"),
+                    "pnl_points": update_payload.get("pnl_points"),
+                    "closed_at": update_payload.get("closed_at"),
+                    "reason": update_payload.get("reason"),
+                    "market_status": update_payload.get("market_status"),
+                }).eq("id", row_id).execute()
                 return True
 
             SUPABASE.table("trade_results").insert(_json_safe(update_payload)).execute()
@@ -435,7 +473,26 @@ def _update_trade_result_payload(payload):
 
                     if existing_any.data:
                         row_id = existing_any.data[0].get("id")
-                        SUPABASE.table("trade_results").update(_json_safe(update_payload)).eq("id", row_id).execute()
+                        SUPABASE.table("trade_results").update({
+                            "status": update_payload.get("status"),
+                            "result": update_payload.get("result"),
+                            "outcome": update_payload.get("outcome"),
+                            "entry": update_payload.get("entry"),
+                            "exit_price": update_payload.get("exit_price"),
+                            "stop_loss": update_payload.get("stop_loss"),
+                            "target": update_payload.get("target"),
+                            "quantity": update_payload.get("quantity"),
+                            "qty": update_payload.get("qty"),
+                            "position_size": update_payload.get("position_size"),
+                            "risk_amount": update_payload.get("risk_amount"),
+                            "risk_per_trade_pct": update_payload.get("risk_per_trade_pct"),
+                            "pnl": update_payload.get("pnl"),
+                            "realized_pnl": update_payload.get("realized_pnl"),
+                            "pnl_points": update_payload.get("pnl_points"),
+                            "closed_at": update_payload.get("closed_at"),
+                            "reason": update_payload.get("reason"),
+                            "market_status": update_payload.get("market_status"),
+                        }).eq("id", row_id).execute()
                         return True
 
                 except Exception as update_error:
