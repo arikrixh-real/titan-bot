@@ -973,7 +973,11 @@ def calculate_trade_result_pnl_detail(row):
         return {"pnl": 0.0, "has_real_pnl": False, "skipped_pnl_reason": "INVALID_TRADE_ROW"}
 
     explicit_pnl = first_real_pnl_number(row)
-    if explicit_pnl is not None:
+
+    # Use explicit pnl only when it is non-zero.
+    # Older/LIVE Supabase rows can store pnl=0, so if pnl is zero,
+    # continue below and recalculate from entry, exit_price, and quantity.
+    if explicit_pnl is not None and abs(explicit_pnl) > 0:
         row.pop("skipped_pnl_reason", None)
         return {"pnl": explicit_pnl, "has_real_pnl": True, "skipped_pnl_reason": ""}
 
