@@ -505,8 +505,11 @@ def _save_trade_result_to_supabase(outcome_row):
         )
 
         if existing.data:
-            print(f"[OutcomeTracker DB] Result already exists: {trade_id}")
-            return True
+            updated = _update_trade_result_payload(payload)
+            if updated:
+                print(f"[OutcomeTracker DB] Existing Supabase result updated with real PnL: {payload.get('symbol')} {payload.get('side')} -> {result}")
+                return True
+            return False
 
         saved = _update_trade_result_payload(payload)
 
