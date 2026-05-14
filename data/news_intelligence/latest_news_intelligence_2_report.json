@@ -83,10 +83,10 @@
       "sentiment_score": 50.0
     },
     {
-      "title": "Niti Aayog to strengthen model concession agreement framework for multi-modal logistics parks",
-      "source": "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms",
+      "title": "Sunil Bharti Mittal to hand over Airtel reins to next generation in the next 10 yrs",
+      "source": "https://economictimes.indiatimes.com/industry/rssfeeds/13352306.cms",
       "tag": "EARNINGS",
-      "sentiment_score": 62.0
+      "sentiment_score": 50.0
     }
   ],
   "news_reaction_memory": {
@@ -101,12 +101,12 @@
     "dominant_event": "EARNINGS",
     "headline_count": 34,
     "event_counts": {
-      "EARNINGS": 12,
+      "EARNINGS": 11,
       "ORDER_CONTRACT": 7,
       "REGULATORY": 3,
       "GENERAL_NEWS": 8,
       "M&A": 1,
-      "MACRO": 3
+      "MACRO": 4
     },
     "average_sentiment": 59.88
   },

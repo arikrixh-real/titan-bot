@@ -13,10 +13,10 @@
     "cross_setup_heat": 0.0,
     "master_shadow_state": "ACTIVE",
     "narrative": "DATA_INSUFFICIENT_NEUTRAL",
-    "shadow_warnings": 7,
+    "shadow_warnings": 6,
     "tracked_lifecycle_trades": 25
   },
-  "generated_at": "2026-05-14 13:58:57",
+  "generated_at": "2026-05-14 14:07:46",
   "intelligence_layers": {
     "phase5_strategy_family": {
       "available": true,
@@ -72,7 +72,7 @@
     },
     "phase8_market_narrative": {
       "available": true,
-      "contradiction_count": 1,
+      "contradiction_count": 0,
       "market_direction": "NEUTRAL",
       "narrative_confidence": 0.57,
       "narrative_type": "DATA_INSUFFICIENT_NEUTRAL",
@@ -90,31 +90,31 @@
   },
   "layer_freshness": {
     "phase5": {
-      "age_seconds": 0.007,
+      "age_seconds": 528.563,
       "available": true,
       "path": "data\\memory\\strategy_family_memory.json",
       "status": "OK"
     },
     "phase6": {
-      "age_seconds": 1.797,
+      "age_seconds": 530.342,
       "available": true,
       "path": "data\\memory\\phase6_shadow_memory.json",
       "status": "OK"
     },
     "phase7": {
-      "age_seconds": 0.398,
+      "age_seconds": 0.229,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "phase8": {
-      "age_seconds": 1.805,
+      "age_seconds": 1.638,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "phase9": {
-      "age_seconds": 0.441,
+      "age_seconds": 528.984,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
@@ -134,9 +134,7 @@
     "narrative_flags": [
       "risk_state:RISK_OFF"
     ],
-    "systemic_flags": [
-      "shadow_contradictions_detected:1"
-    ]
+    "systemic_flags": []
   },
   "runtime_bounded": true,
   "runtime_context": {
@@ -152,7 +150,7 @@
     ],
     "selected_decisions_count": 0
   },
-  "runtime_ms": 31.0,
+  "runtime_ms": 15.0,
   "safety": {
     "broker_api_changes": false,
     "build_master_input_calls": false,

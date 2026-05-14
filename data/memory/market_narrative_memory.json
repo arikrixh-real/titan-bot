@@ -5,9 +5,7 @@
       "score": 48.05,
       "state": "MIXED_BREADTH"
     },
-    "contradiction_flags": [
-      "regime transition from EVENT_CAUTION to DATA_INSUFFICIENT_NEUTRAL"
-    ],
+    "contradiction_flags": [],
     "event_pressure": {
       "keywords": [
         "election",
@@ -18,7 +16,7 @@
       "score": 48.0,
       "state": "MEDIUM"
     },
-    "generated_at": "2026-05-14 13:58:55",
+    "generated_at": "2026-05-14 14:07:44",
     "macro_narrative_memory": {
       "learning_environment": "RECENT_MEMORY_FAVORABLE",
       "lifecycle_memory_available": true,
@@ -36,8 +34,8 @@
     "phase8_applied": true,
     "phase8_shadow_mode": true,
     "regime_transition_detection": {
-      "changed": true,
-      "from": "EVENT_CAUTION",
+      "changed": false,
+      "from": "DATA_INSUFFICIENT_NEUTRAL",
       "to": "DATA_INSUFFICIENT_NEUTRAL"
     },
     "risk_on_risk_off_state": "RISK_OFF",
@@ -107,8 +105,32 @@
       "narrative_type": "DATA_INSUFFICIENT_NEUTRAL",
       "risk_on_risk_off_state": "RISK_OFF",
       "risk_tone_score": 37.12
+    },
+    {
+      "contradiction_count": 0,
+      "generated_at": "2026-05-14 14:00:43",
+      "narrative_confidence": 0.57,
+      "narrative_type": "DATA_INSUFFICIENT_NEUTRAL",
+      "risk_on_risk_off_state": "RISK_OFF",
+      "risk_tone_score": 37.12
+    },
+    {
+      "contradiction_count": 0,
+      "generated_at": "2026-05-14 14:02:50",
+      "narrative_confidence": 0.57,
+      "narrative_type": "DATA_INSUFFICIENT_NEUTRAL",
+      "risk_on_risk_off_state": "RISK_OFF",
+      "risk_tone_score": 37.12
+    },
+    {
+      "contradiction_count": 0,
+      "generated_at": "2026-05-14 14:07:44",
+      "narrative_confidence": 0.57,
+      "narrative_type": "DATA_INSUFFICIENT_NEUTRAL",
+      "risk_on_risk_off_state": "RISK_OFF",
+      "risk_tone_score": 37.12
     }
   ],
-  "last_updated": "2026-05-14 13:58:55",
+  "last_updated": "2026-05-14 14:07:44",
   "version": "8.0"
 }

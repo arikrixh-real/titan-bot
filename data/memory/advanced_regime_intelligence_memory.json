@@ -12,7 +12,7 @@
     "transition_detected": false,
     "transition_strength": 0.0
   },
-  "generated_at": "2026-05-14 13:58:57",
+  "generated_at": "2026-05-14 14:07:46",
   "history": [
     {
       "confidence": 0.45,
@@ -213,29 +213,44 @@
       "confidence": 0.8072,
       "generated_at": "2026-05-14 13:58:57",
       "primary": "RISK_OFF"
+    },
+    {
+      "confidence": 0.8072,
+      "generated_at": "2026-05-14 14:00:44",
+      "primary": "RISK_OFF"
+    },
+    {
+      "confidence": 0.8072,
+      "generated_at": "2026-05-14 14:02:52",
+      "primary": "RISK_OFF"
+    },
+    {
+      "confidence": 0.8072,
+      "generated_at": "2026-05-14 14:07:46",
+      "primary": "RISK_OFF"
     }
   ],
   "layer_freshness": {
     "cross_setup": {
-      "age_seconds": 0.521,
+      "age_seconds": 529.053,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
     },
     "lifecycle": {
-      "age_seconds": 0.491,
+      "age_seconds": 0.31,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "market_narrative": {
-      "age_seconds": 1.885,
+      "age_seconds": 1.709,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "master_shadow": {
-      "age_seconds": 0.056,
+      "age_seconds": 0.067,
       "available": true,
       "path": "data\\memory\\master_shadow_memory.json",
       "status": "OK"
@@ -247,7 +262,7 @@
       "status": "OK"
     },
     "strategy_family": {
-      "age_seconds": 0.112,
+      "age_seconds": 528.646,
       "available": true,
       "path": "data\\memory\\strategy_family_memory.json",
       "status": "OK"
@@ -265,7 +280,7 @@
   "rank_adjustment": 0.0,
   "recommended_live_weight": 0.0,
   "regime_scores": {
-    "CHOPPY_NO_EDGE": 0.6044,
+    "CHOPPY_NO_EDGE": 0.5732,
     "INDEX_DRIVEN": 0.3258,
     "LOW_LIQUIDITY": 0.1075,
     "MEAN_REVERSION": 0.1575,
@@ -274,7 +289,7 @@
     "RISK_OFF": 0.8072,
     "RISK_ON": 0.1834,
     "SECTOR_ROTATION": 0.0,
-    "TRENDING_BREAKOUT": 0.2711
+    "TRENDING_BREAKOUT": 0.3011
   },
   "runtime_bounded": true,
   "runtime_context": {
@@ -291,7 +306,7 @@
     ],
     "selected_decisions_count": 0
   },
-  "runtime_ms": 31.0,
+  "runtime_ms": 15.0,
   "safety": {
     "alert_cap_changes": false,
     "broker_api_changes": false,

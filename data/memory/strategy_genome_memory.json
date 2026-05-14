@@ -113,7 +113,7 @@
       "wins": 3
     }
   },
-  "generated_at": "2026-05-14 13:58:57",
+  "generated_at": "2026-05-14 14:07:46",
   "history": [
     {
       "decaying_families": [],
@@ -314,23 +314,38 @@
       "decaying_families": [],
       "dominant_family": null,
       "generated_at": "2026-05-14 13:58:57"
+    },
+    {
+      "decaying_families": [],
+      "dominant_family": null,
+      "generated_at": "2026-05-14 14:00:44"
+    },
+    {
+      "decaying_families": [],
+      "dominant_family": null,
+      "generated_at": "2026-05-14 14:02:52"
+    },
+    {
+      "decaying_families": [],
+      "dominant_family": null,
+      "generated_at": "2026-05-14 14:07:46"
     }
   ],
   "layer_freshness": {
     "lifecycle": {
-      "age_seconds": 0.549,
+      "age_seconds": 0.359,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "master_shadow": {
-      "age_seconds": 0.105,
+      "age_seconds": 0.102,
       "available": true,
       "path": "data\\memory\\master_shadow_memory.json",
       "status": "OK"
     },
     "promotion_gate": {
-      "age_seconds": 0.061,
+      "age_seconds": 0.053,
       "available": true,
       "path": "data\\memory\\promotion_gate_memory.json",
       "status": "OK"
