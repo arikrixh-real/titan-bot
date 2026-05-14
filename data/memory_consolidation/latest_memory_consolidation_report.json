@@ -1,6 +1,6 @@
 {
   "adaptive_recall_weights": {
-    "weight_count": 95,
+    "weight_count": 96,
     "weights": {
       "adaptive_intelligence_state": 40.0,
       "advanced_regime_intelligence_memory": 40.0,
@@ -49,6 +49,7 @@
       "scan_memory_38": 40.0,
       "scan_memory_39": 40.0,
       "scan_memory_4": 40.0,
+      "scan_memory_40": 40.0,
       "scan_memory_5": 40.0,
       "scan_memory_6": 40.0,
       "scan_memory_7": 40.0,
@@ -115,7 +116,7 @@
   "explanations": [
     "REAL_MEMORY consolidation used available memory, trade history, and context."
   ],
-  "generated_at": "2026-05-13T07:03:25.429923Z",
+  "generated_at": "2026-05-14T08:28:56.205757Z",
   "important_patterns": {
     "important_count": 0,
     "patterns": []
@@ -123,8 +124,8 @@
   "live_order_allowed": false,
   "memory_bias": "STABLE",
   "memory_compression": {
-    "compressed_count": 95,
-    "original_count": 95,
+    "compressed_count": 96,
+    "original_count": 96,
     "pattern_summaries": [
       {
         "average_score": 50.0,
@@ -430,7 +431,7 @@
   },
   "memory_data_mode": "REAL_MEMORY",
   "memory_prioritization": {
-    "item_count": 95,
+    "item_count": 96,
     "top_priorities": [
       {
         "pattern": "ADAPTIVE_INTELLIGENCE_STATE",
@@ -1149,6 +1150,13 @@
           "score": 50.0
         }
       ],
+      "SCAN_MEMORY_40": [
+        {
+          "memory_key": "scan_memory_40",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
       "SCAN_MEMORY_5": [
         {
           "memory_key": "scan_memory_5",
@@ -1486,6 +1494,6 @@
         }
       ]
     },
-    "strategy_count": 95
+    "strategy_count": 96
   }
 }

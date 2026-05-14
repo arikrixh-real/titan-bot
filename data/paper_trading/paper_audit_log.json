@@ -124,5 +124,14 @@
     "current_balance": 100497.14,
     "closed_pnl": 220.44,
     "daily_pnl": 220.44
+  },
+  {
+    "timestamp": "2026-05-14 13:58:55",
+    "event": "PAPER_ACCOUNT_SYNC_FROM_TRADE_RESULTS",
+    "synced": 54,
+    "pnl": 10762.88,
+    "current_balance": 11762.88,
+    "closed_pnl": 10762.88,
+    "daily_pnl": 10762.88
   }
 ]

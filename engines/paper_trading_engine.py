@@ -28,10 +28,10 @@ PROCESSED_RESULTS_PATH = PAPER_DIR / "paper_processed_results.json"
 TRADE_OUTCOMES_CSV = Path("data/journals/trade_outcomes.csv")
 TRADE_OUTCOMES_JSONL = Path("data/journals/trade_outcomes.jsonl")
 
-DEFAULT_INITIAL_BALANCE = 100000.0
+DEFAULT_INITIAL_BALANCE = 1000.0
 DEFAULT_CURRENCY = "INR"
 MAX_RISK_PER_TRADE_PCT = 1.0
-DAILY_LOSS_LIMIT_PCT = 2.0
+DAILY_LOSS_LIMIT_PCT = 3.0
 MAX_DRAWDOWN_PCT = 10.0
 
 
@@ -107,17 +107,26 @@ def _write_json(path: Path, data: Any) -> bool:
 
 def _normalize_account(account: Any) -> Dict[str, Any]:
     account = account if isinstance(account, dict) else {}
-    initial = safe_float(account.get("initial_balance"), DEFAULT_INITIAL_BALANCE)
+    legacy_default = (
+        safe_float(account.get("initial_balance"), DEFAULT_INITIAL_BALANCE) >= 99999.0
+        and safe_text(account.get("capital_mode")) != "ADAPTIVE_1K"
+    )
+    initial = DEFAULT_INITIAL_BALANCE if legacy_default else safe_float(account.get("initial_balance"), DEFAULT_INITIAL_BALANCE)
     balance = safe_float(account.get("current_balance") or account.get("balance"), initial)
+    if legacy_default:
+        balance = DEFAULT_INITIAL_BALANCE
     open_pnl = safe_float(account.get("open_pnl"), 0.0)
-    closed_pnl = safe_float(account.get("closed_pnl"), 0.0)
+    closed_pnl = 0.0 if legacy_default else safe_float(account.get("closed_pnl"), 0.0)
     daily_start_balance = safe_float(account.get("daily_start_balance"), balance)
+    if legacy_default:
+        daily_start_balance = DEFAULT_INITIAL_BALANCE
     daily_pnl = safe_float(account.get("daily_pnl"), balance - daily_start_balance)
     status = safe_text(account.get("paper_trading_status"), "ACTIVE").upper()
     if status not in {"ACTIVE", "LOCKED"}:
         status = "ACTIVE"
     return {
         "paper_trading_status": status,
+        "capital_mode": "ADAPTIVE_1K",
         "initial_balance": initial,
         "currency": safe_text(account.get("currency"), DEFAULT_CURRENCY),
         "current_balance": balance,
@@ -133,10 +142,7 @@ def _normalize_account(account: Any) -> Dict[str, Any]:
                 _dict(account.get("risk_rules")).get("max_risk_per_trade_pct"),
                 MAX_RISK_PER_TRADE_PCT,
             ),
-            "daily_loss_limit_pct": safe_float(
-                _dict(account.get("risk_rules")).get("daily_loss_limit_pct"),
-                DAILY_LOSS_LIMIT_PCT,
-            ),
+            "daily_loss_limit_pct": DAILY_LOSS_LIMIT_PCT,
             "max_drawdown_pct": safe_float(
                 _dict(account.get("risk_rules")).get("max_drawdown_pct"),
                 MAX_DRAWDOWN_PCT,
@@ -144,6 +150,11 @@ def _normalize_account(account: Any) -> Dict[str, Any]:
         },
         "daily_start_balance": daily_start_balance,
         "daily_start_date": account.get("daily_start_date") or _today(),
+        "daily_peak_pnl": safe_float(account.get("daily_peak_pnl"), max(0.0, daily_pnl)),
+        "daily_loss_floor": safe_float(
+            account.get("daily_loss_floor"),
+            -round(daily_start_balance * DAILY_LOSS_LIMIT_PCT / 100.0, 2),
+        ),
         "last_error": account.get("last_error"),
     }
 
@@ -200,6 +211,8 @@ def load_paper_account() -> Dict[str, Any]:
     if account.get("daily_start_date") != _today():
         account["daily_start_date"] = _today()
         account["daily_start_balance"] = account.get("current_balance", DEFAULT_INITIAL_BALANCE)
+        account["daily_peak_pnl"] = 0.0
+        account["daily_loss_floor"] = -round(safe_float(account.get("daily_start_balance"), DEFAULT_INITIAL_BALANCE) * DAILY_LOSS_LIMIT_PCT / 100.0, 2)
     account["open_pnl"] = calculate_open_pnl(account)
     account["closed_pnl"] = calculate_closed_pnl(account)
     account["balance"] = safe_float(account.get("current_balance"), DEFAULT_INITIAL_BALANCE)
@@ -214,6 +227,7 @@ def load_paper_account() -> Dict[str, Any]:
         account["daily_start_balance"] = round(account["balance"] - today_pnl, 2)
     else:
         account["daily_pnl"] = round(account["balance"] - safe_float(account.get("daily_start_balance"), account["balance"]), 2)
+    account = update_daily_trailing_protection(account)
     return account
 
 
@@ -232,10 +246,11 @@ def save_paper_account(account: Dict[str, Any]) -> bool:
     return ok
 
 
-def initialize_paper_account(initial_balance: float = 100000) -> Dict[str, Any]:
+def initialize_paper_account(initial_balance: float = DEFAULT_INITIAL_BALANCE) -> Dict[str, Any]:
     _ensure_storage()
     account = {
         "paper_trading_status": "ACTIVE",
+        "capital_mode": "ADAPTIVE_1K",
         "initial_balance": safe_float(initial_balance, DEFAULT_INITIAL_BALANCE),
         "currency": DEFAULT_CURRENCY,
         "current_balance": safe_float(initial_balance, DEFAULT_INITIAL_BALANCE),
@@ -248,6 +263,8 @@ def initialize_paper_account(initial_balance: float = 100000) -> Dict[str, Any]:
         },
         "daily_start_balance": safe_float(initial_balance, DEFAULT_INITIAL_BALANCE),
         "daily_start_date": _today(),
+        "daily_peak_pnl": 0.0,
+        "daily_loss_floor": -round(safe_float(initial_balance, DEFAULT_INITIAL_BALANCE) * DAILY_LOSS_LIMIT_PCT / 100.0, 2),
         "open_positions": [],
         "closed_positions": [],
     }
@@ -279,33 +296,44 @@ def calculate_paper_trade_sizing(account: Dict[str, Any], trade: Dict[str, Any])
     balance = safe_float(account.get("current_balance"), DEFAULT_INITIAL_BALANCE)
     rules = _dict(account.get("risk_rules"))
     risk_pct = safe_float(rules.get("max_risk_per_trade_pct"), MAX_RISK_PER_TRADE_PCT)
+    if risk_pct <= 0 or risk_pct > 10:
+        risk_pct = MAX_RISK_PER_TRADE_PCT
     risk_amount = balance * risk_pct / 100.0
     entry = safe_float(trade.get("entry") or trade.get("entry_price") or trade.get("price"), 0.0)
     stop = safe_float(trade.get("sl") or trade.get("stop_loss") or trade.get("stoploss"), 0.0)
     per_share_risk = abs(entry - stop)
     quantity = 0
-    if entry <= 0:
+    skip_reason = ""
+    if entry <= 0 or stop <= 0:
         position_size = 0.0
+        skip_reason = "INVALID_ENTRY_OR_SL"
+    elif risk_amount <= 0 or risk_amount > balance:
+        position_size = 0.0
+        skip_reason = "UNREALISTIC_RISK"
     elif per_share_risk > 0:
         quantity = int(math.floor(risk_amount / per_share_risk))
-        if quantity <= 0 and entry <= balance:
-            quantity = 1
         position_size = quantity * entry
-        if quantity > 0 and position_size > balance:
-            quantity = int(math.floor(balance / entry))
-            position_size = quantity * entry
         if quantity <= 0:
             position_size = 0.0
+            skip_reason = "QTY_LESS_THAN_1"
+        elif position_size > balance:
+            quantity = 0
+            position_size = 0.0
+            skip_reason = "INSUFFICIENT_CAPITAL"
     else:
         position_size = 0.0
+        skip_reason = "INVALID_SL_DISTANCE"
     return {
         "quantity": int(quantity),
         "qty": int(quantity),
         "position_size": round(position_size, 2),
+        "capital_used": round(position_size, 2),
         "risk_amount": round(risk_amount, 2),
         "risk_per_trade_pct": risk_pct,
         "risk_per_share": round(per_share_risk, 4),
         "account_balance": round(balance, 2),
+        "skip_reason": skip_reason,
+        "sizing_valid": bool(quantity >= 1 and position_size > 0 and not skip_reason),
     }
 
 
@@ -331,8 +359,12 @@ def prepare_paper_trade_fields(trade: Dict[str, Any], account: Dict[str, Any] | 
         "quantity": sizing["quantity"],
         "qty": sizing["qty"],
         "position_size": sizing["position_size"],
+        "capital_used": sizing["capital_used"],
         "risk_amount": sizing["risk_amount"],
         "risk_per_trade_pct": sizing["risk_per_trade_pct"],
+        "risk_per_share": sizing["risk_per_share"],
+        "sizing_valid": sizing["sizing_valid"],
+        "skip_reason": sizing["skip_reason"],
         "paper_trade_id": paper_trade_id,
         "is_paper_trade": True,
     })
@@ -344,16 +376,19 @@ def place_paper_order(account: Dict[str, Any], trade: Dict[str, Any]) -> Dict[st
     trade = _dict(trade)
     if safe_text(account.get("paper_trading_status"), "ACTIVE").upper() == "LOCKED":
         return {"accepted": False, "reason": "PAPER_ACCOUNT_LOCKED"}
-    if check_daily_loss_limit(account).get("limit_hit") or check_max_drawdown(account).get("limit_hit"):
-        account["paper_trading_status"] = "LOCKED"
+    daily_limit = check_daily_loss_limit(account)
+    drawdown_limit = check_max_drawdown(account)
+    if daily_limit.get("limit_hit") or drawdown_limit.get("limit_hit"):
+        if drawdown_limit.get("limit_hit"):
+            account["paper_trading_status"] = "LOCKED"
         save_paper_account(account)
-        return {"accepted": False, "reason": "RISK_LIMIT_LOCKED"}
+        return {"accepted": False, "reason": daily_limit.get("reason") or "RISK_LIMIT_LOCKED"}
 
     trade = prepare_paper_trade_fields(trade, account)
     qty = safe_int(trade.get("quantity"), 0)
     entry = safe_float(trade.get("entry_price") or trade.get("entry") or trade.get("price"), 0.0)
-    if qty <= 0 or entry <= 0:
-        return {"accepted": False, "reason": "INVALID_SIZE_OR_ENTRY"}
+    if qty <= 0 or entry <= 0 or safe_float(trade.get("position_size"), 0.0) > safe_float(account.get("current_balance"), DEFAULT_INITIAL_BALANCE):
+        return {"accepted": False, "reason": safe_text(trade.get("skip_reason"), "INVALID_SIZE_OR_ENTRY"), "trade": trade}
 
     order = {
         "paper_order_id": f"PO-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
@@ -370,6 +405,7 @@ def place_paper_order(account: Dict[str, Any], trade: Dict[str, Any]) -> Dict[st
         "quantity": qty,
         "qty": qty,
         "position_size": safe_float(trade.get("position_size"), 0.0),
+        "capital_used": safe_float(trade.get("capital_used") or trade.get("position_size"), 0.0),
         "risk_amount": safe_float(trade.get("risk_amount"), 0.0),
         "risk_per_trade_pct": safe_float(trade.get("risk_per_trade_pct"), MAX_RISK_PER_TRADE_PCT),
         "status": "PENDING",
@@ -441,6 +477,7 @@ def open_paper_position(account: Dict[str, Any], order: Dict[str, Any]) -> Dict[
         "quantity": order.get("quantity"),
         "qty": order.get("qty") or order.get("quantity"),
         "position_size": order.get("position_size"),
+        "capital_used": order.get("capital_used") or order.get("position_size"),
         "risk_amount": order.get("risk_amount"),
         "risk_per_trade_pct": order.get("risk_per_trade_pct"),
         "brokerage": order.get("brokerage"),
@@ -497,8 +534,38 @@ def update_paper_balance(account: Dict[str, Any], pnl: Any) -> Dict[str, Any]:
     if not account.get("daily_start_balance"):
         account["daily_start_balance"] = account["current_balance"] - safe_float(pnl)
     account["daily_pnl"] = round(account["current_balance"] - safe_float(account.get("daily_start_balance"), account["current_balance"]), 2)
+    account = update_daily_trailing_protection(account)
     if check_max_drawdown(account).get("limit_hit"):
         account["paper_trading_status"] = "LOCKED"
+    return account
+
+
+def update_daily_trailing_protection(account: Dict[str, Any]) -> Dict[str, Any]:
+    account = account if isinstance(account, dict) else {}
+    start = safe_float(account.get("daily_start_balance"), safe_float(account.get("initial_balance"), DEFAULT_INITIAL_BALANCE))
+    daily_pnl = safe_float(account.get("daily_pnl"), 0.0)
+    peak = max(safe_float(account.get("daily_peak_pnl"), 0.0), daily_pnl)
+    base_floor = -round(start * DAILY_LOSS_LIMIT_PCT / 100.0, 2)
+
+    if peak >= start * 0.03:
+        floor_value = round(peak * 0.50, 2)
+    elif peak >= start * 0.015:
+        floor_value = 0.0
+    elif peak > 0:
+        floor_value = max(base_floor, round(peak - (start * DAILY_LOSS_LIMIT_PCT / 100.0), 2))
+    else:
+        floor_value = base_floor
+
+    account["daily_peak_pnl"] = round(peak, 2)
+    account["daily_loss_floor"] = round(floor_value, 2)
+    account["daily_trailing_protection"] = {
+        "start_balance": round(start, 2),
+        "current_daily_pnl": round(daily_pnl, 2),
+        "peak_daily_pnl": round(peak, 2),
+        "allowed_daily_pnl_floor": round(floor_value, 2),
+        "initial_max_daily_loss": round(abs(base_floor), 2),
+        "trading_blocked": bool(daily_pnl <= floor_value),
+    }
     return account
 
 
@@ -527,9 +594,20 @@ def check_daily_loss_limit(account: Dict[str, Any]) -> Dict[str, Any]:
     rules = _dict(account.get("risk_rules"))
     start = safe_float(account.get("daily_start_balance"), safe_float(account.get("initial_balance"), DEFAULT_INITIAL_BALANCE))
     equity = safe_float(account.get("current_balance"), start) + calculate_open_pnl(account)
-    loss_pct = max(0.0, (start - equity) / max(start, 1.0) * 100.0)
+    daily_pnl = round(equity - start, 2)
+    account["daily_pnl"] = daily_pnl
+    account = update_daily_trailing_protection(account)
     limit = safe_float(rules.get("daily_loss_limit_pct"), DAILY_LOSS_LIMIT_PCT)
-    return {"daily_loss_pct": round(loss_pct, 2), "limit_pct": limit, "limit_hit": bool(loss_pct >= limit)}
+    floor_value = safe_float(account.get("daily_loss_floor"), -round(start * limit / 100.0, 2))
+    loss_pct = max(0.0, (start - equity) / max(start, 1.0) * 100.0)
+    return {
+        "daily_loss_pct": round(loss_pct, 2),
+        "daily_pnl": daily_pnl,
+        "limit_pct": limit,
+        "allowed_daily_pnl_floor": round(floor_value, 2),
+        "limit_hit": bool(daily_pnl <= floor_value),
+        "reason": "DAILY_TRAILING_PROTECTION" if daily_pnl <= floor_value else "",
+    }
 
 
 def check_max_drawdown(account: Dict[str, Any]) -> Dict[str, Any]:
@@ -584,6 +662,18 @@ def _closed_position_keys(closed_positions: List[Dict[str, Any]]) -> set:
                 keys.add(value)
         keys.add(_trade_sync_key(item))
     return keys
+
+
+def _timestamp_key(value: Any) -> str:
+    return safe_text(value).replace("T", " ")[:19]
+
+
+def _row_is_before_account_start(account: Dict[str, Any], row: Dict[str, Any]) -> bool:
+    if safe_text(account.get("capital_mode")) != "ADAPTIVE_1K":
+        return False
+    account_start = _timestamp_key(account.get("created_at"))
+    row_time = _timestamp_key(row.get("closed_at") or row.get("opened_at") or row.get("created_at"))
+    return bool(account_start and row_time and row_time < account_start)
 
 
 def _read_local_trade_result_rows() -> List[Dict[str, Any]]:
@@ -754,6 +844,9 @@ def sync_paper_account_from_trade_results(trade_rows: Any = None) -> Dict[str, A
         outcome = _closed_outcome(row)
         if outcome not in {"TP", "SL"}:
             continue
+        if _row_is_before_account_start(account, row):
+            skipped_invalid += 1
+            continue
 
         key = _trade_sync_key(row)
         trade_id = safe_text(row.get("trade_id") or row.get("id"))
@@ -801,8 +894,10 @@ def sync_paper_account_from_trade_results(trade_rows: Any = None) -> Dict[str, A
             "quantity": quantity,
             "qty": quantity,
             "position_size": round(entry * quantity, 2),
+            "capital_used": row.get("capital_used") or closed_position.get("capital_used") or round(entry * quantity, 2),
             "risk_amount": row.get("risk_amount") or closed_position.get("risk_amount"),
             "risk_per_trade_pct": row.get("risk_per_trade_pct") or closed_position.get("risk_per_trade_pct"),
+            "risk_per_share": row.get("risk_per_share") or closed_position.get("risk_per_share"),
             "closed_at": row.get("closed_at") or _now(),
             "exit_price": exit_price,
             "status": "CLOSED",

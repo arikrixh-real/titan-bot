@@ -4,15 +4,15 @@
     "previous_primary": "RISK_OFF",
     "primary": "RISK_OFF",
     "secondary": [
-      "SECTOR_ROTATION",
-      "INDEX_DRIVEN",
-      "NEWS_SHOCK"
+      "CHOPPY_NO_EDGE",
+      "PANIC_VOLATILITY",
+      "INDEX_DRIVEN"
     ],
     "transition_confirmed": false,
     "transition_detected": false,
     "transition_strength": 0.0
   },
-  "generated_at": "2026-05-13 12:33:31",
+  "generated_at": "2026-05-14 13:58:57",
   "history": [
     {
       "confidence": 0.45,
@@ -208,41 +208,46 @@
       "confidence": 0.8072,
       "generated_at": "2026-05-13 12:33:31",
       "primary": "RISK_OFF"
+    },
+    {
+      "confidence": 0.8072,
+      "generated_at": "2026-05-14 13:58:57",
+      "primary": "RISK_OFF"
     }
   ],
   "layer_freshness": {
     "cross_setup": {
-      "age_seconds": 826.181,
+      "age_seconds": 0.521,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
     },
     "lifecycle": {
-      "age_seconds": 0.396,
+      "age_seconds": 0.491,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "market_narrative": {
-      "age_seconds": 7.225,
+      "age_seconds": 1.885,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "master_shadow": {
-      "age_seconds": 0.13,
+      "age_seconds": 0.056,
       "available": true,
       "path": "data\\memory\\master_shadow_memory.json",
       "status": "OK"
     },
     "promotion_gate": {
-      "age_seconds": 0.022,
+      "age_seconds": 0.004,
       "available": true,
       "path": "data\\memory\\promotion_gate_memory.json",
       "status": "OK"
     },
     "strategy_family": {
-      "age_seconds": 820.897,
+      "age_seconds": 0.112,
       "available": true,
       "path": "data\\memory\\strategy_family_memory.json",
       "status": "OK"
@@ -260,21 +265,21 @@
   "rank_adjustment": 0.0,
   "recommended_live_weight": 0.0,
   "regime_scores": {
-    "CHOPPY_NO_EDGE": 0.4782,
-    "INDEX_DRIVEN": 0.5696,
-    "LOW_LIQUIDITY": 0.2588,
-    "MEAN_REVERSION": 0.07,
-    "NEWS_SHOCK": 0.56,
-    "PANIC_VOLATILITY": 0.4462,
+    "CHOPPY_NO_EDGE": 0.6044,
+    "INDEX_DRIVEN": 0.3258,
+    "LOW_LIQUIDITY": 0.1075,
+    "MEAN_REVERSION": 0.1575,
+    "NEWS_SHOCK": 0.168,
+    "PANIC_VOLATILITY": 0.3518,
     "RISK_OFF": 0.8072,
     "RISK_ON": 0.1834,
-    "SECTOR_ROTATION": 0.6416,
-    "TRENDING_BREAKOUT": 0.1511
+    "SECTOR_ROTATION": 0.0,
+    "TRENDING_BREAKOUT": 0.2711
   },
   "runtime_bounded": true,
   "runtime_context": {
     "context_mode": "SELECTIVE",
-    "observed_setups_count": 8,
+    "observed_setups_count": 0,
     "phase_result_keys": [
       "outcome_result",
       "phase10_master_shadow_result",
@@ -286,7 +291,7 @@
     ],
     "selected_decisions_count": 0
   },
-  "runtime_ms": 15.0,
+  "runtime_ms": 31.0,
   "safety": {
     "alert_cap_changes": false,
     "broker_api_changes": false,

@@ -16,7 +16,7 @@
   "explanations": [
     "PROXY self-reflection used available setup/context/outcome evidence."
   ],
-  "generated_at": "2026-05-13T07:03:25.261876Z",
+  "generated_at": "2026-05-14T08:28:55.998803Z",
   "hallucination_detection": {
     "evidence_gap_detected": true,
     "hallucination_risk_score": 10.0,

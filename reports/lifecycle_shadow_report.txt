@@ -6,37 +6,39 @@ Safety
 - No Telegram, broker, TP/SL/RR, outcome, ranking, or alert-cap changes.
 - Uses only prices already fetched by outcome tracking.
 
-Updated: 2026-05-13 12:19:50
-Tracked Trades: 17
+Updated: 2026-05-14 13:58:57
+Tracked Trades: 25
 
 Failure Cause Classification:
 - unclassified_shadow: 14
-- successful_follow_through: 2
-- bad_entry: 1
+- time_decay: 5
+- successful_follow_through: 3
+- bad_entry: 2
+- weak_setup_quality: 1
 
 Strongest Lifecycle Symbols:
-- TCS: observations=1, avg_health=100.0, max_favorable=147.3, max_adverse=0.0
+- TCS: observations=2, avg_health=100.0, max_favorable=152.1, max_adverse=0.0
 - PFC: observations=1, avg_health=96.75, max_favorable=0.0, max_adverse=0.0
-- HAVELLS: observations=2, avg_health=94.125, max_favorable=0.0, max_adverse=0.0
-- SHRIRAMFIN: observations=2, avg_health=88.375, max_favorable=0.0, max_adverse=0.0
+- HAVELLS: observations=3, avg_health=89.9167, max_favorable=0.0, max_adverse=0.0
 - BAJFINANCE: observations=1, avg_health=87.5, max_favorable=0.0, max_adverse=0.0
 - JSWSTEEL: observations=1, avg_health=86.75, max_favorable=0.0, max_adverse=0.0
 - MARICO: observations=1, avg_health=86.5, max_favorable=0.0, max_adverse=0.0
 - CHOLAFIN: observations=1, avg_health=86.25, max_favorable=0.0, max_adverse=0.0
 - APOLLOHOSP: observations=1, avg_health=85.5, max_favorable=0.0, max_adverse=0.0
-- ABB: observations=1, avg_health=77.0, max_favorable=0.0, max_adverse=0.0
+- SHRIRAMFIN: observations=3, avg_health=84.0833, max_favorable=0.0, max_adverse=0.0
+- JINDALSTEL: observations=1, avg_health=79.5, max_favorable=0.0, max_adverse=0.0
 
 Weakest Lifecycle Symbols:
+- TATASTEEL: observations=1, avg_health=25.0, avg_drift=-55.0
+- BAJAJHLDNG: observations=1, avg_health=45.0, avg_drift=-12.0
+- TRENT: observations=1, avg_health=52.75, avg_drift=-12.0
 - BAJAJ-AUTO: observations=1, avg_health=64.0, avg_drift=0.0
 - RELIANCE: observations=2, avg_health=70.0, avg_drift=-27.5
-- SIEMENS: observations=2, avg_health=74.875, avg_drift=0.0
+- SIEMENS: observations=3, avg_health=70.5833, avg_drift=-4.0
 - ABB: observations=1, avg_health=77.0, avg_drift=0.0
+- JINDALSTEL: observations=1, avg_health=79.5, avg_drift=-12.0
+- SHRIRAMFIN: observations=3, avg_health=84.0833, avg_drift=-4.0
 - APOLLOHOSP: observations=1, avg_health=85.5, avg_drift=0.0
-- CHOLAFIN: observations=1, avg_health=86.25, avg_drift=0.0
-- MARICO: observations=1, avg_health=86.5, avg_drift=0.0
-- JSWSTEEL: observations=1, avg_health=86.75, avg_drift=0.0
-- BAJFINANCE: observations=1, avg_health=87.5, avg_drift=0.0
-- SHRIRAMFIN: observations=2, avg_health=88.375, avg_drift=0.0
 
 Setup Family Lifecycle Stats:
-- GENERAL: observations=17, avg_health=83.8235, failure_causes={'unclassified_shadow': 14, 'successful_follow_through': 2, 'bad_entry': 1}
+- GENERAL: observations=25, avg_health=77.85, failure_causes={'weak_setup_quality': 1, 'time_decay': 5, 'successful_follow_through': 3, 'bad_entry': 2, 'unclassified_shadow': 14}

@@ -62,6 +62,15 @@ ACTIVE_COLUMNS = [
     "rr",
     "score",
     "rank_score",
+    "quantity",
+    "qty",
+    "position_size",
+    "capital_used",
+    "risk_amount",
+    "risk_per_trade_pct",
+    "risk_per_share",
+    "paper_trade_id",
+    "is_paper_trade",
     "market_status",
     "telegram_alerted",
     "status",
@@ -69,8 +78,11 @@ ACTIVE_COLUMNS = [
     "last_checked_at",
     "last_price",
     "close_price",
+    "exit_price",
     "closed_at",
     "result",
+    "realized_pnl",
+    "pnl_points",
     "reason",
 ]
 
@@ -89,7 +101,15 @@ RESULT_COLUMNS = [
     "opened_at",
     "closed_at",
     "close_price",
+    "exit_price",
     "result",
+    "quantity",
+    "qty",
+    "position_size",
+    "capital_used",
+    "risk_amount",
+    "risk_per_trade_pct",
+    "realized_pnl",
     "pnl_points",
     "reason",
 ]
@@ -137,7 +157,7 @@ def _read_csv(path, columns, legacy_path=None):
             if col not in df.columns:
                 df[col] = ""
 
-        return df[columns]
+        return df
 
     except Exception:
         return pd.DataFrame(columns=columns)
@@ -153,7 +173,11 @@ def _write_csv(df, path, columns):
             if col not in df.columns:
                 df[col] = ""
 
-        df[columns].to_csv(path, index=False)
+        final_columns = list(df.columns)
+        for col in columns:
+            if col not in final_columns:
+                final_columns.append(col)
+        df[final_columns].to_csv(path, index=False)
 
     except Exception as e:
         print(f"⚠️ Could not write {path}: {e}")
@@ -318,6 +342,14 @@ def _insert_trade_to_supabase(row):
         "rr": _safe_float(row.get("rr")),
         "score": _safe_float(row.get("score")),
         "rank_score": _safe_float(row.get("rank_score")),
+        "quantity": _safe_float(row.get("quantity") or row.get("qty")),
+        "qty": _safe_float(row.get("quantity") or row.get("qty")),
+        "position_size": _safe_float(row.get("position_size")),
+        "capital_used": _safe_float(row.get("capital_used") or row.get("position_size")),
+        "risk_amount": _safe_float(row.get("risk_amount")),
+        "risk_per_trade_pct": _safe_float(row.get("risk_per_trade_pct"), 1.0),
+        "paper_trade_id": row.get("paper_trade_id"),
+        "is_paper_trade": row.get("is_paper_trade") or True,
         "market_status": _safe_text(row.get("market_status"), 1000),
         "telegram_alerted": str(row.get("telegram_alerted", "NO")),
         "reason": _safe_text(row.get("reason"), 500),
@@ -350,6 +382,14 @@ def _insert_result_to_supabase_minimal(result_row):
         "result": str(result_row.get("result", "")),
         "outcome": "TP" if str(result_row.get("result", "")).upper() == "WIN" else "SL",
         "pnl_points": _safe_float(result_row.get("pnl_points")),
+        "pnl": _safe_float(result_row.get("realized_pnl")),
+        "realized_pnl": _safe_float(result_row.get("realized_pnl")),
+        "quantity": _safe_float(result_row.get("quantity") or result_row.get("qty")),
+        "qty": _safe_float(result_row.get("quantity") or result_row.get("qty")),
+        "position_size": _safe_float(result_row.get("position_size")),
+        "capital_used": _safe_float(result_row.get("capital_used") or result_row.get("position_size")),
+        "risk_amount": _safe_float(result_row.get("risk_amount")),
+        "risk_per_trade_pct": _safe_float(result_row.get("risk_per_trade_pct"), 1.0),
         "closed_at": result_row.get("closed_at") or _now_iso(),
         "reason": _safe_text(result_row.get("reason"), 500),
         "created_at": _now_iso(),
@@ -423,6 +463,11 @@ def add_good_setups_as_live_trades(
     for setup in eligible_setups or []:
         if max_new_trades is not None and local_added >= max_new_trades:
             break
+        try:
+            from engines.paper_trading_engine import prepare_paper_trade_fields
+            setup = prepare_paper_trade_fields(setup if isinstance(setup, dict) else {})
+        except Exception:
+            setup = setup if isinstance(setup, dict) else {}
 
         symbol = str(setup.get("symbol", "")).strip().upper()
         side = str(setup.get("side", "")).strip().upper()
@@ -442,8 +487,13 @@ def add_good_setups_as_live_trades(
         rank_score = _safe_float(
             setup.get("rank_score", setup.get("elite_probability_score", score))
         )
+        quantity = _safe_float(setup.get("quantity") or setup.get("qty"))
+        position_size = _safe_float(setup.get("position_size"))
+        skip_reason = str(setup.get("skip_reason") or "").strip()
 
         if entry <= 0 or sl <= 0 or target <= 0 or rr <= 0:
+            continue
+        if quantity < 1 or position_size <= 0 or skip_reason:
             continue
 
         now_text = _now()
@@ -462,6 +512,15 @@ def add_good_setups_as_live_trades(
             "rr": round(rr, 2),
             "score": round(score, 2),
             "rank_score": round(rank_score, 2),
+            "quantity": quantity,
+            "qty": quantity,
+            "position_size": round(position_size, 2),
+            "capital_used": round(_safe_float(setup.get("capital_used"), position_size), 2),
+            "risk_amount": round(_safe_float(setup.get("risk_amount")), 2),
+            "risk_per_trade_pct": round(_safe_float(setup.get("risk_per_trade_pct"), 1.0), 4),
+            "risk_per_share": round(_safe_float(setup.get("risk_per_share")), 4),
+            "paper_trade_id": setup.get("paper_trade_id", ""),
+            "is_paper_trade": setup.get("is_paper_trade", True),
             "market_status": str(setup.get("market_status", market_status)),
             "telegram_alerted": "YES" if symbol in alerted_symbols else "NO",
             "status": "OPEN",
@@ -469,8 +528,11 @@ def add_good_setups_as_live_trades(
             "last_checked_at": now_text,
             "last_price": "",
             "close_price": "",
+            "exit_price": "",
             "closed_at": "",
             "result": "",
+            "realized_pnl": "",
+            "pnl_points": "",
             "reason": _safe_text(setup.get("reason", ""), 500),
         }
 
@@ -572,11 +634,15 @@ def update_live_trade_outcomes():
         close_iso = _now_iso()
         result = "WIN" if hit == "TARGET" else "LOSS"
         pnl = _pnl_points(side, entry, price)
+        quantity = _safe_float(row.get("quantity") or row.get("qty"))
+        realized_pnl = round(pnl * quantity, 2) if quantity > 0 else ""
 
         active_df.at[idx, "status"] = "CLOSED"
         active_df.at[idx, "close_price"] = round(price, 2)
+        active_df.at[idx, "exit_price"] = round(price, 2)
         active_df.at[idx, "closed_at"] = close_time
         active_df.at[idx, "result"] = result
+        active_df.at[idx, "realized_pnl"] = realized_pnl
 
         result_row = {
             "trade_id": row.get("trade_id", ""),
@@ -593,7 +659,15 @@ def update_live_trade_outcomes():
             "opened_at": row.get("opened_at", ""),
             "closed_at": close_time,
             "close_price": round(price, 2),
+            "exit_price": round(price, 2),
             "result": result,
+            "quantity": quantity,
+            "qty": quantity,
+            "position_size": _safe_float(row.get("position_size")),
+            "capital_used": _safe_float(row.get("capital_used") or row.get("position_size")),
+            "risk_amount": _safe_float(row.get("risk_amount")),
+            "risk_per_trade_pct": _safe_float(row.get("risk_per_trade_pct"), 1.0),
+            "realized_pnl": realized_pnl,
             "pnl_points": pnl,
             "reason": row.get("reason", ""),
         }

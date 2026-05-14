@@ -6,29 +6,21 @@ Safety
 - Rankings, Telegram, alert caps, and execution are unchanged.
 - Aggregates only already-generated Phase 6 metadata.
 
-Generated At: 2026-05-13T12:19:43.647061+05:30
-Observed Setups: 8
-Average Consensus Score: 60.2375
-Average Conflict Score: 19.1113
+Generated At: 2026-05-14T13:58:55.680876+05:30
+Observed Setups: 0
+Average Consensus Score: 0.0
+Average Conflict Score: 0.0
 Contradiction Frequency: 0.0
-Average Agreement Confidence: 53.5475
+Average Agreement Confidence: 0.0
 
 Top Contradiction Types:
 - None observed
 
 Most Common Weak Setup Patterns:
-- confirmation count is low: 8
-- normal follow-through failure after entry: 8
-- execution quality is weak: 2
+- None observed
 
 Strongest Agreement Patterns:
 - None observed
 
 Agent Stance Distributions:
-- execution_agent: CAUTION: 2, NEUTRAL: 5, SUPPORT: 1
-- memory_agent: NEUTRAL: 8
-- news_agent: NEUTRAL: 8
-- regime_agent: NEUTRAL: 8
-- risk_agent: SUPPORT: 8
-- scenario_agent: NEUTRAL: 8
-- technical_agent: NEUTRAL: 1, SUPPORT: 7
+- None observed

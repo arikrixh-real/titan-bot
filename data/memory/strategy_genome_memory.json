@@ -26,12 +26,6 @@
       "samples": 1,
       "win_rate": 1.0
     },
-    "UNKNOWN|LONG|RISK_OFF|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|none": {
-      "failure_patterns": [],
-      "family": "UNKNOWN",
-      "samples": 0,
-      "win_rate": 0.0
-    },
     "UNKNOWN|LONG|RISK_OFF|score_low|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
       "failure_patterns": [
         "expired_at_end_of_trading_day;_not_count"
@@ -48,22 +42,10 @@
       "samples": 0,
       "win_rate": 0.0
     },
-    "UNKNOWN|LONG|RISK_OFF|score_medium|rr_2_plus|vol_unknown|volume_unknown|health_unknown|none": {
-      "failure_patterns": [],
-      "family": "UNKNOWN",
-      "samples": 0,
-      "win_rate": 0.0
-    },
     "UNKNOWN|SHORT|RISK_OFF|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
       "failure_patterns": [
         "expired_at_end_of_trading_day;_not_count"
       ],
-      "family": "UNKNOWN",
-      "samples": 0,
-      "win_rate": 0.0
-    },
-    "UNKNOWN|SHORT|RISK_OFF|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|none": {
-      "failure_patterns": [],
       "family": "UNKNOWN",
       "samples": 0,
       "win_rate": 0.0
@@ -91,12 +73,6 @@
       "family": "UNKNOWN",
       "samples": 0,
       "win_rate": 0.0
-    },
-    "UNKNOWN|SHORT|RISK_OFF|score_medium|rr_2_plus|vol_unknown|volume_unknown|health_unknown|none": {
-      "failure_patterns": [],
-      "family": "UNKNOWN",
-      "samples": 0,
-      "win_rate": 0.0
     }
   },
   "dominant_families": [],
@@ -121,23 +97,23 @@
     "UNKNOWN": {
       "avg_lifecycle_health": 0.5,
       "avg_rr": 2.0,
-      "avg_score": 2.6667,
-      "decay_score": 0.0067,
+      "avg_score": 2.6546,
+      "decay_score": 0.0,
       "dominance_score": 1.0,
-      "drift_score": 0.0067,
+      "drift_score": 0.0,
       "family_state": "INSUFFICIENT_DATA",
       "loss_rate": 0.4,
       "losses": 2,
-      "open_or_other": 303,
+      "open_or_other": 295,
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
       "samples": 5,
-      "stability_score": 0.7913,
+      "stability_score": 0.795,
       "win_rate": 0.6,
       "wins": 3
     }
   },
-  "generated_at": "2026-05-13 12:33:31",
+  "generated_at": "2026-05-14 13:58:57",
   "history": [
     {
       "decaying_families": [],
@@ -333,29 +309,34 @@
       "decaying_families": [],
       "dominant_family": null,
       "generated_at": "2026-05-13 12:33:31"
+    },
+    {
+      "decaying_families": [],
+      "dominant_family": null,
+      "generated_at": "2026-05-14 13:58:57"
     }
   ],
   "layer_freshness": {
     "lifecycle": {
-      "age_seconds": 0.482,
+      "age_seconds": 0.549,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "master_shadow": {
-      "age_seconds": 0.205,
+      "age_seconds": 0.105,
       "available": true,
       "path": "data\\memory\\master_shadow_memory.json",
       "status": "OK"
     },
     "promotion_gate": {
-      "age_seconds": 0.108,
+      "age_seconds": 0.061,
       "available": true,
       "path": "data\\memory\\promotion_gate_memory.json",
       "status": "OK"
     },
     "regime": {
-      "age_seconds": 0.021,
+      "age_seconds": 0.002,
       "available": true,
       "path": "data\\memory\\advanced_regime_intelligence_memory.json",
       "status": "OK"
@@ -363,9 +344,9 @@
   },
   "phase13_shadow_mode": true,
   "promotion_gate_features": {
-    "drift_control_score": 0.9933,
+    "drift_control_score": 1.0,
     "failure_cluster_quality": 0.75,
-    "family_stability_score": 0.7913,
+    "family_stability_score": 0.795,
     "promotion_eligible": false,
     "recommended_live_weight": 0.0,
     "regime_compatibility_quality": 0.565,
@@ -385,7 +366,7 @@
   "runtime_bounded": true,
   "runtime_context": {
     "context_mode": "SELECTIVE",
-    "observed_setups_count": 8,
+    "observed_setups_count": 0,
     "phase_result_keys": [
       "outcome_result",
       "phase10_master_shadow_result",

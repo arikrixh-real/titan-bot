@@ -1,43 +1,44 @@
 {
   "command_status": {
-    "confidence": 53.43,
+    "confidence": 39.95,
     "confidence_stability": {
-      "score": 53.43,
-      "state": "MIXED"
+      "score": 39.95,
+      "state": "FRAGILE"
     },
     "failed_open": false,
     "overall_state": "ACTIVE",
     "warnings": []
   },
   "dashboard_cards": {
-    "cross_setup_heat": 94.38,
+    "cross_setup_heat": 0.0,
     "master_shadow_state": "ACTIVE",
-    "narrative": "EVENT_CAUTION",
-    "shadow_warnings": 8,
+    "narrative": "DATA_INSUFFICIENT_NEUTRAL",
+    "shadow_warnings": 7,
     "tracked_lifecycle_trades": 25
   },
-  "generated_at": "2026-05-13 12:33:31",
+  "generated_at": "2026-05-14 13:58:57",
   "intelligence_layers": {
     "phase5_strategy_family": {
       "available": true,
       "setup_family_strength": [],
-      "total_closed_trades": 88,
+      "total_closed_trades": 90,
       "weak_families": []
     },
     "phase6_multi_agent": {
       "available": true,
-      "average_conflict_score": 19.1113,
-      "average_consensus_score": 60.2375,
+      "average_conflict_score": 0.0,
+      "average_consensus_score": 0.0,
       "contradiction_count": 0,
       "contradiction_frequency": 0.0,
-      "observed_setups": 8
+      "observed_setups": 0
     },
     "phase7_lifecycle": {
       "available": true,
       "failure_cause_counts": {
         "bad_entry": 2,
         "successful_follow_through": 3,
-        "unclassified_shadow": 19,
+        "time_decay": 5,
+        "unclassified_shadow": 14,
         "weak_setup_quality": 1
       },
       "lifecycle_degradation": [
@@ -47,62 +48,73 @@
           "symbol": "TATASTEEL"
         },
         {
+          "drift": -12.0,
+          "health": 45.0,
+          "symbol": "BAJAJHLDNG"
+        },
+        {
+          "drift": -12.0,
+          "health": 52.75,
+          "symbol": "TRENT"
+        },
+        {
           "drift": -27.5,
           "health": 70.0,
           "symbol": "RELIANCE"
+        },
+        {
+          "drift": -12.0,
+          "health": 79.5,
+          "symbol": "JINDALSTEL"
         }
       ],
       "tracked_trades": 25
     },
     "phase8_market_narrative": {
       "available": true,
-      "contradiction_count": 5,
+      "contradiction_count": 1,
       "market_direction": "NEUTRAL",
-      "narrative_confidence": 0.72,
-      "narrative_type": "EVENT_CAUTION",
+      "narrative_confidence": 0.57,
+      "narrative_type": "DATA_INSUFFICIENT_NEUTRAL",
       "risk_state": "RISK_OFF",
       "risk_tone_score": 37.12
     },
     "phase9_cross_setup": {
       "available": true,
-      "concentration_warnings": [
-        "long crowding conflicts with risk-off narrative",
-        "same cluster contains opposing trade directions",
-        "dominant sector concentration detected"
-      ],
-      "observed_setup_count": 8,
-      "portfolio_heat_score": 94.38,
-      "relational_state": "HIGH_CONCENTRATION",
-      "systemic_contradiction_count": 3
+      "concentration_warnings": [],
+      "observed_setup_count": 0,
+      "portfolio_heat_score": 0.0,
+      "relational_state": "NEUTRAL",
+      "systemic_contradiction_count": 0
     }
   },
   "layer_freshness": {
     "phase5": {
-      "age_seconds": 820.727,
+      "age_seconds": 0.007,
       "available": true,
       "path": "data\\memory\\strategy_family_memory.json",
       "status": "OK"
     },
     "phase6": {
-      "age_seconds": 828.05,
+      "age_seconds": 1.797,
       "available": true,
       "path": "data\\memory\\phase6_shadow_memory.json",
       "status": "OK"
     },
     "phase7": {
-      "age_seconds": 0.228,
+      "age_seconds": 0.398,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "phase8": {
-      "age_seconds": 7.07,
+      "age_seconds": 1.805,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "phase9": {
-      "age_seconds": 826.027,
+      "age_seconds": 0.441,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
@@ -114,23 +126,22 @@
     "data_quality_flags": [],
     "lifecycle_flags": [
       "TATASTEEL:health=25.0",
-      "RELIANCE:health=70.0"
+      "BAJAJHLDNG:health=45.0",
+      "TRENT:health=52.75",
+      "RELIANCE:health=70.0",
+      "JINDALSTEL:health=79.5"
     ],
     "narrative_flags": [
       "risk_state:RISK_OFF"
     ],
     "systemic_flags": [
-      "long crowding conflicts with risk-off narrative",
-      "same cluster contains opposing trade directions",
-      "dominant sector concentration detected",
-      "shadow_contradictions_detected:8",
-      "portfolio_heat_high"
+      "shadow_contradictions_detected:1"
     ]
   },
   "runtime_bounded": true,
   "runtime_context": {
     "context_mode": "SELECTIVE",
-    "observed_setups_count": 8,
+    "observed_setups_count": 0,
     "phase_result_keys": [
       "adaptive_memory_result",
       "outcome_result",
@@ -141,7 +152,7 @@
     ],
     "selected_decisions_count": 0
   },
-  "runtime_ms": 15.0,
+  "runtime_ms": 31.0,
   "safety": {
     "broker_api_changes": false,
     "build_master_input_calls": false,

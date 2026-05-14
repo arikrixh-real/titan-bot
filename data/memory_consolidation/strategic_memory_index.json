@@ -329,6 +329,13 @@
         "score": 50.0
       }
     ],
+    "SCAN_MEMORY_40": [
+      {
+        "memory_key": "scan_memory_40",
+        "regime": "UNKNOWN",
+        "score": 50.0
+      }
+    ],
     "SCAN_MEMORY_5": [
       {
         "memory_key": "scan_memory_5",
@@ -666,5 +673,5 @@
       }
     ]
   },
-  "strategy_count": 95
+  "strategy_count": 96
 }

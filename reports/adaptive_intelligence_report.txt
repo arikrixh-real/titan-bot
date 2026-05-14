@@ -1,10 +1,10 @@
 TITAN PHASE 3 ADAPTIVE INTELLIGENCE REPORT
 ============================================================
-Updated: 2026-05-13 12:19:50
-Closed trades: 88
-Wins: 36
-Losses: 52
-Adaptive confidence: 41.3
+Updated: 2026-05-14 13:58:57
+Closed trades: 90
+Wins: 37
+Losses: 53
+Adaptive confidence: 41.49
 
 NOTES
 ------------------------------------------------------------
@@ -15,23 +15,23 @@ FEATURE MEMORY
 ------------------------------------------------------------
 market_filter: trades=85, wins=34, losses=51, posterior=0.4045, weight=0.9522
 trend: trades=85, wins=34, losses=51, posterior=0.4045, weight=0.9522
-general: trades=3, wins=2, losses=1, posterior=0.5714, weight=1.0036
+general: trades=5, wins=3, losses=2, posterior=0.5556, weight=1.0046
 
 REGIME MEMORY
 ------------------------------------------------------------
 NEUTRAL_OK: trades=85, wins=34, losses=51, posterior=0.4045, weight=0.9522
-TRENDING: trades=3, wins=2, losses=1, posterior=0.5714, weight=1.0036
+TRENDING: trades=5, wins=3, losses=2, posterior=0.5556, weight=1.0046
 
 SECTOR MEMORY
 ------------------------------------------------------------
 Auto: trades=23, wins=6, losses=17, posterior=0.2963, weight=0.9219
-IT: trades=18, wins=3, losses=15, posterior=0.2273, weight=0.9182
+IT: trades=19, wins=4, losses=15, posterior=0.2609, weight=0.9243
 Telecom: trades=10, wins=8, losses=2, posterior=0.7143, weight=1.0357
 UNKNOWN: trades=10, wins=1, losses=9, posterior=0.2143, weight=0.9524
 Banking: trades=7, wins=6, losses=1, posterior=0.7273, weight=1.0265
 Oil & Gas: trades=6, wins=6, losses=0, posterior=0.8, weight=1.03
 Consumer / Jewellery: trades=6, wins=1, losses=5, posterior=0.3, weight=0.98
-Metals: trades=3, wins=2, losses=1, posterior=0.5714, weight=1.0036
+Metals: trades=4, wins=2, losses=2, posterior=0.5, weight=1.0
 Energy / Telecom / Retail: trades=3, wins=2, losses=1, posterior=0.5714, weight=1.0036
 FMCG: trades=1, wins=1, losses=0, posterior=0.6, weight=1.0017
 Cement: trades=1, wins=0, losses=1, posterior=0.4, weight=0.9983
@@ -48,5 +48,5 @@ SHORT|NEUTRAL_OK|OIL_GAS|market_filter+trend: trades=6, wins=6, losses=0, poster
 SHORT|NEUTRAL_OK|CONSUMER_JEWELLERY|market_filter+trend: trades=6, wins=1, losses=5, posterior=0.3, weight=0.98
 LONG|NEUTRAL_OK|IT|market_filter+trend: trades=3, wins=1, losses=2, posterior=0.4286, weight=0.9964
 SHORT|NEUTRAL_OK|METALS|market_filter+trend: trades=2, wins=2, losses=0, posterior=0.6667, weight=1.0056
+SHORT|TRENDING|IT|general: trades=2, wins=2, losses=0, posterior=0.6667, weight=1.0056
 LONG|TRENDING|ENERGY_TELECOM_RETAIL|general: trades=2, wins=1, losses=1, posterior=0.5, weight=1.0
-LONG|NEUTRAL_OK|ENERGY_TELECOM_RETAIL|market_filter+trend: trades=1, wins=1, losses=0, posterior=0.6, weight=1.0017

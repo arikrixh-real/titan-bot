@@ -34,7 +34,7 @@ TRADE_WINDOW_START_HOUR = 9
 TRADE_WINDOW_START_MINUTE = 15
 TRADE_WINDOW_END_HOUR = 15
 TRADE_WINDOW_END_MINUTE = 30
-INITIAL_BALANCE = 100000.0
+INITIAL_BALANCE = 1000.0
 REAL_PNL_SOURCE_LABEL = "REAL_STOCK_WISE_PNL | QTY_SYNC_ACTIVE"
 DASHBOARD_VISUAL_VERSION = "REAL_PNL_QTY_SYNC_FIX_V1"
 PAPER_ACCOUNT_PATH = "/".join(["data", "paper_trading", "paper_account.json"])
@@ -593,7 +593,7 @@ def get_paper_trading_status(phase_reports=None, closed_trade_rows=None, open_tr
         default=INITIAL_BALANCE,
     )
 
-    pnl_rows = closed_trade_rows if closed_trade_rows else closed_items
+    pnl_rows = filter_rows_after_paper_account_start(closed_trade_rows if closed_trade_rows else closed_items, paper)
     if pnl_rows:
         pnl_report = build_real_closed_pnl_report(pnl_rows)
         closed_pnl = pnl_report["closed_pnl"]
@@ -685,7 +685,7 @@ def get_paper_trading_status(phase_reports=None, closed_trade_rows=None, open_tr
     daily_start_balance = first_number(
         paper.get("daily_start_balance"),
         initial_balance,
-        default=100000.0,
+        default=INITIAL_BALANCE,
     )
     daily_pnl_source = "account" if paper.get("daily_pnl") not in [None, ""] else "balance_minus_daily_start"
     daily_pnl = first_number(
@@ -1066,6 +1066,25 @@ def build_real_closed_pnl_report(rows):
             report["skipped_pnl_reasons"][reason] = report["skipped_pnl_reasons"].get(reason, 0) + 1
     report["closed_pnl"] = round(report["closed_pnl"], 2)
     return report
+
+
+def filter_rows_after_paper_account_start(rows, paper=None):
+    if not rows:
+        return []
+    paper = paper if isinstance(paper, dict) else safe_read_json(PAPER_ACCOUNT_PATH, {})
+    if not isinstance(paper, dict) or str(paper.get("capital_mode") or "").upper() != "ADAPTIVE_1K":
+        return rows
+    start = str(paper.get("created_at") or "").replace("T", " ")[:19]
+    if not start:
+        return rows
+    filtered = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        row_time = str(row.get("closed_at") or row.get("opened_at") or row.get("created_at") or "").replace("T", " ")[:19]
+        if not row_time or row_time >= start:
+            filtered.append(row)
+    return filtered
 
 
 def calculate_open_trade_pnl(rows):

@@ -83,6 +83,19 @@ def prepare_execution_packets(daily_alert_result):
             "raw": candidate,
         }
 
+        try:
+            from engines.paper_trading_engine import prepare_paper_trade_fields
+            data = prepare_paper_trade_fields(data)
+        except Exception as e:
+            data["skip_reason"] = f"PAPER_SIZING_ERROR:{e}"
+
+        if int(float(data.get("quantity") or data.get("qty") or 0)) < 1 or data.get("skip_reason"):
+            print(
+                f"[Execution] Skipped {data.get('symbol')} "
+                f"because paper sizing rejected it: {data.get('skip_reason') or 'QTY_LESS_THAN_1'}"
+            )
+            continue
+
         data["message"] = build_signal_message(data)
         packets.append(data)
 

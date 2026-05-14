@@ -951,6 +951,14 @@ def scan_for_setups():
             quantity = pos_data.get("quantity") or pos_data.get("qty", 0)
             position_size = pos_data.get("position_size", 0)
             risk_amount = pos_data.get("risk_amount", 0)
+            if not pos_data.get("sizing_valid", quantity and position_size) or int(quantity or 0) < 1:
+                final_passed = max(0, final_passed - 1)
+                titan_log(
+                    f"FILTER RESULT -> {symbol} | PAPER_SIZE_SKIP | "
+                    f"{pos_data.get('skip_reason', 'INVALID_POSITION_SIZE')}",
+                    important=True,
+                )
+                continue
 
             reason = build_reason(
                 symbol=symbol,

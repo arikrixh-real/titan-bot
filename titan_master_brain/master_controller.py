@@ -885,7 +885,7 @@ def refresh_phase24_execution_safety_safely(final_decisions=None, context=None):
         account_snapshot = {}
         if isinstance(context, dict):
             account_snapshot = {
-                "balance": context.get("account_balance") or context.get("capital") or 100000,
+                "balance": context.get("account_balance") or context.get("capital") or 1000,
                 "daily_loss_pct": context.get("daily_loss_pct") or 0.0,
             }
         order_history = selected if isinstance(selected, list) else []

@@ -6,16 +6,16 @@ Safety
 - No ranking, Telegram, execution, broker, alert-cap, duplicate, or market-hours changes.
 - Uses existing local/cached TITAN metadata only.
 
-Updated: 2026-05-13 12:19:43
-Narrative Type: EVENT_CAUTION
+Updated: 2026-05-14 13:58:55
+Narrative Type: DATA_INSUFFICIENT_NEUTRAL
 Risk State: RISK_OFF
 Risk Tone Score: 37.12
 Market Direction: NEUTRAL
-Narrative Confidence: 0.72
+Narrative Confidence: 0.57
 
 Breadth: MIXED_BREADTH | Score: 48.05
 Volatility: CALM | Score: 50.0
-Event Pressure: HIGH | Score: 60.0
+Event Pressure: MEDIUM | Score: 48.0
 
 Sector Leadership:
 - None observed
@@ -24,17 +24,10 @@ Sector Weakness:
 - None observed
 
 Setup Alignment:
-- Observed setups: 8
-- Aligned setups: 1
-- Conflicting setups: 7
-- Average alignment score: 36.5
+- Observed setups: 0
+- Aligned setups: 0
+- Conflicting setups: 0
+- Average alignment score: 50.0
 
 Contradiction Flags:
-- RELIANCE LONG conflicts with risk-off narrative
-- HAVELLS LONG conflicts with risk-off narrative
-- BAJFINANCE LONG conflicts with risk-off narrative
-- SHRIRAMFIN LONG conflicts with risk-off narrative
-- CHOLAFIN LONG conflicts with risk-off narrative
-- ABB LONG conflicts with risk-off narrative
-- SIEMENS LONG conflicts with risk-off narrative
-- regime transition from CHOPPY_NEUTRAL to EVENT_CAUTION
+- regime transition from EVENT_CAUTION to DATA_INSUFFICIENT_NEUTRAL

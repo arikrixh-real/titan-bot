@@ -1,7 +1,7 @@
 {
   "symbol": "UNKNOWN",
   "news_data_mode": "REAL_NEWS",
-  "overall_news_sentiment_score": 60.29,
+  "overall_news_sentiment_score": 59.88,
   "event_classification": "EARNINGS",
   "impact_half_life": {
     "event_type": "EARNINGS",
@@ -29,6 +29,30 @@
   },
   "earnings_event_tags": [
     {
+      "title": "Tata Consumer Q4 net profit falls 19% to Rs 217 cr, firm declares dividend of Rs 7.75 per share",
+      "source": "https://www.moneycontrol.com/rss/business.xml",
+      "tag": "EARNINGS",
+      "sentiment_score": 62.0
+    },
+    {
+      "title": "Tata Consumer Q4 net profit falls 19% to Rs 217 cr, firm declares dividend of Rs 7.75 per share",
+      "source": "https://www.moneycontrol.com/rss/business.xml",
+      "tag": "EARNINGS",
+      "sentiment_score": 62.0
+    },
+    {
+      "title": "Hindustan Unilever Q4 Preview: Price cuts, slow demand, regional competition to hurt topline",
+      "source": "https://www.moneycontrol.com/rss/business.xml",
+      "tag": "EARNINGS",
+      "sentiment_score": 50.0
+    },
+    {
+      "title": "LTIMindtree Q4 Preview: Lower pass-through revenue seen impacting growth marginally",
+      "source": "https://www.moneycontrol.com/rss/business.xml",
+      "tag": "EARNINGS",
+      "sentiment_score": 74.0
+    },
+    {
       "title": "Sensex, Nifty gain for third day in a row; easing volatility to support bull trend",
       "source": "https://www.moneycontrol.com/rss/marketreports.xml",
       "tag": "EARNINGS",
@@ -41,72 +65,60 @@
       "sentiment_score": 50.0
     },
     {
-      "title": "HPCL Q4 Results: Net profit jumps 46% YoY to Rs 4,902 crore; Rs 19.25/sh dividend declared",
-      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
-      "tag": "EARNINGS",
-      "sentiment_score": 86.0
-    },
-    {
-      "title": "Smallcaps rally! IIFL Finance, Hindustan Copper, Meesho, other stocks jump up to 7%",
+      "title": "Rohit Singhania bets on financials, telecom and healthcare for alpha generation",
       "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
       "tag": "EARNINGS",
       "sentiment_score": 74.0
     },
     {
-      "title": "Sensex to hit 89,000? Why Morgan Stanley is betting big on India Inc after 6-quarter slowdown",
+      "title": "Earnings are strong, but margin pain is coming; Dharmesh Kant on 3 sectors worth owning now",
       "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
       "tag": "EARNINGS",
       "sentiment_score": 86.0
     },
     {
-      "title": "Berger Paints shares soar over 9% after Q4 net profit jumps 27% to Rs 335 crore",
-      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
-      "tag": "EARNINGS",
-      "sentiment_score": 98.0
-    },
-    {
-      "title": "Market under pressure: IT stocks face long-term headwinds as oil crisis and AI shift weigh on sentiment: Vinit Bolinjkar",
+      "title": "Bitcoin slips near $79,600 as broader crypto market weakens; BTC dominance stays elevated",
       "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
       "tag": "EARNINGS",
       "sentiment_score": 50.0
     },
     {
-      "title": "SBI shares extend fall to 20% from peak after Q4 NIMs contraction rattles investors. What's ahead for investors?",
-      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+      "title": "Niti Aayog to strengthen model concession agreement framework for multi-modal logistics parks",
+      "source": "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms",
       "tag": "EARNINGS",
-      "sentiment_score": 74.0
+      "sentiment_score": 62.0
     }
   ],
   "news_reaction_memory": {
-    "news_items_observed": 28,
-    "average_recent_sentiment": 60.29,
+    "news_items_observed": 34,
+    "average_recent_sentiment": 59.88,
     "historical_news_trade_count": 0,
     "historical_news_win_rate": 0.0,
     "memory_confidence": 0.0
   },
   "market_narrative": {
-    "narrative_type": "RISK_ON_NEWS",
-    "dominant_event": "MACRO",
-    "headline_count": 28,
+    "narrative_type": "MIXED_NEWS",
+    "dominant_event": "EARNINGS",
+    "headline_count": 34,
     "event_counts": {
-      "ORDER_CONTRACT": 3,
-      "EARNINGS": 8,
-      "GENERAL_NEWS": 3,
-      "MACRO": 9,
-      "REGULATORY": 4,
-      "M&A": 1
+      "EARNINGS": 12,
+      "ORDER_CONTRACT": 7,
+      "REGULATORY": 3,
+      "GENERAL_NEWS": 8,
+      "M&A": 1,
+      "MACRO": 3
     },
-    "average_sentiment": 60.29
+    "average_sentiment": 59.88
   },
-  "credibility_score": 78.29,
-  "source_weight_score": 65.29,
-  "news_intelligence_score": 41.41,
+  "credibility_score": 82.79,
+  "source_weight_score": 69.44,
+  "news_intelligence_score": 41.11,
   "news_bias": "BEARISH",
   "news_warning": "SKIP",
   "live_order_allowed": false,
   "explanations": [
     "Real news items were analyzed for sentiment, relevance, credibility, and narrative.",
     "Dominant event classification: EARNINGS.",
-    "Market narrative: RISK_ON_NEWS."
+    "Market narrative: MIXED_NEWS."
   ]
 }

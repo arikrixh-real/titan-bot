@@ -56,7 +56,7 @@
     "Calibration requested review; small ranking penalty applied.",
     "PROXY confidence calibration used available prediction/outcome evidence."
   ],
-  "generated_at": "2026-05-13T07:03:25.262881Z",
+  "generated_at": "2026-05-14T08:28:56.000233Z",
   "live_order_allowed": false,
   "low_sample_shrinkage": {
     "sample_size": 0,

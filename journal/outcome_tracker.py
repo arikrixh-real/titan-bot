@@ -82,8 +82,10 @@ OUTCOME_FIELDS = [
     "quantity",
     "qty",
     "position_size",
+    "capital_used",
     "risk_amount",
     "risk_per_trade_pct",
+    "risk_per_share",
     "paper_trade_id",
     "is_paper_trade",
     "rr",
@@ -269,7 +271,7 @@ def _ensure_files():
     active_fields = [
         "trade_id", "opened_at", "scan_id", "symbol", "side", "entry", "sl",
         "target", "entry_price", "stop_loss", "tp", "rr", "score", "rank_score",
-        "quantity", "qty", "position_size", "risk_amount", "risk_per_trade_pct",
+        "quantity", "qty", "position_size", "capital_used", "risk_amount", "risk_per_trade_pct", "risk_per_share",
         "paper_trade_id", "is_paper_trade", "alert_sent", "market_status",
         "status", "last_checked_at", "last_price", "pnl_points", "result_reason"
     ]
@@ -404,6 +406,7 @@ def _update_trade_result_payload(payload):
                         "quantity": update_payload.get("quantity"),
                         "qty": update_payload.get("qty"),
                         "position_size": update_payload.get("position_size"),
+                        "capital_used": update_payload.get("capital_used"),
                         "risk_amount": update_payload.get("risk_amount"),
                         "risk_per_trade_pct": update_payload.get("risk_per_trade_pct"),
                         "pnl": update_payload.get("realized_pnl"),
@@ -439,6 +442,7 @@ def _update_trade_result_payload(payload):
                     "quantity": update_payload.get("quantity"),
                     "qty": update_payload.get("qty"),
                     "position_size": update_payload.get("position_size"),
+                    "capital_used": update_payload.get("capital_used"),
                     "risk_amount": update_payload.get("risk_amount"),
                     "risk_per_trade_pct": update_payload.get("risk_per_trade_pct"),
                     "pnl": update_payload.get("realized_pnl"),
@@ -486,6 +490,7 @@ def _update_trade_result_payload(payload):
                             "quantity": update_payload.get("quantity"),
                             "qty": update_payload.get("qty"),
                             "position_size": update_payload.get("position_size"),
+                            "capital_used": update_payload.get("capital_used"),
                             "risk_amount": update_payload.get("risk_amount"),
                             "risk_per_trade_pct": update_payload.get("risk_per_trade_pct"),
                             "pnl": update_payload.get("realized_pnl"),
@@ -543,6 +548,7 @@ def _save_trade_result_to_supabase(outcome_row):
         "quantity": _safe_float(outcome_row.get("quantity") or outcome_row.get("qty")),
         "qty": _safe_float(outcome_row.get("quantity") or outcome_row.get("qty")),
         "position_size": _safe_float(outcome_row.get("position_size")),
+        "capital_used": _safe_float(outcome_row.get("capital_used") or outcome_row.get("position_size")),
         "risk_amount": _safe_float(outcome_row.get("risk_amount")),
         "risk_per_trade_pct": _safe_float(outcome_row.get("risk_per_trade_pct"), 1.0),
         "paper_trade_id": outcome_row.get("paper_trade_id"),
@@ -601,8 +607,10 @@ def _append_outcome(row, outcome, exit_price, pnl_points, reason):
         "quantity": row.get("quantity") or row.get("qty", ""),
         "qty": row.get("qty") or row.get("quantity", ""),
         "position_size": row.get("position_size", ""),
+        "capital_used": row.get("capital_used") or row.get("position_size", ""),
         "risk_amount": row.get("risk_amount", ""),
         "risk_per_trade_pct": row.get("risk_per_trade_pct", ""),
+        "risk_per_share": row.get("risk_per_share", ""),
         "paper_trade_id": row.get("paper_trade_id") or row.get("trade_id", ""),
         "is_paper_trade": row.get("is_paper_trade") or "true",
         "rr": row.get("rr", ""),
@@ -727,7 +735,7 @@ def track_trade_outcomes(limit=None):
     default_fields = [
         "trade_id", "opened_at", "scan_id", "symbol", "side", "entry", "sl",
         "target", "entry_price", "stop_loss", "tp", "rr", "score", "rank_score",
-        "quantity", "qty", "position_size", "risk_amount", "risk_per_trade_pct",
+        "quantity", "qty", "position_size", "capital_used", "risk_amount", "risk_per_trade_pct", "risk_per_share",
         "paper_trade_id", "is_paper_trade", "alert_sent", "market_status",
         "status", "last_checked_at", "last_price", "pnl_points", "result_reason"
     ]

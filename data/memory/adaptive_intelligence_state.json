@@ -1,22 +1,22 @@
 {
   "version": "3.0",
-  "last_updated": "2026-05-13 12:19:50",
-  "total_closed_trades": 88,
-  "total_wins": 36,
-  "total_losses": 52,
+  "last_updated": "2026-05-14 13:58:57",
+  "total_closed_trades": 90,
+  "total_wins": 37,
+  "total_losses": 53,
   "bayesian_prior": {
     "alpha": 2.0,
     "beta": 2.0
   },
   "global_confidence": {
-    "trades": 88,
-    "wins": 36,
-    "losses": 52,
-    "win_rate": 0.4091,
-    "posterior_win_rate": 0.413,
+    "trades": 90,
+    "wins": 37,
+    "losses": 53,
+    "win_rate": 0.4111,
+    "posterior_win_rate": 0.4149,
     "sample_confidence": 1.0,
-    "weight": 0.9565,
-    "adaptive_confidence_score": 41.3
+    "weight": 0.9574,
+    "adaptive_confidence_score": 41.49
   },
   "feature_memory": {
     "market_filter": {
@@ -38,13 +38,13 @@
       "weight": 0.9522
     },
     "general": {
-      "trades": 3,
-      "wins": 2,
-      "losses": 1,
-      "win_rate": 0.6667,
-      "posterior_win_rate": 0.5714,
-      "sample_confidence": 0.1,
-      "weight": 1.0036
+      "trades": 5,
+      "wins": 3,
+      "losses": 2,
+      "win_rate": 0.6,
+      "posterior_win_rate": 0.5556,
+      "sample_confidence": 0.1667,
+      "weight": 1.0046
     }
   },
   "regime_memory": {
@@ -58,33 +58,33 @@
       "weight": 0.9522
     },
     "TRENDING": {
-      "trades": 3,
-      "wins": 2,
-      "losses": 1,
-      "win_rate": 0.6667,
-      "posterior_win_rate": 0.5714,
-      "sample_confidence": 0.1,
-      "weight": 1.0036
+      "trades": 5,
+      "wins": 3,
+      "losses": 2,
+      "win_rate": 0.6,
+      "posterior_win_rate": 0.5556,
+      "sample_confidence": 0.1667,
+      "weight": 1.0046
     }
   },
   "sector_memory": {
     "Metals": {
-      "trades": 3,
+      "trades": 4,
       "wins": 2,
-      "losses": 1,
-      "win_rate": 0.6667,
-      "posterior_win_rate": 0.5714,
-      "sample_confidence": 0.1,
-      "weight": 1.0036
+      "losses": 2,
+      "win_rate": 0.5,
+      "posterior_win_rate": 0.5,
+      "sample_confidence": 0.1333,
+      "weight": 1.0
     },
     "IT": {
-      "trades": 18,
-      "wins": 3,
+      "trades": 19,
+      "wins": 4,
       "losses": 15,
-      "win_rate": 0.1667,
-      "posterior_win_rate": 0.2273,
-      "sample_confidence": 0.6,
-      "weight": 0.9182
+      "win_rate": 0.2105,
+      "posterior_win_rate": 0.2609,
+      "sample_confidence": 0.6333,
+      "weight": 0.9243
     },
     "Auto": {
       "trades": 23,
@@ -305,17 +305,6 @@
       "weight": 1.0
     },
     "SHORT|TRENDING|IT|general": {
-      "trades": 1,
-      "wins": 1,
-      "losses": 0,
-      "win_rate": 1.0,
-      "posterior_win_rate": 0.6,
-      "sample_confidence": 0.0333,
-      "weight": 1.0017
-    }
-  },
-  "symbol_memory": {
-    "TATASTEEL": {
       "trades": 2,
       "wins": 2,
       "losses": 0,
@@ -324,14 +313,34 @@
       "sample_confidence": 0.0667,
       "weight": 1.0056
     },
-    "TCS": {
-      "trades": 5,
+    "SHORT|TRENDING|METALS|general": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "win_rate": 0.0,
+      "posterior_win_rate": 0.4,
+      "sample_confidence": 0.0333,
+      "weight": 0.9983
+    }
+  },
+  "symbol_memory": {
+    "TATASTEEL": {
+      "trades": 3,
       "wins": 2,
+      "losses": 1,
+      "win_rate": 0.6667,
+      "posterior_win_rate": 0.5714,
+      "sample_confidence": 0.1,
+      "weight": 1.0036
+    },
+    "TCS": {
+      "trades": 6,
+      "wins": 3,
       "losses": 3,
-      "win_rate": 0.4,
-      "posterior_win_rate": 0.4444,
-      "sample_confidence": 0.1667,
-      "weight": 0.9954
+      "win_rate": 0.5,
+      "posterior_win_rate": 0.5,
+      "sample_confidence": 0.2,
+      "weight": 1.0
     },
     "M&M": {
       "trades": 3,
@@ -462,13 +471,13 @@
   },
   "side_memory": {
     "SHORT": {
-      "trades": 71,
-      "wins": 32,
-      "losses": 39,
-      "win_rate": 0.4507,
-      "posterior_win_rate": 0.4533,
+      "trades": 73,
+      "wins": 33,
+      "losses": 40,
+      "win_rate": 0.4521,
+      "posterior_win_rate": 0.4545,
       "sample_confidence": 1.0,
-      "weight": 0.9767
+      "weight": 0.9773
     },
     "LONG": {
       "trades": 17,
@@ -493,28 +502,29 @@
       "795e22696d2aed9f047153fca6eb09baf50ed827e6ae0d2b593bd9d451181ab5",
       "da4a5e2a2d92de8c38c36d8d5084f2d4e84679317636a26122b39bb99a9cf1ec",
       "c7fe60f8dd90e3be4b72a00e8f3ac6b73f3a6629835956c2846b329268057f61",
-      "01c3475bee3b08da440f36fc7f0cd4868865ec64a3acc840a8e93a7a52b1efdf",
-      "284a4b0b7a6529fdddfab8ed51b3322cad8c8c7f559fa85f609d325f770c0072",
-      "987921aafbd4ca8c79e7411dc8917b6be6ac98a4ce021b4bbc3e64f67f96c19a",
-      "65b2d9c061d3599e1b55d70601a253c25cb61ff29125da0e90cc876b6f16eb06",
-      "cb52b37f3238b3c727165448c525b0b1f9105fbbc0622a8887340ffda7467ffd",
-      "eb3072b16f0b884fd7415de1c5305a02f4d715345368b1d155d1c6584471ce85",
-      "9ccb4d8d4012fa54eca61a9c6d143cdfc8b5525235ece62817b5d93bd8e2c1b4",
-      "f1583f4cec553e66cfb7ca41d057f2e6c589f5719d72add7350f62907eead122",
-      "b55806f9919411dc2966ac197e1a5a79d543542585307ce2654fa715325f30a0",
-      "4c143b296528302b44f6dddf5ffb4a2fc16ef3886a7631c21be12b29bb93eac3",
-      "badea3130f64d421d20ed9f8c194bc538e65bfcba6e3c1a20ae502e57e816ef7",
-      "9efe9b4eadfa5e407c0b4b836bd189f7aa7dd11dde3453e0043408591119b00f",
-      "513ed5eda95823844b50bb21ccece76514aa5daf4cec379fe7328a89e20a0448",
-      "bca855f098aa4ba99c6c314ca5cd94adf109011e9a20a878aac5162ad7f1427b",
-      "aa846ae8e60ad9e27435ad2ebb744f3f4662dcfa6f852a3bde0fbc6f8d91c0b9",
-      "bc5eb230533fd60844ff84f1ecc69e9f27af010d787c726cb110482e71206e97",
-      "39c66495149207bdb9f1b682f78ecdb4eead69656dc73baead24eb71953780b0",
-      "41469cd36120860da49e08bc7f488ee669595f9f371f426a7afce93d692b7f5b",
-      "71b91830f3bcbda09bc0f8ab2207014c33f1ef69bd9c7e42b8e1cddbe2269d47",
-      "abff09599f1987da5eb7657033a162d98347f19baa4deb8f7793a329ec4437a9",
-      "2cee94f45e7799617d20ec01e87ba952ec430b6448bbee2e29b616c8436d9c54",
-      "2d1f79f551b79cee2cc6d643410fbbd885ea8c49096baf5a9db44d53e2450df6"
+      "1d6ea4c2bde8841c567fb7ce0270b622aab5ec67883f8a02bb699ab1053223e0",
+      "3ec55f3b3f4673f641855ed4962ac08a37bca49f426548e7757c016de6e1873e",
+      "7f94ad65feaa67321922407daa8e89ca09b1cd74927d656c79461241bc66a9dd",
+      "55f946f2058f445fb70398f8c2e53f7b470ab7666b18cd163796b907b88f30a0",
+      "4d2978b15e332de81c2c91bb721bad7eecec57a55ddb657f5becbdd84def6a9b",
+      "e05334c021d28b3470a5091fd98985595b8f56db968595fc55cad25002a63a45",
+      "3438bd54a0329ff0141368d14ef87d67a67f1bb6545aaec2af1c2d0cca600395",
+      "8c4e950e5e59a21c782c91c50410d05cf6ad0292ad6587967de84fa4702098b9",
+      "191ea3974f747277c77355fdf30283a09b9e3594cdba7ef9b76c0d26fcd2c85e",
+      "a346b545e8b2d3ca938b7a1f076e4466d72dd46dfc80b1b31f229931d408718a",
+      "c626b7f6faeb5ac8118b398682092bf60e802485a9702b71623b14b6b01134ce",
+      "3bd082cd647d0f09c0d5e01c06aa61e92dddc6c13e586480cd353d24e14f39be",
+      "d8def76e6ea888d9460aa4da7e465ad2d1e9baa12becb6ef06e3a763297f891a",
+      "6eab54616b3341fcde78bd3d42188452619083143722d47d5858f551f071b11c",
+      "68750eea68d3c8643b98afb2d3b5ceaa0933d023b454b1f871ba63bca04973d8",
+      "42f0f67055dea71773c76a9cea03deb68b880196ed5f0bc4e0f1f0c082c31e78",
+      "89fd4dfb3c0fc043bda55eed02d70df8448507f63bd6fcb8cc1a92223173ffdb",
+      "3f526a2529a904ecba308bae80a7531ba3b13c09bca2b6dd5b49b3872a4f063b",
+      "4eb3fccba9929e75bdbf737e58ea1bfef8760750bd65d9f49d01ede87a1367c3",
+      "b4b434bd8c09faf33a0d0f261bd3614670db66ab5fd698b27e5af52030f9d4f8",
+      "4bdc891f5b7a5b3060496a0589c88835be9e654fb5406dc7e0365df048d5c0c0",
+      "f3e3837696ff280fa630f12f18fc4c28a2fcf8c1ba0fd51cb8be08ac0cbba46e",
+      "5d95446e8fcd3e12d335c1d5a1d72e3c90eea2b154c79e5abda5ce7cc142e55e"
     ],
     "symbol_sentiment": {
       "TATACONSUM": {
@@ -534,15 +544,15 @@
         "sentiment_score": 0.0
       },
       "BHARTIARTL": {
+        "items": 4,
+        "sentiment_score": 0.0833
+      },
+      "RELIANCE": {
         "items": 2,
         "sentiment_score": 0.1667
       },
-      "RELIANCE": {
-        "items": 3,
-        "sentiment_score": 0.2222
-      },
       "MARUTI": {
-        "items": 2,
+        "items": 1,
         "sentiment_score": 0.3333
       },
       "SUNPHARMA": {
@@ -565,19 +575,19 @@
         "items": 1,
         "sentiment_score": 0.3333
       },
-      "SBIN": {
-        "items": 1,
-        "sentiment_score": -0.3333
-      },
-      "WIPRO": {
+      "EICHERMOT": {
         "items": 1,
         "sentiment_score": 0.0
+      },
+      "SBIN": {
+        "items": 1,
+        "sentiment_score": -0.6667
       }
     },
     "sector_sentiment": {
       "FMCG": {
-        "items": 10,
-        "sentiment_score": -0.0
+        "items": 7,
+        "sentiment_score": 0.2381
       },
       "IT": {
         "items": 3,
@@ -592,47 +602,43 @@
         "sentiment_score": 0.0
       },
       "Telecom": {
-        "items": 4,
-        "sentiment_score": 0.1667
+        "items": 5,
+        "sentiment_score": 0.0667
       },
       "Auto": {
         "items": 4,
-        "sentiment_score": 0.1667
+        "sentiment_score": 0.3333
       },
       "Cement / Chemicals": {
         "items": 1,
         "sentiment_score": 0.3333
       },
       "Energy / Telecom / Retail": {
-        "items": 3,
-        "sentiment_score": 0.2222
+        "items": 2,
+        "sentiment_score": 0.1667
       },
       "Market Index": {
-        "items": 6,
-        "sentiment_score": 0.2778
+        "items": 5,
+        "sentiment_score": 0.2
       },
       "Metals": {
-        "items": 2,
-        "sentiment_score": 0.6667
+        "items": 3,
+        "sentiment_score": 0.1111
       },
       "Pharma": {
-        "items": 1,
+        "items": 4,
         "sentiment_score": 0.3333
       },
       "Global Macro": {
         "items": 9,
-        "sentiment_score": 0.0
-      },
-      "Cement": {
-        "items": 1,
-        "sentiment_score": 1.0
+        "sentiment_score": 0.1852
       },
       "Oil & Gas": {
-        "items": 6,
-        "sentiment_score": 0.0
+        "items": 5,
+        "sentiment_score": 0.3333
       },
       "Infrastructure": {
-        "items": 1,
+        "items": 7,
         "sentiment_score": 0.3333
       }
     }

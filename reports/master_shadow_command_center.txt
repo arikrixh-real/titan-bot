@@ -7,33 +7,33 @@ Safety
 - phase10_rank_adjustment: 0.0
 - No forbidden imports detected: True
 
-Updated: 2026-05-13 12:19:51
+Updated: 2026-05-14 13:58:57
 Overall Shadow Health: ACTIVE
-Confidence Stability: 53.43
-Runtime Ms: 46.0 | Bounded: True
+Confidence Stability: 39.95
+Runtime Ms: 31.0 | Bounded: True
 
 Dashboard Cards:
 - Shadow State: ACTIVE
-- Market Narrative: EVENT_CAUTION
-- Cross-Setup Heat: 94.38
-- Lifecycle Trades Tracked: 17
+- Market Narrative: DATA_INSUFFICIENT_NEUTRAL
+- Cross-Setup Heat: 0.0
+- Lifecycle Trades Tracked: 25
 - Shadow Warnings: 7
 
 Layer Summary:
 - Phase 5 setup-family strengths: None observed
-- Phase 7 lifecycle degradation: [{'symbol': 'RELIANCE', 'health': 70.0, 'drift': -27.5}]
-- Phase 8 narrative: EVENT_CAUTION | Risk: RISK_OFF
-- Phase 9 relational state: HIGH_CONCENTRATION | Heat: 94.38
+- Phase 7 lifecycle degradation: [{'symbol': 'TATASTEEL', 'health': 25.0, 'drift': -55.0}, {'symbol': 'BAJAJHLDNG', 'health': 45.0, 'drift': -12.0}, {'symbol': 'TRENT', 'health': 52.75, 'drift': -12.0}, {'symbol': 'RELIANCE', 'health': 70.0, 'drift': -27.5}, {'symbol': 'JINDALSTEL', 'health': 79.5, 'drift': -12.0}]
+- Phase 8 narrative: DATA_INSUFFICIENT_NEUTRAL | Risk: RISK_OFF
+- Phase 9 relational state: NEUTRAL | Heat: 0.0
 
 Systemic Warnings:
-- long crowding conflicts with risk-off narrative
-- same cluster contains opposing trade directions
-- dominant sector concentration detected
-- shadow_contradictions_detected:11
-- portfolio_heat_high
+- shadow_contradictions_detected:1
 
 Lifecycle Warnings:
+- TATASTEEL:health=25.0
+- BAJAJHLDNG:health=45.0
+- TRENT:health=52.75
 - RELIANCE:health=70.0
+- JINDALSTEL:health=79.5
 
 Data Quality Warnings:
 - None observed

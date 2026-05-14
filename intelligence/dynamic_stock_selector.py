@@ -2,6 +2,7 @@ import contextlib
 import io
 import yfinance as yf
 
+from config.universe import get_capital_adaptive_universe
 from intelligence.news_signal_engine import get_actionable_news_signals
 
 
@@ -37,6 +38,11 @@ BROAD_UNIVERSE = [
     "VEDL.NS", "GAIL.NS", "IOC.NS", "HINDPETRO.NS",
     "PETRONET.NS", "CONCOR.NS",
 ]
+
+try:
+    BROAD_UNIVERSE = get_capital_adaptive_universe()
+except Exception:
+    pass
 
 
 def clean_symbol(symbol):

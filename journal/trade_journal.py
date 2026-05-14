@@ -40,6 +40,13 @@ JOURNAL_FIELDS = [
     "rr",
     "score",
     "rank_score",
+    "quantity",
+    "qty",
+    "position_size",
+    "capital_used",
+    "risk_amount",
+    "risk_per_trade_pct",
+    "risk_per_share",
     "confirmations",
     "reason",
     "alert_sent",
@@ -64,8 +71,12 @@ ACTIVE_FIELDS = [
     "quantity",
     "qty",
     "position_size",
+    "capital_used",
     "risk_amount",
     "risk_per_trade_pct",
+    "risk_per_share",
+    "sizing_valid",
+    "skip_reason",
     "paper_trade_id",
     "is_paper_trade",
     "alert_sent",
@@ -214,8 +225,12 @@ def _build_rows(setup, scan_id, alert_sent, market_status):
     target = _float_text(_safe_get(setup, "target", "tp", "t1", "target1"))
     quantity = _float_text(_safe_get(setup, "quantity", "qty"))
     position_size = _float_text(_safe_get(setup, "position_size"))
+    capital_used = _float_text(_safe_get(setup, "capital_used", "position_size"))
     risk_amount = _float_text(_safe_get(setup, "risk_amount"))
     risk_pct = _float_text(_safe_get(setup, "risk_per_trade_pct", default=1.0))
+    risk_per_share = _float_text(_safe_get(setup, "risk_per_share"))
+    sizing_valid = _text(_safe_get(setup, "sizing_valid", default=""))
+    skip_reason = _text(_safe_get(setup, "skip_reason", default=""))
     paper_trade_id = _text(_safe_get(setup, "paper_trade_id", "trade_id", default=""))
 
     rr = _float_text(_safe_get(setup, "rr", "risk_reward"))
@@ -239,6 +254,13 @@ def _build_rows(setup, scan_id, alert_sent, market_status):
         "rr": rr,
         "score": score,
         "rank_score": rank_score,
+        "quantity": quantity,
+        "qty": quantity,
+        "position_size": position_size,
+        "capital_used": capital_used,
+        "risk_amount": risk_amount,
+        "risk_per_trade_pct": risk_pct,
+        "risk_per_share": risk_per_share,
         "confirmations": confirmations,
         "reason": reason,
         "alert_sent": alert_text,
@@ -263,8 +285,12 @@ def _build_rows(setup, scan_id, alert_sent, market_status):
         "quantity": quantity,
         "qty": quantity,
         "position_size": position_size,
+        "capital_used": capital_used,
         "risk_amount": risk_amount,
         "risk_per_trade_pct": risk_pct,
+        "risk_per_share": risk_per_share,
+        "sizing_valid": sizing_valid,
+        "skip_reason": skip_reason,
         "paper_trade_id": paper_trade_id,
         "is_paper_trade": "true",
         "alert_sent": alert_text,
@@ -290,6 +316,16 @@ def _valid_trade(row):
                 return False
         except Exception:
             return False
+
+    try:
+        if float(row.get("quantity") or row.get("qty") or 0) < 1:
+            return False
+        if row.get("sizing_valid") not in ["", None, True, "True", "true", "1", "YES"]:
+            return False
+        if str(row.get("skip_reason") or "").strip():
+            return False
+    except Exception:
+        return False
 
     return True
 
