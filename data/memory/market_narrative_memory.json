@@ -7,16 +7,11 @@
     },
     "contradiction_flags": [],
     "event_pressure": {
-      "keywords": [
-        "election",
-        "geopolitical",
-        "inflation",
-        "rbi"
-      ],
-      "score": 48.0,
-      "state": "MEDIUM"
+      "keywords": [],
+      "score": 0.0,
+      "state": "LOW"
     },
-    "generated_at": "2026-05-14 14:07:44",
+    "generated_at": "2026-05-14 14:36:59",
     "macro_narrative_memory": {
       "learning_environment": "RECENT_MEMORY_FAVORABLE",
       "lifecycle_memory_available": true,
@@ -25,8 +20,8 @@
     },
     "market_direction": "NEUTRAL",
     "narrative_adjustment": 0.0,
-    "narrative_confidence": 0.57,
-    "narrative_type": "DATA_INSUFFICIENT_NEUTRAL",
+    "narrative_confidence": 0.72,
+    "narrative_type": "CHOPPY_NEUTRAL",
     "panic_euphoria_detection": {
       "euphoria": false,
       "panic": false
@@ -35,11 +30,11 @@
     "phase8_shadow_mode": true,
     "regime_transition_detection": {
       "changed": false,
-      "from": "DATA_INSUFFICIENT_NEUTRAL",
-      "to": "DATA_INSUFFICIENT_NEUTRAL"
+      "from": "CHOPPY_NEUTRAL",
+      "to": "CHOPPY_NEUTRAL"
     },
-    "risk_on_risk_off_state": "RISK_OFF",
-    "risk_tone_score": 37.12,
+    "risk_on_risk_off_state": "NEUTRAL",
+    "risk_tone_score": 49.12,
     "sector_leadership": [],
     "sector_weakness": [],
     "setup_alignment": {
@@ -129,8 +124,32 @@
       "narrative_type": "DATA_INSUFFICIENT_NEUTRAL",
       "risk_on_risk_off_state": "RISK_OFF",
       "risk_tone_score": 37.12
+    },
+    {
+      "contradiction_count": 0,
+      "generated_at": "2026-05-14 14:18:24",
+      "narrative_confidence": 0.57,
+      "narrative_type": "DATA_INSUFFICIENT_NEUTRAL",
+      "risk_on_risk_off_state": "RISK_OFF",
+      "risk_tone_score": 37.12
+    },
+    {
+      "contradiction_count": 1,
+      "generated_at": "2026-05-14 14:35:58",
+      "narrative_confidence": 0.72,
+      "narrative_type": "CHOPPY_NEUTRAL",
+      "risk_on_risk_off_state": "NEUTRAL",
+      "risk_tone_score": 49.12
+    },
+    {
+      "contradiction_count": 0,
+      "generated_at": "2026-05-14 14:36:59",
+      "narrative_confidence": 0.72,
+      "narrative_type": "CHOPPY_NEUTRAL",
+      "risk_on_risk_off_state": "NEUTRAL",
+      "risk_tone_score": 49.12
     }
   ],
-  "last_updated": "2026-05-14 14:07:44",
+  "last_updated": "2026-05-14 14:36:59",
   "version": "8.0"
 }

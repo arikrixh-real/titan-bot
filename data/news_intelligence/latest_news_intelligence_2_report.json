@@ -1,124 +1,47 @@
 {
   "symbol": "UNKNOWN",
-  "news_data_mode": "REAL_NEWS",
-  "overall_news_sentiment_score": 59.88,
-  "event_classification": "EARNINGS",
+  "news_data_mode": "INSUFFICIENT",
+  "overall_news_sentiment_score": 50.0,
+  "event_classification": "NO_NEWS_DATA",
   "impact_half_life": {
-    "event_type": "EARNINGS",
-    "half_life_hours": 18.0,
-    "age_hours": 0.0,
-    "impact_remaining_score": 100.0
+    "event_type": "NO_NEWS_DATA",
+    "half_life_hours": 0.0,
+    "impact_remaining_score": 50.0
   },
-  "stock_relevance_score": 35.0,
-  "sector_relevance_score": 35.0,
+  "stock_relevance_score": 50.0,
+  "sector_relevance_score": 50.0,
   "duplicate_fake_news_control": {
     "active": false,
     "duplicate_count": 0,
-    "low_credibility_count": 0,
     "risk_score": 0.0
   },
   "panic_news_detection": {
-    "active": true,
-    "panic_hits": 3,
-    "panic_score": 90.0
+    "active": false,
+    "panic_hits": 0,
+    "panic_score": 0.0
   },
   "positive_news_exhaustion": {
     "active": false,
     "positive_news_count": 0,
     "risk_score": 0.0
   },
-  "earnings_event_tags": [
-    {
-      "title": "Tata Consumer Q4 net profit falls 19% to Rs 217 cr, firm declares dividend of Rs 7.75 per share",
-      "source": "https://www.moneycontrol.com/rss/business.xml",
-      "tag": "EARNINGS",
-      "sentiment_score": 62.0
-    },
-    {
-      "title": "Tata Consumer Q4 net profit falls 19% to Rs 217 cr, firm declares dividend of Rs 7.75 per share",
-      "source": "https://www.moneycontrol.com/rss/business.xml",
-      "tag": "EARNINGS",
-      "sentiment_score": 62.0
-    },
-    {
-      "title": "Hindustan Unilever Q4 Preview: Price cuts, slow demand, regional competition to hurt topline",
-      "source": "https://www.moneycontrol.com/rss/business.xml",
-      "tag": "EARNINGS",
-      "sentiment_score": 50.0
-    },
-    {
-      "title": "LTIMindtree Q4 Preview: Lower pass-through revenue seen impacting growth marginally",
-      "source": "https://www.moneycontrol.com/rss/business.xml",
-      "tag": "EARNINGS",
-      "sentiment_score": 74.0
-    },
-    {
-      "title": "Sensex, Nifty gain for third day in a row; easing volatility to support bull trend",
-      "source": "https://www.moneycontrol.com/rss/marketreports.xml",
-      "tag": "EARNINGS",
-      "sentiment_score": 62.0
-    },
-    {
-      "title": "Sensex, Nifty extend gains to 3rd day, Q4 results to guide stock-specific action",
-      "source": "https://www.moneycontrol.com/rss/marketreports.xml",
-      "tag": "EARNINGS",
-      "sentiment_score": 50.0
-    },
-    {
-      "title": "Rohit Singhania bets on financials, telecom and healthcare for alpha generation",
-      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
-      "tag": "EARNINGS",
-      "sentiment_score": 74.0
-    },
-    {
-      "title": "Earnings are strong, but margin pain is coming; Dharmesh Kant on 3 sectors worth owning now",
-      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
-      "tag": "EARNINGS",
-      "sentiment_score": 86.0
-    },
-    {
-      "title": "Bitcoin slips near $79,600 as broader crypto market weakens; BTC dominance stays elevated",
-      "source": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
-      "tag": "EARNINGS",
-      "sentiment_score": 50.0
-    },
-    {
-      "title": "Sunil Bharti Mittal to hand over Airtel reins to next generation in the next 10 yrs",
-      "source": "https://economictimes.indiatimes.com/industry/rssfeeds/13352306.cms",
-      "tag": "EARNINGS",
-      "sentiment_score": 50.0
-    }
-  ],
+  "earnings_event_tags": [],
   "news_reaction_memory": {
-    "news_items_observed": 34,
-    "average_recent_sentiment": 59.88,
-    "historical_news_trade_count": 0,
-    "historical_news_win_rate": 0.0,
+    "news_items_observed": 0,
     "memory_confidence": 0.0
   },
   "market_narrative": {
-    "narrative_type": "MIXED_NEWS",
-    "dominant_event": "EARNINGS",
-    "headline_count": 34,
-    "event_counts": {
-      "EARNINGS": 11,
-      "ORDER_CONTRACT": 7,
-      "REGULATORY": 3,
-      "GENERAL_NEWS": 8,
-      "M&A": 1,
-      "MACRO": 4
-    },
-    "average_sentiment": 59.88
+    "narrative_type": "NO_REAL_NEWS",
+    "dominant_event": "NONE",
+    "headline_count": 0
   },
-  "credibility_score": 82.79,
-  "source_weight_score": 69.44,
-  "news_intelligence_score": 41.11,
-  "news_bias": "BEARISH",
-  "news_warning": "SKIP",
+  "credibility_score": 50.0,
+  "source_weight_score": 50.0,
+  "news_intelligence_score": 50.0,
+  "news_bias": "NEUTRAL",
+  "news_warning": "REVIEW",
   "live_order_allowed": false,
   "explanations": [
-    "Real news items were analyzed for sentiment, relevance, credibility, and narrative.",
-    "Dominant event classification: EARNINGS.",
-    "Market narrative: MIXED_NEWS."
+    "No useful real news or proxy news context available; score kept neutral."
   ]
 }

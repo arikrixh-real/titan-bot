@@ -10,7 +10,7 @@
     "win_rate": 0.6,
     "wins": 3
   },
-  "generated_at": "2026-05-14 14:07:46",
+  "generated_at": "2026-05-14 14:37:00",
   "layer_freshness": {
     "phase10": {
       "age_seconds": 0.004,
@@ -19,25 +19,25 @@
       "status": "OK"
     },
     "phase6": {
-      "age_seconds": 530.373,
+      "age_seconds": 2284.881,
       "available": true,
       "path": "data\\memory\\phase6_shadow_memory.json",
       "status": "OK"
     },
     "phase7": {
-      "age_seconds": 0.261,
+      "age_seconds": 1754.769,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "phase8": {
-      "age_seconds": 1.66,
+      "age_seconds": 1.549,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "phase9": {
-      "age_seconds": 529.006,
+      "age_seconds": 2283.514,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
@@ -75,19 +75,19 @@
     "usefulness_score": 0.5827
   },
   "phase8": {
-    "agreement_quality": 0.83,
-    "confidence_quality": 0.7,
+    "agreement_quality": 0.92,
+    "confidence_quality": 0.82,
     "contradiction_accuracy": 1.0,
-    "drift_score": 0.0745,
-    "false_negative_rate": 0.172,
-    "false_positive_rate": 0.342,
-    "promotion_score": 0.1074,
+    "drift_score": 0.074,
+    "false_negative_rate": 0.224,
+    "false_positive_rate": 0.144,
+    "promotion_score": 0.1818,
     "recommendation": "INSUFFICIENT_SAMPLE_SHADOW_ONLY",
     "recommended_live_weight": 0.0,
-    "regime_consistency": 0.4,
-    "samples": 9,
-    "stability_score": 0.9255,
-    "usefulness_score": 0.3796
+    "regime_consistency": 0.8,
+    "samples": 12,
+    "stability_score": 0.926,
+    "usefulness_score": 0.5249
   },
   "phase9": {
     "agreement_quality": 0.6,
@@ -124,7 +124,7 @@
     ],
     "selected_decisions_count": 0
   },
-  "runtime_ms": 47.0,
+  "runtime_ms": 31.0,
   "safety": {
     "alert_caps_mutated": false,
     "alert_changes": false,

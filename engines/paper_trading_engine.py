@@ -294,6 +294,7 @@ def calculate_paper_trade_sizing(account: Dict[str, Any], trade: Dict[str, Any])
     account = _normalize_account(account)
     trade = _dict(trade)
     balance = safe_float(account.get("current_balance"), DEFAULT_INITIAL_BALANCE)
+    micro_capital_mode = safe_text(account.get("capital_mode")).upper() == "ADAPTIVE_1K"
     rules = _dict(account.get("risk_rules"))
     risk_pct = safe_float(rules.get("max_risk_per_trade_pct"), MAX_RISK_PER_TRADE_PCT)
     if risk_pct <= 0 or risk_pct > 10:
@@ -307,6 +308,9 @@ def calculate_paper_trade_sizing(account: Dict[str, Any], trade: Dict[str, Any])
     if entry <= 0 or stop <= 0:
         position_size = 0.0
         skip_reason = "INVALID_ENTRY_OR_SL"
+    elif micro_capital_mode and entry > balance:
+        position_size = 0.0
+        skip_reason = "MICRO_CAPITAL_PRICE_SKIP"
     elif risk_amount <= 0 or risk_amount > balance:
         position_size = 0.0
         skip_reason = "UNREALISTIC_RISK"
@@ -315,14 +319,14 @@ def calculate_paper_trade_sizing(account: Dict[str, Any], trade: Dict[str, Any])
         position_size = quantity * entry
         if quantity <= 0:
             position_size = 0.0
-            skip_reason = "QTY_LESS_THAN_1"
+            skip_reason = "MICRO_CAPITAL_SL_TOO_WIDE" if micro_capital_mode else "QTY_LESS_THAN_1"
         elif position_size > balance:
             quantity = 0
             position_size = 0.0
-            skip_reason = "INSUFFICIENT_CAPITAL"
+            skip_reason = "MICRO_CAPITAL_PRICE_SKIP" if micro_capital_mode else "INSUFFICIENT_CAPITAL"
     else:
         position_size = 0.0
-        skip_reason = "INVALID_SL_DISTANCE"
+        skip_reason = "MICRO_CAPITAL_QTY_INVALID" if micro_capital_mode else "INVALID_SL_DISTANCE"
     return {
         "quantity": int(quantity),
         "qty": int(quantity),

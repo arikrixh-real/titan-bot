@@ -1,8 +1,8 @@
 {
-  "symbol": "JINDALSTEL",
-  "status": "UNMAPPED",
-  "last_price": null,
-  "source": "NONE",
-  "timestamp": "2026-05-14T14:07:45.786840",
-  "reason": "Instrument key missing"
+  "symbol": "ICICIBANK",
+  "status": "ERROR",
+  "last_price": 1253.1,
+  "source": "CACHE",
+  "timestamp": "2026-05-14T14:36:57.789938",
+  "reason": "API/socket failure; using cache if available"
 }

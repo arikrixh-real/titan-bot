@@ -31,6 +31,17 @@ from journal.scan_journal import log_scan
 from utils.market_hours import is_trade_window, trade_window_text
 
 try:
+    from config.universe import (
+        MICRO_CAPITAL_PRICE_SOFT_CAP,
+        MICRO_CAPITAL_TIGHT_SL_PCT,
+        is_adaptive_1k_mode,
+    )
+except Exception:
+    MICRO_CAPITAL_PRICE_SOFT_CAP = 700.0
+    MICRO_CAPITAL_TIGHT_SL_PCT = 0.75
+    is_adaptive_1k_mode = None
+
+try:
     from engines.institutional_microstructure import analyze_microstructure
 except Exception:
     analyze_microstructure = None
@@ -248,7 +259,7 @@ def safe_position_sizing(entry, stop_loss):
             load_paper_account(),
             {"entry": entry, "sl": stop_loss},
         )
-        if int(sizing.get("quantity", 0)) > 0:
+        if isinstance(sizing, dict):
             return {**sizing, "raw": "PAPER_RISK_1PCT"}
     except Exception:
         pass
@@ -262,6 +273,10 @@ def safe_position_sizing(entry, stop_loss):
                 "quantity": pos_data.get("qty") or pos_data.get("quantity") or 0,
                 "position_size": pos_data.get("position_size") or 0,
                 "risk_amount": pos_data.get("risk_amount") or pos_data.get("risk") or 0,
+                "risk_per_trade_pct": pos_data.get("risk_per_trade_pct") or 1.0,
+                "risk_per_share": pos_data.get("risk_per_share") or abs(float(entry) - float(stop_loss)),
+                "skip_reason": pos_data.get("skip_reason") or "",
+                "sizing_valid": bool(pos_data.get("qty") or pos_data.get("quantity")),
                 "raw": pos_data
             }
 
@@ -271,6 +286,10 @@ def safe_position_sizing(entry, stop_loss):
                 "quantity": pos_data[0] if len(pos_data) > 0 else 0,
                 "position_size": (pos_data[0] if len(pos_data) > 0 else 0) * entry,
                 "risk_amount": pos_data[1] if len(pos_data) > 1 else 0,
+                "risk_per_trade_pct": 1.0,
+                "risk_per_share": abs(float(entry) - float(stop_loss)),
+                "skip_reason": "",
+                "sizing_valid": bool(pos_data[0] if len(pos_data) > 0 else 0),
                 "raw": list(pos_data)
             }
 
@@ -279,6 +298,10 @@ def safe_position_sizing(entry, stop_loss):
             "quantity": 0,
             "position_size": 0,
             "risk_amount": 0,
+            "risk_per_trade_pct": 1.0,
+            "risk_per_share": 0,
+            "skip_reason": "MICRO_CAPITAL_QTY_INVALID",
+            "sizing_valid": False,
             "raw": pos_data
         }
 
@@ -289,8 +312,42 @@ def safe_position_sizing(entry, stop_loss):
             "quantity": 0,
             "position_size": 0,
             "risk_amount": 0,
+            "risk_per_trade_pct": 1.0,
+            "risk_per_share": 0,
+            "skip_reason": "MICRO_CAPITAL_QTY_INVALID",
+            "sizing_valid": False,
             "raw": None
         }
+
+
+def _micro_capital_skip_reason(entry, stop_loss, sizing):
+    if is_adaptive_1k_mode is None or not is_adaptive_1k_mode():
+        return ""
+
+    try:
+        entry = float(entry)
+        stop_loss = float(stop_loss)
+    except Exception:
+        return "MICRO_CAPITAL_QTY_INVALID"
+
+    account_balance = _safe_float(sizing.get("account_balance"), 1000.0)
+    risk_amount = _safe_float(sizing.get("risk_amount"), account_balance * 0.01)
+    risk_per_share = _safe_float(sizing.get("risk_per_share"), abs(entry - stop_loss))
+    quantity = int(_safe_float(sizing.get("quantity") or sizing.get("qty"), 0.0))
+    position_size = _safe_float(sizing.get("position_size"), 0.0)
+    sl_pct = (risk_per_share / entry * 100.0) if entry > 0 else 999.0
+
+    if entry > account_balance:
+        return "MICRO_CAPITAL_PRICE_SKIP"
+    if quantity < 1:
+        if risk_per_share > risk_amount:
+            return "MICRO_CAPITAL_SL_TOO_WIDE"
+        return "MICRO_CAPITAL_QTY_INVALID"
+    if position_size <= 0 or position_size > account_balance:
+        return "MICRO_CAPITAL_QTY_INVALID"
+    if entry > MICRO_CAPITAL_PRICE_SOFT_CAP and sl_pct > MICRO_CAPITAL_TIGHT_SL_PCT:
+        return "MICRO_CAPITAL_SL_TOO_WIDE"
+    return ""
 
 
 def _safe_float(value, default=0.0):
@@ -874,6 +931,14 @@ def scan_for_setups():
 
             passed = False
             fail_reason = "UNKNOWN"
+            entry = None
+            stop_loss = None
+            target = None
+            rr = 0
+            pos_data = None
+            quantity = 0
+            position_size = 0
+            risk_amount = 0
 
             if not structure_result:
                 structure_fail_count += 1
@@ -926,9 +991,28 @@ def scan_for_setups():
                         fail_reason = "RR_FAIL"
 
                     else:
-                        passed = True
-                        fail_reason = "PASSED"
-                        final_passed += 1
+                        pos_data = safe_position_sizing(entry, stop_loss)
+                        micro_skip_reason = _micro_capital_skip_reason(entry, stop_loss, pos_data)
+                        quantity = pos_data.get("quantity") or pos_data.get("qty", 0)
+                        position_size = pos_data.get("position_size", 0)
+                        risk_amount = pos_data.get("risk_amount", 0)
+
+                        if micro_skip_reason:
+                            fail_reason = micro_skip_reason
+                            titan_log(
+                                f"FILTER RESULT -> {symbol} | PAPER_SIZE_SKIP | {micro_skip_reason}",
+                                important=True,
+                            )
+                        elif not pos_data.get("sizing_valid", quantity and position_size) or int(quantity or 0) < 1:
+                            fail_reason = pos_data.get("skip_reason", "MICRO_CAPITAL_QTY_INVALID")
+                            titan_log(
+                                f"FILTER RESULT -> {symbol} | PAPER_SIZE_SKIP | {fail_reason}",
+                                important=True,
+                            )
+                        else:
+                            passed = True
+                            fail_reason = "PASSED"
+                            final_passed += 1
 
             insert_scan_symbol(scan_id, {
                 "symbol": symbol,
@@ -947,18 +1031,11 @@ def scan_for_setups():
             if not passed:
                 continue
 
-            pos_data = safe_position_sizing(entry, stop_loss)
-            quantity = pos_data.get("quantity") or pos_data.get("qty", 0)
-            position_size = pos_data.get("position_size", 0)
-            risk_amount = pos_data.get("risk_amount", 0)
-            if not pos_data.get("sizing_valid", quantity and position_size) or int(quantity or 0) < 1:
-                final_passed = max(0, final_passed - 1)
-                titan_log(
-                    f"FILTER RESULT -> {symbol} | PAPER_SIZE_SKIP | "
-                    f"{pos_data.get('skip_reason', 'INVALID_POSITION_SIZE')}",
-                    important=True,
-                )
-                continue
+            if pos_data is None:
+                pos_data = safe_position_sizing(entry, stop_loss)
+                quantity = pos_data.get("quantity") or pos_data.get("qty", 0)
+                position_size = pos_data.get("position_size", 0)
+                risk_amount = pos_data.get("risk_amount", 0)
 
             reason = build_reason(
                 symbol=symbol,

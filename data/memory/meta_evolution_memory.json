@@ -1,6 +1,6 @@
 {
   "contradictions": [],
-  "generated_at": "2026-05-14 14:07:46",
+  "generated_at": "2026-05-14 14:37:00",
   "history": [
     {
       "contradiction_pressure": 0.0175,
@@ -259,59 +259,77 @@
       "generated_at": "2026-05-14 14:07:46",
       "overall_drift_score": 0.0006,
       "overall_usefulness_score": 0.4093
+    },
+    {
+      "contradiction_pressure": 0.0,
+      "generated_at": "2026-05-14 14:18:26",
+      "overall_drift_score": 0.0006,
+      "overall_usefulness_score": 0.4098
+    },
+    {
+      "contradiction_pressure": 0.0,
+      "generated_at": "2026-05-14 14:36:00",
+      "overall_drift_score": 0.0158,
+      "overall_usefulness_score": 0.4141
+    },
+    {
+      "contradiction_pressure": 0.0,
+      "generated_at": "2026-05-14 14:37:00",
+      "overall_drift_score": 0.0065,
+      "overall_usefulness_score": 0.4165
     }
   ],
   "layer_freshness": {
     "phase10_master_shadow": {
-      "age_seconds": 0.135,
+      "age_seconds": 0.174,
       "available": true,
       "path": "data\\memory\\master_shadow_memory.json",
       "status": "OK"
     },
     "phase11_promotion_gate": {
-      "age_seconds": 0.087,
+      "age_seconds": 0.118,
       "available": true,
       "path": "data\\memory\\promotion_gate_memory.json",
       "status": "OK"
     },
     "phase12_regime": {
-      "age_seconds": 0.049,
+      "age_seconds": 0.064,
       "available": true,
       "path": "data\\memory\\advanced_regime_intelligence_memory.json",
       "status": "OK"
     },
     "phase13_strategy_genome": {
-      "age_seconds": 0.006,
+      "age_seconds": 0.008,
       "available": true,
       "path": "data\\memory\\strategy_genome_memory.json",
       "status": "OK"
     },
     "phase5_strategy_family": {
-      "age_seconds": 528.726,
+      "age_seconds": 2283.274,
       "available": true,
       "path": "data\\memory\\strategy_family_memory.json",
       "status": "OK"
     },
     "phase6_multi_agent": {
-      "age_seconds": 530.504,
+      "age_seconds": 2285.052,
       "available": true,
       "path": "data\\memory\\phase6_shadow_memory.json",
       "status": "OK"
     },
     "phase7_lifecycle": {
-      "age_seconds": 0.393,
+      "age_seconds": 1754.94,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "phase8_market_narrative": {
-      "age_seconds": 1.792,
+      "age_seconds": 1.719,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "phase9_cross_setup": {
-      "age_seconds": 529.137,
+      "age_seconds": 2283.684,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
@@ -319,17 +337,17 @@
   },
   "layers": {
     "phase10_master_shadow": {
-      "drift_score": 0.0,
-      "loser_warning_quality": 0.8,
-      "overfit_risk": 0.1482,
+      "drift_score": 0.0288,
+      "loser_warning_quality": 0.9,
+      "overfit_risk": 0.1975,
       "promotion_recommendation": "INSUFFICIENT_DATA",
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
       "sample_confidence": 0.25,
       "samples": 25,
-      "stability_score": 0.4474,
-      "usefulness_score": 0.3959,
-      "winner_alignment": 0.7995
+      "stability_score": 0.5029,
+      "usefulness_score": 0.4391,
+      "winner_alignment": 0.852
     },
     "phase11_promotion_gate": {
       "drift_score": 0.0,
@@ -345,17 +363,17 @@
       "winner_alignment": 0.7435
     },
     "phase12_regime": {
-      "drift_score": 0.0,
+      "drift_score": 0.011,
       "loser_warning_quality": 0.6,
-      "overfit_risk": 0.5901,
+      "overfit_risk": 0.4179,
       "promotion_recommendation": "INSUFFICIENT_DATA",
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
       "sample_confidence": 0.05,
       "samples": 5,
-      "stability_score": 0.6061,
-      "usefulness_score": 0.3297,
-      "winner_alignment": 0.7928
+      "stability_score": 0.6619,
+      "usefulness_score": 0.3559,
+      "winner_alignment": 0.9282
     },
     "phase13_strategy_genome": {
       "drift_score": 0.0,
@@ -410,17 +428,17 @@
       "winner_alignment": 0.9
     },
     "phase8_market_narrative": {
-      "drift_score": 0.0055,
+      "drift_score": 0.0187,
       "loser_warning_quality": 0.6,
-      "overfit_risk": 0.415,
+      "overfit_risk": 0.4811,
       "promotion_recommendation": "INSUFFICIENT_DATA",
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
-      "sample_confidence": 0.09,
-      "samples": 9,
-      "stability_score": 0.6675,
-      "usefulness_score": 0.3843,
-      "winner_alignment": 0.97
+      "sample_confidence": 0.12,
+      "samples": 12,
+      "stability_score": 0.648,
+      "usefulness_score": 0.3804,
+      "winner_alignment": 0.88
     },
     "phase9_cross_setup": {
       "drift_score": 0.0,
@@ -438,19 +456,19 @@
   },
   "meta_state": {
     "contradiction_pressure": 0.0,
-    "overall_drift_score": 0.0006,
-    "overall_intelligence_stability": 0.6479,
-    "overall_overfit_risk": 0.2372,
-    "overall_usefulness_score": 0.4093,
+    "overall_drift_score": 0.0065,
+    "overall_intelligence_stability": 0.6581,
+    "overall_overfit_risk": 0.2309,
+    "overall_usefulness_score": 0.4165,
     "rank_adjustment": 0.0,
     "recommended_live_weight": 0.0
   },
   "phase14_shadow_mode": true,
   "promotion_gate_features": {
     "contradiction_control_score": 1.0,
-    "layer_usefulness_quality": 0.4093,
-    "meta_stability_score": 0.6479,
-    "overfit_control_score": 0.7628,
+    "layer_usefulness_quality": 0.4165,
+    "meta_stability_score": 0.6581,
+    "overfit_control_score": 0.7691,
     "promotion_eligible": false,
     "recommended_live_weight": 0.0,
     "samples": 5
@@ -458,11 +476,11 @@
   "rank_adjustment": 0.0,
   "recommended_live_weight": 0.0,
   "regime_layer_usefulness": {
-    "RISK_OFF": {
+    "CHOPPY_NO_EDGE": {
       "phase10_master_shadow": {
         "confidence": 0.1667,
         "samples": 5,
-        "usefulness_score": 0.3959
+        "usefulness_score": 0.4391
       },
       "phase11_promotion_gate": {
         "confidence": 0.1667,
@@ -472,7 +490,7 @@
       "phase12_regime": {
         "confidence": 0.1667,
         "samples": 5,
-        "usefulness_score": 0.3297
+        "usefulness_score": 0.3559
       },
       "phase13_strategy_genome": {
         "confidence": 0.1667,
@@ -497,7 +515,7 @@
       "phase8_market_narrative": {
         "confidence": 0.1667,
         "samples": 5,
-        "usefulness_score": 0.3843
+        "usefulness_score": 0.3804
       },
       "phase9_cross_setup": {
         "confidence": 0.1667,
@@ -523,7 +541,7 @@
     ],
     "selected_decisions_count": 0
   },
-  "runtime_ms": 15.0,
+  "runtime_ms": 31.0,
   "safety": {
     "automatic_parameter_changes": false,
     "broker_api_changes": false,

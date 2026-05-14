@@ -58,7 +58,7 @@
     "rationale": "Approve only when support survives bearish, risk, execution, news, portfolio, and regime objections.",
     "warning": "NONE"
   },
-  "generated_at": "2026-05-14T08:37:44.683232Z",
+  "generated_at": "2026-05-14T09:06:59.126382Z",
   "live_order_allowed": false,
   "news_objection_agent": {
     "news_state": {

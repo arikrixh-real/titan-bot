@@ -14,7 +14,7 @@
   "explanations": [
     "PROXY no-trade scan evaluated market safety and setup contradiction risk."
   ],
-  "generated_at": "2026-05-14T08:37:44.689795Z",
+  "generated_at": "2026-05-14T09:06:59.131719Z",
   "liquidity_danger": {
     "danger_score": 27.5,
     "is_liquidity_danger": false,
@@ -35,12 +35,12 @@
     "vix_or_volatility": 0.0
   },
   "news_chaos": {
-    "danger_score": 12.0,
+    "danger_score": 0.0,
     "is_news_chaos": false,
-    "news_item_count": 34
+    "news_item_count": 0
   },
   "no_trade_data_mode": "PROXY",
-  "no_trade_score": 16.2,
+  "no_trade_score": 15.0,
   "no_trade_warning": "NONE",
   "overtrading_risk": {
     "danger_score": 0.0,

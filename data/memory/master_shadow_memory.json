@@ -1,9 +1,9 @@
 {
   "command_status": {
-    "confidence": 39.95,
+    "confidence": 45.2,
     "confidence_stability": {
-      "score": 39.95,
-      "state": "FRAGILE"
+      "score": 45.2,
+      "state": "MIXED"
     },
     "failed_open": false,
     "overall_state": "ACTIVE",
@@ -12,11 +12,11 @@
   "dashboard_cards": {
     "cross_setup_heat": 0.0,
     "master_shadow_state": "ACTIVE",
-    "narrative": "DATA_INSUFFICIENT_NEUTRAL",
-    "shadow_warnings": 6,
+    "narrative": "CHOPPY_NEUTRAL",
+    "shadow_warnings": 5,
     "tracked_lifecycle_trades": 25
   },
-  "generated_at": "2026-05-14 14:07:46",
+  "generated_at": "2026-05-14 14:37:00",
   "intelligence_layers": {
     "phase5_strategy_family": {
       "available": true,
@@ -74,10 +74,10 @@
       "available": true,
       "contradiction_count": 0,
       "market_direction": "NEUTRAL",
-      "narrative_confidence": 0.57,
-      "narrative_type": "DATA_INSUFFICIENT_NEUTRAL",
-      "risk_state": "RISK_OFF",
-      "risk_tone_score": 37.12
+      "narrative_confidence": 0.72,
+      "narrative_type": "CHOPPY_NEUTRAL",
+      "risk_state": "NEUTRAL",
+      "risk_tone_score": 49.12
     },
     "phase9_cross_setup": {
       "available": true,
@@ -90,31 +90,31 @@
   },
   "layer_freshness": {
     "phase5": {
-      "age_seconds": 528.563,
+      "age_seconds": 2283.076,
       "available": true,
       "path": "data\\memory\\strategy_family_memory.json",
       "status": "OK"
     },
     "phase6": {
-      "age_seconds": 530.342,
+      "age_seconds": 2284.855,
       "available": true,
       "path": "data\\memory\\phase6_shadow_memory.json",
       "status": "OK"
     },
     "phase7": {
-      "age_seconds": 0.229,
+      "age_seconds": 1754.743,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "phase8": {
-      "age_seconds": 1.638,
+      "age_seconds": 1.523,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "phase9": {
-      "age_seconds": 528.984,
+      "age_seconds": 2283.488,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
@@ -131,9 +131,7 @@
       "RELIANCE:health=70.0",
       "JINDALSTEL:health=79.5"
     ],
-    "narrative_flags": [
-      "risk_state:RISK_OFF"
-    ],
+    "narrative_flags": [],
     "systemic_flags": []
   },
   "runtime_bounded": true,
@@ -150,7 +148,7 @@
     ],
     "selected_decisions_count": 0
   },
-  "runtime_ms": 15.0,
+  "runtime_ms": 0.0,
   "safety": {
     "broker_api_changes": false,
     "build_master_input_calls": false,

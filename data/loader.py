@@ -2,6 +2,19 @@ import os
 import random
 import pandas as pd
 
+try:
+    from config.universe import (
+        MICRO_CAPITAL_PRICE_SOFT_CAP,
+        MICRO_CAPITAL_PRIORITY,
+        get_capital_adaptive_universe,
+        is_adaptive_1k_mode,
+    )
+except Exception:
+    MICRO_CAPITAL_PRICE_SOFT_CAP = 700.0
+    MICRO_CAPITAL_PRIORITY = []
+    get_capital_adaptive_universe = None
+    is_adaptive_1k_mode = None
+
 
 SCAN_LIMIT = 50
 
@@ -26,6 +39,51 @@ def _clean_stock_df(df):
         return None
 
     return df
+
+
+def _symbol_key(symbol):
+    return str(symbol).replace(".NS", "").upper().strip()
+
+
+def _latest_close(df):
+    try:
+        return float(df["Close"].iloc[-1])
+    except Exception:
+        return 0.0
+
+
+def _select_micro_capital_symbols(all_stock_data, limit):
+    available = set(all_stock_data.keys())
+    selected = []
+    seen = set()
+
+    def add(symbol):
+        clean = _symbol_key(symbol)
+        if clean in available and clean not in seen:
+            selected.append(clean)
+            seen.add(clean)
+
+    for symbol in MICRO_CAPITAL_PRIORITY:
+        add(symbol)
+
+    affordable = [
+        symbol for symbol, df in all_stock_data.items()
+        if symbol not in seen and 0 < _latest_close(df) <= MICRO_CAPITAL_PRICE_SOFT_CAP
+    ]
+    affordable.sort(key=lambda symbol: (_latest_close(all_stock_data[symbol]), symbol))
+    for symbol in affordable:
+        add(symbol)
+
+    universe = get_capital_adaptive_universe() if get_capital_adaptive_universe else []
+    for symbol in universe:
+        add(symbol)
+
+    expensive = [symbol for symbol in available if symbol not in seen]
+    random.shuffle(expensive)
+    for symbol in expensive:
+        add(symbol)
+
+    return selected[:limit]
 
 
 def load_cached_stock_data(symbol=None, limit=SCAN_LIMIT):
@@ -100,7 +158,9 @@ def load_cached_stock_data(symbol=None, limit=SCAN_LIMIT):
 
     all_symbols = list(all_stock_data.keys())
 
-    if len(all_symbols) <= limit:
+    if is_adaptive_1k_mode is not None and is_adaptive_1k_mode():
+        selected_symbols = _select_micro_capital_symbols(all_stock_data, limit)
+    elif len(all_symbols) <= limit:
         selected_symbols = all_symbols
     else:
         selected_symbols = random.sample(all_symbols, limit)
