@@ -1,8 +1,8 @@
 {
-  "active_regime": "RISK_OFF",
+  "active_regime": "CHOPPY_NO_EDGE",
   "decaying_families": [],
   "dna_fingerprints": {
-    "UNKNOWN|LONG|RISK_OFF|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
+    "UNKNOWN|LONG|CHOPPY_NO_EDGE|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
       "failure_patterns": [
         "expired_at_end_of_trading_day;_not_count"
       ],
@@ -10,7 +10,7 @@
       "samples": 0,
       "win_rate": 0.0
     },
-    "UNKNOWN|LONG|RISK_OFF|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|long_stop_loss_hit": {
+    "UNKNOWN|LONG|CHOPPY_NO_EDGE|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|long_stop_loss_hit": {
       "failure_patterns": [
         "long_stop_loss_hit"
       ],
@@ -18,7 +18,7 @@
       "samples": 1,
       "win_rate": 0.0
     },
-    "UNKNOWN|LONG|RISK_OFF|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|long_target_hit": {
+    "UNKNOWN|LONG|CHOPPY_NO_EDGE|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|long_target_hit": {
       "failure_patterns": [
         "long_target_hit"
       ],
@@ -26,7 +26,7 @@
       "samples": 1,
       "win_rate": 1.0
     },
-    "UNKNOWN|LONG|RISK_OFF|score_low|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
+    "UNKNOWN|LONG|CHOPPY_NO_EDGE|score_low|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
       "failure_patterns": [
         "expired_at_end_of_trading_day;_not_count"
       ],
@@ -34,7 +34,7 @@
       "samples": 0,
       "win_rate": 0.0
     },
-    "UNKNOWN|LONG|RISK_OFF|score_medium|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
+    "UNKNOWN|LONG|CHOPPY_NO_EDGE|score_medium|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
       "failure_patterns": [
         "expired_at_end_of_trading_day;_not_count"
       ],
@@ -42,7 +42,7 @@
       "samples": 0,
       "win_rate": 0.0
     },
-    "UNKNOWN|SHORT|RISK_OFF|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
+    "UNKNOWN|SHORT|CHOPPY_NO_EDGE|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
       "failure_patterns": [
         "expired_at_end_of_trading_day;_not_count"
       ],
@@ -50,7 +50,7 @@
       "samples": 0,
       "win_rate": 0.0
     },
-    "UNKNOWN|SHORT|RISK_OFF|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|short_stop_loss_hit": {
+    "UNKNOWN|SHORT|CHOPPY_NO_EDGE|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|short_stop_loss_hit": {
       "failure_patterns": [
         "short_stop_loss_hit"
       ],
@@ -58,7 +58,7 @@
       "samples": 1,
       "win_rate": 0.0
     },
-    "UNKNOWN|SHORT|RISK_OFF|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|short_target_hit": {
+    "UNKNOWN|SHORT|CHOPPY_NO_EDGE|score_high|rr_2_plus|vol_unknown|volume_unknown|health_unknown|short_target_hit": {
       "failure_patterns": [
         "short_target_hit"
       ],
@@ -66,7 +66,7 @@
       "samples": 2,
       "win_rate": 1.0
     },
-    "UNKNOWN|SHORT|RISK_OFF|score_medium|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
+    "UNKNOWN|SHORT|CHOPPY_NO_EDGE|score_medium|rr_2_plus|vol_unknown|volume_unknown|health_unknown|expired_at_end_of_trading_day;_not_count": {
       "failure_patterns": [
         "expired_at_end_of_trading_day;_not_count"
       ],
@@ -113,7 +113,7 @@
       "wins": 3
     }
   },
-  "generated_at": "2026-05-15 09:08:48",
+  "generated_at": "2026-05-15 14:28:22",
   "history": [
     {
       "decaying_families": [],
@@ -364,29 +364,64 @@
       "decaying_families": [],
       "dominant_family": null,
       "generated_at": "2026-05-15 09:08:48"
+    },
+    {
+      "decaying_families": [],
+      "dominant_family": null,
+      "generated_at": "2026-05-15 10:44:24"
+    },
+    {
+      "decaying_families": [],
+      "dominant_family": null,
+      "generated_at": "2026-05-15 11:24:29"
+    },
+    {
+      "decaying_families": [],
+      "dominant_family": null,
+      "generated_at": "2026-05-15 13:15:55"
+    },
+    {
+      "decaying_families": [],
+      "dominant_family": null,
+      "generated_at": "2026-05-15 13:57:39"
+    },
+    {
+      "decaying_families": [],
+      "dominant_family": null,
+      "generated_at": "2026-05-15 14:16:56"
+    },
+    {
+      "decaying_families": [],
+      "dominant_family": null,
+      "generated_at": "2026-05-15 14:19:32"
+    },
+    {
+      "decaying_families": [],
+      "dominant_family": null,
+      "generated_at": "2026-05-15 14:28:22"
     }
   ],
   "layer_freshness": {
     "lifecycle": {
-      "age_seconds": 68462.319,
+      "age_seconds": 87637.071,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "master_shadow": {
-      "age_seconds": 0.078,
+      "age_seconds": 0.112,
       "available": true,
       "path": "data\\memory\\master_shadow_memory.json",
       "status": "OK"
     },
     "promotion_gate": {
-      "age_seconds": 0.044,
+      "age_seconds": 0.067,
       "available": true,
       "path": "data\\memory\\promotion_gate_memory.json",
       "status": "OK"
     },
     "regime": {
-      "age_seconds": 0.001,
+      "age_seconds": 0.002,
       "available": true,
       "path": "data\\memory\\advanced_regime_intelligence_memory.json",
       "status": "OK"
@@ -405,7 +440,7 @@
   "rank_adjustment": 0.0,
   "recommended_live_weight": 0.0,
   "regime_family_compatibility": {
-    "RISK_OFF": {
+    "CHOPPY_NO_EDGE": {
       "UNKNOWN": {
         "compatibility_score": 0.565,
         "confidence": 0.1667,
@@ -415,16 +450,21 @@
   },
   "runtime_bounded": true,
   "runtime_context": {
-    "context_mode": null,
+    "context_mode": "SELECTIVE",
     "observed_setups_count": 0,
     "phase_result_keys": [
+      "outcome_result",
       "phase10_master_shadow_result",
       "phase11_promotion_gate_result",
-      "phase12_advanced_regime_result"
+      "phase12_advanced_regime_result",
+      "phase5_memory_result",
+      "phase6_shadow_report_result",
+      "phase8_market_narrative_result",
+      "phase9_cross_setup_result"
     ],
     "selected_decisions_count": 0
   },
-  "runtime_ms": 16.0,
+  "runtime_ms": 31.0,
   "safety": {
     "alert_cap_changes": false,
     "broker_api_changes": false,

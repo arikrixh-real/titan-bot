@@ -1,0 +1,58 @@
+name: TITAN OHLC Cache Refresh
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 09:15 IST pre-market and 12:30 IST midday refresh.
+    - cron: "45 3 * * 1-5"
+    - cron: "0 7 * * 1-5"
+
+concurrency:
+  group: titan-ohlc-cache-refresh
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-ohlc-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install pandas numpy yfinance python-dotenv
+          fi
+
+      - name: Refresh OHLC cache
+        run: |
+          python scripts/refresh_ohlc_cache.py
+
+      - name: Commit refreshed cache
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- data/cache; then
+            echo "No OHLC cache changes to commit."
+            exit 0
+          fi
+
+          git add data/cache
+          git commit -m "Refresh OHLC cache"
+          git push

@@ -1,18 +1,18 @@
 {
   "active_regime": {
-    "confidence": 0.8072,
-    "previous_primary": "RISK_OFF",
-    "primary": "RISK_OFF",
+    "confidence": 0.5161,
+    "previous_primary": "CHOPPY_NO_EDGE",
+    "primary": "CHOPPY_NO_EDGE",
     "secondary": [
-      "CHOPPY_NO_EDGE",
-      "PANIC_VOLATILITY",
-      "INDEX_DRIVEN"
+      "MEAN_REVERSION",
+      "INDEX_DRIVEN",
+      "TRENDING_BREAKOUT"
     ],
     "transition_confirmed": false,
     "transition_detected": false,
     "transition_strength": 0.0
   },
-  "generated_at": "2026-05-15 09:08:48",
+  "generated_at": "2026-05-15 14:28:22",
   "history": [
     {
       "confidence": 0.45,
@@ -263,41 +263,76 @@
       "confidence": 0.8072,
       "generated_at": "2026-05-15 09:08:48",
       "primary": "RISK_OFF"
+    },
+    {
+      "confidence": 0.5594,
+      "generated_at": "2026-05-15 10:44:24",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.8072,
+      "generated_at": "2026-05-15 11:24:29",
+      "primary": "RISK_OFF"
+    },
+    {
+      "confidence": 0.5594,
+      "generated_at": "2026-05-15 13:15:55",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.5282,
+      "generated_at": "2026-05-15 13:57:39",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.5161,
+      "generated_at": "2026-05-15 14:16:56",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.5161,
+      "generated_at": "2026-05-15 14:19:32",
+      "primary": "CHOPPY_NO_EDGE"
+    },
+    {
+      "confidence": 0.5161,
+      "generated_at": "2026-05-15 14:28:22",
+      "primary": "CHOPPY_NO_EDGE"
     }
   ],
   "layer_freshness": {
     "cross_setup": {
-      "age_seconds": 68991.02,
+      "age_seconds": 686.507,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
     },
     "lifecycle": {
-      "age_seconds": 68462.278,
+      "age_seconds": 87637.01,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "market_narrative": {
-      "age_seconds": 65768.03,
+      "age_seconds": 1.261,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "master_shadow": {
-      "age_seconds": 0.045,
+      "age_seconds": 0.064,
       "available": true,
       "path": "data\\memory\\master_shadow_memory.json",
       "status": "OK"
     },
     "promotion_gate": {
-      "age_seconds": 0.002,
+      "age_seconds": 0.006,
       "available": true,
       "path": "data\\memory\\promotion_gate_memory.json",
       "status": "OK"
     },
     "strategy_family": {
-      "age_seconds": 68990.612,
+      "age_seconds": 686.206,
       "available": true,
       "path": "data\\memory\\strategy_family_memory.json",
       "status": "OK"
@@ -310,33 +345,38 @@
     "recommended_live_weight": 0.0,
     "regime_prediction_quality": 0.0,
     "samples": 5,
-    "stability_score": 0.8072
+    "stability_score": 0.5161
   },
   "rank_adjustment": 0.0,
   "recommended_live_weight": 0.0,
   "regime_scores": {
-    "CHOPPY_NO_EDGE": 0.6044,
-    "INDEX_DRIVEN": 0.3258,
-    "LOW_LIQUIDITY": 0.1075,
-    "MEAN_REVERSION": 0.1575,
-    "NEWS_SHOCK": 0.168,
-    "PANIC_VOLATILITY": 0.3518,
-    "RISK_OFF": 0.8072,
-    "RISK_ON": 0.1834,
+    "CHOPPY_NO_EDGE": 0.5161,
+    "INDEX_DRIVEN": 0.331,
+    "LOW_LIQUIDITY": 0.07,
+    "MEAN_REVERSION": 0.42,
+    "NEWS_SHOCK": 0.0,
+    "PANIC_VOLATILITY": 0.2079,
+    "RISK_OFF": 0.2317,
+    "RISK_ON": 0.208,
     "SECTOR_ROTATION": 0.0,
-    "TRENDING_BREAKOUT": 0.2711
+    "TRENDING_BREAKOUT": 0.3004
   },
   "runtime_bounded": true,
   "runtime_context": {
-    "context_mode": null,
+    "context_mode": "SELECTIVE",
     "observed_setups_count": 0,
     "phase_result_keys": [
+      "outcome_result",
       "phase10_master_shadow_result",
-      "phase11_promotion_gate_result"
+      "phase11_promotion_gate_result",
+      "phase5_memory_result",
+      "phase6_shadow_report_result",
+      "phase8_market_narrative_result",
+      "phase9_cross_setup_result"
     ],
     "selected_decisions_count": 0
   },
-  "runtime_ms": 15.0,
+  "runtime_ms": 16.0,
   "safety": {
     "alert_cap_changes": false,
     "broker_api_changes": false,
@@ -359,7 +399,7 @@
   },
   "strategy_family_regime_performance": {
     "UNKNOWN": {
-      "RISK_OFF": {
+      "CHOPPY_NO_EDGE": {
         "confidence": 0.25,
         "losses": 2,
         "samples": 5,

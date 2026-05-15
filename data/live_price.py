@@ -32,6 +32,18 @@ from utils.market_hours import is_trade_window
 
 
 STATUS_FILE = "data/live_price_status.json"
+_STATUS_LOGGED = set()
+
+
+def _log_status_once(symbol, status, message="", source="UNKNOWN"):
+    key = (status, source, str(message)[:120])
+    if key in _STATUS_LOGGED:
+        return
+    _STATUS_LOGGED.add(key)
+    print(
+        f"[UpstoxStatus] symbol={normalize_symbol(symbol)} | "
+        f"status={status} | source={source} | reason={message}"
+    )
 
 
 def _write_status(symbol, status, message="", price=None, source="UNKNOWN"):
@@ -115,27 +127,55 @@ def _extract_ltp(data, instrument_key):
 
 
 def fetch_price_from_upstox(symbol, use_cache=True, debug=False):
+    result = fetch_price_from_upstox_debug(symbol, use_cache=use_cache, debug=debug)
+    return result.get("price")
+
+
+def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
     symbol = normalize_symbol(symbol)
     instrument_key = get_instrument_key(symbol)
 
     # No spam. Cached data fallback will be used.
     if not instrument_key:
-        _write_status(symbol, "UNMAPPED", "Instrument key missing", None, "NONE")
-        return None
+        reason = "Instrument key missing"
+        _write_status(symbol, "UNMAPPED", reason, None, "NONE")
+        _log_status_once(symbol, "UNMAPPED", reason, "UNKNOWN")
+        return {
+            "price": None,
+            "source": "UNKNOWN",
+            "status": "UNMAPPED",
+            "reason": reason,
+        }
 
     cached_price = safe_float(get_cached_price(symbol)) if use_cache else None
 
     if not is_trade_window():
-        _write_status(symbol, "MARKET_CLOSED", "Market closed; using cache if available", cached_price, "CACHE" if cached_price is not None else "NONE")
-        return cached_price
+        reason = "Market closed; using cache if available"
+        source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
+        _write_status(symbol, "MARKET_CLOSED", reason, cached_price, "CACHE" if cached_price is not None else "NONE")
+        _log_status_once(symbol, "MARKET_CLOSED", reason, source)
+        return {
+            "price": cached_price,
+            "source": source,
+            "status": "MARKET_CLOSED",
+            "reason": reason,
+        }
 
     access_token = get_upstox_token()
 
     if not access_token:
         if debug:
             print("Upstox skipped: UPSTOX_ACCESS_TOKEN missing")
-        _write_status(symbol, "TOKEN_MISSING", "UPSTOX_ACCESS_TOKEN missing; using cache if available", cached_price, "CACHE" if cached_price is not None else "NONE")
-        return cached_price
+        reason = "UPSTOX_ACCESS_TOKEN missing; using cache if available"
+        source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
+        _write_status(symbol, "TOKEN_MISSING", reason, cached_price, "CACHE" if cached_price is not None else "NONE")
+        _log_status_once(symbol, "TOKEN_MISSING", reason, source)
+        return {
+            "price": cached_price,
+            "source": source,
+            "status": "TOKEN_MISSING",
+            "reason": reason,
+        }
 
     try:
         url = "https://api.upstox.com/v2/market-quote/ltp"
@@ -156,8 +196,16 @@ def fetch_price_from_upstox(symbol, use_cache=True, debug=False):
         except Exception:
             if debug:
                 print("Upstox error: response was not valid JSON")
-            _write_status(symbol, "BAD_RESPONSE", "Response was not valid JSON; using cache if available", cached_price, "CACHE" if cached_price is not None else "NONE")
-            return cached_price
+            reason = "Response was not valid JSON; using cache if available"
+            source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
+            _write_status(symbol, "BAD_RESPONSE", reason, cached_price, "CACHE" if cached_price is not None else "NONE")
+            _log_status_once(symbol, "BAD_RESPONSE", reason, source)
+            return {
+                "price": cached_price,
+                "source": source,
+                "status": "BAD_RESPONSE",
+                "reason": reason,
+            }
 
         if response.status_code != 200:
             message = str(data)
@@ -165,33 +213,77 @@ def fetch_price_from_upstox(symbol, use_cache=True, debug=False):
             if response.status_code == 401 or "Invalid token" in message or "invalid token" in message.lower():
                 if debug:
                     print("Upstox token invalid/expired. Update UPSTOX_ACCESS_TOKEN.")
-                _write_status(symbol, "TOKEN_INVALID", "Upstox token invalid/expired; using cache if available", cached_price, "CACHE" if cached_price is not None else "NONE")
+                status = "TOKEN_INVALID"
+                reason = "Upstox token invalid/expired; using cache if available"
             else:
                 if debug:
                     print(f"Upstox error: HTTP {response.status_code}")
-                _write_status(symbol, "HTTP_ERROR", f"HTTP {response.status_code}; using cache if available", cached_price, "CACHE" if cached_price is not None else "NONE")
+                status = "HTTP_ERROR"
+                reason = f"HTTP {response.status_code}; using cache if available"
 
-            return cached_price
+            source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
+            _write_status(symbol, status, reason, cached_price, "CACHE" if cached_price is not None else "NONE")
+            _log_status_once(symbol, status, reason, source)
+
+            return {
+                "price": cached_price,
+                "source": source,
+                "status": status,
+                "reason": reason,
+            }
 
         ltp = _extract_ltp(data, instrument_key)
         price = safe_float(ltp)
         if price is not None:
             update_cached_price(symbol, price)
             _write_status(symbol, "ACTIVE", "Live price fetched", price, "UPSTOX")
-            return price
-        _write_status(symbol, "NO_PRICE", "Upstox response had no price; using cache if available", cached_price, "CACHE" if cached_price is not None else "NONE")
-        return cached_price
+            return {
+                "price": price,
+                "source": "UPSTOX",
+                "status": "ACTIVE",
+                "reason": "Live price fetched",
+            }
+        reason = "Upstox response had no price; using cache if available"
+        source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
+        _write_status(symbol, "NO_PRICE", reason, cached_price, "CACHE" if cached_price is not None else "NONE")
+        _log_status_once(symbol, "NO_PRICE", reason, source)
+        return {
+            "price": cached_price,
+            "source": source,
+            "status": "NO_PRICE",
+            "reason": reason,
+        }
 
     except Exception as e:
         if debug:
             print(f"Upstox live price error: {e}")
-        reason = "API/socket failure; using cache if available" if "WinError 10013" in str(e) else f"{e}; using cache if available"
-        _write_status(symbol, "ERROR", reason, cached_price, "CACHE" if cached_price is not None else "NONE")
-        return cached_price
+        error_text = str(e)
+        if "WinError 10013" in error_text:
+            status = "NETWORK_BLOCKED"
+            reason = "Socket blocked while calling Upstox; using cache if available"
+        elif "getaddrinfo failed" in error_text or "NameResolutionError" in error_text:
+            status = "DNS_ERROR"
+            reason = "DNS resolution failed while calling Upstox; using cache if available"
+        else:
+            status = "API_ERROR"
+            reason = f"{error_text}; using cache if available"
+        source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
+        _write_status(symbol, status, reason, cached_price, "CACHE" if cached_price is not None else "NONE")
+        _log_status_once(symbol, status, reason, source)
+        return {
+            "price": cached_price,
+            "source": source,
+            "status": status,
+            "reason": reason,
+        }
 
 
 def get_live_price(symbol, use_cache=True, debug=False):
     return fetch_price_from_upstox(symbol, use_cache=use_cache, debug=debug)
+
+
+def get_live_price_debug(symbol, use_cache=True, debug=False):
+    return fetch_price_from_upstox_debug(symbol, use_cache=use_cache, debug=debug)
 
 
 if __name__ == "__main__":

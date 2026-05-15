@@ -1,6 +1,6 @@
 {
   "adaptive_recall_weights": {
-    "weight_count": 103,
+    "weight_count": 110,
     "weights": {
       "adaptive_intelligence_state": 40.0,
       "advanced_regime_intelligence_memory": 40.0,
@@ -57,7 +57,14 @@
       "scan_memory_45": 40.0,
       "scan_memory_46": 40.0,
       "scan_memory_47": 40.0,
+      "scan_memory_48": 40.0,
+      "scan_memory_49": 40.0,
       "scan_memory_5": 40.0,
+      "scan_memory_50": 40.0,
+      "scan_memory_51": 40.0,
+      "scan_memory_52": 40.0,
+      "scan_memory_53": 40.0,
+      "scan_memory_54": 40.0,
       "scan_memory_6": 40.0,
       "scan_memory_7": 40.0,
       "scan_memory_8": 40.0,
@@ -123,7 +130,7 @@
   "explanations": [
     "REAL_MEMORY consolidation used available memory, trade history, and context."
   ],
-  "generated_at": "2026-05-15T03:38:48.744204Z",
+  "generated_at": "2026-05-15T08:58:21.696547Z",
   "important_patterns": {
     "important_count": 0,
     "patterns": []
@@ -131,8 +138,8 @@
   "live_order_allowed": false,
   "memory_bias": "STABLE",
   "memory_compression": {
-    "compressed_count": 103,
-    "original_count": 103,
+    "compressed_count": 110,
+    "original_count": 110,
     "pattern_summaries": [
       {
         "average_score": 50.0,
@@ -438,7 +445,7 @@
   },
   "memory_data_mode": "REAL_MEMORY",
   "memory_prioritization": {
-    "item_count": 103,
+    "item_count": 110,
     "top_priorities": [
       {
         "pattern": "ADAPTIVE_INTELLIGENCE_STATE",
@@ -1213,9 +1220,58 @@
           "score": 50.0
         }
       ],
+      "SCAN_MEMORY_48": [
+        {
+          "memory_key": "scan_memory_48",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_49": [
+        {
+          "memory_key": "scan_memory_49",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
       "SCAN_MEMORY_5": [
         {
           "memory_key": "scan_memory_5",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_50": [
+        {
+          "memory_key": "scan_memory_50",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_51": [
+        {
+          "memory_key": "scan_memory_51",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_52": [
+        {
+          "memory_key": "scan_memory_52",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_53": [
+        {
+          "memory_key": "scan_memory_53",
+          "regime": "UNKNOWN",
+          "score": 50.0
+        }
+      ],
+      "SCAN_MEMORY_54": [
+        {
+          "memory_key": "scan_memory_54",
           "regime": "UNKNOWN",
           "score": 50.0
         }
@@ -1550,6 +1606,6 @@
         }
       ]
     },
-    "strategy_count": 103
+    "strategy_count": 110
   }
 }

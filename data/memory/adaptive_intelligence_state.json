@@ -1,6 +1,6 @@
 {
   "version": "3.0",
-  "last_updated": "2026-05-14 13:58:57",
+  "last_updated": "2026-05-15 14:16:56",
   "total_closed_trades": 90,
   "total_wins": 37,
   "total_losses": 53,
@@ -490,158 +490,9 @@
     }
   },
   "news_reaction_memory": {
-    "seen_news_hashes": [
-      "59c941c196c7f3db1c3c031b757a353864dc0c93981bec14006f2123bbac2116",
-      "fa1fbe4f24c2f4332858d898d0fa68387071d8d80173a740a71c775cf8bde4a3",
-      "db45e8a6eb8255f9699106e6700450b81183d2330e0125671eb0bf339a37eb92",
-      "ea3ab373a918be5e2c2b6154cbcea2f92fc7b4ca92c294b4adc8f42d816e2bc1",
-      "82d819b0262c862f44018ebf68bae1d26c5cb86e08f0563a2434fe040249526e",
-      "bedde6e2221d7122e856f6d286a2e983ee1cf61cf13d698f9b8f1a02f696ffd5",
-      "0ea7109cba4f33de43755c078aaf1583d39a91f19b7b141334bb1bea80a09137",
-      "c9317f88ad1ac515fd39ef07a51c04150c0c2e1c11f5bd2f4ea9f60fe37a04de",
-      "795e22696d2aed9f047153fca6eb09baf50ed827e6ae0d2b593bd9d451181ab5",
-      "da4a5e2a2d92de8c38c36d8d5084f2d4e84679317636a26122b39bb99a9cf1ec",
-      "c7fe60f8dd90e3be4b72a00e8f3ac6b73f3a6629835956c2846b329268057f61",
-      "1d6ea4c2bde8841c567fb7ce0270b622aab5ec67883f8a02bb699ab1053223e0",
-      "3ec55f3b3f4673f641855ed4962ac08a37bca49f426548e7757c016de6e1873e",
-      "7f94ad65feaa67321922407daa8e89ca09b1cd74927d656c79461241bc66a9dd",
-      "55f946f2058f445fb70398f8c2e53f7b470ab7666b18cd163796b907b88f30a0",
-      "4d2978b15e332de81c2c91bb721bad7eecec57a55ddb657f5becbdd84def6a9b",
-      "e05334c021d28b3470a5091fd98985595b8f56db968595fc55cad25002a63a45",
-      "3438bd54a0329ff0141368d14ef87d67a67f1bb6545aaec2af1c2d0cca600395",
-      "8c4e950e5e59a21c782c91c50410d05cf6ad0292ad6587967de84fa4702098b9",
-      "191ea3974f747277c77355fdf30283a09b9e3594cdba7ef9b76c0d26fcd2c85e",
-      "a346b545e8b2d3ca938b7a1f076e4466d72dd46dfc80b1b31f229931d408718a",
-      "c626b7f6faeb5ac8118b398682092bf60e802485a9702b71623b14b6b01134ce",
-      "3bd082cd647d0f09c0d5e01c06aa61e92dddc6c13e586480cd353d24e14f39be",
-      "d8def76e6ea888d9460aa4da7e465ad2d1e9baa12becb6ef06e3a763297f891a",
-      "6eab54616b3341fcde78bd3d42188452619083143722d47d5858f551f071b11c",
-      "68750eea68d3c8643b98afb2d3b5ceaa0933d023b454b1f871ba63bca04973d8",
-      "42f0f67055dea71773c76a9cea03deb68b880196ed5f0bc4e0f1f0c082c31e78",
-      "89fd4dfb3c0fc043bda55eed02d70df8448507f63bd6fcb8cc1a92223173ffdb",
-      "3f526a2529a904ecba308bae80a7531ba3b13c09bca2b6dd5b49b3872a4f063b",
-      "4eb3fccba9929e75bdbf737e58ea1bfef8760750bd65d9f49d01ede87a1367c3",
-      "b4b434bd8c09faf33a0d0f261bd3614670db66ab5fd698b27e5af52030f9d4f8",
-      "4bdc891f5b7a5b3060496a0589c88835be9e654fb5406dc7e0365df048d5c0c0",
-      "f3e3837696ff280fa630f12f18fc4c28a2fcf8c1ba0fd51cb8be08ac0cbba46e",
-      "5d95446e8fcd3e12d335c1d5a1d72e3c90eea2b154c79e5abda5ce7cc142e55e"
-    ],
-    "symbol_sentiment": {
-      "TATACONSUM": {
-        "items": 2,
-        "sentiment_score": 0.3333
-      },
-      "HINDUNILVR": {
-        "items": 1,
-        "sentiment_score": -1.0
-      },
-      "LTIM": {
-        "items": 1,
-        "sentiment_score": 0.3333
-      },
-      "LT": {
-        "items": 1,
-        "sentiment_score": 0.0
-      },
-      "BHARTIARTL": {
-        "items": 4,
-        "sentiment_score": 0.0833
-      },
-      "RELIANCE": {
-        "items": 2,
-        "sentiment_score": 0.1667
-      },
-      "MARUTI": {
-        "items": 1,
-        "sentiment_score": 0.3333
-      },
-      "SUNPHARMA": {
-        "items": 1,
-        "sentiment_score": 0.3333
-      },
-      "HCLTECH": {
-        "items": 1,
-        "sentiment_score": 0.3333
-      },
-      "GRASIM": {
-        "items": 1,
-        "sentiment_score": 0.3333
-      },
-      "HINDALCO": {
-        "items": 1,
-        "sentiment_score": 0.3333
-      },
-      "NESTLEIND": {
-        "items": 1,
-        "sentiment_score": 0.3333
-      },
-      "EICHERMOT": {
-        "items": 1,
-        "sentiment_score": 0.0
-      },
-      "SBIN": {
-        "items": 1,
-        "sentiment_score": -0.6667
-      }
-    },
-    "sector_sentiment": {
-      "FMCG": {
-        "items": 7,
-        "sentiment_score": 0.2381
-      },
-      "IT": {
-        "items": 3,
-        "sentiment_score": 0.2222
-      },
-      "Capital Goods / Infrastructure": {
-        "items": 1,
-        "sentiment_score": 0.0
-      },
-      "Banking": {
-        "items": 4,
-        "sentiment_score": 0.0
-      },
-      "Telecom": {
-        "items": 5,
-        "sentiment_score": 0.0667
-      },
-      "Auto": {
-        "items": 4,
-        "sentiment_score": 0.3333
-      },
-      "Cement / Chemicals": {
-        "items": 1,
-        "sentiment_score": 0.3333
-      },
-      "Energy / Telecom / Retail": {
-        "items": 2,
-        "sentiment_score": 0.1667
-      },
-      "Market Index": {
-        "items": 5,
-        "sentiment_score": 0.2
-      },
-      "Metals": {
-        "items": 3,
-        "sentiment_score": 0.1111
-      },
-      "Pharma": {
-        "items": 4,
-        "sentiment_score": 0.3333
-      },
-      "Global Macro": {
-        "items": 9,
-        "sentiment_score": 0.1852
-      },
-      "Oil & Gas": {
-        "items": 5,
-        "sentiment_score": 0.3333
-      },
-      "Infrastructure": {
-        "items": 7,
-        "sentiment_score": 0.3333
-      }
-    }
+    "seen_news_hashes": [],
+    "symbol_sentiment": {},
+    "sector_sentiment": {}
   },
   "builder_notes": [
     "Adaptive memory is available for conservative post-score ranking adjustments.",

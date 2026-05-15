@@ -8,9 +8,9 @@ Safety
 - recommended_live_weight: 0.0
 - No forbidden imports detected: True
 
-Updated: 2026-05-15 09:03:06
-Runtime Ms: 47.0 | Bounded: True
-Active Regime: RISK_OFF
+Updated: 2026-05-15 14:16:56
+Runtime Ms: 31.0 | Bounded: True
+Active Regime: CHOPPY_NO_EDGE
 
 Top Strategy Families:
 - UNKNOWN: samples=5, win_rate=0.6, stability=0.795, drift=0.0, state=INSUFFICIENT_DATA

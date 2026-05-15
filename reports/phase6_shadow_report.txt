@@ -6,7 +6,7 @@ Safety
 - Rankings, Telegram, alert caps, and execution are unchanged.
 - Aggregates only already-generated Phase 6 metadata.
 
-Generated At: 2026-05-14T13:58:55.680876+05:30
+Generated At: 2026-05-15T14:16:55.034665+05:30
 Observed Setups: 0
 Average Consensus Score: 0.0
 Average Conflict Score: 0.0

@@ -1,12 +1,15 @@
 import os
 
 QUIET_MODE = os.getenv("TITAN_QUIET_MODE", "0") == "1"
+import json
+from collections import Counter
 from datetime import datetime
+from pathlib import Path
 
 from supabase import create_client
 
-from data.loader import load_cached_stock_data
-from data.live_price import get_live_price
+from data.loader import get_last_load_debug, load_cached_stock_data
+from data.live_price import get_live_price_debug
 
 from scanners.volume_scanner import volume_anomaly_score
 from scanners.strength_scanner import price_strength_score
@@ -102,6 +105,63 @@ from titan_brain.db import (
     insert_trade,
     insert_setup
 )
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+FINAL_REJECTION_DEBUG_PATH = PROJECT_ROOT / "data" / "debug" / "final_rejection_breakdown.json"
+
+
+def _normalize_final_rejection_reason(reason):
+    reason = str(reason or "UNKNOWN").strip().upper()
+    return {
+        "STRUCTURE_FAIL": "STRUCTURE_WEAK",
+        "MOMENTUM_FAIL": "MOMENTUM_WEAK",
+        "QUALITY_FAIL": "LOW_FINAL_SCORE",
+        "CONFLUENCE_FAIL": "ENTRY_CONFIRMATION_FAIL",
+        "LEVELS_FAIL": "TRADE_LEVELS_INVALID",
+        "RR_FAIL": "RISK_REWARD_INVALID",
+        "NOT_READY": "ENTRY_CONFIRMATION_FAIL",
+    }.get(reason, reason or "UNKNOWN")
+
+
+def _record_final_rejection(counter, symbols_by_reason, symbol, reason):
+    reason = _normalize_final_rejection_reason(reason)
+    counter[reason] += 1
+    symbols_by_reason.setdefault(reason, []).append(symbol)
+
+
+def _save_final_rejection_breakdown(counter, symbols_by_reason, entry_passed, final_passed):
+    payload = {
+        "timestamp": datetime.now().isoformat(),
+        "entry_passed": entry_passed,
+        "final_passed": final_passed,
+        "total_final_rejections_after_entry": sum(counter.values()),
+        "breakdown": dict(counter.most_common()),
+        "symbols_by_reason": {
+            reason: symbols_by_reason.get(reason, [])
+            for reason in dict(counter.most_common())
+        },
+    }
+
+    try:
+        FINAL_REJECTION_DEBUG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(FINAL_REJECTION_DEBUG_PATH, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, sort_keys=True)
+    except Exception as e:
+        titan_log(f"FINAL REJECTION DEBUG SAVE ERROR -> {e}", important=True)
+
+
+def _print_final_rejection_breakdown(counter):
+    print("FINAL REJECTION BREAKDOWN")
+    print("-------------------------")
+
+    if not counter:
+        print("NONE : 0")
+        return
+
+    max_reason_len = max(len(reason) for reason in counter)
+    for reason, count in counter.most_common():
+        print(f"{reason.ljust(max_reason_len)} : {count}")
 
 
 
@@ -783,9 +843,21 @@ def scan_for_setups():
     levels_fail_count = 0
     rr_fail_count = 0
     phase1_block_count = 0
+    final_rejection_breakdown = Counter()
+    final_rejection_symbols = {}
+    upstox_count = 0
+    live_cache_count = 0
+    csv_close_count = 0
+    unknown_price_count = 0
 
     symbols = load_cached_stock_data()
     total_symbols = len(symbols)
+    loader_debug = get_last_load_debug()
+    selected_set_hash = loader_debug.get("selected_set_hash")
+    selected_symbols_count = loader_debug.get("selected_symbols_count", total_symbols)
+    repeated_selection_warning = bool(loader_debug.get("repeated_selection_warning"))
+    stale_cache_count = int(loader_debug.get("stale_cache_count") or 0)
+    cache_debug = loader_debug.get("cache_debug") or {}
 
     data_advantage_context = {}
     try:
@@ -816,6 +888,13 @@ def scan_for_setups():
 
     titan_log("DYNAMIC / SETUP ENGINE ACTIVE")
     titan_log(f"Symbols received from loader: {total_symbols}")
+    titan_log(
+        f"SCAN DEBUG | selected_set_hash={selected_set_hash} | "
+        f"selected_symbols_count={selected_symbols_count} | "
+        f"repeated_selection_warning={repeated_selection_warning} | "
+        f"stale_cache_count={stale_cache_count}",
+        important=True,
+    )
 
     scan_record = {
         "total_symbols": total_symbols,
@@ -832,15 +911,23 @@ def scan_for_setups():
             scan_record["scanned_count"] += 1
             stocks_checked += 1
 
-            source = "UPSTOX"
-            live_price = get_live_price(symbol)
+            price_debug = get_live_price_debug(symbol)
+            live_price = price_debug.get("price")
+            source = price_debug.get("source") or "UNKNOWN"
+            price_status = price_debug.get("status") or "UNKNOWN"
+            price_reason = price_debug.get("reason") or ""
+            symbol_cache_debug = cache_debug.get(symbol, {})
 
             if live_price is None:
                 try:
                     live_price = float(data["Close"].iloc[-1])
-                    source = "CACHE_CLOSE"
+                    source = "CSV_CLOSE"
+                    price_status = "CSV_CLOSE"
+                    price_reason = "Live price unavailable; using selected CSV Close"
                 except Exception:
+                    source = "UNKNOWN"
                     no_live_price_count += 1
+                    unknown_price_count += 1
                     titan_log(f"FILTER RESULT → {symbol} | NO_LIVE_PRICE")
                     insert_scan_symbol(scan_id, {
                         "symbol": symbol,
@@ -851,9 +938,28 @@ def scan_for_setups():
                         "compression_score": 0,
                         "final_score": 0,
                         "passed": False,
-                        "reason": "NO_LIVE_PRICE"
+                        "reason": "NO_LIVE_PRICE",
+                        "source": source,
+                        "price_source": source,
+                        "price_status": price_status,
+                        "price_reason": price_reason,
+                        "selected_set_hash": selected_set_hash,
+                        "selected_symbols_count": selected_symbols_count,
+                        "repeated_selection_warning": repeated_selection_warning,
+                        "stale_cache_count": stale_cache_count,
+                        "cache_stale": bool(symbol_cache_debug.get("cache_stale")),
+                        "cache_age_hours": symbol_cache_debug.get("cache_age_hours"),
                     })
                     continue
+
+            if source == "UPSTOX":
+                upstox_count += 1
+            elif source == "LIVE_PRICE_CACHE":
+                live_cache_count += 1
+            elif source == "CSV_CLOSE":
+                csv_close_count += 1
+            else:
+                unknown_price_count += 1
 
             trend = trend_direction(data)
             side = trade_side_from_trend(trend)
@@ -870,7 +976,17 @@ def scan_for_setups():
                     "compression_score": 0,
                     "final_score": 0,
                     "passed": False,
-                    "reason": "NO_VALID_TREND"
+                    "reason": "NO_VALID_TREND",
+                    "source": source,
+                    "price_source": source,
+                    "price_status": price_status,
+                    "price_reason": price_reason,
+                    "selected_set_hash": selected_set_hash,
+                    "selected_symbols_count": selected_symbols_count,
+                    "repeated_selection_warning": repeated_selection_warning,
+                    "stale_cache_count": stale_cache_count,
+                    "cache_stale": bool(symbol_cache_debug.get("cache_stale")),
+                    "cache_age_hours": symbol_cache_debug.get("cache_age_hours"),
                 })
                 continue
 
@@ -1023,12 +1139,29 @@ def scan_for_setups():
                 "compression_score": comp_score,
                 "final_score": final_score,
                 "passed": passed,
-                "reason": fail_reason
+                "reason": fail_reason,
+                "source": source,
+                "price_source": source,
+                "price_status": price_status,
+                "price_reason": price_reason,
+                "selected_set_hash": selected_set_hash,
+                "selected_symbols_count": selected_symbols_count,
+                "repeated_selection_warning": repeated_selection_warning,
+                "stale_cache_count": stale_cache_count,
+                "cache_stale": bool(symbol_cache_debug.get("cache_stale")),
+                "cache_age_hours": symbol_cache_debug.get("cache_age_hours"),
             })
 
             titan_log(f"FILTER RESULT → {symbol} | {fail_reason}")
 
             if not passed:
+                if entry_result:
+                    _record_final_rejection(
+                        final_rejection_breakdown,
+                        final_rejection_symbols,
+                        symbol,
+                        fail_reason,
+                    )
                 continue
 
             if pos_data is None:
@@ -1109,6 +1242,12 @@ def scan_for_setups():
             if trade_payload.get("phase1_blocked"):
                 phase1_block_count += 1
                 final_passed = max(0, final_passed - 1)
+                _record_final_rejection(
+                    final_rejection_breakdown,
+                    final_rejection_symbols,
+                    symbol,
+                    trade_payload.get("phase1_block_reason") or "PHASE1_RISK_BLOCK",
+                )
                 titan_log(
                     f"FILTER RESULT → {symbol} | PHASE1_RISK_BLOCK | "
                     f"{trade_payload.get('phase1_block_reason')}",
@@ -1232,6 +1371,14 @@ def scan_for_setups():
             f"Entry={entry_passed} | Final={final_passed} | "
             f"Phase1Blocks={phase1_block_count} | Errors={len(errors)}"
         )
+        print(
+            f"[ScanDebug] selected_set_hash={selected_set_hash} | "
+            f"selected_symbols_count={selected_symbols_count} | "
+            f"repeated_selection_warning={repeated_selection_warning} | "
+            f"stale_cache_count={stale_cache_count} | "
+            f"upstox_count={upstox_count} | live_cache_count={live_cache_count} | "
+            f"csv_close_count={csv_close_count} | unknown_price_count={unknown_price_count}"
+        )
     else:
         print("========== SCAN FAILURE BREAKDOWN ==========")
         print(f"Stocks Checked: {stocks_checked}")
@@ -1248,7 +1395,24 @@ def scan_for_setups():
         print(f"RR Fail: {rr_fail_count}")
         print(f"Phase 1 Risk Blocks: {phase1_block_count}")
         print(f"Final Passed: {final_passed}")
+        print("========== SCAN DEBUG ==========")
+        print(f"Selected Set Hash: {selected_set_hash}")
+        print(f"Selected Symbols Count: {selected_symbols_count}")
+        print(f"Repeated Selection Warning: {repeated_selection_warning}")
+        print(f"Stale Cache Count: {stale_cache_count}")
+        print(f"UPSTOX Count: {upstox_count}")
+        print(f"Live Price Cache Count: {live_cache_count}")
+        print(f"CSV Close Count: {csv_close_count}")
+        print(f"Unknown Price Count: {unknown_price_count}")
         print("============================================")
+
+    _print_final_rejection_breakdown(final_rejection_breakdown)
+    _save_final_rejection_breakdown(
+        final_rejection_breakdown,
+        final_rejection_symbols,
+        entry_passed,
+        final_passed,
+    )
 
     log_scan(
         total_symbols=total_symbols,

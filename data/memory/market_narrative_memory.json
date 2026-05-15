@@ -2,23 +2,16 @@
   "current_narrative": {
     "breadth_pressure": {
       "raw": {},
-      "score": 48.05,
+      "score": 44.02,
       "state": "MIXED_BREADTH"
     },
-    "contradiction_flags": [
-      "regime transition from CHOPPY_NEUTRAL to DATA_INSUFFICIENT_NEUTRAL"
-    ],
+    "contradiction_flags": [],
     "event_pressure": {
-      "keywords": [
-        "election",
-        "geopolitical",
-        "inflation",
-        "rbi"
-      ],
-      "score": 48.0,
-      "state": "MEDIUM"
+      "keywords": [],
+      "score": 0.0,
+      "state": "LOW"
     },
-    "generated_at": "2026-05-14 14:52:40",
+    "generated_at": "2026-05-15 14:28:21",
     "macro_narrative_memory": {
       "learning_environment": "RECENT_MEMORY_FAVORABLE",
       "lifecycle_memory_available": true,
@@ -27,8 +20,8 @@
     },
     "market_direction": "NEUTRAL",
     "narrative_adjustment": 0.0,
-    "narrative_confidence": 0.57,
-    "narrative_type": "DATA_INSUFFICIENT_NEUTRAL",
+    "narrative_confidence": 0.72,
+    "narrative_type": "CHOPPY_NEUTRAL",
     "panic_euphoria_detection": {
       "euphoria": false,
       "panic": false
@@ -36,12 +29,12 @@
     "phase8_applied": true,
     "phase8_shadow_mode": true,
     "regime_transition_detection": {
-      "changed": true,
+      "changed": false,
       "from": "CHOPPY_NEUTRAL",
-      "to": "DATA_INSUFFICIENT_NEUTRAL"
+      "to": "CHOPPY_NEUTRAL"
     },
-    "risk_on_risk_off_state": "RISK_OFF",
-    "risk_tone_score": 37.12,
+    "risk_on_risk_off_state": "NEUTRAL",
+    "risk_tone_score": 47.31,
     "sector_leadership": [],
     "sector_weakness": [],
     "setup_alignment": {
@@ -163,8 +156,64 @@
       "narrative_type": "DATA_INSUFFICIENT_NEUTRAL",
       "risk_on_risk_off_state": "RISK_OFF",
       "risk_tone_score": 37.12
+    },
+    {
+      "contradiction_count": 1,
+      "generated_at": "2026-05-15 10:44:23",
+      "narrative_confidence": 0.72,
+      "narrative_type": "CHOPPY_NEUTRAL",
+      "risk_on_risk_off_state": "NEUTRAL",
+      "risk_tone_score": 49.12
+    },
+    {
+      "contradiction_count": 1,
+      "generated_at": "2026-05-15 11:24:29",
+      "narrative_confidence": 0.72,
+      "narrative_type": "EVENT_CAUTION",
+      "risk_on_risk_off_state": "RISK_OFF",
+      "risk_tone_score": 37.12
+    },
+    {
+      "contradiction_count": 1,
+      "generated_at": "2026-05-15 13:15:53",
+      "narrative_confidence": 0.72,
+      "narrative_type": "CHOPPY_NEUTRAL",
+      "risk_on_risk_off_state": "NEUTRAL",
+      "risk_tone_score": 49.12
+    },
+    {
+      "contradiction_count": 0,
+      "generated_at": "2026-05-15 13:57:38",
+      "narrative_confidence": 0.72,
+      "narrative_type": "CHOPPY_NEUTRAL",
+      "risk_on_risk_off_state": "NEUTRAL",
+      "risk_tone_score": 49.12
+    },
+    {
+      "contradiction_count": 0,
+      "generated_at": "2026-05-15 14:16:55",
+      "narrative_confidence": 0.72,
+      "narrative_type": "CHOPPY_NEUTRAL",
+      "risk_on_risk_off_state": "NEUTRAL",
+      "risk_tone_score": 47.31
+    },
+    {
+      "contradiction_count": 0,
+      "generated_at": "2026-05-15 14:19:31",
+      "narrative_confidence": 0.72,
+      "narrative_type": "CHOPPY_NEUTRAL",
+      "risk_on_risk_off_state": "NEUTRAL",
+      "risk_tone_score": 47.31
+    },
+    {
+      "contradiction_count": 0,
+      "generated_at": "2026-05-15 14:28:21",
+      "narrative_confidence": 0.72,
+      "narrative_type": "CHOPPY_NEUTRAL",
+      "risk_on_risk_off_state": "NEUTRAL",
+      "risk_tone_score": 47.31
     }
   ],
-  "last_updated": "2026-05-14 14:52:40",
+  "last_updated": "2026-05-15 14:28:21",
   "version": "8.0"
 }

@@ -1,6 +1,6 @@
 {
   "symbol": "UNKNOWN",
-  "data_mode": "INSUFFICIENT",
+  "data_mode": "PROXY",
   "best_bid": 0.0,
   "best_ask": 0.0,
   "spread": 0.0,
@@ -60,12 +60,11 @@
     "bias": "BEARISH",
     "imbalance_direction": "NEUTRAL"
   },
-  "microstructure_score": 50.0,
+  "microstructure_score": 62.5,
   "microstructure_bias": "NEUTRAL",
   "execution_warning": "NONE",
   "live_order_allowed": false,
   "explanations": [
-    "Microstructure data mode: INSUFFICIENT.",
-    "Insufficient depth or proxy data; score kept neutral."
+    "Microstructure data mode: PROXY."
   ]
 }

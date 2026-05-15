@@ -1,6 +1,6 @@
 {
   "symbol": "UNKNOWN",
-  "scenario_data_mode": "INSUFFICIENT",
+  "scenario_data_mode": "PROXY",
   "bullish_scenario": {
     "probability": 47.5,
     "projected_move_pct": 1.0,
@@ -28,7 +28,7 @@
   },
   "regime_flip_scenario": {
     "probability": 10.0,
-    "current_regime": "UNKNOWN",
+    "current_regime": "MARKET_ALLOWED_LEVEL_1",
     "flip_risk_score": 10.0
   },
   "probability_tree": {
@@ -59,14 +59,12 @@
     "stress_risk_score": 32.85,
     "stress_state": "NORMAL"
   },
-  "scenario_score": 50.0,
+  "scenario_score": 56.41,
   "scenario_bias": "NEUTRAL",
-  "scenario_warning": "REVIEW",
+  "scenario_warning": "NONE",
   "live_order_allowed": false,
   "explanations": [
-    "Scenario data mode: INSUFFICIENT.",
-    "Expected-value projection is positive.",
-    "Scenario warning is REVIEW.",
-    "No useful scenario inputs; score kept neutral."
+    "Scenario data mode: PROXY.",
+    "Expected-value projection is positive."
   ]
 }

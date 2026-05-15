@@ -10,7 +10,7 @@
   "closed_pnl": 0.0,
   "daily_pnl": 0.0,
   "created_at": "2026-05-15 09:08:18",
-  "updated_at": "2026-05-15 09:08:48",
+  "updated_at": "2026-05-15 14:28:22",
   "risk_rules": {
     "max_risk_per_trade_pct": 1.0,
     "daily_loss_limit_pct": 3.0,

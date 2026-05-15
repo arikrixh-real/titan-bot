@@ -1,8 +1,8 @@
 {
-  "symbol": "RELIANCE",
-  "status": "MARKET_CLOSED",
-  "last_price": 1366.7,
+  "symbol": "HDFCBANK",
+  "status": "NETWORK_BLOCKED",
+  "last_price": 772.4,
   "source": "CACHE",
-  "timestamp": "2026-05-15T09:01:37.151072",
-  "reason": "Market closed; using cache if available"
+  "timestamp": "2026-05-15T14:28:20.499935",
+  "reason": "Socket blocked while calling Upstox; using cache if available"
 }

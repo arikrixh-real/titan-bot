@@ -1,5 +1,5 @@
 {
-  "calibrated_confidence_score": 50.0,
+  "calibrated_confidence_score": 26.5,
   "calibration_bias": "REVIEW",
   "calibration_curve": {
     "buckets": [
@@ -37,7 +37,7 @@
     "curve_error": 0.0,
     "populated_bucket_count": 0
   },
-  "calibration_data_mode": "INSUFFICIENT",
+  "calibration_data_mode": "PROXY",
   "calibration_warning": "REVIEW",
   "confidence_correction": {
     "base_confidence": 50.0,
@@ -53,9 +53,10 @@
     "volatility_score": 0.0
   },
   "explanations": [
-    "Insufficient calibration history; neutral non-blocking confidence applied."
+    "Calibration requested review; small ranking penalty applied.",
+    "PROXY confidence calibration used available prediction/outcome evidence."
   ],
-  "generated_at": "2026-05-15T03:38:48.706936Z",
+  "generated_at": "2026-05-15T08:58:21.609480Z",
   "live_order_allowed": false,
   "low_sample_shrinkage": {
     "sample_size": 0,

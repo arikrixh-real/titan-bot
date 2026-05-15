@@ -1,6 +1,6 @@
 {
   "contradictions": [],
-  "generated_at": "2026-05-15 09:08:48",
+  "generated_at": "2026-05-15 14:28:22",
   "history": [
     {
       "contradiction_pressure": 0.0175,
@@ -301,59 +301,101 @@
       "generated_at": "2026-05-15 09:08:48",
       "overall_drift_score": 0.0,
       "overall_usefulness_score": 0.3989
+    },
+    {
+      "contradiction_pressure": 0.0,
+      "generated_at": "2026-05-15 10:44:24",
+      "overall_drift_score": 0.0242,
+      "overall_usefulness_score": 0.4124
+    },
+    {
+      "contradiction_pressure": 0.0,
+      "generated_at": "2026-05-15 11:24:29",
+      "overall_drift_score": 0.0119,
+      "overall_usefulness_score": 0.406
+    },
+    {
+      "contradiction_pressure": 0.0,
+      "generated_at": "2026-05-15 13:15:55",
+      "overall_drift_score": 0.0119,
+      "overall_usefulness_score": 0.4135
+    },
+    {
+      "contradiction_pressure": 0.0,
+      "generated_at": "2026-05-15 13:57:39",
+      "overall_drift_score": 0.0065,
+      "overall_usefulness_score": 0.4159
+    },
+    {
+      "contradiction_pressure": 0.0,
+      "generated_at": "2026-05-15 14:16:56",
+      "overall_drift_score": 0.0011,
+      "overall_usefulness_score": 0.4161
+    },
+    {
+      "contradiction_pressure": 0.0,
+      "generated_at": "2026-05-15 14:19:32",
+      "overall_drift_score": 0.0006,
+      "overall_usefulness_score": 0.4167
+    },
+    {
+      "contradiction_pressure": 0.0,
+      "generated_at": "2026-05-15 14:28:22",
+      "overall_drift_score": 0.0006,
+      "overall_usefulness_score": 0.4172
     }
   ],
   "layer_freshness": {
     "phase10_master_shadow": {
-      "age_seconds": 0.107,
+      "age_seconds": 0.153,
       "available": true,
       "path": "data\\memory\\master_shadow_memory.json",
       "status": "OK"
     },
     "phase11_promotion_gate": {
-      "age_seconds": 0.073,
+      "age_seconds": 0.11,
       "available": true,
       "path": "data\\memory\\promotion_gate_memory.json",
       "status": "OK"
     },
     "phase12_regime": {
-      "age_seconds": 0.044,
+      "age_seconds": 0.065,
       "available": true,
       "path": "data\\memory\\advanced_regime_intelligence_memory.json",
       "status": "OK"
     },
     "phase13_strategy_genome": {
-      "age_seconds": 0.006,
+      "age_seconds": 0.009,
       "available": true,
       "path": "data\\memory\\strategy_genome_memory.json",
       "status": "OK"
     },
     "phase5_strategy_family": {
-      "age_seconds": 68990.681,
+      "age_seconds": 686.308,
       "available": true,
       "path": "data\\memory\\strategy_family_memory.json",
       "status": "OK"
     },
     "phase6_multi_agent": {
-      "age_seconds": 68992.46,
+      "age_seconds": 687.872,
       "available": true,
       "path": "data\\memory\\phase6_shadow_memory.json",
       "status": "OK"
     },
     "phase7_lifecycle": {
-      "age_seconds": 68462.348,
+      "age_seconds": 87637.114,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "phase8_market_narrative": {
-      "age_seconds": 65768.102,
+      "age_seconds": 1.367,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "phase9_cross_setup": {
-      "age_seconds": 68991.092,
+      "age_seconds": 686.614,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
@@ -362,16 +404,16 @@
   "layers": {
     "phase10_master_shadow": {
       "drift_score": 0.0,
-      "loser_warning_quality": 0.4,
-      "overfit_risk": 0.1059,
+      "loser_warning_quality": 0.8,
+      "overfit_risk": 0.1869,
       "promotion_recommendation": "INSUFFICIENT_DATA",
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
       "sample_confidence": 0.25,
       "samples": 25,
-      "stability_score": 0.2674,
-      "usefulness_score": 0.2749,
-      "winner_alignment": 0.7995
+      "stability_score": 0.4579,
+      "usefulness_score": 0.4089,
+      "winner_alignment": 0.852
     },
     "phase11_promotion_gate": {
       "drift_score": 0.0,
@@ -389,15 +431,15 @@
     "phase12_regime": {
       "drift_score": 0.0,
       "loser_warning_quality": 0.6,
-      "overfit_risk": 0.5901,
+      "overfit_risk": 0.4092,
       "promotion_recommendation": "INSUFFICIENT_DATA",
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
       "sample_confidence": 0.05,
       "samples": 5,
-      "stability_score": 0.6061,
-      "usefulness_score": 0.3297,
-      "winner_alignment": 0.7928
+      "stability_score": 0.6643,
+      "usefulness_score": 0.3536,
+      "winner_alignment": 0.9161
     },
     "phase13_strategy_genome": {
       "drift_score": 0.0,
@@ -452,17 +494,17 @@
       "winner_alignment": 0.9
     },
     "phase8_market_narrative": {
-      "drift_score": 0.0,
-      "loser_warning_quality": 0.7,
-      "overfit_risk": 0.3846,
+      "drift_score": 0.0055,
+      "loser_warning_quality": 0.6,
+      "overfit_risk": 0.4147,
       "promotion_recommendation": "INSUFFICIENT_DATA",
       "rank_adjustment": 0.0,
       "recommended_live_weight": 0.0,
-      "sample_confidence": 0.13,
-      "samples": 13,
-      "stability_score": 0.6365,
-      "usefulness_score": 0.4118,
-      "winner_alignment": 0.97
+      "sample_confidence": 0.2,
+      "samples": 20,
+      "stability_score": 0.676,
+      "usefulness_score": 0.4191,
+      "winner_alignment": 0.88
     },
     "phase9_cross_setup": {
       "drift_score": 0.0,
@@ -480,19 +522,19 @@
   },
   "meta_state": {
     "contradiction_pressure": 0.0,
-    "overall_drift_score": 0.0,
-    "overall_intelligence_stability": 0.6244,
-    "overall_overfit_risk": 0.2292,
-    "overall_usefulness_score": 0.3989,
+    "overall_drift_score": 0.0006,
+    "overall_intelligence_stability": 0.6564,
+    "overall_overfit_risk": 0.2214,
+    "overall_usefulness_score": 0.4172,
     "rank_adjustment": 0.0,
     "recommended_live_weight": 0.0
   },
   "phase14_shadow_mode": true,
   "promotion_gate_features": {
     "contradiction_control_score": 1.0,
-    "layer_usefulness_quality": 0.3989,
-    "meta_stability_score": 0.6244,
-    "overfit_control_score": 0.7708,
+    "layer_usefulness_quality": 0.4172,
+    "meta_stability_score": 0.6564,
+    "overfit_control_score": 0.7786,
     "promotion_eligible": false,
     "recommended_live_weight": 0.0,
     "samples": 5
@@ -500,11 +542,11 @@
   "rank_adjustment": 0.0,
   "recommended_live_weight": 0.0,
   "regime_layer_usefulness": {
-    "RISK_OFF": {
+    "CHOPPY_NO_EDGE": {
       "phase10_master_shadow": {
         "confidence": 0.1667,
         "samples": 5,
-        "usefulness_score": 0.2749
+        "usefulness_score": 0.4089
       },
       "phase11_promotion_gate": {
         "confidence": 0.1667,
@@ -514,7 +556,7 @@
       "phase12_regime": {
         "confidence": 0.1667,
         "samples": 5,
-        "usefulness_score": 0.3297
+        "usefulness_score": 0.3536
       },
       "phase13_strategy_genome": {
         "confidence": 0.1667,
@@ -539,7 +581,7 @@
       "phase8_market_narrative": {
         "confidence": 0.1667,
         "samples": 5,
-        "usefulness_score": 0.4118
+        "usefulness_score": 0.4191
       },
       "phase9_cross_setup": {
         "confidence": 0.1667,
@@ -550,17 +592,22 @@
   },
   "runtime_bounded": true,
   "runtime_context": {
-    "context_mode": null,
+    "context_mode": "SELECTIVE",
     "observed_setups_count": 0,
     "phase_result_keys": [
+      "outcome_result",
       "phase10_master_shadow_result",
       "phase11_promotion_gate_result",
       "phase12_advanced_regime_result",
-      "phase13_strategy_genome_result"
+      "phase13_strategy_genome_result",
+      "phase5_memory_result",
+      "phase6_shadow_report_result",
+      "phase8_market_narrative_result",
+      "phase9_cross_setup_result"
     ],
     "selected_decisions_count": 0
   },
-  "runtime_ms": 15.0,
+  "runtime_ms": 31.0,
   "safety": {
     "automatic_parameter_changes": false,
     "broker_api_changes": false,

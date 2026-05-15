@@ -10,34 +10,34 @@
     "win_rate": 0.6,
     "wins": 3
   },
-  "generated_at": "2026-05-15 09:08:48",
+  "generated_at": "2026-05-15 14:28:22",
   "layer_freshness": {
     "phase10": {
-      "age_seconds": 0.004,
+      "age_seconds": 0.005,
       "available": true,
       "path": "data\\memory\\master_shadow_memory.json",
       "status": "OK"
     },
     "phase6": {
-      "age_seconds": 68992.356,
+      "age_seconds": 687.722,
       "available": true,
       "path": "data\\memory\\phase6_shadow_memory.json",
       "status": "OK"
     },
     "phase7": {
-      "age_seconds": 68462.243,
+      "age_seconds": 87636.963,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "phase8": {
-      "age_seconds": 65767.998,
+      "age_seconds": 1.218,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "phase9": {
-      "age_seconds": 68990.989,
+      "age_seconds": 686.464,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
@@ -75,19 +75,19 @@
     "usefulness_score": 0.5827
   },
   "phase8": {
-    "agreement_quality": 0.83,
-    "confidence_quality": 0.7,
-    "contradiction_accuracy": 0.94,
-    "drift_score": 0.0748,
-    "false_negative_rate": 0.172,
-    "false_positive_rate": 0.342,
-    "promotion_score": 0.1559,
+    "agreement_quality": 0.92,
+    "confidence_quality": 0.82,
+    "contradiction_accuracy": 1.0,
+    "drift_score": 0.0687,
+    "false_negative_rate": 0.224,
+    "false_positive_rate": 0.144,
+    "promotion_score": 0.3128,
     "recommendation": "INSUFFICIENT_SAMPLE_SHADOW_ONLY",
     "recommended_live_weight": 0.0,
-    "regime_consistency": 0.4,
-    "samples": 13,
-    "stability_score": 0.9252,
-    "usefulness_score": 0.4053
+    "regime_consistency": 0.8,
+    "samples": 20,
+    "stability_score": 0.9313,
+    "usefulness_score": 0.5927
   },
   "phase9": {
     "agreement_quality": 0.6,
@@ -115,7 +115,12 @@
   "runtime_context": {
     "observed_setups_count": 0,
     "phase_result_keys": [
-      "phase10_master_shadow_result"
+      "outcome_result",
+      "phase10_master_shadow_result",
+      "phase5_memory_result",
+      "phase6_shadow_report_result",
+      "phase8_market_narrative_result",
+      "phase9_cross_setup_result"
     ],
     "selected_decisions_count": 0
   },

@@ -13,6 +13,9 @@ env/
 logs/
 *.log
 
+# Local data-provider cache
+data/yfinance_cache/
+
 # Secrets
 .env
 .env.*
