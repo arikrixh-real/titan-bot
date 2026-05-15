@@ -1,24 +1,14 @@
 {
   "breakdown": {
     "MICRO_CAPITAL_PRICE_SKIP": 1,
-    "MICRO_CAPITAL_QTY_INVALID": 7,
     "MOMENTUM_WEAK": 6,
     "STRUCTURE_WEAK": 9
   },
   "entry_passed": 23,
-  "final_passed": 0,
+  "final_passed": 7,
   "symbols_by_reason": {
     "MICRO_CAPITAL_PRICE_SKIP": [
-      "ADANIENT"
-    ],
-    "MICRO_CAPITAL_QTY_INVALID": [
-      "BANKBARODA",
-      "PNB",
-      "GAIL",
-      "INDUSTOWER",
-      "NATIONALUM",
-      "TATAMOTORS",
-      "PFC"
+      "ASIANPAINT"
     ],
     "MOMENTUM_WEAK": [
       "CANBK",
@@ -36,10 +26,10 @@
       "IOC",
       "ICICIPRULI",
       "DLF",
-      "IRCTC",
-      "DABUR"
+      "DABUR",
+      "IRCTC"
     ]
   },
-  "timestamp": "2026-05-15T14:28:20.530487",
-  "total_final_rejections_after_entry": 23
+  "timestamp": "2026-05-15T14:48:18.599218",
+  "total_final_rejections_after_entry": 16
 }

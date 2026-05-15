@@ -328,39 +328,56 @@ def safe_position_sizing(entry, stop_loss):
         pos_data = position_sizing(entry, stop_loss)
 
         if isinstance(pos_data, dict):
+            qty = pos_data.get("qty") or pos_data.get("quantity") or 0
+            position_size = pos_data.get("position_size") or 0
+            skip_reason = pos_data.get("skip_reason") or ""
             return {
-                "qty": pos_data.get("qty") or pos_data.get("quantity") or 0,
-                "quantity": pos_data.get("qty") or pos_data.get("quantity") or 0,
-                "position_size": pos_data.get("position_size") or 0,
+                "qty": qty,
+                "quantity": qty,
+                "computed_qty": pos_data.get("computed_qty") or qty,
+                "position_size": position_size,
+                "required_capital": pos_data.get("required_capital") or position_size,
                 "risk_amount": pos_data.get("risk_amount") or pos_data.get("risk") or 0,
                 "risk_per_trade_pct": pos_data.get("risk_per_trade_pct") or 1.0,
                 "risk_per_share": pos_data.get("risk_per_share") or abs(float(entry) - float(stop_loss)),
-                "skip_reason": pos_data.get("skip_reason") or "",
-                "sizing_valid": bool(pos_data.get("qty") or pos_data.get("quantity")),
+                "account_balance": pos_data.get("account_balance") or 1000.0,
+                "skip_reason": skip_reason,
+                "rejection_reason": pos_data.get("rejection_reason") or skip_reason,
+                "sizing_valid": bool(qty),
                 "raw": pos_data
             }
 
         if isinstance(pos_data, (tuple, list)):
+            qty = pos_data[0] if len(pos_data) > 0 else 0
+            position_size = qty * entry
             return {
-                "qty": pos_data[0] if len(pos_data) > 0 else 0,
-                "quantity": pos_data[0] if len(pos_data) > 0 else 0,
-                "position_size": (pos_data[0] if len(pos_data) > 0 else 0) * entry,
+                "qty": qty,
+                "quantity": qty,
+                "computed_qty": qty,
+                "position_size": position_size,
+                "required_capital": position_size,
                 "risk_amount": pos_data[1] if len(pos_data) > 1 else 0,
                 "risk_per_trade_pct": 1.0,
                 "risk_per_share": abs(float(entry) - float(stop_loss)),
+                "account_balance": 1000.0,
                 "skip_reason": "",
-                "sizing_valid": bool(pos_data[0] if len(pos_data) > 0 else 0),
+                "rejection_reason": "",
+                "sizing_valid": bool(qty),
                 "raw": list(pos_data)
             }
 
         return {
             "qty": 0,
             "quantity": 0,
+            "computed_qty": 0,
             "position_size": 0,
+            "required_capital": 0,
             "risk_amount": 0,
             "risk_per_trade_pct": 1.0,
             "risk_per_share": 0,
+            "account_balance": 1000.0,
             "skip_reason": "MICRO_CAPITAL_QTY_INVALID",
+            "rejection_reason": "MICRO_CAPITAL_QTY_INVALID",
             "sizing_valid": False,
             "raw": pos_data
         }
@@ -370,14 +387,31 @@ def safe_position_sizing(entry, stop_loss):
         return {
             "qty": 0,
             "quantity": 0,
+            "computed_qty": 0,
             "position_size": 0,
+            "required_capital": 0,
             "risk_amount": 0,
             "risk_per_trade_pct": 1.0,
             "risk_per_share": 0,
+            "account_balance": 1000.0,
             "skip_reason": "MICRO_CAPITAL_QTY_INVALID",
+            "rejection_reason": "MICRO_CAPITAL_QTY_INVALID",
             "sizing_valid": False,
             "raw": None
         }
+
+
+def _paper_sizing_debug_text(sizing, rejection_reason=""):
+    if not isinstance(sizing, dict):
+        sizing = {}
+    reason = rejection_reason or sizing.get("rejection_reason") or sizing.get("skip_reason") or ""
+    return (
+        f"account_balance={sizing.get('account_balance')} | "
+        f"computed_qty={sizing.get('computed_qty', sizing.get('quantity') or sizing.get('qty'))} | "
+        f"required_capital={sizing.get('required_capital', sizing.get('position_size'))} | "
+        f"risk_amount={sizing.get('risk_amount')} | "
+        f"rejection_reason={reason}"
+    )
 
 
 def _micro_capital_skip_reason(entry, stop_loss, sizing):
@@ -1116,13 +1150,19 @@ def scan_for_setups():
                         if micro_skip_reason:
                             fail_reason = micro_skip_reason
                             titan_log(
-                                f"FILTER RESULT -> {symbol} | PAPER_SIZE_SKIP | {micro_skip_reason}",
+                                (
+                                    f"FILTER RESULT -> {symbol} | PAPER_SIZE_SKIP | {micro_skip_reason} | "
+                                    f"{_paper_sizing_debug_text(pos_data, micro_skip_reason)}"
+                                ),
                                 important=True,
                             )
                         elif not pos_data.get("sizing_valid", quantity and position_size) or int(quantity or 0) < 1:
                             fail_reason = pos_data.get("skip_reason", "MICRO_CAPITAL_QTY_INVALID")
                             titan_log(
-                                f"FILTER RESULT -> {symbol} | PAPER_SIZE_SKIP | {fail_reason}",
+                                (
+                                    f"FILTER RESULT -> {symbol} | PAPER_SIZE_SKIP | {fail_reason} | "
+                                    f"{_paper_sizing_debug_text(pos_data, fail_reason)}"
+                                ),
                                 important=True,
                             )
                         else:
@@ -1150,6 +1190,11 @@ def scan_for_setups():
                 "stale_cache_count": stale_cache_count,
                 "cache_stale": bool(symbol_cache_debug.get("cache_stale")),
                 "cache_age_hours": symbol_cache_debug.get("cache_age_hours"),
+                "account_balance": (pos_data or {}).get("account_balance"),
+                "computed_qty": (pos_data or {}).get("computed_qty", quantity),
+                "required_capital": (pos_data or {}).get("required_capital", position_size),
+                "risk_amount": risk_amount,
+                "rejection_reason": fail_reason if not passed else "",
             })
 
             titan_log(f"FILTER RESULT → {symbol} | {fail_reason}")
@@ -1203,8 +1248,12 @@ def scan_for_setups():
                 "position_size": position_size,
                 "quantity": quantity,
                 "qty": quantity,
+                "computed_qty": pos_data.get("computed_qty", quantity),
+                "required_capital": pos_data.get("required_capital", position_size),
+                "account_balance": pos_data.get("account_balance"),
                 "risk_amount": risk_amount,
                 "risk_per_trade_pct": pos_data.get("risk_per_trade_pct", 1.0),
+                "rejection_reason": fail_reason if not passed else "",
                 "entry_price": entry,
                 "sl": stop_loss,
                 "tp": target,
@@ -1301,8 +1350,12 @@ def scan_for_setups():
                 "position_size": position_size,
                 "quantity": quantity,
                 "qty": quantity,
+                "computed_qty": pos_data.get("computed_qty", quantity),
+                "required_capital": pos_data.get("required_capital", position_size),
+                "account_balance": pos_data.get("account_balance"),
                 "risk_amount": risk_amount,
                 "risk_per_trade_pct": pos_data.get("risk_per_trade_pct", 1.0),
+                "rejection_reason": "",
                 "scores": trade_payload.get("scores", {
                     "volume_score": volume_score,
                     "strength_score": strength_score,

@@ -372,39 +372,54 @@ def calculate_paper_trade_sizing(account: Dict[str, Any], trade: Dict[str, Any])
     stop = safe_float(trade.get("sl") or trade.get("stop_loss") or trade.get("stoploss"), 0.0)
     per_share_risk = abs(entry - stop)
     quantity = 0
+    computed_qty = 0
     skip_reason = ""
+    position_size = 0.0
+    required_capital = 0.0
     if entry <= 0 or stop <= 0:
-        position_size = 0.0
         skip_reason = "INVALID_ENTRY_OR_SL"
     elif micro_capital_mode and entry > balance:
-        position_size = 0.0
+        if per_share_risk > 0 and risk_amount > 0:
+            computed_qty = int(math.floor(risk_amount / per_share_risk))
+        required_capital = entry
         skip_reason = "MICRO_CAPITAL_PRICE_SKIP"
     elif risk_amount <= 0 or risk_amount > balance:
-        position_size = 0.0
         skip_reason = "UNREALISTIC_RISK"
     elif per_share_risk > 0:
-        quantity = int(math.floor(risk_amount / per_share_risk))
+        risk_limited_qty = int(math.floor(risk_amount / per_share_risk))
+        cash_limited_qty = int(math.floor(balance / entry))
+        computed_qty = risk_limited_qty
+        quantity = min(risk_limited_qty, cash_limited_qty) if micro_capital_mode else risk_limited_qty
         position_size = quantity * entry
+        required_capital = position_size if quantity > 0 else entry
         if quantity <= 0:
             position_size = 0.0
-            skip_reason = "MICRO_CAPITAL_SL_TOO_WIDE" if micro_capital_mode else "QTY_LESS_THAN_1"
+            if micro_capital_mode and risk_limited_qty <= 0:
+                skip_reason = "MICRO_CAPITAL_SL_TOO_WIDE"
+            elif micro_capital_mode and cash_limited_qty <= 0:
+                skip_reason = "MICRO_CAPITAL_PRICE_SKIP"
+            else:
+                skip_reason = "QTY_LESS_THAN_1"
         elif position_size > balance:
+            required_capital = position_size
             quantity = 0
             position_size = 0.0
             skip_reason = "MICRO_CAPITAL_PRICE_SKIP" if micro_capital_mode else "INSUFFICIENT_CAPITAL"
     else:
-        position_size = 0.0
         skip_reason = "MICRO_CAPITAL_QTY_INVALID" if micro_capital_mode else "INVALID_SL_DISTANCE"
     return {
         "quantity": int(quantity),
         "qty": int(quantity),
+        "computed_qty": int(computed_qty),
         "position_size": round(position_size, 2),
         "capital_used": round(position_size, 2),
+        "required_capital": round(required_capital, 2),
         "risk_amount": round(risk_amount, 2),
         "risk_per_trade_pct": risk_pct,
         "risk_per_share": round(per_share_risk, 4),
         "account_balance": round(balance, 2),
         "skip_reason": skip_reason,
+        "rejection_reason": skip_reason,
         "sizing_valid": bool(quantity >= 1 and position_size > 0 and not skip_reason),
     }
 
