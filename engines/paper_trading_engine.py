@@ -25,6 +25,7 @@ POSITIONS_PATH = PAPER_DIR / "paper_positions.json"
 CLOSED_POSITIONS_PATH = PAPER_DIR / "paper_closed_positions.json"
 AUDIT_LOG_PATH = PAPER_DIR / "paper_audit_log.json"
 PROCESSED_RESULTS_PATH = PAPER_DIR / "paper_processed_results.json"
+LEGACY_CLOSED_POSITIONS_ARCHIVE_PATH = PAPER_DIR / "paper_closed_positions_legacy_archive.json"
 TRADE_OUTCOMES_CSV = Path("data/journals/trade_outcomes.csv")
 TRADE_OUTCOMES_JSONL = Path("data/journals/trade_outcomes.jsonl")
 
@@ -107,20 +108,31 @@ def _write_json(path: Path, data: Any) -> bool:
 
 def _normalize_account(account: Any) -> Dict[str, Any]:
     account = account if isinstance(account, dict) else {}
+    mode = safe_text(account.get("capital_mode")).upper()
     legacy_default = (
         safe_float(account.get("initial_balance"), DEFAULT_INITIAL_BALANCE) >= 99999.0
-        and safe_text(account.get("capital_mode")) != "ADAPTIVE_1K"
+        and mode != "ADAPTIVE_1K"
+    )
+    stored_initial = safe_float(account.get("initial_balance"), DEFAULT_INITIAL_BALANCE)
+    stored_balance = safe_float(account.get("current_balance") or account.get("balance"), stored_initial)
+    stored_closed_pnl = safe_float(account.get("closed_pnl"), 0.0)
+    adaptive_inconsistent = (
+        mode == "ADAPTIVE_1K"
+        and stored_initial <= 5000.0
+        and abs((stored_balance - stored_initial) - stored_closed_pnl) > 0.01
+        and abs(stored_closed_pnl) > max(50.0, stored_initial * 0.25)
     )
     initial = DEFAULT_INITIAL_BALANCE if legacy_default else safe_float(account.get("initial_balance"), DEFAULT_INITIAL_BALANCE)
     balance = safe_float(account.get("current_balance") or account.get("balance"), initial)
-    if legacy_default:
+    if legacy_default or adaptive_inconsistent:
+        initial = DEFAULT_INITIAL_BALANCE
         balance = DEFAULT_INITIAL_BALANCE
-    open_pnl = safe_float(account.get("open_pnl"), 0.0)
-    closed_pnl = 0.0 if legacy_default else safe_float(account.get("closed_pnl"), 0.0)
+    open_pnl = 0.0 if adaptive_inconsistent else safe_float(account.get("open_pnl"), 0.0)
+    closed_pnl = 0.0 if legacy_default or adaptive_inconsistent else safe_float(account.get("closed_pnl"), 0.0)
     daily_start_balance = safe_float(account.get("daily_start_balance"), balance)
-    if legacy_default:
+    if legacy_default or adaptive_inconsistent:
         daily_start_balance = DEFAULT_INITIAL_BALANCE
-    daily_pnl = safe_float(account.get("daily_pnl"), balance - daily_start_balance)
+    daily_pnl = 0.0 if adaptive_inconsistent else safe_float(account.get("daily_pnl"), balance - daily_start_balance)
     status = safe_text(account.get("paper_trading_status"), "ACTIVE").upper()
     if status not in {"ACTIVE", "LOCKED"}:
         status = "ACTIVE"
@@ -131,11 +143,11 @@ def _normalize_account(account: Any) -> Dict[str, Any]:
         "currency": safe_text(account.get("currency"), DEFAULT_CURRENCY),
         "current_balance": balance,
         "balance": balance,
-        "equity": safe_float(account.get("equity"), balance + open_pnl),
+        "equity": round(balance + open_pnl, 2),
         "open_pnl": open_pnl,
         "closed_pnl": closed_pnl,
         "daily_pnl": round(daily_pnl, 2),
-        "created_at": account.get("created_at") or _now(),
+        "created_at": _now() if adaptive_inconsistent else account.get("created_at") or _now(),
         "updated_at": _now(),
         "risk_rules": {
             "max_risk_per_trade_pct": safe_float(
@@ -150,7 +162,7 @@ def _normalize_account(account: Any) -> Dict[str, Any]:
         },
         "daily_start_balance": daily_start_balance,
         "daily_start_date": account.get("daily_start_date") or _today(),
-        "daily_peak_pnl": safe_float(account.get("daily_peak_pnl"), max(0.0, daily_pnl)),
+        "daily_peak_pnl": 0.0 if adaptive_inconsistent else safe_float(account.get("daily_peak_pnl"), max(0.0, daily_pnl)),
         "daily_loss_floor": safe_float(
             account.get("daily_loss_floor"),
             -round(daily_start_balance * DAILY_LOSS_LIMIT_PCT / 100.0, 2),
@@ -165,6 +177,56 @@ def _dict(value: Any) -> Dict[str, Any]:
 
 def _list(value: Any) -> List[Any]:
     return value if isinstance(value, list) else []
+
+
+def _is_adaptive_1k_account(account: Dict[str, Any]) -> bool:
+    return safe_text(_dict(account).get("capital_mode")).upper() == "ADAPTIVE_1K"
+
+
+def _position_exposure(position: Dict[str, Any]) -> float:
+    entry = safe_float(position.get("entry") or position.get("entry_price"), 0.0)
+    qty = safe_float(position.get("quantity") or position.get("qty"), 0.0)
+    explicit = safe_float(position.get("position_size") or position.get("capital_used"), 0.0)
+    return explicit if explicit > 0 else entry * qty
+
+
+def _is_legacy_1l_position(account: Dict[str, Any], position: Dict[str, Any]) -> bool:
+    if not _is_adaptive_1k_account(account):
+        return False
+    balance = max(safe_float(account.get("current_balance"), DEFAULT_INITIAL_BALANCE), DEFAULT_INITIAL_BALANCE)
+    exposure = _position_exposure(position)
+    risk_amount = safe_float(position.get("risk_amount"), 0.0)
+    return bool(exposure > balance * 1.5 or risk_amount > balance * 0.10)
+
+
+def _archive_legacy_closed_positions(legacy_positions: List[Dict[str, Any]]) -> None:
+    if not legacy_positions:
+        return
+    archive = _list(_read_json(LEGACY_CLOSED_POSITIONS_ARCHIVE_PATH, []))
+    archived_at = _now()
+    for position in legacy_positions:
+        row = dict(position)
+        row["archived_at"] = archived_at
+        row["archive_reason"] = "LEGACY_1L_POSITION_REMOVED_FROM_ADAPTIVE_1K"
+        archive.append(row)
+    _write_json(LEGACY_CLOSED_POSITIONS_ARCHIVE_PATH, archive[-5000:])
+
+
+def sanitize_closed_positions_for_account(account: Dict[str, Any], positions: List[Any]) -> List[Dict[str, Any]]:
+    valid: List[Dict[str, Any]] = []
+    legacy: List[Dict[str, Any]] = []
+    for item in _list(positions):
+        if not isinstance(item, dict):
+            continue
+        position = dict(item)
+        if _is_legacy_1l_position(account, position):
+            legacy.append(position)
+            continue
+        valid.append(position)
+    _archive_legacy_closed_positions(legacy)
+    if legacy:
+        _write_json(CLOSED_POSITIONS_PATH, valid)
+    return valid
 
 
 def migrate_open_positions_quantity(account: Dict[str, Any], positions: List[Any]) -> List[Dict[str, Any]]:
@@ -205,7 +267,7 @@ def load_paper_account() -> Dict[str, Any]:
         return initialize_paper_account(DEFAULT_INITIAL_BALANCE)
     account = _normalize_account(_read_json(ACCOUNT_PATH, {}))
     positions = migrate_open_positions_quantity(account, _read_json(POSITIONS_PATH, []))
-    closed = _read_json(CLOSED_POSITIONS_PATH, [])
+    closed = sanitize_closed_positions_for_account(account, _read_json(CLOSED_POSITIONS_PATH, []))
     account["open_positions"] = [item for item in _list(positions) if isinstance(item, dict)]
     account["closed_positions"] = [item for item in _list(closed) if isinstance(item, dict)]
     if account.get("daily_start_date") != _today():
@@ -216,6 +278,11 @@ def load_paper_account() -> Dict[str, Any]:
     account["open_pnl"] = calculate_open_pnl(account)
     account["closed_pnl"] = calculate_closed_pnl(account)
     account["balance"] = safe_float(account.get("current_balance"), DEFAULT_INITIAL_BALANCE)
+    if _is_adaptive_1k_account(account) and not account["closed_positions"] and abs(account["closed_pnl"]) > 0:
+        account["closed_pnl"] = 0.0
+        account["current_balance"] = DEFAULT_INITIAL_BALANCE
+        account["balance"] = DEFAULT_INITIAL_BALANCE
+        account["daily_start_balance"] = DEFAULT_INITIAL_BALANCE
     account["equity"] = round(account["balance"] + account["open_pnl"], 2)
     today_pnl = round(sum(
         safe_float(position.get("closed_pnl"), 0.0)
@@ -228,6 +295,7 @@ def load_paper_account() -> Dict[str, Any]:
     else:
         account["daily_pnl"] = round(account["balance"] - safe_float(account.get("daily_start_balance"), account["balance"]), 2)
     account = update_daily_trailing_protection(account)
+    save_paper_account(account)
     return account
 
 
@@ -880,6 +948,13 @@ def sync_paper_account_from_trade_results(trade_rows: Any = None) -> Dict[str, A
         if quantity <= 0:
             skipped_invalid += 1
             continue
+        if _is_adaptive_1k_account(account):
+            exposure = round(entry * quantity, 2)
+            account_balance = max(safe_float(account.get("current_balance"), DEFAULT_INITIAL_BALANCE), DEFAULT_INITIAL_BALANCE)
+            if exposure > account_balance:
+                row["skipped_pnl_reason"] = "LEGACY_POSITION_SIZE_EXCEEDS_ADAPTIVE_1K_BALANCE"
+                skipped_invalid += 1
+                continue
 
         closed_position = dict(matched_position or {})
         closed_position.update({

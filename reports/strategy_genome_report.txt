@@ -8,8 +8,8 @@ Safety
 - recommended_live_weight: 0.0
 - No forbidden imports detected: True
 
-Updated: 2026-05-14 13:58:57
-Runtime Ms: 31.0 | Bounded: True
+Updated: 2026-05-15 09:03:06
+Runtime Ms: 47.0 | Bounded: True
 Active Regime: RISK_OFF
 
 Top Strategy Families:

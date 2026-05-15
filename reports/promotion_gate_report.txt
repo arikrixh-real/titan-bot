@@ -7,9 +7,9 @@ Safety
 - recommended_live_weight remains pinned at 0.00.
 - No forbidden imports detected: True
 
-Updated: 2026-05-14 13:58:57
+Updated: 2026-05-15 09:03:06
 Status: ACTIVE
-Runtime Ms: 16.0 | Bounded: True
+Runtime Ms: 32.0 | Bounded: True
 
 Actual Outcome Baseline:
 - Source: data\journals\trade_outcomes.jsonl
@@ -26,7 +26,7 @@ Promotion Summary:
 Layer Metrics:
 - phase6: samples=5, usefulness=0.2952, stability=1.0, promotion=0.0603, live_weight=0.0, recommendation=INSUFFICIENT_SAMPLE_SHADOW_ONLY
 - phase7: samples=25, usefulness=0.5827, stability=0.8099, promotion=0.3435, live_weight=0.0, recommendation=INSUFFICIENT_SAMPLE_SHADOW_ONLY
-- phase8: samples=6, usefulness=0.3603, stability=0.9441, promotion=0.0705, live_weight=0.0, recommendation=INSUFFICIENT_SAMPLE_SHADOW_ONLY
+- phase8: samples=13, usefulness=0.4053, stability=0.9252, promotion=0.1559, live_weight=0.0, recommendation=INSUFFICIENT_SAMPLE_SHADOW_ONLY
 - phase9: samples=5, usefulness=0.3593, stability=0.5491, promotion=0.0606, live_weight=0.0, recommendation=INSUFFICIENT_SAMPLE_SHADOW_ONLY
 
 Warnings:

@@ -14,9 +14,9 @@
     "regret_risk_score": 15.0
   },
   "explanations": [
-    "PROXY self-reflection used available setup/context/outcome evidence."
+    "Insufficient reflection data; neutral non-blocking reflection applied."
   ],
-  "generated_at": "2026-05-14T09:06:59.127435Z",
+  "generated_at": "2026-05-15T03:38:48.706936Z",
   "hallucination_detection": {
     "evidence_gap_detected": true,
     "hallucination_risk_score": 10.0,
@@ -36,10 +36,10 @@
     "reasoning_quality_score": 45.0,
     "warning_count": 0
   },
-  "reflection_bias": "CONFIDENT",
-  "reflection_data_mode": "PROXY",
-  "reflection_score": 82.56,
-  "reflection_warning": "NONE",
+  "reflection_bias": "REVIEW",
+  "reflection_data_mode": "INSUFFICIENT",
+  "reflection_score": 50.0,
+  "reflection_warning": "REVIEW",
   "self_critique": {
     "critique_score": 70.0,
     "strengths": [

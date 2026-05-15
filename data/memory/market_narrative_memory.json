@@ -5,13 +5,20 @@
       "score": 48.05,
       "state": "MIXED_BREADTH"
     },
-    "contradiction_flags": [],
+    "contradiction_flags": [
+      "regime transition from CHOPPY_NEUTRAL to DATA_INSUFFICIENT_NEUTRAL"
+    ],
     "event_pressure": {
-      "keywords": [],
-      "score": 0.0,
-      "state": "LOW"
+      "keywords": [
+        "election",
+        "geopolitical",
+        "inflation",
+        "rbi"
+      ],
+      "score": 48.0,
+      "state": "MEDIUM"
     },
-    "generated_at": "2026-05-14 14:36:59",
+    "generated_at": "2026-05-14 14:52:40",
     "macro_narrative_memory": {
       "learning_environment": "RECENT_MEMORY_FAVORABLE",
       "lifecycle_memory_available": true,
@@ -20,8 +27,8 @@
     },
     "market_direction": "NEUTRAL",
     "narrative_adjustment": 0.0,
-    "narrative_confidence": 0.72,
-    "narrative_type": "CHOPPY_NEUTRAL",
+    "narrative_confidence": 0.57,
+    "narrative_type": "DATA_INSUFFICIENT_NEUTRAL",
     "panic_euphoria_detection": {
       "euphoria": false,
       "panic": false
@@ -29,12 +36,12 @@
     "phase8_applied": true,
     "phase8_shadow_mode": true,
     "regime_transition_detection": {
-      "changed": false,
+      "changed": true,
       "from": "CHOPPY_NEUTRAL",
-      "to": "CHOPPY_NEUTRAL"
+      "to": "DATA_INSUFFICIENT_NEUTRAL"
     },
-    "risk_on_risk_off_state": "NEUTRAL",
-    "risk_tone_score": 49.12,
+    "risk_on_risk_off_state": "RISK_OFF",
+    "risk_tone_score": 37.12,
     "sector_leadership": [],
     "sector_weakness": [],
     "setup_alignment": {
@@ -148,8 +155,16 @@
       "narrative_type": "CHOPPY_NEUTRAL",
       "risk_on_risk_off_state": "NEUTRAL",
       "risk_tone_score": 49.12
+    },
+    {
+      "contradiction_count": 1,
+      "generated_at": "2026-05-14 14:52:40",
+      "narrative_confidence": 0.57,
+      "narrative_type": "DATA_INSUFFICIENT_NEUTRAL",
+      "risk_on_risk_off_state": "RISK_OFF",
+      "risk_tone_score": 37.12
     }
   ],
-  "last_updated": "2026-05-14 14:36:59",
+  "last_updated": "2026-05-14 14:52:40",
   "version": "8.0"
 }

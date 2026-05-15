@@ -1,22 +1,28 @@
 {
   "command_status": {
-    "confidence": 45.2,
+    "confidence": 39.95,
     "confidence_stability": {
-      "score": 45.2,
-      "state": "MIXED"
+      "score": 39.95,
+      "state": "FRAGILE"
     },
     "failed_open": false,
-    "overall_state": "ACTIVE",
-    "warnings": []
+    "overall_state": "DEGRADED_OBSERVING",
+    "warnings": [
+      "phase5_memory_stale",
+      "phase6_memory_stale",
+      "phase7_memory_stale",
+      "phase8_memory_stale",
+      "phase9_memory_stale"
+    ]
   },
   "dashboard_cards": {
     "cross_setup_heat": 0.0,
-    "master_shadow_state": "ACTIVE",
-    "narrative": "CHOPPY_NEUTRAL",
-    "shadow_warnings": 5,
+    "master_shadow_state": "DEGRADED_OBSERVING",
+    "narrative": "DATA_INSUFFICIENT_NEUTRAL",
+    "shadow_warnings": 12,
     "tracked_lifecycle_trades": 25
   },
-  "generated_at": "2026-05-14 14:37:00",
+  "generated_at": "2026-05-15 09:08:48",
   "intelligence_layers": {
     "phase5_strategy_family": {
       "available": true,
@@ -72,12 +78,12 @@
     },
     "phase8_market_narrative": {
       "available": true,
-      "contradiction_count": 0,
+      "contradiction_count": 1,
       "market_direction": "NEUTRAL",
-      "narrative_confidence": 0.72,
-      "narrative_type": "CHOPPY_NEUTRAL",
-      "risk_state": "NEUTRAL",
-      "risk_tone_score": 49.12
+      "narrative_confidence": 0.57,
+      "narrative_type": "DATA_INSUFFICIENT_NEUTRAL",
+      "risk_state": "RISK_OFF",
+      "risk_tone_score": 37.12
     },
     "phase9_cross_setup": {
       "available": true,
@@ -90,31 +96,31 @@
   },
   "layer_freshness": {
     "phase5": {
-      "age_seconds": 2283.076,
+      "age_seconds": 68990.549,
       "available": true,
       "path": "data\\memory\\strategy_family_memory.json",
       "status": "OK"
     },
     "phase6": {
-      "age_seconds": 2284.855,
+      "age_seconds": 68992.328,
       "available": true,
       "path": "data\\memory\\phase6_shadow_memory.json",
       "status": "OK"
     },
     "phase7": {
-      "age_seconds": 1754.743,
+      "age_seconds": 68462.215,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "phase8": {
-      "age_seconds": 1.523,
+      "age_seconds": 65767.97,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "phase9": {
-      "age_seconds": 2283.488,
+      "age_seconds": 68990.959,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
@@ -123,7 +129,13 @@
   "phase10_rank_adjustment": 0.0,
   "phase10_shadow_mode": true,
   "risk_observations": {
-    "data_quality_flags": [],
+    "data_quality_flags": [
+      "phase5_memory_stale",
+      "phase6_memory_stale",
+      "phase7_memory_stale",
+      "phase8_memory_stale",
+      "phase9_memory_stale"
+    ],
     "lifecycle_flags": [
       "TATASTEEL:health=25.0",
       "BAJAJHLDNG:health=45.0",
@@ -131,24 +143,23 @@
       "RELIANCE:health=70.0",
       "JINDALSTEL:health=79.5"
     ],
-    "narrative_flags": [],
-    "systemic_flags": []
+    "narrative_flags": [
+      "risk_state:RISK_OFF"
+    ],
+    "systemic_flags": [
+      "shadow_contradictions_detected:1"
+    ]
   },
   "runtime_bounded": true,
   "runtime_context": {
-    "context_mode": "SELECTIVE",
+    "context_mode": null,
     "observed_setups_count": 0,
     "phase_result_keys": [
-      "adaptive_memory_result",
-      "outcome_result",
-      "phase5_memory_result",
-      "phase6_shadow_report_result",
-      "phase8_market_narrative_result",
-      "phase9_cross_setup_result"
+      "news_items_collected"
     ],
     "selected_decisions_count": 0
   },
-  "runtime_ms": 0.0,
+  "runtime_ms": 16.0,
   "safety": {
     "broker_api_changes": false,
     "build_master_input_calls": false,

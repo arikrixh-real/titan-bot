@@ -1,8 +1,8 @@
 {
-  "symbol": "ICICIBANK",
-  "status": "ERROR",
-  "last_price": 1253.1,
+  "symbol": "RELIANCE",
+  "status": "MARKET_CLOSED",
+  "last_price": 1366.7,
   "source": "CACHE",
-  "timestamp": "2026-05-14T14:36:57.789938",
-  "reason": "API/socket failure; using cache if available"
+  "timestamp": "2026-05-15T09:01:37.151072",
+  "reason": "Market closed; using cache if available"
 }

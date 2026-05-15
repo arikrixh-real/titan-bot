@@ -35,10 +35,10 @@
       "No major contradiction detected."
     ]
   },
-  "debate_bias": "APPROVE",
-  "debate_data_mode": "PROXY",
-  "debate_score": 75.44,
-  "debate_warning": "NONE",
+  "debate_bias": "REVIEW",
+  "debate_data_mode": "INSUFFICIENT",
+  "debate_score": 50.0,
+  "debate_warning": "REVIEW",
   "execution_objection_agent": {
     "execution_risks": {
       "chase_risk_score": 0.0,
@@ -49,7 +49,7 @@
     "stance": "CLEAR"
   },
   "explanations": [
-    "Proxy debate used partial setup/context fields.",
+    "Insufficient setup/context data; debate remains neutral and non-blocking.",
     "No major contradiction detected."
   ],
   "final_judge": {
@@ -58,7 +58,7 @@
     "rationale": "Approve only when support survives bearish, risk, execution, news, portfolio, and regime objections.",
     "warning": "NONE"
   },
-  "generated_at": "2026-05-14T09:06:59.126382Z",
+  "generated_at": "2026-05-15T03:38:48.705699Z",
   "live_order_allowed": false,
   "news_objection_agent": {
     "news_state": {
@@ -81,7 +81,7 @@
   "regime_objection_agent": {
     "objection_score": 12.0,
     "regime_state": {
-      "regime_text": "NO_SETUP_PHASE"
+      "regime_text": "UNKNOWN"
     },
     "stance": "CLEAR"
   },

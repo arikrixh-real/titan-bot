@@ -10,7 +10,7 @@
     "win_rate": 0.6,
     "wins": 3
   },
-  "generated_at": "2026-05-14 14:37:00",
+  "generated_at": "2026-05-15 09:08:48",
   "layer_freshness": {
     "phase10": {
       "age_seconds": 0.004,
@@ -19,25 +19,25 @@
       "status": "OK"
     },
     "phase6": {
-      "age_seconds": 2284.881,
+      "age_seconds": 68992.356,
       "available": true,
       "path": "data\\memory\\phase6_shadow_memory.json",
       "status": "OK"
     },
     "phase7": {
-      "age_seconds": 1754.769,
+      "age_seconds": 68462.243,
       "available": true,
       "path": "data\\memory\\lifecycle_memory.json",
       "status": "OK"
     },
     "phase8": {
-      "age_seconds": 1.549,
+      "age_seconds": 65767.998,
       "available": true,
       "path": "data\\memory\\market_narrative_memory.json",
       "status": "OK"
     },
     "phase9": {
-      "age_seconds": 2283.514,
+      "age_seconds": 68990.989,
       "available": true,
       "path": "data\\memory\\cross_setup_memory.json",
       "status": "OK"
@@ -75,19 +75,19 @@
     "usefulness_score": 0.5827
   },
   "phase8": {
-    "agreement_quality": 0.92,
-    "confidence_quality": 0.82,
-    "contradiction_accuracy": 1.0,
-    "drift_score": 0.074,
-    "false_negative_rate": 0.224,
-    "false_positive_rate": 0.144,
-    "promotion_score": 0.1818,
+    "agreement_quality": 0.83,
+    "confidence_quality": 0.7,
+    "contradiction_accuracy": 0.94,
+    "drift_score": 0.0748,
+    "false_negative_rate": 0.172,
+    "false_positive_rate": 0.342,
+    "promotion_score": 0.1559,
     "recommendation": "INSUFFICIENT_SAMPLE_SHADOW_ONLY",
     "recommended_live_weight": 0.0,
-    "regime_consistency": 0.8,
-    "samples": 12,
-    "stability_score": 0.926,
-    "usefulness_score": 0.5249
+    "regime_consistency": 0.4,
+    "samples": 13,
+    "stability_score": 0.9252,
+    "usefulness_score": 0.4053
   },
   "phase9": {
     "agreement_quality": 0.6,
@@ -115,16 +115,11 @@
   "runtime_context": {
     "observed_setups_count": 0,
     "phase_result_keys": [
-      "outcome_result",
-      "phase10_master_shadow_result",
-      "phase5_memory_result",
-      "phase6_shadow_report_result",
-      "phase8_market_narrative_result",
-      "phase9_cross_setup_result"
+      "phase10_master_shadow_result"
     ],
     "selected_decisions_count": 0
   },
-  "runtime_ms": 31.0,
+  "runtime_ms": 16.0,
   "safety": {
     "alert_caps_mutated": false,
     "alert_changes": false,
