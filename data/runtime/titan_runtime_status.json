@@ -1,0 +1,22 @@
+{
+  "timestamp_ist": "2026-05-16T22:08:08.478017+05:30",
+  "mode": "WEEKEND_MODE",
+  "live_allowed_engines": [
+    "dashboard_sync"
+  ],
+  "research_allowed_engines": [
+    "historical_replay",
+    "backtesting",
+    "synthetic_simulation",
+    "learning_engine",
+    "evolution_engine",
+    "memory_compression",
+    "weekly_report"
+  ],
+  "blocked_engines": [
+    "telegram_alerts",
+    "live_trade_creation",
+    "live_scanner"
+  ],
+  "reason": "Non-trading day; live scanning is not included in observed permissions."
+}

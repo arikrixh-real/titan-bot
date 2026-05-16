@@ -2,12 +2,13 @@ import os
 import json
 import glob
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 
 import pandas as pd
 import requests
 import streamlit as st
 from supabase import create_client, Client
+from utils.market_hours import IST, is_trade_window
 
 
 # =========================================================
@@ -27,13 +28,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-IST = timezone(timedelta(hours=5, minutes=30))
 AUTO_REFRESH_SECONDS = 10
 SCAN_BATCH_SIZE = 50
-TRADE_WINDOW_START_HOUR = 9
-TRADE_WINDOW_START_MINUTE = 15
-TRADE_WINDOW_END_HOUR = 15
-TRADE_WINDOW_END_MINUTE = 30
 INITIAL_BALANCE = 1000.0
 REAL_PNL_SOURCE_LABEL = "REAL_STOCK_WISE_PNL | QTY_SYNC_ACTIVE"
 DASHBOARD_VISUAL_VERSION = "REAL_PNL_QTY_SYNC_FIX_V1"
@@ -469,12 +465,7 @@ def file_modified_dt(path):
 
 
 def is_market_open_now(now=None):
-    now = now or datetime.now(IST)
-    if now.weekday() >= 5:
-        return False
-    start = now.replace(hour=TRADE_WINDOW_START_HOUR, minute=TRADE_WINDOW_START_MINUTE, second=0, microsecond=0)
-    end = now.replace(hour=TRADE_WINDOW_END_HOUR, minute=TRADE_WINDOW_END_MINUTE, second=0, microsecond=0)
-    return start <= now <= end
+    return is_trade_window(now)
 
 
 def market_mode_label():
