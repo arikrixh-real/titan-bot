@@ -27,7 +27,7 @@ except Exception:
     CONFIG_UPSTOX_ACCESS_TOKEN = None
 
 from config.upstox_symbols import get_instrument_key, normalize_symbol
-from data.price_cache import get_cached_price, update_cached_price
+from data.price_cache import get_cached_price, get_cached_price_debug, update_cached_price
 from utils.market_hours import is_trade_window
 
 
@@ -301,6 +301,108 @@ def get_live_price(symbol, use_cache=True, debug=False):
 
 def get_live_price_debug(symbol, use_cache=True, debug=False):
     return fetch_price_from_upstox_debug(symbol, use_cache=use_cache, debug=debug)
+
+
+def get_strict_fresh_price_debug(symbol, max_age_seconds=120, debug=False):
+    """
+    Strict price helper for TP/SL closure.
+    Accepts only a real active Upstox price, or an explicitly timestamped fresh
+    cache price. It never returns entry/last_price fallbacks.
+    """
+    normalized = normalize_symbol(symbol)
+
+    try:
+        live_result = fetch_price_from_upstox_debug(
+            normalized,
+            use_cache=False,
+            debug=debug,
+        )
+    except Exception as e:
+        live_result = {
+            "price": None,
+            "source": "UNKNOWN",
+            "status": "API_ERROR",
+            "reason": str(e),
+            "token_type_used": "UNKNOWN",
+        }
+
+    price = safe_float(live_result.get("price"))
+    source = str(live_result.get("source") or "").upper()
+    status = str(live_result.get("status") or "").upper()
+
+    if price is not None and source == "UPSTOX" and status == "ACTIVE":
+        return {
+            "price": price,
+            "source": "UPSTOX",
+            "status": "ACTIVE",
+            "timestamp": datetime.now().isoformat(),
+            "fresh": True,
+            "age_seconds": 0,
+            "max_age_seconds": max_age_seconds,
+            "reason": live_result.get("reason") or "Live Upstox price fetched",
+            "token_type_used": live_result.get("token_type_used"),
+        }
+
+    try:
+        cache_result = get_cached_price_debug(normalized, max_age_seconds=max_age_seconds)
+    except Exception as e:
+        cache_result = {
+            "price": None,
+            "source": "LIVE_PRICE_CACHE",
+            "status": "CACHE_ERROR",
+            "timestamp": None,
+            "fresh": False,
+            "age_seconds": None,
+            "max_age_seconds": max_age_seconds,
+            "reason": str(e),
+        }
+    cache_price = safe_float(cache_result.get("price"))
+
+    if cache_price is not None and cache_result.get("fresh"):
+        if debug:
+            print(
+                f"[StrictPrice] {normalized}: using fresh timestamped cache "
+                f"age={cache_result.get('age_seconds')}s"
+            )
+        return {
+            "price": cache_price,
+            "source": cache_result.get("source") or "LIVE_PRICE_CACHE",
+            "status": "CACHE_FRESH",
+            "timestamp": cache_result.get("timestamp"),
+            "fresh": True,
+            "age_seconds": cache_result.get("age_seconds"),
+            "max_age_seconds": max_age_seconds,
+            "reason": cache_result.get("reason"),
+            "live_status": live_result.get("status"),
+            "live_source": live_result.get("source"),
+            "live_reason": live_result.get("reason"),
+            "token_type_used": live_result.get("token_type_used"),
+        }
+
+    reason = (
+        f"PRICE_STALE: live source={live_result.get('source')} "
+        f"status={live_result.get('status')} reason={live_result.get('reason')}; "
+        f"cache status={cache_result.get('status')} reason={cache_result.get('reason')}"
+    )
+    if debug:
+        print(f"[StrictPrice] {normalized}: {reason}")
+
+    return {
+        "price": None,
+        "source": "UNKNOWN",
+        "status": "PRICE_STALE",
+        "timestamp": cache_result.get("timestamp"),
+        "fresh": False,
+        "age_seconds": cache_result.get("age_seconds"),
+        "max_age_seconds": max_age_seconds,
+        "reason": reason,
+        "live_status": live_result.get("status"),
+        "live_source": live_result.get("source"),
+        "live_reason": live_result.get("reason"),
+        "cache_price": cache_result.get("price"),
+        "cache_status": cache_result.get("status"),
+        "token_type_used": live_result.get("token_type_used"),
+    }
 
 
 if __name__ == "__main__":

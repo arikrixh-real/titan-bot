@@ -32,7 +32,7 @@ from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from data.live_price import get_live_price
+from data.live_price import get_strict_fresh_price_debug
 from utils.market_hours import is_trade_window, trade_window_text
 
 try:
@@ -66,6 +66,7 @@ OUTCOMES_CSV = JOURNAL_DIR / "trade_outcomes.csv"
 OUTCOMES_JSONL = JOURNAL_DIR / "trade_outcomes.jsonl"
 REINFORCEMENT_REPORTS_JSONL = LEARNING_DIR / "reinforcement_learning_reports.jsonl"
 REINFORCEMENT_MEMORY_JSON = MEMORY_DIR / "reinforcement_learning_memory.json"
+MAX_TP_SL_PRICE_AGE_SECONDS = 120
 
 OUTCOME_FIELDS = [
     "closed_at",
@@ -692,10 +693,45 @@ def track_trade_outcomes(limit=None):
         checked += 1
 
         try:
-            live_price = get_live_price(symbol)
+            price_result = get_strict_fresh_price_debug(
+                symbol,
+                max_age_seconds=MAX_TP_SL_PRICE_AGE_SECONDS,
+                debug=False,
+            )
 
-            if live_price is None:
-                live_price = row.get("last_price") or row.get("entry")
+            if not isinstance(price_result, dict):
+                price_result = {
+                    "price": None,
+                    "source": "UNKNOWN",
+                    "status": "PRICE_STALE",
+                    "reason": "Strict price helper returned non-dict result",
+                    "fresh": False,
+                }
+
+            live_price = price_result.get("price")
+            price_source = str(price_result.get("source") or "").upper()
+            price_status = str(price_result.get("status") or "").upper()
+            price_fresh = bool(price_result.get("fresh"))
+
+            strict_price_ok = (
+                live_price is not None
+                and price_fresh
+                and (
+                    (price_source == "UPSTOX" and price_status == "ACTIVE")
+                    or price_status == "CACHE_FRESH"
+                )
+            )
+
+            if not strict_price_ok:
+                row["last_checked_at"] = _now()
+                row["result_reason"] = "PRICE_STALE"
+                still_open += 1
+                print(
+                    f"[OutcomeTracker] {symbol} PRICE_STALE: "
+                    f"{price_result.get('reason')}"
+                )
+                updated_rows.append(row)
+                continue
 
             outcome, exit_price, pnl_points, reason = _check_outcome(row, live_price)
 
