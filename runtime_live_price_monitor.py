@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from data.live_price import get_live_price_debug
+from data.price_cache import META_CACHE_FILE
 from utils.market_hours import as_ist_datetime
 
 
@@ -10,6 +11,14 @@ LIVE_PRICE_MONITOR_STATUS_PATH = (
 )
 PAPER_TRADE_REGISTRY_PATH = Path("data") / "runtime" / "paper_trade_registry.json"
 MAX_SYMBOLS_PER_RUN = 5
+NETWORK_OR_TOKEN_FAILURE_STATUSES = {
+    "API_ERROR",
+    "DNS_ERROR",
+    "HTTP_ERROR",
+    "NETWORK_BLOCKED",
+    "TOKEN_INVALID",
+    "TOKEN_MISSING",
+}
 
 
 def _read_json(path):
@@ -59,6 +68,10 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
             "symbols_checked": 0,
             "successful_prices": 0,
             "failed_prices": 0,
+            "cache_meta_updated": False,
+            "price_cache_meta_path": META_CACHE_FILE,
+            "max_symbols_per_run": MAX_SYMBOLS_PER_RUN,
+            "network_or_token_failure_count": 0,
             "price_results": [],
         }
         path = Path(path)
@@ -69,6 +82,8 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
     price_results = []
     successful_prices = 0
     failed_prices = 0
+    cache_meta_updated = False
+    network_or_token_failure_count = 0
 
     for symbol in symbols:
         try:
@@ -82,6 +97,15 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
                 }
 
             price = result.get("price")
+            status = result.get("status")
+            source = result.get("source")
+
+            if status in NETWORK_OR_TOKEN_FAILURE_STATUSES:
+                network_or_token_failure_count += 1
+
+            if price is not None and source == "UPSTOX" and status == "ACTIVE":
+                cache_meta_updated = True
+
             if price is None:
                 failed_prices += 1
             else:
@@ -91,8 +115,8 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
                 {
                     "symbol": symbol,
                     "price": price,
-                    "source": result.get("source"),
-                    "status": result.get("status"),
+                    "source": source,
+                    "status": status,
                     "reason": result.get("reason"),
                 }
             )
@@ -114,6 +138,10 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
         "symbols_checked": len(symbols),
         "successful_prices": successful_prices,
         "failed_prices": failed_prices,
+        "cache_meta_updated": cache_meta_updated,
+        "price_cache_meta_path": META_CACHE_FILE,
+        "max_symbols_per_run": MAX_SYMBOLS_PER_RUN,
+        "network_or_token_failure_count": network_or_token_failure_count,
         "price_results": price_results,
     }
 
