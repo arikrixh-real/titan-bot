@@ -1,14 +1,27 @@
 import json
+import time
 from pathlib import Path
 
 from runtime_engine_registry import get_registered_handler
 from runtime_tick import get_due_tasks
 from runtime_lock import acquire_lock, release_lock
+from runtime_timeout import run_with_timeout
 
 
 DISPATCH_LOG_PATH = Path("data/runtime/dispatch_log.jsonl")
 DISPATCH_LOG_PREVIOUS_PATH = Path("data/runtime/dispatch_log_previous.jsonl")
 MAX_DISPATCH_LOG_BYTES = 5 * 1024 * 1024
+CYCLE_DEADLINE_SECONDS = 285
+DEFAULT_TASK_TIMEOUT_SECONDS = 60
+TASK_TIMEOUT_SECONDS = {
+    "setup_engine": 240,
+    "master_brain": 240,
+    "scanner": 120,
+    "news_pulse": 45,
+    "light_news_pulse": 45,
+    "outcome_tracker": 45,
+    "evolution_engine": 60,
+}
 
 
 def rotate_dispatch_log_if_needed():
@@ -39,12 +52,31 @@ def append_dispatch_log(timestamp_ist, mode, dispatch_preview):
         pass
 
 
+def _task_timeout_seconds(task):
+    return TASK_TIMEOUT_SECONDS.get(task, DEFAULT_TASK_TIMEOUT_SECONDS)
+
+
+def _cycle_budget_remaining(started_at):
+    return CYCLE_DEADLINE_SECONDS - (time.monotonic() - started_at)
+
+
 def preview_dispatch(value=None):
     tick = get_due_tasks(value)
     due_tasks = tick["due_tasks"]
     dispatch_preview = []
+    cycle_started_at = time.monotonic()
 
     for task in due_tasks:
+        if _cycle_budget_remaining(cycle_started_at) <= 0:
+            dispatch_preview.append(
+                {
+                    "task": task,
+                    "action": "SKIPPED_CYCLE_DEADLINE",
+                    "executed": False,
+                }
+            )
+            continue
+
         handler = get_registered_handler(task)
 
         if handler:
@@ -56,9 +88,24 @@ def preview_dispatch(value=None):
                 executed = False
             else:
                 try:
-                    handler()
-                    action = "EXECUTED"
-                    executed = True
+                    timeout_seconds = min(
+                        _task_timeout_seconds(task),
+                        max(1, int(_cycle_budget_remaining(cycle_started_at))),
+                    )
+                    try:
+                        result = run_with_timeout(handler, timeout_seconds)
+                    except Exception:
+                        result = {"status": "error"}
+
+                    if result.get("status") == "ok":
+                        action = "EXECUTED"
+                        executed = True
+                    elif result.get("status") == "timeout":
+                        action = "TIMEOUT"
+                        executed = False
+                    else:
+                        action = "ERROR"
+                        executed = False
                 finally:
                     release_lock(lock_name)
         else:
