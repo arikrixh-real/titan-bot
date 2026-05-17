@@ -704,6 +704,8 @@ def track_trade_outcomes(limit=None):
     checked = 0
     closed = 0
     still_open = 0
+    price_stale_skipped = 0
+    deferred_open = 0
     updated_rows = []
     lifecycle_observations = []
     max_checks = None
@@ -713,6 +715,15 @@ def track_trade_outcomes(limit=None):
             max_checks = max(0, int(limit))
     except Exception:
         max_checks = None
+
+    backlog_size = 0
+    for row in rows:
+        status_text = str(row.get("status", "")).upper().strip()
+        if status_text in {"OPEN", "TP", "SL"}:
+            backlog_size += 1
+
+    limit_text = "ALL" if max_checks is None else str(max_checks)
+    print(f"[OutcomeTracker DEBUG] Backlog eligible rows: {backlog_size} | limit={limit_text}")
 
     for row in rows:
         status, _ = _normalize_active_trade_lifecycle(row)
@@ -724,6 +735,7 @@ def track_trade_outcomes(limit=None):
         if max_checks is not None and checked >= max_checks:
             updated_rows.append(row)
             still_open += 1
+            deferred_open += 1
             continue
 
         symbol = row.get("symbol", "")
@@ -762,6 +774,7 @@ def track_trade_outcomes(limit=None):
             if not strict_price_ok:
                 row["last_checked_at"] = _now()
                 row["result_reason"] = "PRICE_STALE"
+                price_stale_skipped += 1
                 still_open += 1
                 print(
                     f"[OutcomeTracker] {symbol} PRICE_STALE: "
@@ -842,12 +855,20 @@ def track_trade_outcomes(limit=None):
             lifecycle_result = {"error": str(e)}
             print(f"[Lifecycle ERROR] Shadow lifecycle failed open: {e}")
 
+    print(
+        "[OutcomeTracker DEBUG] "
+        f"Processed rows: {checked} | PRICE_STALE skipped: {price_stale_skipped} | "
+        f"Deferred open rows: {deferred_open}"
+    )
     print(f"[OutcomeTracker] Checked: {checked} | Closed: {closed} | Still open: {still_open}")
 
     return {
         "checked": checked,
         "closed": closed,
         "open": still_open,
+        "backlog_size": backlog_size,
+        "price_stale_skipped": price_stale_skipped,
+        "deferred_open": deferred_open,
         "lifecycle_shadow_result": lifecycle_result,
     }
 

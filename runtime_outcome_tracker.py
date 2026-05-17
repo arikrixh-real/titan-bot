@@ -16,7 +16,7 @@ def run_outcome_tracker():
     error_message = None
 
     try:
-        result_summary = track_trade_outcomes(limit=1)
+        result_summary = track_trade_outcomes()
         status = "OUTCOME_TRACKER_REAL_RUN_COMPLETE"
     except Exception as exc:
         status = "OUTCOME_TRACKER_REAL_RUN_ERROR"
@@ -28,7 +28,7 @@ def run_outcome_tracker():
         "mode": current_bot_mode(now_ist),
         "status": status,
         "real_tracking": True,
-        "limit": 1,
+        "limit": None,
         "result_summary": result_summary,
         "error_type": error_type,
         "error_message": error_message,
