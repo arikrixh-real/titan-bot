@@ -1,4 +1,4 @@
-name: TITAN 5 Minute Automation
+name: TITAN 5 Minute Health Check
 
 on:
   workflow_dispatch:
@@ -50,7 +50,7 @@ jobs:
           python -m py_compile titan_master_brain/master_controller.py
           python -m py_compile titan_master_brain/final_decision_engine.py
 
-      - name: Run TITAN Health Check
+      - name: Run TITAN HEALTH_ONLY Check
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -60,11 +60,17 @@ jobs:
           TITAN_RUNTIME_OWNER: "GITHUB_ACTIONS"
           TITAN_QUIET_MODE: "1"
         run: |
-          echo "GITHUB_HEALTH_MODE_ACTIVE"
+          echo "TITAN_RUNTIME_MODE=HEALTH_ONLY"
+          echo "TITAN_EXECUTION_OWNER=GITHUB_HEALTH_ONLY"
+          echo "GitHub path is health-only."
+          echo "No live execution."
+          echo "No Telegram."
+          echo "No journaling, outcomes, or lifecycle mutation."
           python -c "from titan_master_brain.master_controller import run_master_brain; run_master_brain(health_check=True)"
 
       - name: Skip Git memory push
         if: always()
         run: |
-          echo "Skipping Git memory push during 5-minute live scan."
-          echo "GitHub health mode only: live execution, alerts, journaling, and outcome tracking are disabled."
+          echo "Skipping Git memory push during 5-minute health check."
+          echo "GitHub HEALTH_ONLY mode: live execution, Telegram, journaling, outcomes, and lifecycle mutation are disabled."
+          echo "VPS REAL mode is the sole live execution owner."

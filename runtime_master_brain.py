@@ -16,6 +16,9 @@ MODE_READ_ONLY = "READ_ONLY"
 MODE_HEALTH = "HEALTH"
 MODE_REAL = "REAL"
 SUPPORTED_RUNTIME_MODES = {MODE_READ_ONLY, MODE_HEALTH, MODE_REAL}
+EXECUTION_OWNER_NONE = "NONE"
+EXECUTION_OWNER_GITHUB_HEALTH = "GITHUB_HEALTH_ONLY"
+EXECUTION_OWNER_VPS_REAL = "VPS_REAL_SOLE_LIVE_OWNER"
 
 
 def _timestamp_ist():
@@ -24,9 +27,18 @@ def _timestamp_ist():
 
 def _base_payload(scanner_status=None):
     scanner_status = scanner_status if isinstance(scanner_status, dict) else {}
+    runtime_contract = _runtime_contract(MODE_READ_ONLY)
     return {
         "timestamp_ist": _timestamp_ist(),
         "mode": scanner_status.get("mode", "READ_ONLY_MASTER_BRAIN"),
+        "runtime_mode": runtime_contract["runtime_mode"],
+        "execution_owner": runtime_contract["execution_owner"],
+        "execution_contract": runtime_contract["execution_contract"],
+        "live_execution_enabled": runtime_contract["live_execution_enabled"],
+        "telegram_enabled": runtime_contract["telegram_enabled"],
+        "lifecycle_mutation_enabled": runtime_contract["lifecycle_mutation_enabled"],
+        "journal_writes_enabled": runtime_contract["journal_writes_enabled"],
+        "outcome_tracking_enabled": runtime_contract["outcome_tracking_enabled"],
         "status": "MASTER_BRAIN_READ_ONLY_COMPLETE",
         "scan_only": bool(scanner_status.get("scan_only")),
         "observe_only": True,
@@ -42,6 +54,66 @@ def _base_payload(scanner_status=None):
         "error_type": None,
         "error_message": None,
     }
+
+
+def _runtime_contract(mode):
+    if mode == MODE_HEALTH:
+        return {
+            "runtime_mode": "HEALTH_ONLY",
+            "execution_owner": EXECUTION_OWNER_GITHUB_HEALTH,
+            "execution_contract": (
+                "Health check only; no live execution, no Telegram, "
+                "no journaling, no outcomes, no lifecycle mutation."
+            ),
+            "live_execution_enabled": False,
+            "telegram_enabled": False,
+            "lifecycle_mutation_enabled": False,
+            "journal_writes_enabled": False,
+            "outcome_tracking_enabled": False,
+        }
+
+    if mode == MODE_REAL:
+        return {
+            "runtime_mode": MODE_REAL,
+            "execution_owner": EXECUTION_OWNER_VPS_REAL,
+            "execution_contract": (
+                "VPS REAL mode is the sole live execution owner; Telegram and "
+                "lifecycle mutation are enabled only through the real master controller."
+            ),
+            "live_execution_enabled": True,
+            "telegram_enabled": True,
+            "lifecycle_mutation_enabled": True,
+            "journal_writes_enabled": True,
+            "outcome_tracking_enabled": True,
+        }
+
+    return {
+        "runtime_mode": MODE_READ_ONLY,
+        "execution_owner": EXECUTION_OWNER_NONE,
+        "execution_contract": (
+            "Marker/observation mode only; no live execution, no Telegram, "
+            "no journaling, no outcomes."
+        ),
+        "live_execution_enabled": False,
+        "telegram_enabled": False,
+        "lifecycle_mutation_enabled": False,
+        "journal_writes_enabled": False,
+        "outcome_tracking_enabled": False,
+    }
+
+
+def _print_runtime_contract(mode):
+    contract = _runtime_contract(mode)
+    print(
+        "[RuntimeMasterBrain] "
+        f"runtime_mode={contract['runtime_mode']} "
+        f"execution_owner={contract['execution_owner']} "
+        f"live_execution_enabled={contract['live_execution_enabled']} "
+        f"telegram_enabled={contract['telegram_enabled']} "
+        f"lifecycle_mutation_enabled={contract['lifecycle_mutation_enabled']}",
+        flush=True,
+    )
+    print(f"[RuntimeMasterBrain] {contract['execution_contract']}", flush=True)
 
 
 def _ohlc_dataframe(last_ohlc):
@@ -126,6 +198,22 @@ def _run_real_master_controller(*, health_check=False):
     if health_check:
         return run_real_master_brain(health_check=True)
 
+    _write_status(
+        {
+            "timestamp_ist": _timestamp_ist(),
+            "mode": "REAL_MASTER_BRAIN_HANDOFF",
+            "status": "REAL_MASTER_CONTROLLER_HANDOFF",
+            **_runtime_contract(MODE_REAL),
+            "observe_only": False,
+            "scan_only": False,
+            "trade_creation": True,
+            "telegram_alerts": True,
+            "supabase_writes": True,
+            "journal_writes": True,
+            "error_type": None,
+            "error_message": None,
+        }
+    )
     return run_real_master_brain()
 
 
@@ -134,7 +222,16 @@ def _run_health_master_controller():
         run_master_brain as run_real_master_brain,
     )
 
-    return run_real_master_brain(health_check=True)
+    result = run_real_master_brain(health_check=True)
+    if isinstance(result, dict):
+        payload = dict(result)
+        payload.update(_runtime_contract(MODE_HEALTH))
+        payload.setdefault("status", "HEALTH_CHECK_COMPLETE")
+        payload["timestamp_ist"] = _timestamp_ist()
+        _write_status(payload)
+        return payload
+
+    return result
 
 
 def _evaluated_trade_setups(evaluated):
@@ -227,6 +324,7 @@ def _run_read_only_master_brain():
 def run_master_brain():
     mode = _runtime_mode()
     print(f"[RuntimeMasterBrain] mode={mode}", flush=True)
+    _print_runtime_contract(mode)
 
     if mode == MODE_HEALTH:
         return _run_health_master_controller()

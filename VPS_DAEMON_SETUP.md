@@ -27,7 +27,30 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## 5. Test daemon manually
+## 5. Runtime mode contract
+
+TITAN has three explicit runtime modes. Do not treat them as equivalent.
+
+- `HEALTH_ONLY` - GitHub Actions only. Runs `run_master_brain(health_check=True)`.
+  It performs no live execution, sends no Telegram alerts, writes no journals,
+  tracks no outcomes, and performs no lifecycle mutation.
+- `READ_ONLY` - VPS daemon observation mode. This is the default. It reads
+  runtime/scanner status and writes observation status files. It performs no
+  live execution, sends no Telegram alerts, writes no journals, and tracks no
+  outcomes.
+- `REAL` - VPS daemon live-owner mode. This is the only supported live
+  execution path. In this mode the real master controller owns live execution,
+  Telegram alerts, Supabase writes, journaling, and lifecycle mutation. During
+  market alert hours, it also owns the global runtime lock.
+
+GitHub must remain `HEALTH_ONLY`. Controlled live-market validation must run
+from the VPS daemon with:
+
+```bash
+TITAN_RUNTIME_MASTER_BRAIN_MODE=REAL
+```
+
+## 6. Test daemon manually
 
 ```bash
 python titan_daemon.py
@@ -40,11 +63,14 @@ Supported master brain modes:
 
 - `READ_ONLY` - default. Reads scanner status and writes
   `data/runtime/master_brain_status.json`; does not call the real master
-  controller.
+  controller. Marker/observation mode only.
 - `HEALTH` - calls the real master controller with `health_check=True`.
+  Health-only mode; no live execution, Telegram, journaling, outcomes, or
+  lifecycle mutation.
 - `REAL` - calls `titan_master_brain.master_controller.run_master_brain()`.
-  Off-market research mode remains allowed. During market alert hours, the real
-  controller owns and enforces the global runtime lock.
+  VPS REAL mode is the sole live execution owner. Off-market research mode
+  remains allowed. During market alert hours, the real controller owns and
+  enforces the global runtime lock.
 
 To test read-only mode:
 
@@ -75,9 +101,10 @@ Future engines should be added through:
 runtime_engine_registry.py
 ```
 
-## 6. Create systemd service
+## 7. Create systemd service
 
-Create a systemd service named `titan-daemon` using this service definition:
+Create a systemd service named `titan-daemon` using this service definition for
+READ_ONLY observation mode:
 
 ```ini
 [Unit]
@@ -102,6 +129,9 @@ To enable the real master brain on VPS, change the service environment line to:
 Environment=TITAN_RUNTIME_MASTER_BRAIN_MODE=REAL
 ```
 
+Only use `REAL` when the VPS is intended to be the live execution owner.
+GitHub Actions must not be used as a live execution path.
+
 Then reload and restart the service:
 
 ```bash
@@ -109,7 +139,7 @@ sudo systemctl daemon-reload
 sudo systemctl restart titan-daemon
 ```
 
-## 7. Enable service
+## 8. Enable service
 
 ```bash
 sudo systemctl daemon-reload
@@ -117,31 +147,31 @@ sudo systemctl enable titan-daemon
 sudo systemctl start titan-daemon
 ```
 
-## 8. Check service status
+## 9. Check service status
 
 ```bash
 sudo systemctl status titan-daemon
 ```
 
-## 9. View live logs
+## 10. View live logs
 
 ```bash
 journalctl -u titan-daemon -f
 ```
 
-## 10. Restart service
+## 11. Restart service
 
 ```bash
 sudo systemctl restart titan-daemon
 ```
 
-## 11. Stop service
+## 12. Stop service
 
 ```bash
 sudo systemctl stop titan-daemon
 ```
 
-## 12. Runtime files generated
+## 13. Runtime files generated
 
 The daemon generates runtime files under `data/runtime/`:
 
