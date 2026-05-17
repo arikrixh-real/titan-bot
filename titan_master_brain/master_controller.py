@@ -2317,7 +2317,10 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True, health_check=
             health_check=health_check,
         )
     finally:
-        release_global_runtime_lock(owner=lock_result.get("owner"))
+        release_global_runtime_lock(
+            owner=lock_result.get("owner"),
+            run_id=lock_result.get("run_id"),
+        )
 
 
 if __name__ == "__main__":
