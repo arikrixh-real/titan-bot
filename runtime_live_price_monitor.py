@@ -19,6 +19,36 @@ NETWORK_OR_TOKEN_FAILURE_STATUSES = {
     "TOKEN_INVALID",
     "TOKEN_MISSING",
 }
+AUTH_TOKEN_FAILURE_STATUSES = {
+    "TOKEN_INVALID",
+    "TOKEN_MISSING",
+    "UNAUTHORIZED",
+    "AUTH_ERROR",
+    "AUTH_TOKEN_EXPIRED",
+    "TOKEN_EXPIRED",
+}
+AUTH_TOKEN_FAILURE_MARKERS = (
+    "token",
+    "unauthorized",
+    "401",
+    "403",
+    "auth",
+    "expired",
+    "invalid access",
+    "invalid_token",
+)
+
+
+def _is_auth_token_failure(status, reason):
+    status_text = str(status or "").strip().upper()
+    if status_text in AUTH_TOKEN_FAILURE_STATUSES:
+        return True
+
+    reason_text = str(reason or "").strip().lower()
+    if not reason_text:
+        return False
+
+    return any(marker in reason_text for marker in AUTH_TOKEN_FAILURE_MARKERS)
 
 
 def _read_json(path):
@@ -72,6 +102,9 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
             "price_cache_meta_path": META_CACHE_FILE,
             "max_symbols_per_run": MAX_SYMBOLS_PER_RUN,
             "network_or_token_failure_count": 0,
+            "token_status": "UNKNOWN",
+            "token_action_required": False,
+            "upstox_extended_token_recommended": True,
             "price_results": [],
         }
         path = Path(path)
@@ -84,6 +117,7 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
     failed_prices = 0
     cache_meta_updated = False
     network_or_token_failure_count = 0
+    token_status = "UNKNOWN"
 
     for symbol in symbols:
         try:
@@ -99,12 +133,16 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
             price = result.get("price")
             status = result.get("status")
             source = result.get("source")
+            reason = result.get("reason")
 
             if status in NETWORK_OR_TOKEN_FAILURE_STATUSES:
                 network_or_token_failure_count += 1
 
             if price is not None and source == "UPSTOX" and status == "ACTIVE":
                 cache_meta_updated = True
+                token_status = "VALID"
+            elif _is_auth_token_failure(status, reason):
+                token_status = "INVALID_OR_EXPIRED"
 
             if price is None:
                 failed_prices += 1
@@ -117,11 +155,13 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
                     "price": price,
                     "source": source,
                     "status": status,
-                    "reason": result.get("reason"),
+                    "reason": reason,
                 }
             )
         except Exception as exc:
             failed_prices += 1
+            if _is_auth_token_failure("ERROR", str(exc)):
+                token_status = "INVALID_OR_EXPIRED"
             price_results.append(
                 {
                     "symbol": symbol,
@@ -142,6 +182,9 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
         "price_cache_meta_path": META_CACHE_FILE,
         "max_symbols_per_run": MAX_SYMBOLS_PER_RUN,
         "network_or_token_failure_count": network_or_token_failure_count,
+        "token_status": token_status,
+        "token_action_required": token_status == "INVALID_OR_EXPIRED",
+        "upstox_extended_token_recommended": True,
         "price_results": price_results,
     }
 
