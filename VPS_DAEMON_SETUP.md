@@ -33,7 +33,38 @@ pip install -r requirements.txt
 python titan_daemon.py
 ```
 
-Currently only safe registered tasks execute:
+The master brain runtime wrapper defaults to safe read-only mode unless explicitly
+enabled with an environment variable.
+
+Supported master brain modes:
+
+- `READ_ONLY` - default. Reads scanner status and writes
+  `data/runtime/master_brain_status.json`; does not call the real master
+  controller.
+- `HEALTH` - calls the real master controller with `health_check=True`.
+- `REAL` - calls `titan_master_brain.master_controller.run_master_brain()`.
+  Off-market research mode remains allowed. During market alert hours, the real
+  controller owns and enforces the global runtime lock.
+
+To test read-only mode:
+
+```bash
+TITAN_RUNTIME_MASTER_BRAIN_MODE=READ_ONLY python runtime_master_brain.py
+```
+
+To test health mode:
+
+```bash
+TITAN_RUNTIME_MASTER_BRAIN_MODE=HEALTH python runtime_master_brain.py
+```
+
+To test real mode:
+
+```bash
+TITAN_RUNTIME_MASTER_BRAIN_MODE=REAL python runtime_master_brain.py
+```
+
+Currently safe registered tasks execute through:
 
 - heartbeat
 - runtime_status
@@ -56,12 +87,26 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/home/ubuntu/TITAN
+Environment=TITAN_RUNTIME_MASTER_BRAIN_MODE=READ_ONLY
 ExecStart=/home/ubuntu/TITAN/.venv/bin/python titan_daemon.py
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
+```
+
+To enable the real master brain on VPS, change the service environment line to:
+
+```ini
+Environment=TITAN_RUNTIME_MASTER_BRAIN_MODE=REAL
+```
+
+Then reload and restart the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart titan-daemon
 ```
 
 ## 7. Enable service

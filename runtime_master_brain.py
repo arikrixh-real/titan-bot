@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -10,6 +11,11 @@ from titan_master_brain.setup_reasoning_engine import evaluate_setups
 IST = timezone(timedelta(hours=5, minutes=30))
 SCANNER_STATUS_PATH = Path("data") / "runtime" / "scanner_status.json"
 MASTER_BRAIN_STATUS_PATH = Path("data") / "runtime" / "master_brain_status.json"
+RUNTIME_MODE_ENV = "TITAN_RUNTIME_MASTER_BRAIN_MODE"
+MODE_READ_ONLY = "READ_ONLY"
+MODE_HEALTH = "HEALTH"
+MODE_REAL = "REAL"
+SUPPORTED_RUNTIME_MODES = {MODE_READ_ONLY, MODE_HEALTH, MODE_REAL}
 
 
 def _timestamp_ist():
@@ -98,6 +104,39 @@ def _write_status(payload, path=MASTER_BRAIN_STATUS_PATH):
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
 
+def _runtime_mode():
+    raw_mode = os.getenv(RUNTIME_MODE_ENV, MODE_READ_ONLY)
+    mode = str(raw_mode or MODE_READ_ONLY).strip().upper()
+
+    if mode not in SUPPORTED_RUNTIME_MODES:
+        print(
+            "[RuntimeMasterBrain] "
+            f"Unsupported {RUNTIME_MODE_ENV}={raw_mode!r}; using {MODE_READ_ONLY}"
+        )
+        return MODE_READ_ONLY
+
+    return mode
+
+
+def _run_real_master_controller(*, health_check=False):
+    from titan_master_brain.master_controller import (
+        run_master_brain as run_real_master_brain,
+    )
+
+    if health_check:
+        return run_real_master_brain(health_check=True)
+
+    return run_real_master_brain()
+
+
+def _run_health_master_controller():
+    from titan_master_brain.master_controller import (
+        run_master_brain as run_real_master_brain,
+    )
+
+    return run_real_master_brain(health_check=True)
+
+
 def _evaluated_trade_setups(evaluated):
     trade_setups = []
     for item in evaluated or []:
@@ -117,7 +156,7 @@ def _evaluated_trade_setups(evaluated):
     return trade_setups
 
 
-def run_master_brain():
+def _run_read_only_master_brain():
     scanner_status = None
 
     try:
@@ -185,5 +224,22 @@ def run_master_brain():
         return payload
 
 
+def run_master_brain():
+    mode = _runtime_mode()
+    print(f"[RuntimeMasterBrain] mode={mode}", flush=True)
+
+    if mode == MODE_HEALTH:
+        return _run_health_master_controller()
+
+    if mode == MODE_REAL:
+        return _run_real_master_controller()
+
+    return _run_read_only_master_brain()
+
+
+def main():
+    return run_master_brain()
+
+
 if __name__ == "__main__":
-    print(json.dumps(run_master_brain(), indent=2, sort_keys=True))
+    print(json.dumps(main(), indent=2, sort_keys=True))
