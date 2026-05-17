@@ -871,9 +871,10 @@ def scan_for_setups():
         print("⚠️ Trade execution layer not connected")
 
     # Track internal live trades for TP/SL
+    print("[SetupEngine] Legacy non-strict outcome updater disabled; strict OutcomeTracker owns TP/SL closure.")
     if update_live_trade_outcomes is not None:
         try:
-            update_live_trade_outcomes()
+            pass
         except Exception as e:
             print(f"⚠️ Trade execution outcome error: {e}")
     else:
