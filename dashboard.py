@@ -1593,6 +1593,11 @@ def get_dashboard_runtime_status():
     daemon_health = data.get("daemon_health") if isinstance(data.get("daemon_health"), dict) else {}
     heartbeat = data.get("heartbeat") if isinstance(data.get("heartbeat"), dict) else {}
     runtime_status = data.get("runtime_status") if isinstance(data.get("runtime_status"), dict) else {}
+    autonomous_summary = (
+        data.get("autonomous_runtime_summary")
+        if isinstance(data.get("autonomous_runtime_summary"), dict)
+        else {}
+    )
 
     daemon_status = str(
         daemon_health.get("status")
@@ -1609,12 +1614,20 @@ def get_dashboard_runtime_status():
     heartbeat_timestamp = heartbeat.get("timestamp_ist") or daemon_health.get("timestamp_ist") or data.get("timestamp_ist")
     ticks_completed = daemon_health.get("ticks_completed")
     ticks_text = f"{int(ticks_completed):,}" if isinstance(ticks_completed, (int, float)) else str(ticks_completed or "0")
+    attention_reasons = autonomous_summary.get("attention_reasons")
+    if not isinstance(attention_reasons, list):
+        attention_reasons = []
+    attention_reasons = [str(reason) for reason in attention_reasons if reason]
+    autonomous_status = "NEEDS ATTENTION" if bool(autonomous_summary.get("needs_attention")) else "OK"
+    autonomous_sub = ", ".join(attention_reasons) if attention_reasons else "Runtime attention checks clear"
 
     return {
         "daemon_status": daemon_status,
         "runtime_mode": runtime_mode,
         "heartbeat_timestamp": format_runtime_timestamp(heartbeat_timestamp),
         "ticks_completed": ticks_text,
+        "autonomous_runtime_status": autonomous_status,
+        "autonomous_runtime_sub": autonomous_sub,
     }
 
 
@@ -1766,7 +1779,7 @@ def market_aware_status(status, market_open=None, closed_status="RESEARCH MODE")
 def status_html(status):
     status = str(status).upper()
 
-    if status in ["ONLINE", "CONNECTED", "SUCCESS", "RUNNING", "ACTIVE", "LEARNING", "OBSERVING"]:
+    if status in ["ONLINE", "CONNECTED", "SUCCESS", "RUNNING", "ACTIVE", "LEARNING", "OBSERVING", "OK"]:
         css = "pill-green"
     elif status in ["DELAYED", "UNKNOWN", "WAITING", "NOT CONFIGURED", "BUILDING", "STALE", "RESEARCH MODE", "MARKET CLOSED", "MARKET CLOSED / RESEARCH MODE", "REVIEW"]:
         css = "pill-yellow"
@@ -2669,6 +2682,11 @@ with r1:
             f"Heartbeat: {runtime_status_data['heartbeat_timestamp']} | "
             f"Ticks: {runtime_status_data['ticks_completed']}"
         ),
+    )
+    small_status(
+        "Autonomous Runtime",
+        runtime_status_data["autonomous_runtime_status"],
+        runtime_status_data["autonomous_runtime_sub"],
     )
 
 with r2:

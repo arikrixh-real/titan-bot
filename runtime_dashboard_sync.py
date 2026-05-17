@@ -66,13 +66,29 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
     if isinstance(daemon_health, dict):
         runtime_mode = daemon_health.get("mode") or runtime_mode
 
+    runtime_health_checks = {
+        "daemon_alive": (daemon_alive, "daemon_not_alive"),
+        "scanner_active": (is_active_status(scanner_status), "scanner_inactive"),
+        "master_brain_active": (is_active_status(master_brain_status), "master_brain_inactive"),
+        "paper_engine_active": (is_active_status(paper_engine_status), "paper_engine_inactive"),
+        "live_price_monitor_active": (
+            is_active_status(live_price_monitor_status),
+            "live_price_monitor_inactive",
+        ),
+    }
+    attention_reasons = [
+        reason for is_active, reason in runtime_health_checks.values() if not is_active
+    ]
+
     payload = {
         "autonomous_runtime_summary": {
-            "daemon_alive": daemon_alive,
-            "scanner_active": is_active_status(scanner_status),
-            "master_brain_active": is_active_status(master_brain_status),
-            "paper_engine_active": is_active_status(paper_engine_status),
-            "live_price_monitor_active": is_active_status(live_price_monitor_status),
+            "daemon_alive": runtime_health_checks["daemon_alive"][0],
+            "scanner_active": runtime_health_checks["scanner_active"][0],
+            "master_brain_active": runtime_health_checks["master_brain_active"][0],
+            "paper_engine_active": runtime_health_checks["paper_engine_active"][0],
+            "live_price_monitor_active": runtime_health_checks["live_price_monitor_active"][0],
+            "needs_attention": bool(attention_reasons),
+            "attention_reasons": attention_reasons,
             "open_paper_positions": open_paper_positions,
             "paper_equity": paper_equity,
             "runtime_mode": runtime_mode,

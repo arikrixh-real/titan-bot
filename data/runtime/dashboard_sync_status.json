@@ -1,9 +1,13 @@
 {
   "autonomous_runtime_summary": {
+    "attention_reasons": [
+      "daemon_not_alive"
+    ],
     "daemon_alive": false,
     "last_runtime_update": "2026-05-17T12:41:50.829678+05:30",
     "live_price_monitor_active": true,
     "master_brain_active": true,
+    "needs_attention": true,
     "open_paper_positions": 0,
     "paper_engine_active": true,
     "paper_equity": 100000.0,
