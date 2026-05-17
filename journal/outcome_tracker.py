@@ -312,6 +312,101 @@ def _ensure_csv_columns(path, required_fields):
         pass
 
 
+def _parse_opened_at_date(value):
+    text = str(value or "").strip()
+    if not text:
+        return None
+
+    text = text.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        try:
+            parsed = datetime.strptime(text[:19], "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=IST)
+
+    return parsed.astimezone(IST).date()
+
+
+def _expire_previous_day_open_trades():
+    """
+    Closes stale local OPEN rows without creating TP/SL outcomes.
+
+    Previous-day local active trades must not be evaluated against a later
+    session's prices. This only rewrites active_trades.csv and deliberately
+    avoids trade_outcomes, JSONL, and Supabase result sync.
+    """
+    summary = {
+        "expired_count": 0,
+        "expired_symbols": [],
+        "skipped_same_day_count": 0,
+        "error": None,
+    }
+
+    try:
+        _ensure_files()
+
+        with open(ACTIVE_TRADES_CSV, "r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+        today = datetime.now(IST).date()
+        checked_at = _now()
+        updated_rows = []
+
+        for row in rows:
+            status = str(row.get("status", "")).upper().strip()
+            if status != "OPEN":
+                updated_rows.append(row)
+                continue
+
+            opened_date = _parse_opened_at_date(row.get("opened_at"))
+            if opened_date is None:
+                updated_rows.append(row)
+                continue
+
+            if opened_date >= today:
+                summary["skipped_same_day_count"] += 1
+                updated_rows.append(row)
+                continue
+
+            row["status"] = "CLOSED"
+            row["outcome"] = "MARKET_CLOSED"
+            row["result"] = "MARKET_CLOSED"
+            row["last_checked_at"] = checked_at
+            row["result_reason"] = "Expired because trade was opened on a previous trading date"
+
+            symbol = str(row.get("symbol", "")).upper().strip()
+            if symbol:
+                summary["expired_symbols"].append(symbol)
+            summary["expired_count"] += 1
+            updated_rows.append(row)
+
+        if summary["expired_count"]:
+            with open(ACTIVE_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=ACTIVE_FIELDS, extrasaction="ignore")
+                writer.writeheader()
+                for row in updated_rows:
+                    writer.writerow({field: row.get(field, "") for field in ACTIVE_FIELDS})
+
+        print(
+            "[OutcomeTracker EXPIRE] "
+            f"expired_count={summary['expired_count']} "
+            f"expired_symbols={summary['expired_symbols']} "
+            f"skipped_same_day_count={summary['skipped_same_day_count']}"
+        )
+        return summary
+
+    except Exception as e:
+        summary["error"] = str(e)
+        print(f"[OutcomeTracker EXPIRE ERROR] {e}")
+        return summary
+
+
 def _check_outcome(row, live_price):
     side = str(row.get("side", "")).upper().strip()
 
@@ -679,9 +774,17 @@ def track_trade_outcomes(limit=None):
     limit is optional for backward compatibility with older callers.
     If omitted, all OPEN trades are checked.
     """
+    expiry_result = _expire_previous_day_open_trades()
+
     if not is_trade_window():
         print(f"[OutcomeTracker] Skipped outside trade window ({trade_window_text()}).")
-        return {"checked": 0, "closed": 0, "open": 0, "skipped": "OUTSIDE_TRADE_WINDOW"}
+        return {
+            "checked": 0,
+            "closed": 0,
+            "open": 0,
+            "skipped": "OUTSIDE_TRADE_WINDOW",
+            "expired_previous_day_open": expiry_result,
+        }
 
     _ensure_files()
 
@@ -850,6 +953,7 @@ def track_trade_outcomes(limit=None):
         "backlog_size": backlog_size,
         "price_stale_skipped": price_stale_skipped,
         "deferred_open": deferred_open,
+        "expired_previous_day_open": expiry_result,
         "lifecycle_shadow_result": lifecycle_result,
     }
 
