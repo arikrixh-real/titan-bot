@@ -12,6 +12,20 @@ LIVE_PRICE_CACHE_PATH = Path("data") / "live_price_cache.json"
 PAPER_ENGINE_STATUS_PATH = Path("data") / "runtime" / "paper_engine_status.json"
 PAPER_TRADE_REGISTRY_PATH = Path("data") / "runtime" / "paper_trade_registry.json"
 MAX_NEW_POSITIONS_PER_RUN = 5
+MAX_PRICE_AGE_SECONDS = 120
+PRICE_TIMESTAMP_FIELDS = (
+    "timestamp",
+    "timestamp_ist",
+    "updated_at",
+    "updated_at_ist",
+    "fetched_at",
+    "fetched_at_ist",
+    "last_updated",
+    "last_updated_ist",
+    "as_of",
+    "time",
+)
+PRICE_VALUE_FIELDS = ("price", "ltp", "last_price", "close")
 
 
 def _safe_float(value):
@@ -97,6 +111,55 @@ def _load_price_cache():
     return cache if isinstance(cache, dict) else {}
 
 
+def _parse_cache_timestamp(value):
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)) and math.isfinite(value):
+        timestamp = value / 1000 if value > 9999999999 else value
+        try:
+            return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        except (OSError, OverflowError, ValueError):
+            return None
+
+    if not isinstance(value, str):
+        return None
+
+    text = value.strip()
+    if not text:
+        return None
+
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=IST)
+    return parsed
+
+
+def _timestamp_from_mapping(mapping):
+    if not isinstance(mapping, dict):
+        return None, False
+
+    for field in PRICE_TIMESTAMP_FIELDS:
+        if field in mapping:
+            return _parse_cache_timestamp(mapping.get(field)), True
+    return None, False
+
+
+def _is_fresh_timestamp(timestamp, now):
+    if timestamp is None:
+        return False
+
+    age_seconds = (now - timestamp.astimezone(now.tzinfo)).total_seconds()
+    return age_seconds <= MAX_PRICE_AGE_SECONDS
+
+
 def _base_payload(
     status,
     safety_gates_passed,
@@ -111,6 +174,7 @@ def _base_payload(
     trade_window=False,
     new_entries_allowed=False,
     paper_trade_creation=True,
+    stale_or_missing_prices=0,
     error_type=None,
     error_message=None,
 ):
@@ -128,6 +192,9 @@ def _base_payload(
         "open_positions_count": int(open_positions_count or 0),
         "closed_positions_count": int(closed_positions_count or 0),
         "closed_this_run": int(closed_this_run or 0),
+        "stale_or_missing_prices": int(stale_or_missing_prices or 0),
+        "price_freshness_guard": True,
+        "max_price_age_seconds": MAX_PRICE_AGE_SECONDS,
         "paper_performance_summary": paper_performance_summary,
         "setup_symbols": setup_symbols,
         "reason": reason,
@@ -193,15 +260,39 @@ def _valid_setups(master_brain_status):
     return valid_setups
 
 
-def _cached_price(price_cache, symbol):
+def _cached_price(price_cache, symbol, now):
     if not isinstance(price_cache, dict):
-        return None
+        return None, False
 
     normalized_symbol = _normalize_symbol(symbol)
+    cache_timestamp, cache_has_timestamp = _timestamp_from_mapping(price_cache)
     for key, value in price_cache.items():
         if _normalize_symbol(key) == normalized_symbol:
-            return _safe_float(value)
-    return None
+            if isinstance(value, dict):
+                price = None
+                for field in PRICE_VALUE_FIELDS:
+                    if field in value:
+                        price = _safe_float(value.get(field))
+                        break
+
+                timestamp, has_timestamp = _timestamp_from_mapping(value)
+                if not has_timestamp and cache_has_timestamp:
+                    timestamp = cache_timestamp
+                    has_timestamp = True
+
+                if price is None:
+                    return None, False
+                if has_timestamp and not _is_fresh_timestamp(timestamp, now):
+                    return None, True
+                return price, False
+
+            price = _safe_float(value)
+            if price is None:
+                return None, False
+            if cache_has_timestamp and not _is_fresh_timestamp(cache_timestamp, now):
+                return None, True
+            return price, False
+    return None, False
 
 
 def _realized_pnl(position, exit_price):
@@ -278,13 +369,16 @@ def _update_open_positions(registry, price_cache):
     open_positions = []
     closed_positions = list(registry.get("closed_positions", []))
     closed_this_run = 0
+    stale_or_missing_prices = 0
+    now = datetime.now(timezone.utc)
 
     for position in registry.get("open_positions", []):
         if not isinstance(position, dict):
             continue
 
-        price = _cached_price(price_cache, position.get("symbol"))
+        price, stale = _cached_price(price_cache, position.get("symbol"), now)
         if price is None:
+            stale_or_missing_prices += 1
             open_positions.append(position)
             continue
 
@@ -332,7 +426,7 @@ def _update_open_positions(registry, price_cache):
 
     registry["open_positions"] = open_positions
     registry["closed_positions"] = closed_positions
-    return closed_this_run
+    return closed_this_run, stale_or_missing_prices
 
 
 def _open_new_positions(registry, setups):
@@ -380,11 +474,12 @@ def run_paper_engine():
     now = as_ist_datetime()
     trade_window_open = is_trade_window(now)
     new_entries_allowed = False
+    stale_or_missing_prices = 0
 
     try:
         registry = _load_registry()
         price_cache = _load_price_cache()
-        closed_this_run = _update_open_positions(registry, price_cache)
+        closed_this_run, stale_or_missing_prices = _update_open_positions(registry, price_cache)
         _write_json(PAPER_TRADE_REGISTRY_PATH, registry)
 
         master_brain_status = _read_json(MASTER_BRAIN_STATUS_PATH)
@@ -407,6 +502,7 @@ def run_paper_engine():
                 open_positions_count=len(registry.get("open_positions", [])),
                 closed_positions_count=len(registry.get("closed_positions", [])),
                 closed_this_run=closed_this_run,
+                stale_or_missing_prices=stale_or_missing_prices,
                 paper_performance_summary=_paper_performance_summary(registry),
                 trade_window=trade_window_open,
                 new_entries_allowed=new_entries_allowed,
@@ -426,6 +522,7 @@ def run_paper_engine():
                 open_positions_count=len(registry.get("open_positions", [])),
                 closed_positions_count=len(registry.get("closed_positions", [])),
                 closed_this_run=closed_this_run,
+                stale_or_missing_prices=stale_or_missing_prices,
                 paper_performance_summary=_paper_performance_summary(registry),
                 trade_window=trade_window_open,
                 new_entries_allowed=new_entries_allowed,
@@ -448,6 +545,7 @@ def run_paper_engine():
             open_positions_count=len(registry.get("open_positions", [])),
             closed_positions_count=len(registry.get("closed_positions", [])),
             closed_this_run=closed_this_run,
+            stale_or_missing_prices=stale_or_missing_prices,
             paper_performance_summary=_paper_performance_summary(registry),
             trade_window=trade_window_open,
             new_entries_allowed=new_entries_allowed,
@@ -461,6 +559,7 @@ def run_paper_engine():
             False,
             master_brain_status.get("input_candidates", 0) if isinstance(master_brain_status, dict) else 0,
             "Paper engine failed safely",
+            stale_or_missing_prices=stale_or_missing_prices,
             paper_performance_summary=_paper_performance_summary(registry),
             trade_window=trade_window_open,
             new_entries_allowed=False,
