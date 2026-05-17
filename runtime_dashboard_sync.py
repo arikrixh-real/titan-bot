@@ -79,6 +79,20 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
     attention_reasons = [
         reason for is_active, reason in runtime_health_checks.values() if not is_active
     ]
+    recovery_suggestion_map = {
+        "daemon_not_alive": "Start titan_daemon.py",
+        "scanner_inactive": "Check runtime_scanner.py",
+        "master_brain_inactive": "Check runtime_master_brain.py",
+        "paper_engine_inactive": "Check runtime_paper_engine.py",
+        "live_price_monitor_inactive": "Check runtime_live_price_monitor.py",
+    }
+    recovery_suggestions = list(
+        dict.fromkeys(
+            recovery_suggestion_map[reason]
+            for reason in attention_reasons
+            if reason in recovery_suggestion_map
+        )
+    )
 
     payload = {
         "autonomous_runtime_summary": {
@@ -89,6 +103,7 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
             "live_price_monitor_active": runtime_health_checks["live_price_monitor_active"][0],
             "needs_attention": bool(attention_reasons),
             "attention_reasons": attention_reasons,
+            "recovery_suggestions": recovery_suggestions,
             "open_paper_positions": open_paper_positions,
             "paper_equity": paper_equity,
             "runtime_mode": runtime_mode,

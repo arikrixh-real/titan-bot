@@ -11,6 +11,9 @@
     "open_paper_positions": 0,
     "paper_engine_active": true,
     "paper_equity": 100000.0,
+    "recovery_suggestions": [
+      "Start titan_daemon.py"
+    ],
     "runtime_mode": "WEEKEND_MODE",
     "scanner_active": true
   }
