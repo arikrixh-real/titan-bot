@@ -26,6 +26,13 @@ PRICE_TIMESTAMP_FIELDS = (
     "time",
 )
 PRICE_VALUE_FIELDS = ("price", "ltp", "last_price", "close")
+DEFAULT_PAPER_ACCOUNT = {
+    "starting_balance": 100000.0,
+    "current_balance": 100000.0,
+    "equity": 100000.0,
+    "realized_pnl": 0.0,
+    "unrealized_pnl": 0.0,
+}
 
 
 def _safe_float(value):
@@ -85,7 +92,24 @@ def _paper_key(setup):
 
 
 def _default_registry():
-    return {"open_positions": [], "closed_positions": [], "seen_keys": []}
+    return {
+        "open_positions": [],
+        "closed_positions": [],
+        "seen_keys": [],
+        "paper_account": dict(DEFAULT_PAPER_ACCOUNT),
+    }
+
+
+def _normalize_account(account):
+    normalized = dict(DEFAULT_PAPER_ACCOUNT)
+    if isinstance(account, dict):
+        for key in DEFAULT_PAPER_ACCOUNT:
+            value = _safe_float(account.get(key))
+            if value is not None:
+                normalized[key] = value
+
+    normalized["equity"] = round(normalized["current_balance"] + normalized["unrealized_pnl"], 4)
+    return normalized
 
 
 def _load_registry():
@@ -100,6 +124,7 @@ def _load_registry():
         "open_positions": registry.get("open_positions") if isinstance(registry.get("open_positions"), list) else [],
         "closed_positions": registry.get("closed_positions") if isinstance(registry.get("closed_positions"), list) else [],
         "seen_keys": registry.get("seen_keys") if isinstance(registry.get("seen_keys"), list) else [],
+        "paper_account": _normalize_account(registry.get("paper_account")),
     }
 
 
@@ -175,11 +200,13 @@ def _base_payload(
     new_entries_allowed=False,
     paper_trade_creation=True,
     stale_or_missing_prices=0,
+    paper_account_summary=None,
     error_type=None,
     error_message=None,
 ):
     setup_symbols = setup_symbols or []
     paper_performance_summary = paper_performance_summary or _paper_performance_summary(_default_registry())
+    paper_account_summary = paper_account_summary or _paper_account_summary(_default_registry())
     return {
         "timestamp_ist": _timestamp_ist(),
         "status": status,
@@ -196,6 +223,7 @@ def _base_payload(
         "price_freshness_guard": True,
         "max_price_age_seconds": MAX_PRICE_AGE_SECONDS,
         "paper_performance_summary": paper_performance_summary,
+        "paper_account_summary": paper_account_summary,
         "setup_symbols": setup_symbols,
         "reason": reason,
         "error_type": error_type,
@@ -299,9 +327,45 @@ def _realized_pnl(position, exit_price):
     entry = _safe_float(position.get("entry"))
     if entry is None or exit_price is None:
         return 0.0
+    quantity = _safe_float(position.get("quantity"))
+    if quantity is None:
+        quantity = 1.0
     if position.get("side") == "SHORT":
-        return round(entry - exit_price, 4)
-    return round(exit_price - entry, 4)
+        return round((entry - exit_price) * quantity, 4)
+    return round((exit_price - entry) * quantity, 4)
+
+
+def _paper_account_summary(registry):
+    account = _normalize_account(registry.get("paper_account") if isinstance(registry, dict) else None)
+    if isinstance(registry, dict):
+        account["unrealized_pnl"] = round(_open_unrealized_pnl(registry), 4)
+    account["equity"] = round(account["current_balance"] + account["unrealized_pnl"], 4)
+    return account
+
+
+def _open_unrealized_pnl(registry):
+    open_positions = registry.get("open_positions", []) if isinstance(registry, dict) else []
+    open_positions = open_positions if isinstance(open_positions, list) else []
+
+    total_unrealized_pnl = 0.0
+    for position in open_positions:
+        if not isinstance(position, dict):
+            continue
+
+        entry = _safe_float(position.get("entry"))
+        last_price = _safe_float(position.get("last_price"))
+        if entry is None or last_price is None:
+            continue
+
+        total_unrealized_pnl += _realized_pnl(position, last_price)
+
+    return total_unrealized_pnl
+
+
+def _refresh_paper_account(registry):
+    account = _paper_account_summary(registry)
+    registry["paper_account"] = account
+    return account
 
 
 def _paper_performance_summary(registry):
@@ -368,6 +432,8 @@ def _paper_performance_summary(registry):
 def _update_open_positions(registry, price_cache):
     open_positions = []
     closed_positions = list(registry.get("closed_positions", []))
+    account = _normalize_account(registry.get("paper_account"))
+    realized_this_run = 0.0
     closed_this_run = 0
     stale_or_missing_prices = 0
     now = datetime.now(timezone.utc)
@@ -406,26 +472,34 @@ def _update_open_positions(registry, price_cache):
 
         if outcome is None:
             updated = dict(position)
+            updated["quantity"] = 1
             updated["last_price"] = price
             updated["unrealized_pnl"] = 0.0 if entry is None else _realized_pnl(updated, price)
             open_positions.append(updated)
             continue
 
         closed = dict(position)
+        closed["quantity"] = 1
+        realized_pnl = _realized_pnl(closed, exit_price)
         closed.update(
             {
                 "status": outcome,
                 "closed_at_ist": _timestamp_ist(),
                 "exit_price": exit_price,
                 "last_price": price,
-                "realized_pnl": _realized_pnl(closed, exit_price),
+                "realized_pnl": realized_pnl,
             }
         )
         closed_positions.append(closed)
+        realized_this_run += realized_pnl
         closed_this_run += 1
 
     registry["open_positions"] = open_positions
     registry["closed_positions"] = closed_positions
+    account["current_balance"] = round(account["current_balance"] + realized_this_run, 4)
+    account["realized_pnl"] = round(account["realized_pnl"] + realized_this_run, 4)
+    registry["paper_account"] = account
+    _refresh_paper_account(registry)
     return closed_this_run, stale_or_missing_prices
 
 
@@ -454,6 +528,7 @@ def _open_new_positions(registry, setups):
             "entry": setup["entry"],
             "sl": setup["sl"],
             "target": setup["target"],
+            "quantity": 1,
             "rr": _safe_float(setup.get("rr")),
             "status": "OPEN",
             "opened_at_ist": _timestamp_ist(),
@@ -504,6 +579,7 @@ def run_paper_engine():
                 closed_this_run=closed_this_run,
                 stale_or_missing_prices=stale_or_missing_prices,
                 paper_performance_summary=_paper_performance_summary(registry),
+                paper_account_summary=_paper_account_summary(registry),
                 trade_window=trade_window_open,
                 new_entries_allowed=new_entries_allowed,
                 paper_trade_creation=False,
@@ -524,6 +600,7 @@ def run_paper_engine():
                 closed_this_run=closed_this_run,
                 stale_or_missing_prices=stale_or_missing_prices,
                 paper_performance_summary=_paper_performance_summary(registry),
+                paper_account_summary=_paper_account_summary(registry),
                 trade_window=trade_window_open,
                 new_entries_allowed=new_entries_allowed,
             )
@@ -533,6 +610,7 @@ def run_paper_engine():
         new_entries_allowed = True
         valid_setups = _valid_setups(master_brain_status)
         new_positions = _open_new_positions(registry, valid_setups)
+        _refresh_paper_account(registry)
         _write_json(PAPER_TRADE_REGISTRY_PATH, registry)
 
         payload = _base_payload(
@@ -547,6 +625,7 @@ def run_paper_engine():
             closed_this_run=closed_this_run,
             stale_or_missing_prices=stale_or_missing_prices,
             paper_performance_summary=_paper_performance_summary(registry),
+            paper_account_summary=_paper_account_summary(registry),
             trade_window=trade_window_open,
             new_entries_allowed=new_entries_allowed,
         )
@@ -561,6 +640,7 @@ def run_paper_engine():
             "Paper engine failed safely",
             stale_or_missing_prices=stale_or_missing_prices,
             paper_performance_summary=_paper_performance_summary(registry),
+            paper_account_summary=_paper_account_summary(registry),
             trade_window=trade_window_open,
             new_entries_allowed=False,
             paper_trade_creation=False,

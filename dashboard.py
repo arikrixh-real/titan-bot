@@ -1624,12 +1624,21 @@ def get_paper_engine_runtime_status():
         data = {}
 
     summary = data.get("paper_performance_summary")
+    account_summary = data.get("paper_account_summary")
+    if not isinstance(account_summary, dict):
+        account_summary = {}
+
+    equity = first_number(account_summary.get("equity"), account_summary.get("current_balance"), default=0.0)
+    realized_pnl = first_number(account_summary.get("realized_pnl"), default=0.0)
+
     if not isinstance(summary, dict):
         return {
             "status": "WAITING",
             "message": "No paper engine runtime summary yet",
             "open_positions_count": 0,
             "closed_positions_count": 0,
+            "equity": equity,
+            "realized_pnl": realized_pnl,
             "winning_trades": 0,
             "losing_trades": 0,
             "win_rate": 0.0,
@@ -1644,6 +1653,8 @@ def get_paper_engine_runtime_status():
         "message": "Source: data/runtime/paper_engine_status.json",
         "open_positions_count": int(first_number(summary.get("open_positions_count"), default=0)),
         "closed_positions_count": int(first_number(summary.get("closed_positions_count"), default=0)),
+        "equity": equity,
+        "realized_pnl": realized_pnl,
         "winning_trades": int(first_number(summary.get("winning_trades"), default=0)),
         "losing_trades": int(first_number(summary.get("losing_trades"), default=0)),
         "win_rate": first_number(summary.get("win_rate"), default=0.0),
@@ -2427,7 +2438,12 @@ with c5:
     status_card(
         "Paper Simulation",
         paper_engine_runtime_data["status"],
-        f"Open: {paper_engine_runtime_data['open_positions_count']:,} | Closed: {paper_engine_runtime_data['closed_positions_count']:,}",
+        (
+            f"Open: {paper_engine_runtime_data['open_positions_count']:,} | "
+            f"Closed: {paper_engine_runtime_data['closed_positions_count']:,}<br>"
+            f"Equity: {format_inr(paper_engine_runtime_data['equity'])}<br>"
+            f"Realized PnL: {format_signed_inr(paper_engine_runtime_data['realized_pnl'])}"
+        ),
     )
 
 if github_data["url"]:

@@ -9,6 +9,13 @@
   "new_entries_allowed": false,
   "new_paper_positions": 0,
   "open_positions_count": 0,
+  "paper_account_summary": {
+    "current_balance": 100000.0,
+    "equity": 100000.0,
+    "realized_pnl": 0.0,
+    "starting_balance": 100000.0,
+    "unrealized_pnl": 0.0
+  },
   "paper_performance_summary": {
     "closed_positions_count": 0,
     "losing_trades": 0,
@@ -35,7 +42,7 @@
   "status": "PAPER_ENGINE_MONITOR_ONLY_OUTSIDE_TRADE_WINDOW",
   "supabase_writes": false,
   "telegram_alerts": false,
-  "timestamp_ist": "2026-05-17T12:23:20.913171+05:30",
+  "timestamp_ist": "2026-05-17T12:28:38.381331+05:30",
   "trade_creation": false,
   "trade_window": false
 }
