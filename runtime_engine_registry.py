@@ -25,8 +25,37 @@ from runtime_paper_engine import run_paper_engine
 from runtime_snapshot_logger import log_runtime_snapshot
 
 
+PLACEHOLDER_TASKS = (
+    "daily_review",
+    "experience_memory",
+    "global_market_check",
+    "learning_engine",
+    "news_intelligence",
+    "next_day_preparation",
+    "premarket_bias_builder",
+    "premarket_price_context",
+    "replay_batch",
+    "risk_warning_builder",
+    "scenario_simulation",
+    "sector_preparation",
+    "watchlist_preparation",
+)
+
+
+def _make_placeholder_handler(task_name):
+    def _placeholder_handler():
+        return {
+            "status": "NOT_IMPLEMENTED",
+            "executed": False,
+            "placeholder": True,
+            "task": task_name,
+        }
+
+    return _placeholder_handler
+
+
 def get_engine_registry():
-    return {
+    registry = {
         "heartbeat": write_heartbeat,
         "news_pulse": run_news_pulse,
         "light_news_pulse": run_news_pulse,
@@ -54,6 +83,11 @@ def get_engine_registry():
         "paper_engine": run_paper_engine,
         "runtime_snapshot_logger": log_runtime_snapshot,
     }
+
+    for task_name in PLACEHOLDER_TASKS:
+        registry[task_name] = _make_placeholder_handler(task_name)
+
+    return registry
 
 
 def get_registered_handler(task_name):
