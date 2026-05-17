@@ -1,5 +1,16 @@
 {
+  "item_count": 42,
   "mode": "WEEKEND_MODE",
-  "status": "NEWS_PULSE_MARKER_UPDATED",
-  "timestamp_ist": "2026-05-16T21:52:44.748231+05:30"
+  "sample_titles": [
+    "Tata Consumer Q4 net profit falls 19% to Rs 217 cr, firm declares dividend of Rs 7.75 per share",
+    "Hindustan Unilever Q4 Preview: Price cuts, slow demand, regional competition to hurt topline",
+    "LTIMindtree Q4 Preview: Lower pass-through revenue seen impacting growth marginally",
+    "LT manufactures hydrotreating reactor for refinery in Mexico",
+    "Razorpay announces #39;UPI Switch#39; in partnership with Airtel Payments Bank"
+  ],
+  "status": "NEWS_PULSE_FETCHED",
+  "storage": "runtime_status_only",
+  "supabase_write": false,
+  "timestamp_ist": "2026-05-16T23:21:08.212574+05:30",
+  "trading_effect": false
 }

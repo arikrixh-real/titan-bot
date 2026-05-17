@@ -1,5 +1,15 @@
 {
+  "error_message": null,
+  "error_type": null,
+  "limit": 1,
   "mode": "WEEKEND_MODE",
-  "status": "OUTCOME_TRACKER_MARKER_UPDATED",
-  "timestamp_ist": "2026-05-16T21:52:44.750237+05:30"
+  "real_tracking": true,
+  "result_summary": {
+    "checked": 0,
+    "closed": 0,
+    "open": 0,
+    "skipped": "OUTSIDE_TRADE_WINDOW"
+  },
+  "status": "OUTCOME_TRACKER_REAL_RUN_COMPLETE",
+  "timestamp_ist": "2026-05-16T23:21:08.860761+05:30"
 }

@@ -62,6 +62,7 @@ def get_scheduler_map(mode):
             "market_regime_update",
             "news_pulse",
             "sector_strength",
+            "outcome_tracker",
         ]
         scheduler_map["every_5_minutes"] = [
             "scanner",
@@ -69,7 +70,6 @@ def get_scheduler_map(mode):
             "setup_engine",
             "master_brain",
             "journal",
-            "outcome_tracker",
         ]
 
     elif mode == "INTELLIGENCE_MODE":

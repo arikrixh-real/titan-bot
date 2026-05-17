@@ -34,6 +34,7 @@ INITIAL_BALANCE = 1000.0
 REAL_PNL_SOURCE_LABEL = "REAL_STOCK_WISE_PNL | QTY_SYNC_ACTIVE"
 DASHBOARD_VISUAL_VERSION = "REAL_PNL_QTY_SYNC_FIX_V1"
 PAPER_ACCOUNT_PATH = "/".join(["data", "paper_trading", "paper_account.json"])
+DASHBOARD_SYNC_STATUS_PATH = "/".join(["data", "runtime", "dashboard_sync_status.json"])
 
 
 # =========================================================
@@ -1576,6 +1577,46 @@ def age_text_from_dt(dt):
     return f"{days}d ago"
 
 
+def format_runtime_timestamp(value):
+    dt = parse_dt(value)
+    if dt:
+        return dt.strftime("%d %b %Y %I:%M:%S %p IST")
+    return str(value or "No heartbeat yet")
+
+
+def get_dashboard_runtime_status():
+    data = safe_read_json(DASHBOARD_SYNC_STATUS_PATH, {})
+    if not isinstance(data, dict):
+        data = {}
+
+    daemon_health = data.get("daemon_health") if isinstance(data.get("daemon_health"), dict) else {}
+    heartbeat = data.get("heartbeat") if isinstance(data.get("heartbeat"), dict) else {}
+    runtime_status = data.get("runtime_status") if isinstance(data.get("runtime_status"), dict) else {}
+
+    daemon_status = str(
+        daemon_health.get("status")
+        or heartbeat.get("status")
+        or data.get("status")
+        or "WAITING"
+    ).upper()
+    runtime_mode = str(
+        runtime_status.get("mode")
+        or daemon_health.get("mode")
+        or heartbeat.get("mode")
+        or "UNKNOWN"
+    )
+    heartbeat_timestamp = heartbeat.get("timestamp_ist") or daemon_health.get("timestamp_ist") or data.get("timestamp_ist")
+    ticks_completed = daemon_health.get("ticks_completed")
+    ticks_text = f"{int(ticks_completed):,}" if isinstance(ticks_completed, (int, float)) else str(ticks_completed or "0")
+
+    return {
+        "daemon_status": daemon_status,
+        "runtime_mode": runtime_mode,
+        "heartbeat_timestamp": format_runtime_timestamp(heartbeat_timestamp),
+        "ticks_completed": ticks_text,
+    }
+
+
 def scan_status_from_dt(dt, market_open=None):
     market_open = is_market_open_now() if market_open is None else market_open
 
@@ -2173,6 +2214,7 @@ github_status = github_data["status"]
 github_age = age_text_from_dt(github_data["last_run_time"])
 
 supabase_status = get_supabase_connection_status()
+runtime_status_data = get_dashboard_runtime_status()
 
 
 # Counts
@@ -2558,6 +2600,15 @@ with r1:
     small_status("GitHub 5-Min Runner", github_display_status, f"Last run: {github_age}")
     small_status("Supabase Memory", supabase_status, "Database connection")
     small_status("Master Brain", master_brain_display_status, f"Last activity: {master_brain_data['last_activity_age']}")
+    small_status(
+        "TITAN Runtime",
+        runtime_status_data["daemon_status"],
+        (
+            f"Mode: {runtime_status_data['runtime_mode']} | "
+            f"Heartbeat: {runtime_status_data['heartbeat_timestamp']} | "
+            f"Ticks: {runtime_status_data['ticks_completed']}"
+        ),
+    )
 
 with r2:
     small_status("News Engine", news_status, f"News: {news_gathered:,} · Latest: {news_memory_data['age']}")

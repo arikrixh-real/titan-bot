@@ -5,24 +5,22 @@ from engines.time_filter import current_bot_mode
 from utils.market_hours import as_ist_datetime
 
 
-SETUP_ENGINE_STATUS_PATH = Path("data") / "runtime" / "setup_engine_status.json"
+BROKER_HEALTH_CHECK_STATUS_PATH = (
+    Path("data") / "runtime" / "broker_health_check_status.json"
+)
 
 
-def run_setup_engine():
+def run_broker_health_check():
     now_ist = as_ist_datetime()
     payload = {
         "timestamp_ist": now_ist.isoformat(),
         "mode": current_bot_mode(now_ist),
-        "status": "SETUP_ENGINE_MARKER_UPDATED",
+        "status": "BROKER_HEALTH_CHECK_MARKER_UPDATED",
     }
 
-    SETUP_ENGINE_STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SETUP_ENGINE_STATUS_PATH.write_text(
+    BROKER_HEALTH_CHECK_STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    BROKER_HEALTH_CHECK_STATUS_PATH.write_text(
         json.dumps(payload, indent=2, sort_keys=True),
         encoding="utf-8",
     )
     return payload
-
-
-if __name__ == "__main__":
-    run_setup_engine()

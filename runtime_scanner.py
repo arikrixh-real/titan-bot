@@ -13,7 +13,14 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     payload = {
         "timestamp_ist": now_ist.isoformat(),
         "mode": current_bot_mode(now_ist),
-        "status": "SCANNER_MARKER_UPDATED",
+        "status": "SCAN_ONLY_PLACEHOLDER_READY",
+        "scan_only": True,
+        "real_scanner_called": False,
+        "trade_creation": False,
+        "telegram_alerts": False,
+        "supabase_writes": False,
+        "journal_writes": False,
+        "next_step": "build_safe_scan_only_loop",
     }
 
     path = Path(path)
