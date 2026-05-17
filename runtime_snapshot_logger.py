@@ -9,6 +9,8 @@ PAPER_ENGINE_STATUS_PATH = RUNTIME_DIR / "paper_engine_status.json"
 MASTER_BRAIN_STATUS_PATH = RUNTIME_DIR / "master_brain_status.json"
 SCANNER_STATUS_PATH = RUNTIME_DIR / "scanner_status.json"
 RUNTIME_SNAPSHOTS_PATH = RUNTIME_DIR / "runtime_snapshots.jsonl"
+RUNTIME_SNAPSHOT_MAX_LINES = 5000
+RUNTIME_SNAPSHOT_KEEP_LINES = 2500
 IST = timezone(timedelta(hours=5, minutes=30))
 
 
@@ -118,10 +120,23 @@ def _build_snapshot():
     return snapshot
 
 
+def _rotate_runtime_snapshots_if_needed(path):
+    if not path.exists():
+        return
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if len(lines) <= RUNTIME_SNAPSHOT_MAX_LINES:
+        return
+
+    newest_lines = lines[-RUNTIME_SNAPSHOT_KEEP_LINES:]
+    path.write_text("\n".join(newest_lines) + "\n", encoding="utf-8")
+
+
 def append_runtime_snapshot(path=RUNTIME_SNAPSHOTS_PATH):
     snapshot = _build_snapshot()
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    _rotate_runtime_snapshots_if_needed(path)
     with path.open("a", encoding="utf-8") as file:
         file.write(json.dumps(snapshot, separators=(",", ":"), sort_keys=True))
         file.write("\n")
