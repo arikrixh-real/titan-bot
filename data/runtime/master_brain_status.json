@@ -1,5 +1,22 @@
 {
-  "mode": "WEEKEND_MODE",
-  "status": "MASTER_BRAIN_MARKER_UPDATED",
-  "timestamp_ist": "2026-05-16T22:35:54.616911+05:30"
+  "error_message": null,
+  "error_type": null,
+  "evaluated_count": 5,
+  "input_candidates": 5,
+  "journal_writes": false,
+  "mode": "SCAN_ONLY_CACHED_50",
+  "observe_only": true,
+  "scan_only": true,
+  "status": "MASTER_BRAIN_READ_ONLY_COMPLETE",
+  "supabase_writes": false,
+  "telegram_alerts": false,
+  "timestamp_ist": "2026-05-17T11:07:06.808719+05:30",
+  "top_symbols": [
+    "BANKBARODA",
+    "PNB",
+    "GAIL",
+    "INDUSTOWER",
+    "NATIONALUM"
+  ],
+  "trade_creation": false
 }

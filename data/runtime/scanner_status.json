@@ -1,5 +1,25 @@
 {
-  "mode": "WEEKEND_MODE",
-  "status": "SCANNER_MARKER_UPDATED",
-  "timestamp_ist": "2026-05-16T22:35:54.612978+05:30"
+  "breakout_ready_count": 7,
+  "candidate_symbols": [
+    "BANKBARODA",
+    "PNB",
+    "GAIL",
+    "INDUSTOWER",
+    "NATIONALUM"
+  ],
+  "errors": 0,
+  "journal_writes": false,
+  "mode": "SCAN_ONLY_CACHED_50",
+  "momentum_passed": 7,
+  "passed_setups": 7,
+  "real_scanner_called": true,
+  "scan_only": true,
+  "status": "SCAN_ONLY_COMPLETE",
+  "stocks_checked": 50,
+  "structure_passed": 14,
+  "supabase_writes": false,
+  "telegram_alerts": false,
+  "timestamp_ist": "2026-05-17T10:55:38.656353+05:30",
+  "trade_creation": false,
+  "trend_passed": 23
 }

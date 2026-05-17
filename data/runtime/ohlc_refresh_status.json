@@ -1,0 +1,14 @@
+{
+  "error_message": null,
+  "error_type": null,
+  "result_summary": {
+    "failed": 0,
+    "refreshed": 118,
+    "requested": 120,
+    "skipped": 2
+  },
+  "status": "COMPLETED",
+  "symbols_requested": 120,
+  "timestamp_ist": "2026-05-17T10:59:43.466824+05:30",
+  "trade_window": false
+}
