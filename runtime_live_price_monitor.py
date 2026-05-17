@@ -51,6 +51,21 @@ def _is_auth_token_failure(status, reason):
     return any(marker in reason_text for marker in AUTH_TOKEN_FAILURE_MARKERS)
 
 
+def _health_check_token_status(price, source, status, reason):
+    source_text = str(source or "").strip().upper()
+
+    if price is not None and source_text == "UPSTOX" and status == "ACTIVE":
+        return "VALID"
+
+    if _is_auth_token_failure(status, reason):
+        return "INVALID_OR_EXPIRED"
+
+    if price is not None and source_text != "UPSTOX":
+        return "CACHE_OR_FALLBACK"
+
+    return "UNKNOWN"
+
+
 def _read_json(path):
     path = Path(path)
     if not path.exists():
@@ -92,20 +107,68 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
     symbols = _open_paper_symbols(registry)[:MAX_SYMBOLS_PER_RUN]
 
     if not symbols:
+        health_check_symbol = "RELIANCE"
+        try:
+            result = get_live_price_debug(
+                health_check_symbol, use_cache=True, debug=False
+            )
+            if not isinstance(result, dict):
+                result = {
+                    "price": None,
+                    "source": "UNKNOWN",
+                    "status": "BAD_RESULT",
+                    "reason": "get_live_price_debug returned non-dict result",
+                }
+        except Exception as exc:
+            result = {
+                "price": None,
+                "source": "UNKNOWN",
+                "status": "ERROR",
+                "reason": str(exc),
+            }
+
+        health_check_price = result.get("price")
+        health_check_source = result.get("source")
+        health_check_status = result.get("status")
+        health_check_reason = result.get("reason")
+        token_status = _health_check_token_status(
+            health_check_price,
+            health_check_source,
+            health_check_status,
+            health_check_reason,
+        )
         payload = {
             "timestamp_ist": now_ist.isoformat(),
-            "status": "NO_OPEN_PAPER_POSITIONS",
-            "symbols_checked": 0,
-            "successful_prices": 0,
-            "failed_prices": 0,
-            "cache_meta_updated": False,
+            "status": "NO_OPEN_POSITIONS_HEALTH_CHECK_COMPLETE",
+            "symbols_checked": 1,
+            "successful_prices": 1 if health_check_price is not None else 0,
+            "failed_prices": 0 if health_check_price is not None else 1,
+            "cache_meta_updated": (
+                health_check_price is not None
+                and health_check_source == "UPSTOX"
+                and health_check_status == "ACTIVE"
+            ),
             "price_cache_meta_path": META_CACHE_FILE,
             "max_symbols_per_run": MAX_SYMBOLS_PER_RUN,
-            "network_or_token_failure_count": 0,
-            "token_status": "UNKNOWN",
-            "token_action_required": False,
+            "network_or_token_failure_count": (
+                1 if health_check_status in NETWORK_OR_TOKEN_FAILURE_STATUSES else 0
+            ),
+            "health_check_symbol": health_check_symbol,
+            "health_check_price": health_check_price,
+            "health_check_source": health_check_source,
+            "health_check_status": health_check_status,
+            "token_status": token_status,
+            "token_action_required": token_status == "INVALID_OR_EXPIRED",
             "upstox_extended_token_recommended": True,
-            "price_results": [],
+            "price_results": [
+                {
+                    "symbol": health_check_symbol,
+                    "price": health_check_price,
+                    "source": health_check_source,
+                    "status": health_check_status,
+                    "reason": health_check_reason,
+                }
+            ],
         }
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
