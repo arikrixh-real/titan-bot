@@ -63,6 +63,7 @@ def get_scheduler_map(mode):
             "news_pulse",
             "sector_strength",
             "outcome_tracker",
+            "runtime_snapshot_logger",
         ]
         scheduler_map["every_5_minutes"] = [
             "scanner",
@@ -86,6 +87,7 @@ def get_scheduler_map(mode):
         scheduler_map["every_5_minutes"] = [
             "learning_engine",
             "experience_memory",
+            "runtime_snapshot_logger",
         ]
         scheduler_map["every_15_minutes"] = [
             "scenario_simulation",
@@ -107,6 +109,7 @@ def get_scheduler_map(mode):
         scheduler_map["every_5_minutes"] = [
             "historical_replay",
             "backtesting",
+            "runtime_snapshot_logger",
         ]
         scheduler_map["every_15_minutes"] = [
             "synthetic_simulation",
