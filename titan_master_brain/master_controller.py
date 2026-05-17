@@ -37,6 +37,7 @@ from titan_master_brain.execution_engine import (
     send_telegram_signals,
 )
 from journal.outcome_tracker import track_trade_outcomes
+from runtime_global_lock import acquire_global_runtime_lock, release_global_runtime_lock
 from utils.market_hours import TRADE_WINDOW_END, TRADE_WINDOW_START, is_trade_window
 
 _SUPABASE_WARNED = set()
@@ -1804,7 +1805,7 @@ def refresh_phase14_meta_evolution_safely(evaluated_setups, context, final_decis
 # MAIN MASTER BRAIN
 # =========================================================
 
-def run_master_brain(send_telegram=True, run_outcome_tracker=True, health_check=False):
+def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, health_check=False):
     print("[MasterBrain] Step 9B Final Master Controller Running...")
 
     if health_check:
@@ -2256,6 +2257,40 @@ def run_master_brain(send_telegram=True, run_outcome_tracker=True, health_check=
         "phase36_memory_consolidation_result": phase36_memory_consolidation_result,
         "phase37_auto_repair_result": phase37_auto_repair_result,
     }
+
+
+def run_master_brain(send_telegram=True, run_outcome_tracker=True, health_check=False):
+    if health_check:
+        return _run_master_brain_unlocked(
+            send_telegram=send_telegram,
+            run_outcome_tracker=run_outcome_tracker,
+            health_check=health_check,
+        )
+
+    if not _is_market_alert_time():
+        return _run_master_brain_unlocked(
+            send_telegram=send_telegram,
+            run_outcome_tracker=run_outcome_tracker,
+            health_check=health_check,
+        )
+
+    lock_result = acquire_global_runtime_lock(mode="LIVE")
+    if not lock_result.get("acquired"):
+        return {
+            "mode": "LIVE_SKIPPED_GLOBAL_LOCK",
+            "status": "SKIPPED",
+            "reason": lock_result.get("reason", "GLOBAL_LOCK_NOT_ACQUIRED"),
+            "lock": lock_result,
+        }
+
+    try:
+        return _run_master_brain_unlocked(
+            send_telegram=send_telegram,
+            run_outcome_tracker=run_outcome_tracker,
+            health_check=health_check,
+        )
+    finally:
+        release_global_runtime_lock(owner=lock_result.get("owner"))
 
 
 if __name__ == "__main__":

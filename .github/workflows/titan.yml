@@ -57,6 +57,7 @@ jobs:
           UPSTOX_ACCESS_TOKEN: ${{ secrets.UPSTOX_ACCESS_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          TITAN_RUNTIME_OWNER: "GITHUB_ACTIONS"
           TITAN_QUIET_MODE: "1"
         run: |
           python -c "from titan_master_brain.master_controller import run_master_brain; run_master_brain()"
