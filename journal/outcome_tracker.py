@@ -33,6 +33,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from data.live_price import get_strict_fresh_price_debug
+from journal.trade_journal import ACTIVE_FIELDS, _ensure_csv as _ensure_active_csv_schema
 from utils.market_hours import is_trade_window, trade_window_text
 
 try:
@@ -269,20 +270,12 @@ def _ensure_files():
     JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
     LEARNING_DIR.mkdir(parents=True, exist_ok=True)
 
-    active_fields = [
-        "trade_id", "opened_at", "scan_id", "symbol", "side", "entry", "sl",
-        "target", "entry_price", "stop_loss", "tp", "rr", "score", "rank_score",
-        "quantity", "qty", "position_size", "capital_used", "risk_amount", "risk_per_trade_pct", "risk_per_share",
-        "paper_trade_id", "is_paper_trade", "alert_sent", "market_status",
-        "status", "outcome", "result", "last_checked_at", "last_price", "pnl_points", "result_reason"
-    ]
-
     if not ACTIVE_TRADES_CSV.exists():
         with open(ACTIVE_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=active_fields)
+            writer = csv.DictWriter(f, fieldnames=ACTIVE_FIELDS)
             writer.writeheader()
     else:
-        _ensure_csv_columns(ACTIVE_TRADES_CSV, active_fields)
+        _ensure_active_csv_schema(ACTIVE_TRADES_CSV, ACTIVE_FIELDS)
 
     if not OUTCOMES_CSV.exists():
         with open(OUTCOMES_CSV, "w", newline="", encoding="utf-8") as f:
@@ -825,23 +818,11 @@ def track_trade_outcomes(limit=None):
 
         updated_rows.append(row)
 
-    default_fields = [
-        "trade_id", "opened_at", "scan_id", "symbol", "side", "entry", "sl",
-        "target", "entry_price", "stop_loss", "tp", "rr", "score", "rank_score",
-        "quantity", "qty", "position_size", "capital_used", "risk_amount", "risk_per_trade_pct", "risk_per_share",
-        "paper_trade_id", "is_paper_trade", "alert_sent", "market_status",
-        "status", "outcome", "result", "last_checked_at", "last_price", "pnl_points", "result_reason"
-    ]
-
-    final_fields = fields or default_fields
-    for field in default_fields:
-        if field not in final_fields:
-            final_fields.append(field)
-
     with open(ACTIVE_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=final_fields)
+        writer = csv.DictWriter(f, fieldnames=ACTIVE_FIELDS, extrasaction="ignore")
         writer.writeheader()
-        writer.writerows(updated_rows)
+        for row in updated_rows:
+            writer.writerow({field: row.get(field, "") for field in ACTIVE_FIELDS})
 
     lifecycle_result = None
     if update_lifecycle_memory_safely is not None:

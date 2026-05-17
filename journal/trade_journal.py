@@ -14,6 +14,7 @@ What this does:
 
 import csv
 import json
+import shutil
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -91,6 +92,41 @@ ACTIVE_FIELDS = [
     "result_reason",
 ]
 
+LEGACY_SHIFTED_ACTIVE_FIELDS = [
+    "trade_id",
+    "opened_at",
+    "scan_id",
+    "symbol",
+    "side",
+    "entry",
+    "sl",
+    "target",
+    "entry_price",
+    "stop_loss",
+    "tp",
+    "rr",
+    "score",
+    "rank_score",
+    "quantity",
+    "qty",
+    "position_size",
+    "capital_used",
+    "risk_amount",
+    "risk_per_trade_pct",
+    "risk_per_share",
+    "sizing_valid",
+    "skip_reason",
+    "paper_trade_id",
+    "is_paper_trade",
+    "alert_sent",
+    "market_status",
+    "status",
+    "last_checked_at",
+    "last_price",
+    "pnl_points",
+    "result_reason",
+]
+
 
 def _now():
     return datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
@@ -139,6 +175,83 @@ def _side(value):
     return str(value or "").upper().strip()
 
 
+def _looks_like_trade_id(value):
+    parts = str(value or "").strip().split("|")
+    return len(parts) >= 6 and parts[2].upper() in {"LONG", "SHORT"}
+
+
+def _is_number(value):
+    try:
+        float(value)
+        return True
+    except Exception:
+        return False
+
+
+def _looks_shifted_active_row(header, raw_row):
+    if not raw_row:
+        return False
+
+    row_by_header = {
+        field: raw_row[index] if index < len(raw_row) else ""
+        for index, field in enumerate(header)
+    }
+
+    return (
+        _looks_like_trade_id(raw_row[0])
+        or _looks_like_trade_id(row_by_header.get("symbol"))
+        or (
+            _is_number(row_by_header.get("status"))
+            and str(row_by_header.get("last_checked_at", "")).upper().strip() in {"OPEN", "CLOSED", "TP", "SL"}
+        )
+    )
+
+
+def _active_row_from_position(raw_row):
+    source_fields = ACTIVE_FIELDS if len(raw_row) >= len(ACTIVE_FIELDS) else LEGACY_SHIFTED_ACTIVE_FIELDS
+    repaired = {field: "" for field in ACTIVE_FIELDS}
+
+    for index, value in enumerate(raw_row):
+        if index >= len(source_fields):
+            break
+        repaired[source_fields[index]] = value
+
+    if not repaired.get("entry_price"):
+        repaired["entry_price"] = repaired.get("entry", "")
+    if not repaired.get("stop_loss"):
+        repaired["stop_loss"] = repaired.get("sl", "")
+    if not repaired.get("tp"):
+        repaired["tp"] = repaired.get("target", "")
+
+    status = str(repaired.get("status", "")).upper().strip()
+    if status in {"TP", "SL"}:
+        repaired["outcome"] = repaired.get("outcome") or status
+        repaired["result"] = repaired.get("result") or ("WIN" if status == "TP" else "LOSS")
+        repaired["status"] = "CLOSED"
+
+    return repaired
+
+
+def _backup_csv_before_rewrite(path):
+    backup_path = path.with_name(f"{path.stem}.backup{path.suffix}")
+    shutil.copyfile(path, backup_path)
+    return backup_path
+
+
+def _rewrite_csv(path, fields, rows, repaired_count=0, backup_path=None):
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({field: row.get(field, "") for field in fields})
+
+    if path == ACTIVE_TRADES_CSV:
+        print(f"[TradeJournal CSV Repair] repaired rows: {repaired_count}")
+        print(f"[TradeJournal CSV Repair] rewritten schema: {','.join(fields)}")
+        if backup_path is not None:
+            print(f"[TradeJournal CSV Repair] backup path: {backup_path}")
+
+
 def _ensure_csv(path, fields):
     JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -150,20 +263,37 @@ def _ensure_csv(path, fields):
 
     try:
         with open(path, "r", newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            existing_fields = reader.fieldnames or []
-            rows = list(reader)
-        missing = [field for field in fields if field not in existing_fields]
-        if not missing:
+            reader = csv.reader(f)
+            raw_rows = list(reader)
+
+        if not raw_rows:
             return
-        merged_fields = existing_fields + missing
-        with open(path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=merged_fields)
-            writer.writeheader()
-            for row in rows:
-                writer.writerow({field: row.get(field, "") for field in merged_fields})
-    except Exception:
-        pass
+
+        existing_fields = raw_rows[0]
+        data_rows = raw_rows[1:]
+        repaired_count = 0
+        normalized_rows = []
+
+        for raw_row in data_rows:
+            if path == ACTIVE_TRADES_CSV and _looks_shifted_active_row(existing_fields, raw_row):
+                normalized_rows.append(_active_row_from_position(raw_row))
+                repaired_count += 1
+                continue
+
+            row = {
+                field: raw_row[index] if index < len(raw_row) else ""
+                for index, field in enumerate(existing_fields)
+            }
+            normalized_rows.append({field: row.get(field, "") for field in fields})
+
+        if existing_fields == fields and repaired_count == 0:
+            return
+
+        backup_path = _backup_csv_before_rewrite(path) if path == ACTIVE_TRADES_CSV else None
+        _rewrite_csv(path, fields, normalized_rows, repaired_count, backup_path)
+
+    except Exception as e:
+        print(f"[TradeJournal CSV Repair] schema validation failed for {path}: {e}")
 
 
 def _paper_fields(setup):
