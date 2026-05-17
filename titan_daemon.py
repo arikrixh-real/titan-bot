@@ -1,6 +1,6 @@
 import time
 
-from runtime_lock import acquire_lock, release_lock
+from runtime_lock import acquire_lock, refresh_lock, release_lock
 from runtime_dispatcher import preview_dispatch
 from runtime_health import write_daemon_health
 from runtime_error_log import log_runtime_error
@@ -35,6 +35,7 @@ def main():
                     dispatch_count=last_dispatch_count,
                     status="RUNNING",
                 )
+                refresh_lock(LOCK_NAME)
 
                 now = time.monotonic()
                 if now - last_printed_at >= PRINT_INTERVAL_SECONDS:

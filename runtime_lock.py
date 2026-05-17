@@ -85,6 +85,11 @@ def acquire_lock(name, stale_after_seconds=300):
         return True
 
 
+def refresh_lock(name):
+    path = _lock_path(name)
+    _write_lock(path, name)
+
+
 def release_lock(name):
     path = _lock_path(name)
 
