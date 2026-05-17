@@ -18,6 +18,7 @@ from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from journal.trade_id import build_canonical_trade_id
 from utils.market_hours import is_trade_window, trade_window_text
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -210,7 +211,15 @@ def _load_existing_open_keys():
 
 
 def _build_trade_id(scan_id, symbol, side, entry, sl, target):
-    return f"{scan_id}|{symbol}|{side}|{entry}|{sl}|{target}"
+    return build_canonical_trade_id(
+        scan_id,
+        symbol,
+        side,
+        entry,
+        sl,
+        target,
+        source="TradeJournal",
+    )
 
 
 def _build_rows(setup, scan_id, alert_sent, market_status):

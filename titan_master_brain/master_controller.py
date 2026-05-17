@@ -36,6 +36,7 @@ from titan_master_brain.execution_engine import (
     print_execution_packets,
     send_telegram_signals,
 )
+from journal.trade_id import build_canonical_trade_id
 from journal.outcome_tracker import track_trade_outcomes
 from runtime_global_lock import acquire_global_runtime_lock, release_global_runtime_lock
 from utils.market_hours import TRADE_WINDOW_END, TRADE_WINDOW_START, is_trade_window
@@ -541,6 +542,18 @@ def save_sent_packets_to_trade_results(sent_packets, context=None):
             rr = _safe_float(_deep_get(packet, ["rr", "risk_reward", "actual_rr"]), 0)
             score = _safe_float(_deep_get(packet, ["score", "final_score", "rank_score"]), 0)
             reason = _deep_get(packet, ["reason", "reasoning", "message", "note"], "")
+            scan_id = _deep_get(packet, ["scan_id", "scan_uuid", "scan"])
+            existing_trade_id = _deep_get(packet, ["trade_id"])
+
+            if not scan_id and isinstance(existing_trade_id, str) and existing_trade_id.count("|") == 5:
+                scan_id = existing_trade_id.split("|", 1)[0]
+
+            if not scan_id and isinstance(context, dict):
+                scan_id = (
+                    context.get("scan_id")
+                    or context.get("scan_uuid")
+                    or context.get("cycle_id")
+                )
 
             if not symbol or not side or entry is None or sl is None or tp is None or quantity <= 0:
                 print(f"[TradeResults] Skipped invalid packet: {packet}")
@@ -548,6 +561,19 @@ def save_sent_packets_to_trade_results(sent_packets, context=None):
 
             symbol = str(symbol).upper()
             side = str(side).upper()
+            trade_id = build_canonical_trade_id(
+                scan_id,
+                symbol,
+                side,
+                entry,
+                sl,
+                tp,
+                source="TradeResults",
+            )
+
+            if not trade_id:
+                print(f"[TradeResults] Skipped packet because canonical trade_id could not be generated: {symbol} {side}")
+                continue
 
             if symbol in TEST_SYMBOLS:
                 print(f"[TradeResults] Skipped test symbol: {symbol}")
@@ -559,6 +585,7 @@ def save_sent_packets_to_trade_results(sent_packets, context=None):
                 continue
 
             row = {
+                "trade_id": trade_id,
                 "symbol": symbol,
                 "side": side,
                 "entry": entry,

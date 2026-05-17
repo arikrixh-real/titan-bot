@@ -36,6 +36,7 @@ try:
 except Exception:
     get_live_price = None
 
+from journal.trade_id import build_canonical_trade_id
 from utils.market_hours import is_trade_window, trade_window_text
 
 
@@ -498,8 +499,18 @@ def add_good_setups_as_live_trades(
 
         now_text = _now()
 
-        safe_scan_id = str(scan_id or datetime.now(IST).strftime("%Y%m%d_%H%M%S"))
-        trade_id = f"{safe_scan_id}_{symbol}_{side}_{len(active_df) + len(new_rows) + 1}"
+        safe_scan_id = str(scan_id or "")
+        trade_id = build_canonical_trade_id(
+            safe_scan_id,
+            symbol,
+            side,
+            entry,
+            sl,
+            target,
+            source="TradeExecution",
+        )
+        if not trade_id:
+            continue
 
         row = {
             "trade_id": trade_id,
