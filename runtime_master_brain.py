@@ -2,6 +2,8 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from engines.risk_engine import calculate_rr
+from engines.trade_levels import calculate_trade_levels
 from titan_master_brain.setup_reasoning_engine import evaluate_setups
 
 
@@ -25,6 +27,8 @@ def _base_payload(scanner_status=None):
         "input_candidates": 0,
         "evaluated_count": 0,
         "top_symbols": [],
+        "trade_levels_generated": 0,
+        "evaluated_trade_setups": [],
         "trade_creation": False,
         "telegram_alerts": False,
         "supabase_writes": False,
@@ -34,21 +38,54 @@ def _base_payload(scanner_status=None):
     }
 
 
-def _sanitized_setups(candidate_symbols):
+def _ohlc_dataframe(last_ohlc):
+    if not isinstance(last_ohlc, dict):
+        return None
+
+    try:
+        row = {
+            "High": float(last_ohlc["High"]),
+            "Low": float(last_ohlc["Low"]),
+            "Close": float(last_ohlc["Close"]),
+        }
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    pandas = __import__("pandas")
+    return pandas.DataFrame([row], columns=["High", "Low", "Close"])
+
+
+def _sanitized_setups(candidate_details):
     setups = []
-    for symbol in candidate_symbols or []:
+    for candidate in candidate_details or []:
+        if not isinstance(candidate, dict):
+            continue
+
+        symbol = candidate.get("symbol")
+        side = candidate.get("side")
         if not symbol:
             continue
+
+        entry, sl, target = calculate_trade_levels(
+            _ohlc_dataframe(candidate.get("last_ohlc")),
+            side,
+        )
+        rr = calculate_rr(entry, sl, target, side)
+
         setups.append(
             {
                 "symbol": symbol,
-                "side": None,
+                "side": side,
+                "entry": entry,
+                "sl": sl,
+                "target": target,
                 "score": 0.0,
-                "rr": 0.0,
+                "rr": rr,
                 "setup_context": {"confirmations": 0},
                 "market_context": {"trend": "UNKNOWN"},
                 "source": "scanner_status.json",
                 "scan_only": True,
+                "observe_only": True,
                 "execution_allowed": False,
             }
         )
@@ -59,6 +96,25 @@ def _write_status(payload, path=MASTER_BRAIN_STATUS_PATH):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _evaluated_trade_setups(evaluated):
+    trade_setups = []
+    for item in evaluated or []:
+        if not isinstance(item, dict):
+            continue
+
+        trade_setups.append(
+            {
+                "symbol": item.get("symbol"),
+                "side": item.get("side"),
+                "entry": item.get("entry"),
+                "sl": item.get("sl"),
+                "target": item.get("target"),
+                "rr": item.get("rr"),
+            }
+        )
+    return trade_setups
 
 
 def run_master_brain():
@@ -79,11 +135,11 @@ def run_master_brain():
             _write_status(payload)
             return payload
 
-        candidate_symbols = scanner_status.get("candidate_symbols", [])
-        if not isinstance(candidate_symbols, list):
-            candidate_symbols = []
+        candidate_details = scanner_status.get("candidate_details", [])
+        if not isinstance(candidate_details, list):
+            candidate_details = []
 
-        setups = _sanitized_setups(candidate_symbols)
+        setups = _sanitized_setups(candidate_details)
         context = {
             "source": "scanner_status.json",
             "scan_only": True,
@@ -91,6 +147,7 @@ def run_master_brain():
             "execution_allowed": False,
         }
         evaluated = evaluate_setups(setups, context)
+        evaluated_trade_setups = _evaluated_trade_setups(evaluated)
 
         top_symbols = []
         for item in evaluated or []:
@@ -102,6 +159,14 @@ def run_master_brain():
                 "input_candidates": len(setups),
                 "evaluated_count": len(evaluated or []),
                 "top_symbols": top_symbols[:5],
+                "trade_levels_generated": sum(
+                    1
+                    for setup in setups
+                    if setup.get("entry") is not None
+                    and setup.get("sl") is not None
+                    and setup.get("target") is not None
+                ),
+                "evaluated_trade_setups": evaluated_trade_setups,
             }
         )
         _write_status(payload)

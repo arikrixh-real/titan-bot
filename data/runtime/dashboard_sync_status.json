@@ -2,16 +2,16 @@
   "daemon_health": {
     "last_dispatch_count": 2,
     "mode": "WEEKEND_MODE",
-    "pid": 11068,
+    "pid": 2608,
     "status": "STOPPED",
-    "ticks_completed": 37,
-    "timestamp_ist": "2026-05-16T23:19:38.683787+05:30"
+    "ticks_completed": 24,
+    "timestamp_ist": "2026-05-17T11:08:31.380951+05:30"
   },
   "heartbeat": {
     "mode": "WEEKEND_MODE",
-    "pid": 24248,
+    "pid": 9852,
     "status": "ALIVE",
-    "timestamp_ist": "2026-05-16T23:21:08.172158+05:30"
+    "timestamp_ist": "2026-05-17T11:30:46.299635+05:30"
   },
   "recent_dispatch_events": [
     {
@@ -19,140 +19,140 @@
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "heartbeat",
-      "timestamp_ist": "2026-05-16T23:19:28.901675+05:30"
+      "timestamp_ist": "2026-05-17T11:08:22.071217+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "runtime_status",
-      "timestamp_ist": "2026-05-16T23:19:28.901675+05:30"
+      "timestamp_ist": "2026-05-17T11:08:22.071217+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "heartbeat",
-      "timestamp_ist": "2026-05-16T23:19:29.904926+05:30"
+      "timestamp_ist": "2026-05-17T11:08:23.074634+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "runtime_status",
-      "timestamp_ist": "2026-05-16T23:19:29.904926+05:30"
+      "timestamp_ist": "2026-05-17T11:08:23.074634+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "heartbeat",
-      "timestamp_ist": "2026-05-16T23:19:30.908413+05:30"
+      "timestamp_ist": "2026-05-17T11:08:24.077820+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "runtime_status",
-      "timestamp_ist": "2026-05-16T23:19:30.908413+05:30"
+      "timestamp_ist": "2026-05-17T11:08:24.077820+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "heartbeat",
-      "timestamp_ist": "2026-05-16T23:19:31.912234+05:30"
+      "timestamp_ist": "2026-05-17T11:08:25.081317+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "runtime_status",
-      "timestamp_ist": "2026-05-16T23:19:31.912234+05:30"
+      "timestamp_ist": "2026-05-17T11:08:25.081317+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "heartbeat",
-      "timestamp_ist": "2026-05-16T23:19:32.915765+05:30"
+      "timestamp_ist": "2026-05-17T11:08:26.084897+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "runtime_status",
-      "timestamp_ist": "2026-05-16T23:19:32.915765+05:30"
+      "timestamp_ist": "2026-05-17T11:08:26.084897+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "heartbeat",
-      "timestamp_ist": "2026-05-16T23:19:33.919678+05:30"
+      "timestamp_ist": "2026-05-17T11:08:27.088371+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "runtime_status",
-      "timestamp_ist": "2026-05-16T23:19:33.919678+05:30"
+      "timestamp_ist": "2026-05-17T11:08:27.088371+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "heartbeat",
-      "timestamp_ist": "2026-05-16T23:19:34.923654+05:30"
+      "timestamp_ist": "2026-05-17T11:08:28.091573+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "runtime_status",
-      "timestamp_ist": "2026-05-16T23:19:34.923654+05:30"
+      "timestamp_ist": "2026-05-17T11:08:28.091573+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "heartbeat",
-      "timestamp_ist": "2026-05-16T23:19:35.927447+05:30"
+      "timestamp_ist": "2026-05-17T11:08:29.095077+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "runtime_status",
-      "timestamp_ist": "2026-05-16T23:19:35.927447+05:30"
+      "timestamp_ist": "2026-05-17T11:08:29.095077+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "heartbeat",
-      "timestamp_ist": "2026-05-16T23:19:36.931193+05:30"
+      "timestamp_ist": "2026-05-17T11:08:30.098729+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "runtime_status",
-      "timestamp_ist": "2026-05-16T23:19:36.931193+05:30"
+      "timestamp_ist": "2026-05-17T11:08:30.098729+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "heartbeat",
-      "timestamp_ist": "2026-05-16T23:19:37.934598+05:30"
+      "timestamp_ist": "2026-05-17T11:08:31.102587+05:30"
     },
     {
       "action": "EXECUTED",
       "executed": true,
       "mode": "WEEKEND_MODE",
       "task": "runtime_status",
-      "timestamp_ist": "2026-05-16T23:19:37.934598+05:30"
+      "timestamp_ist": "2026-05-17T11:08:31.102587+05:30"
     }
   ],
   "runtime_status": {
@@ -175,8 +175,8 @@
       "memory_compression",
       "weekly_report"
     ],
-    "timestamp_ist": "2026-05-16T23:21:08.173508+05:30"
+    "timestamp_ist": "2026-05-17T11:30:46.300640+05:30"
   },
   "status": "DASHBOARD_RUNTIME_SYNC_UPDATED",
-  "timestamp_ist": "2026-05-16T23:21:08.179542+05:30"
+  "timestamp_ist": "2026-05-17T11:30:46.307787+05:30"
 }

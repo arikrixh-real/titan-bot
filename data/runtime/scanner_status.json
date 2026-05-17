@@ -1,25 +1,72 @@
 {
-  "breakout_ready_count": 7,
+  "breakout_ready_count": 10,
+  "candidate_details": [
+    {
+      "last_ohlc": {
+        "Close": 261.20001220703125,
+        "High": 261.8500061035156,
+        "Low": 260.79998779296875
+      },
+      "side": "SHORT",
+      "symbol": "BANKBARODA"
+    },
+    {
+      "last_ohlc": {
+        "Close": 397.7999877929688,
+        "High": 398.9500122070313,
+        "Low": 397.0
+      },
+      "side": "SHORT",
+      "symbol": "BHEL"
+    },
+    {
+      "last_ohlc": {
+        "Close": 98.56999969482422,
+        "High": 98.87000274658205,
+        "Low": 98.5500030517578
+      },
+      "side": "SHORT",
+      "symbol": "IRFC"
+    },
+    {
+      "last_ohlc": {
+        "Close": 126.6500015258789,
+        "High": 127.19000244140624,
+        "Low": 126.6500015258789
+      },
+      "side": "SHORT",
+      "symbol": "IREDA"
+    },
+    {
+      "last_ohlc": {
+        "Close": 93.79000091552734,
+        "High": 94.06999969482422,
+        "Low": 93.58000183105467
+      },
+      "side": "SHORT",
+      "symbol": "NBCC"
+    }
+  ],
   "candidate_symbols": [
     "BANKBARODA",
-    "PNB",
-    "GAIL",
-    "INDUSTOWER",
-    "NATIONALUM"
+    "BHEL",
+    "IRFC",
+    "IREDA",
+    "NBCC"
   ],
   "errors": 0,
   "journal_writes": false,
   "mode": "SCAN_ONLY_CACHED_50",
-  "momentum_passed": 7,
-  "passed_setups": 7,
+  "momentum_passed": 10,
+  "passed_setups": 10,
   "real_scanner_called": true,
   "scan_only": true,
   "status": "SCAN_ONLY_COMPLETE",
   "stocks_checked": 50,
-  "structure_passed": 14,
+  "structure_passed": 18,
   "supabase_writes": false,
   "telegram_alerts": false,
-  "timestamp_ist": "2026-05-17T10:55:38.656353+05:30",
+  "timestamp_ist": "2026-05-17T11:30:47.889697+05:30",
   "trade_creation": false,
-  "trend_passed": 23
+  "trend_passed": 29
 }

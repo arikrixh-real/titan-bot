@@ -70,6 +70,7 @@ def get_scheduler_map(mode):
             "setup_engine",
             "master_brain",
             "journal",
+            "paper_engine",
         ]
 
     elif mode == "INTELLIGENCE_MODE":

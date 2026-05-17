@@ -36,7 +36,30 @@ def _side_from_trend(trend):
         return "LONG"
     if trend == "BEARISH":
         return "SHORT"
+    if trend == "UP":
+        return "LONG"
+    if trend == "DOWN":
+        return "SHORT"
     return None
+
+
+def _last_ohlc(data):
+    try:
+        if data is None or data.empty:
+            return None
+
+        for column in ["High", "Low", "Close"]:
+            if column not in data.columns:
+                return None
+
+        last = data.iloc[-1]
+        return {
+            "High": float(last["High"]),
+            "Low": float(last["Low"]),
+            "Close": float(last["Close"]),
+        }
+    except Exception:
+        return None
 
 
 def _status_payload(
@@ -49,6 +72,7 @@ def _status_payload(
     breakout_ready_count,
     passed_setups,
     candidate_symbols,
+    candidate_details,
     errors,
 ):
     return {
@@ -68,6 +92,7 @@ def _status_payload(
         "breakout_ready_count": breakout_ready_count,
         "passed_setups": passed_setups,
         "candidate_symbols": candidate_symbols[:5],
+        "candidate_details": candidate_details[:5],
         "errors": errors,
     }
 
@@ -80,6 +105,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     breakout_ready_count = 0
     passed_setups = 0
     candidate_symbols = []
+    candidate_details = []
     errors = 0
     mode = "SCAN_ONLY"
 
@@ -116,6 +142,16 @@ def run_scanner(path=SCANNER_STATUS_PATH):
             passed_setups += 1
             if len(candidate_symbols) < 5:
                 candidate_symbols.append(symbol)
+            if len(candidate_details) < 5:
+                last_ohlc = _last_ohlc(data)
+                if last_ohlc is not None:
+                    candidate_details.append(
+                        {
+                            "symbol": symbol,
+                            "side": side,
+                            "last_ohlc": last_ohlc,
+                        }
+                    )
 
         except Exception:
             errors += 1
@@ -130,6 +166,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         breakout_ready_count=breakout_ready_count,
         passed_setups=passed_setups,
         candidate_symbols=candidate_symbols,
+        candidate_details=candidate_details,
         errors=errors,
     )
 

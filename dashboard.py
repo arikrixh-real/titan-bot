@@ -35,6 +35,7 @@ REAL_PNL_SOURCE_LABEL = "REAL_STOCK_WISE_PNL | QTY_SYNC_ACTIVE"
 DASHBOARD_VISUAL_VERSION = "REAL_PNL_QTY_SYNC_FIX_V1"
 PAPER_ACCOUNT_PATH = "/".join(["data", "paper_trading", "paper_account.json"])
 DASHBOARD_SYNC_STATUS_PATH = "/".join(["data", "runtime", "dashboard_sync_status.json"])
+PAPER_ENGINE_STATUS_PATH = "/".join(["data", "runtime", "paper_engine_status.json"])
 
 
 # =========================================================
@@ -1617,6 +1618,42 @@ def get_dashboard_runtime_status():
     }
 
 
+def get_paper_engine_runtime_status():
+    data = safe_read_json(PAPER_ENGINE_STATUS_PATH, {})
+    if not isinstance(data, dict):
+        data = {}
+
+    summary = data.get("paper_performance_summary")
+    if not isinstance(summary, dict):
+        return {
+            "status": "WAITING",
+            "message": "No paper engine runtime summary yet",
+            "open_positions_count": 0,
+            "closed_positions_count": 0,
+            "winning_trades": 0,
+            "losing_trades": 0,
+            "win_rate": 0.0,
+            "total_unrealized_pnl": 0.0,
+            "total_realized_pnl": 0.0,
+            "open_long_count": 0,
+            "open_short_count": 0,
+        }
+
+    return {
+        "status": "ACTIVE",
+        "message": "Source: data/runtime/paper_engine_status.json",
+        "open_positions_count": int(first_number(summary.get("open_positions_count"), default=0)),
+        "closed_positions_count": int(first_number(summary.get("closed_positions_count"), default=0)),
+        "winning_trades": int(first_number(summary.get("winning_trades"), default=0)),
+        "losing_trades": int(first_number(summary.get("losing_trades"), default=0)),
+        "win_rate": first_number(summary.get("win_rate"), default=0.0),
+        "total_unrealized_pnl": first_number(summary.get("total_unrealized_pnl"), default=0.0),
+        "total_realized_pnl": first_number(summary.get("total_realized_pnl"), default=0.0),
+        "open_long_count": int(first_number(summary.get("open_long_count"), default=0)),
+        "open_short_count": int(first_number(summary.get("open_short_count"), default=0)),
+    }
+
+
 def scan_status_from_dt(dt, market_open=None):
     market_open = is_market_open_now() if market_open is None else market_open
 
@@ -2215,6 +2252,7 @@ github_age = age_text_from_dt(github_data["last_run_time"])
 
 supabase_status = get_supabase_connection_status()
 runtime_status_data = get_dashboard_runtime_status()
+paper_engine_runtime_data = get_paper_engine_runtime_status()
 
 
 # Counts
@@ -2371,7 +2409,7 @@ st.markdown("<div class='subtitle'>Dashboard Real PnL Fix V1</div>", unsafe_allo
 st.markdown("<div class='section'>", unsafe_allow_html=True)
 st.markdown("<div class='section-title'>🧠 Top Control Status</div>", unsafe_allow_html=True)
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5 = st.columns(5)
 
 with c1:
     status_card("TITAN Status", titan_status, market_mode_label())
@@ -2384,6 +2422,13 @@ with c3:
 
 with c4:
     metric_card("Last Scan", last_scan_age, f"GitHub last run: {github_age}")
+
+with c5:
+    status_card(
+        "Paper Simulation",
+        paper_engine_runtime_data["status"],
+        f"Open: {paper_engine_runtime_data['open_positions_count']:,} | Closed: {paper_engine_runtime_data['closed_positions_count']:,}",
+    )
 
 if github_data["url"]:
     st.markdown(f"[Open latest GitHub workflow run]({github_data['url']})")

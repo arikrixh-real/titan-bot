@@ -1,0 +1,9 @@
+{
+  "closed_positions_count": 0,
+  "new_paper_positions": 0,
+  "open_positions_count": 0,
+  "paper_trade_creation": false,
+  "reason": "Local paper runtime reset only",
+  "status": "PAPER_RUNTIME_RESET",
+  "trade_creation": false
+}

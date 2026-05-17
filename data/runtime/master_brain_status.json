@@ -2,6 +2,48 @@
   "error_message": null,
   "error_type": null,
   "evaluated_count": 5,
+  "evaluated_trade_setups": [
+    {
+      "entry": 261.2,
+      "rr": 2.0,
+      "side": "SHORT",
+      "sl": 261.85,
+      "symbol": "BANKBARODA",
+      "target": 259.9
+    },
+    {
+      "entry": 397.8,
+      "rr": 2.0,
+      "side": "SHORT",
+      "sl": 398.95,
+      "symbol": "BHEL",
+      "target": 395.5
+    },
+    {
+      "entry": 98.57,
+      "rr": 2.0,
+      "side": "SHORT",
+      "sl": 98.87,
+      "symbol": "IRFC",
+      "target": 97.97
+    },
+    {
+      "entry": 126.65,
+      "rr": 2.0,
+      "side": "SHORT",
+      "sl": 127.19,
+      "symbol": "IREDA",
+      "target": 125.57
+    },
+    {
+      "entry": 93.79,
+      "rr": 2.0,
+      "side": "SHORT",
+      "sl": 94.07,
+      "symbol": "NBCC",
+      "target": 93.23
+    }
+  ],
   "input_candidates": 5,
   "journal_writes": false,
   "mode": "SCAN_ONLY_CACHED_50",
@@ -10,13 +52,14 @@
   "status": "MASTER_BRAIN_READ_ONLY_COMPLETE",
   "supabase_writes": false,
   "telegram_alerts": false,
-  "timestamp_ist": "2026-05-17T11:07:06.808719+05:30",
+  "timestamp_ist": "2026-05-17T11:30:48.667610+05:30",
   "top_symbols": [
     "BANKBARODA",
-    "PNB",
-    "GAIL",
-    "INDUSTOWER",
-    "NATIONALUM"
+    "BHEL",
+    "IRFC",
+    "IREDA",
+    "NBCC"
   ],
-  "trade_creation": false
+  "trade_creation": false,
+  "trade_levels_generated": 5
 }

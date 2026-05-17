@@ -21,6 +21,7 @@ from runtime_pnl_refresh import run_pnl_refresh
 from runtime_market_pressure_check import run_market_pressure_check
 from runtime_market_regime_update import run_market_regime_update
 from runtime_sector_strength import run_sector_strength
+from runtime_paper_engine import run_paper_engine
 
 
 def get_engine_registry():
@@ -49,6 +50,7 @@ def get_engine_registry():
         "market_pressure_check": run_market_pressure_check,
         "market_regime_update": run_market_regime_update,
         "sector_strength": run_sector_strength,
+        "paper_engine": run_paper_engine,
     }
 
 
