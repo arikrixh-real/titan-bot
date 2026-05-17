@@ -46,7 +46,7 @@ def _log_status_once(symbol, status, message="", source="UNKNOWN"):
     )
 
 
-def _write_status(symbol, status, message="", price=None, source="UNKNOWN"):
+def _write_status(symbol, status, message="", price=None, source="UNKNOWN", token_type_used="MISSING"):
     try:
         os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
         payload = {
@@ -54,6 +54,7 @@ def _write_status(symbol, status, message="", price=None, source="UNKNOWN"):
             "status": status,
             "last_price": price,
             "source": source,
+            "token_type_used": token_type_used,
             "timestamp": datetime.now().isoformat(),
             "reason": message,
         }
@@ -66,18 +67,27 @@ def _write_status(symbol, status, message="", price=None, source="UNKNOWN"):
 def get_upstox_token():
     """
     Priority:
-    1. Environment variable from .env
-    2. config.api_keys.UPSTOX_ACCESS_TOKEN
+    1. UPSTOX_ANALYTICS_TOKEN
+    2. UPSTOX_EXTENDED_TOKEN
+    3. UPSTOX_ACCESS_TOKEN
+    4. config.api_keys.UPSTOX_ACCESS_TOKEN
     """
-    token = os.getenv("UPSTOX_ACCESS_TOKEN")
+    token_sources = [
+        ("UPSTOX_ANALYTICS_TOKEN", "ANALYTICS_TOKEN"),
+        ("UPSTOX_EXTENDED_TOKEN", "EXTENDED_TOKEN"),
+        ("UPSTOX_ACCESS_TOKEN", "ACCESS_TOKEN"),
+    ]
 
-    if token and str(token).strip():
-        return str(token).strip()
+    for env_key, token_type in token_sources:
+        token = os.getenv(env_key)
+        if token and str(token).strip():
+            return str(token).strip(), token_type
+
 
     if CONFIG_UPSTOX_ACCESS_TOKEN and str(CONFIG_UPSTOX_ACCESS_TOKEN).strip():
-        return str(CONFIG_UPSTOX_ACCESS_TOKEN).strip()
+        return str(CONFIG_UPSTOX_ACCESS_TOKEN).strip(), "ACCESS_TOKEN"
 
-    return None
+    return None, "MISSING"
 
 
 def safe_float(value):
@@ -134,17 +144,19 @@ def fetch_price_from_upstox(symbol, use_cache=True, debug=False):
 def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
     symbol = normalize_symbol(symbol)
     instrument_key = get_instrument_key(symbol)
+    access_token, token_type_used = get_upstox_token()
 
     # No spam. Cached data fallback will be used.
     if not instrument_key:
         reason = "Instrument key missing"
-        _write_status(symbol, "UNMAPPED", reason, None, "NONE")
+        _write_status(symbol, "UNMAPPED", reason, None, "NONE", token_type_used)
         _log_status_once(symbol, "UNMAPPED", reason, "UNKNOWN")
         return {
             "price": None,
             "source": "UNKNOWN",
             "status": "UNMAPPED",
             "reason": reason,
+            "token_type_used": token_type_used,
         }
 
     cached_price = safe_float(get_cached_price(symbol)) if use_cache else None
@@ -152,29 +164,29 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
     if not is_trade_window():
         reason = "Market closed; using cache if available"
         source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
-        _write_status(symbol, "MARKET_CLOSED", reason, cached_price, "CACHE" if cached_price is not None else "NONE")
+        _write_status(symbol, "MARKET_CLOSED", reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used)
         _log_status_once(symbol, "MARKET_CLOSED", reason, source)
         return {
             "price": cached_price,
             "source": source,
             "status": "MARKET_CLOSED",
             "reason": reason,
+            "token_type_used": token_type_used,
         }
-
-    access_token = get_upstox_token()
 
     if not access_token:
         if debug:
-            print("Upstox skipped: UPSTOX_ACCESS_TOKEN missing")
-        reason = "UPSTOX_ACCESS_TOKEN missing; using cache if available"
+            print("Upstox skipped: Upstox token missing")
+        reason = "Upstox token missing; using cache if available"
         source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
-        _write_status(symbol, "TOKEN_MISSING", reason, cached_price, "CACHE" if cached_price is not None else "NONE")
+        _write_status(symbol, "TOKEN_MISSING", reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used)
         _log_status_once(symbol, "TOKEN_MISSING", reason, source)
         return {
             "price": cached_price,
             "source": source,
             "status": "TOKEN_MISSING",
             "reason": reason,
+            "token_type_used": token_type_used,
         }
 
     try:
@@ -198,13 +210,14 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
                 print("Upstox error: response was not valid JSON")
             reason = "Response was not valid JSON; using cache if available"
             source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
-            _write_status(symbol, "BAD_RESPONSE", reason, cached_price, "CACHE" if cached_price is not None else "NONE")
+            _write_status(symbol, "BAD_RESPONSE", reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used)
             _log_status_once(symbol, "BAD_RESPONSE", reason, source)
             return {
                 "price": cached_price,
                 "source": source,
                 "status": "BAD_RESPONSE",
                 "reason": reason,
+                "token_type_used": token_type_used,
             }
 
         if response.status_code != 200:
@@ -222,7 +235,7 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
                 reason = f"HTTP {response.status_code}; using cache if available"
 
             source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
-            _write_status(symbol, status, reason, cached_price, "CACHE" if cached_price is not None else "NONE")
+            _write_status(symbol, status, reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used)
             _log_status_once(symbol, status, reason, source)
 
             return {
@@ -230,28 +243,31 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
                 "source": source,
                 "status": status,
                 "reason": reason,
+                "token_type_used": token_type_used,
             }
 
         ltp = _extract_ltp(data, instrument_key)
         price = safe_float(ltp)
         if price is not None:
             update_cached_price(symbol, price)
-            _write_status(symbol, "ACTIVE", "Live price fetched", price, "UPSTOX")
+            _write_status(symbol, "ACTIVE", "Live price fetched", price, "UPSTOX", token_type_used)
             return {
                 "price": price,
                 "source": "UPSTOX",
                 "status": "ACTIVE",
                 "reason": "Live price fetched",
+                "token_type_used": token_type_used,
             }
         reason = "Upstox response had no price; using cache if available"
         source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
-        _write_status(symbol, "NO_PRICE", reason, cached_price, "CACHE" if cached_price is not None else "NONE")
+        _write_status(symbol, "NO_PRICE", reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used)
         _log_status_once(symbol, "NO_PRICE", reason, source)
         return {
             "price": cached_price,
             "source": source,
             "status": "NO_PRICE",
             "reason": reason,
+            "token_type_used": token_type_used,
         }
 
     except Exception as e:
@@ -268,13 +284,14 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
             status = "API_ERROR"
             reason = f"{error_text}; using cache if available"
         source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
-        _write_status(symbol, status, reason, cached_price, "CACHE" if cached_price is not None else "NONE")
+        _write_status(symbol, status, reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used)
         _log_status_once(symbol, status, reason, source)
         return {
             "price": cached_price,
             "source": source,
             "status": status,
             "reason": reason,
+            "token_type_used": token_type_used,
         }
 
 
