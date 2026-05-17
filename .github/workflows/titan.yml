@@ -50,7 +50,7 @@ jobs:
           python -m py_compile titan_master_brain/master_controller.py
           python -m py_compile titan_master_brain/final_decision_engine.py
 
-      - name: Run TITAN Master Brain
+      - name: Run TITAN Health Check
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -60,10 +60,11 @@ jobs:
           TITAN_RUNTIME_OWNER: "GITHUB_ACTIONS"
           TITAN_QUIET_MODE: "1"
         run: |
-          python -c "from titan_master_brain.master_controller import run_master_brain; run_master_brain()"
+          echo "GITHUB_HEALTH_MODE_ACTIVE"
+          python -c "from titan_master_brain.master_controller import run_master_brain; run_master_brain(health_check=True)"
 
       - name: Skip Git memory push
         if: always()
         run: |
           echo "Skipping Git memory push during 5-minute live scan."
-          echo "TITAN scan, Master Brain, alerts, journaling, and outcome tracking still run."
+          echo "GitHub health mode only: live execution, alerts, journaling, and outcome tracking are disabled."
