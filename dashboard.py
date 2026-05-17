@@ -1800,24 +1800,82 @@ def _is_test_symbol(symbol):
     return str(symbol or "").strip().upper() in TEST_SYMBOLS
 
 
+def _dashboard_debug(message):
+    try:
+        print(f"[Dashboard LiveCount] {message}")
+    except Exception:
+        pass
+
+
+def _has_value(value):
+    return str(value or "").strip() != ""
+
+
+def _is_live_trade_row(row):
+    if not isinstance(row, dict):
+        return False
+
+    if _is_test_symbol(row.get("symbol")):
+        return False
+
+    status = str(
+        row.get("status")
+        or row.get("trade_status")
+        or row.get("state")
+        or ""
+    ).strip().upper()
+    outcome = normalize_outcome(row.get("outcome"))
+    result = normalize_outcome(row.get("result"))
+
+    if status == "CLOSED":
+        return False
+    if _has_value(row.get("closed_at")):
+        return False
+    if outcome in {"WIN", "LOSS"} or str(row.get("outcome") or "").strip().upper() in {"TP", "SL"}:
+        return False
+    if result in {"WIN", "LOSS"}:
+        return False
+
+    return status in {"OPEN", "ACTIVE", "LIVE"}
+
+
+def _local_active_trades_count(paths):
+    for path in paths:
+        try:
+            if not os.path.exists(path):
+                continue
+
+            df = pd.read_csv(path, on_bad_lines="skip")
+
+            if df.empty:
+                _dashboard_debug(f"source=LOCAL path={path} live_count=0 fallback_reason=empty_file")
+                return 0, path, None
+
+            rows = df.to_dict("records")
+            live_count = sum(1 for row in rows if _is_live_trade_row(row))
+            _dashboard_debug(f"source=LOCAL path={path} live_count={live_count} fallback_reason=not_used")
+            return int(live_count), path, None
+
+        except Exception as exc:
+            _dashboard_debug(f"source=LOCAL path={path} live_count=0 fallback_reason=read_error:{exc}")
+            continue
+
+    return None, None, "local_active_trades_unavailable"
+
+
 def get_live_trades_count():
     """
-    FINAL LIVE TRADE FIX:
+    FINAL CANONICAL LIVE TRADE FIX:
     Live trades should come from active/open trades, not trade_results.
 
     Priority:
-    1. Supabase trades table if it has OPEN/LIVE/ACTIVE rows
-    2. Local active_trades.csv fallback
+    1. Local active_trades.csv
+    2. Supabase trades fallback
     3. 0 if nothing available
 
     NOTE:
     trade_results is for CLOSED TP/SL performance only.
     """
-
-    supabase_count = get_supabase_live_trades_count()
-
-    if supabase_count > 0:
-        return supabase_count
 
     possible_paths = [
         "data/journals/active_trades.csv",
@@ -1828,53 +1886,29 @@ def get_live_trades_count():
         "trades/active_trades.csv",
     ]
 
-    for path in possible_paths:
-        try:
-            if not os.path.exists(path):
-                continue
+    local_count, local_path, fallback_reason = _local_active_trades_count(possible_paths)
+    if local_count is not None:
+        return local_count
 
-            df = pd.read_csv(path, on_bad_lines="skip")
-
-            if df.empty:
-                continue
-
-            if "symbol" in df.columns:
-                df = df[~df["symbol"].astype(str).str.upper().isin(TEST_SYMBOLS)]
-
-            status_columns = ["status", "trade_status", "outcome", "state"]
-
-            for col in status_columns:
-                if col in df.columns:
-                    live_df = df[
-                        df[col]
-                        .astype(str)
-                        .str.upper()
-                        .isin(["ACTIVE", "OPEN", "LIVE", "RUNNING", "PENDING"])
-                    ]
-                    return int(len(live_df))
-
-            return int(len(df))
-
-        except Exception:
-            continue
-
-    return 0
+    supabase_count = get_supabase_live_trades_count(fallback_reason=fallback_reason)
+    return supabase_count
 
 
 
-def get_supabase_live_trades_count():
+def get_supabase_live_trades_count(fallback_reason="local_active_trades_unavailable"):
     """
-    Reads live/open trades from Supabase trades table.
+    Fallback reader for live/open trades from Supabase trades table.
     Does NOT use trade_results because trade_results stores closed TP/SL outcomes.
     Excludes manual TEST rows.
     """
     if supabase is None:
+        _dashboard_debug(f"source=SUPABASE_TRADES live_count=0 fallback_reason={fallback_reason}; supabase_unavailable")
         return 0
 
     try:
         result = (
             supabase.table("trades")
-            .select("symbol,status,trade_status,outcome,result")
+            .select("symbol,status,trade_status,state,outcome,result,closed_at")
             .limit(5000)
             .execute()
         )
@@ -1882,30 +1916,15 @@ def get_supabase_live_trades_count():
         rows = result.data or []
 
         if not rows:
+            _dashboard_debug(f"source=SUPABASE_TRADES live_count=0 fallback_reason={fallback_reason}; no_rows")
             return 0
 
-        live_count = 0
-
-        for row in rows:
-            if _is_test_symbol(row.get("symbol")):
-                continue
-
-            value = (
-                row.get("status")
-                or row.get("trade_status")
-                or row.get("outcome")
-                or row.get("result")
-            )
-
-            raw = str(value or "").strip().upper()
-            normalized = normalize_outcome(raw)
-
-            if normalized == "OPEN" or raw in ["ACTIVE", "LIVE", "RUNNING", "OPEN", "PENDING"]:
-                live_count += 1
-
+        live_count = sum(1 for row in rows if _is_live_trade_row(row))
+        _dashboard_debug(f"source=SUPABASE_TRADES live_count={live_count} fallback_reason={fallback_reason}")
         return int(live_count)
 
-    except Exception:
+    except Exception as exc:
+        _dashboard_debug(f"source=SUPABASE_TRADES live_count=0 fallback_reason={fallback_reason}; error:{exc}")
         return 0
 
 
