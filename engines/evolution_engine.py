@@ -46,6 +46,7 @@ REPORTS_DIR = PROJECT_ROOT / "reports"
 
 TRADE_JOURNAL_PATH = DATA_DIR / "trade_journal.csv"
 SCAN_JOURNAL_PATH = DATA_DIR / "scan_journal.csv"
+TRADE_OUTCOMES_PATH = DATA_DIR / "journals" / "trade_outcomes.csv"
 
 EVOLUTION_STATE_PATH = MEMORY_DIR / "evolution_state.json"
 EVOLUTION_REPORT_PATH = REPORTS_DIR / "evolution_report.txt"
@@ -223,18 +224,37 @@ def _get_outcome(row: Dict[str, Any]) -> Optional[str]:
 
 def _closed_trades_from_journal() -> List[Dict[str, Any]]:
     """
-    Reads trade_journal first.
-    If no closed trades found there, tries scan_journal as fallback.
+    Reads real closed trade outcomes first.
+    Falls back to legacy trade_journal and scan_journal sources.
     """
 
-    rows = _read_csv_rows(TRADE_JOURNAL_PATH)
-    closed = [r for r in rows if _get_outcome(r) in {"WIN", "LOSS"}]
+    sources = [
+        ("trade_outcomes", TRADE_OUTCOMES_PATH),
+        ("legacy_trade_journal", TRADE_JOURNAL_PATH),
+        ("legacy_scan_journal", SCAN_JOURNAL_PATH),
+    ]
 
-    if closed:
-        return closed
+    for index, (source_name, path) in enumerate(sources):
+        try:
+            rows = _read_csv_rows(path)
+            closed = [r for r in rows if _get_outcome(r) in {"WIN", "LOSS"}]
+            fallback_note = "primary source" if index == 0 else f"fallback path used: {path}"
+            print(
+                f"[Evolution DEBUG] source={source_name} path={path} "
+                f"closed_trades={len(closed)} ({fallback_note})"
+            )
 
-    fallback_rows = _read_csv_rows(SCAN_JOURNAL_PATH)
-    return [r for r in fallback_rows if _get_outcome(r) in {"WIN", "LOSS"}]
+            if closed:
+                print(
+                    f"[Evolution DEBUG] using source={source_name} "
+                    f"closed_trade_count={len(closed)}"
+                )
+                return closed
+        except Exception as e:
+            print(f"[Evolution DEBUG] source={source_name} path={path} read_failed={e}")
+
+    print("[Evolution DEBUG] no closed trades found in primary or fallback sources")
+    return []
 
 
 # =========================
