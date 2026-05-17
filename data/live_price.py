@@ -249,7 +249,7 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
         ltp = _extract_ltp(data, instrument_key)
         price = safe_float(ltp)
         if price is not None:
-            update_cached_price(symbol, price)
+            update_cached_price(symbol, price, source="UPSTOX")
             _write_status(symbol, "ACTIVE", "Live price fetched", price, "UPSTOX", token_type_used)
             return {
                 "price": price,

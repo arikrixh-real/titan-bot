@@ -19,12 +19,16 @@ It only decides:
 
 from __future__ import annotations
 
-import json
 import os
-from pathlib import Path
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List
+
+from alerts.daily_alert_state import (
+    DAILY_ALERT_STATE_FILE,
+    load_daily_alert_state,
+    save_daily_alert_state,
+)
 
 try:
     from supabase import create_client
@@ -34,8 +38,7 @@ except Exception:
 
 IST = ZoneInfo("Asia/Kolkata")
 
-STATE_DIR = Path("state")
-STATE_FILE = STATE_DIR / "daily_alert_state.json"
+STATE_FILE = DAILY_ALERT_STATE_FILE
 
 MAX_DAILY_ALERTS = 3
 TEST_SYMBOLS = {"TEST", "TESTPY"}
@@ -317,30 +320,22 @@ def _load_remote_alert_state() -> Dict[str, Any] | None:
 
 
 def _load_state() -> Dict[str, Any]:
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-
     today = _today_key()
     remote_state = _load_remote_alert_state()
 
-    if not STATE_FILE.exists():
-        return remote_state or {
-            "date": today,
-            "alerts_sent": 0,
-            "alerted_keys": []
-        }
-
     try:
-        with open(STATE_FILE, "r", encoding="utf-8") as f:
-            state = json.load(f)
+        state = load_daily_alert_state()
 
         if state.get("date") != today:
             return {
                 "date": today,
                 "alerts_sent": 0,
-                "alerted_keys": []
+                "messages": [],
+                "alerted_keys": [],
             }
 
         state.setdefault("alerts_sent", 0)
+        state.setdefault("messages", [])
         state.setdefault("alerted_keys", [])
 
         if remote_state and remote_state.get("date") == today:
@@ -362,15 +357,13 @@ def _load_state() -> Dict[str, Any]:
         return remote_state or {
             "date": today,
             "alerts_sent": 0,
-            "alerted_keys": []
+            "messages": [],
+            "alerted_keys": [],
         }
 
 
 def _save_state(state: Dict[str, Any]) -> None:
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-
-    with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(state, f, indent=2, ensure_ascii=False)
+    save_daily_alert_state(state)
 
 
 def _collect_candidate_pool(alert_filter_result: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -510,7 +503,14 @@ def mark_alerts_sent(sent_candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
             sent_count += 1
 
     state["alerted_keys"] = list(alerted_keys)
-    state["alerts_sent"] = min(MAX_DAILY_ALERTS, _safe_int(state.get("alerts_sent"), 0) + sent_count)
+    state["alerts_sent"] = min(
+        MAX_DAILY_ALERTS,
+        max(
+            _safe_int(state.get("alerts_sent"), 0),
+            len(alerted_keys),
+            sent_count,
+        ),
+    )
 
     _save_state(state)
 

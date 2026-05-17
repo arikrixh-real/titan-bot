@@ -79,6 +79,36 @@ def _read_json(path):
     return payload if isinstance(payload, dict) else {}
 
 
+def _meta_cache_exists():
+    return Path(META_CACHE_FILE).exists()
+
+
+def _meta_cache_updated_for_symbol(symbol, before_meta, after_meta):
+    before_entry = before_meta.get(symbol)
+    after_entry = after_meta.get(symbol)
+
+    if not isinstance(after_entry, dict):
+        return False
+
+    before_timestamp = before_entry.get("updated_at_ist") if isinstance(before_entry, dict) else None
+    after_timestamp = after_entry.get("updated_at_ist")
+
+    return bool(after_timestamp and after_timestamp != before_timestamp)
+
+
+def _readiness_status(meta_cache_exists, meta_cache_updated, token_status):
+    if not meta_cache_exists:
+        return "FAIL_META_CACHE_MISSING"
+
+    if token_status == "INVALID_OR_EXPIRED":
+        return "FAIL_TOKEN_INVALID_OR_EXPIRED"
+
+    if meta_cache_updated:
+        return "READY"
+
+    return "WARNING_META_CACHE_NOT_UPDATED"
+
+
 def _open_paper_symbols(registry):
     symbols = []
     seen = set()
@@ -108,6 +138,7 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
 
     if not symbols:
         health_check_symbol = "RELIANCE"
+        before_meta = _read_json(META_CACHE_FILE)
         try:
             result = get_live_price_debug(
                 health_check_symbol, use_cache=True, debug=False
@@ -137,17 +168,33 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
             health_check_status,
             health_check_reason,
         )
+        after_meta = _read_json(META_CACHE_FILE)
+        meta_cache_exists = _meta_cache_exists()
+        meta_cache_updated = (
+            health_check_price is not None
+            and health_check_source == "UPSTOX"
+            and health_check_status == "ACTIVE"
+            and _meta_cache_updated_for_symbol(
+                health_check_symbol,
+                before_meta,
+                after_meta,
+            )
+        )
+        readiness_status = _readiness_status(
+            meta_cache_exists,
+            meta_cache_updated,
+            token_status,
+        )
         payload = {
             "timestamp_ist": now_ist.isoformat(),
             "status": "NO_OPEN_POSITIONS_HEALTH_CHECK_COMPLETE",
             "symbols_checked": 1,
             "successful_prices": 1 if health_check_price is not None else 0,
             "failed_prices": 0 if health_check_price is not None else 1,
-            "cache_meta_updated": (
-                health_check_price is not None
-                and health_check_source == "UPSTOX"
-                and health_check_status == "ACTIVE"
-            ),
+            "meta_cache_exists": meta_cache_exists,
+            "meta_cache_updated": meta_cache_updated,
+            "cache_meta_updated": meta_cache_updated,
+            "readiness_status": readiness_status,
             "price_cache_meta_path": META_CACHE_FILE,
             "max_symbols_per_run": MAX_SYMBOLS_PER_RUN,
             "network_or_token_failure_count": (
@@ -183,6 +230,7 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
     token_status = "UNKNOWN"
 
     for symbol in symbols:
+        before_meta = _read_json(META_CACHE_FILE)
         try:
             result = get_live_price_debug(symbol, use_cache=True, debug=False)
             if not isinstance(result, dict):
@@ -202,7 +250,11 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
                 network_or_token_failure_count += 1
 
             if price is not None and source == "UPSTOX" and status == "ACTIVE":
-                cache_meta_updated = True
+                after_meta = _read_json(META_CACHE_FILE)
+                cache_meta_updated = (
+                    cache_meta_updated
+                    or _meta_cache_updated_for_symbol(symbol, before_meta, after_meta)
+                )
                 token_status = "VALID"
             elif _is_auth_token_failure(status, reason):
                 token_status = "INVALID_OR_EXPIRED"
@@ -235,13 +287,22 @@ def run_live_price_monitor(path=LIVE_PRICE_MONITOR_STATUS_PATH):
                 }
             )
 
+    meta_cache_exists = _meta_cache_exists()
+    readiness_status = _readiness_status(
+        meta_cache_exists,
+        cache_meta_updated,
+        token_status,
+    )
     payload = {
         "timestamp_ist": now_ist.isoformat(),
         "status": "LIVE_PRICE_CACHE_REFRESHED",
         "symbols_checked": len(symbols),
         "successful_prices": successful_prices,
         "failed_prices": failed_prices,
+        "meta_cache_exists": meta_cache_exists,
+        "meta_cache_updated": cache_meta_updated,
         "cache_meta_updated": cache_meta_updated,
+        "readiness_status": readiness_status,
         "price_cache_meta_path": META_CACHE_FILE,
         "max_symbols_per_run": MAX_SYMBOLS_PER_RUN,
         "network_or_token_failure_count": network_or_token_failure_count,
