@@ -274,7 +274,7 @@ def _ensure_files():
         "target", "entry_price", "stop_loss", "tp", "rr", "score", "rank_score",
         "quantity", "qty", "position_size", "capital_used", "risk_amount", "risk_per_trade_pct", "risk_per_share",
         "paper_trade_id", "is_paper_trade", "alert_sent", "market_status",
-        "status", "last_checked_at", "last_price", "pnl_points", "result_reason"
+        "status", "outcome", "result", "last_checked_at", "last_price", "pnl_points", "result_reason"
     ]
 
     if not ACTIVE_TRADES_CSV.exists():
@@ -341,6 +341,43 @@ def _check_outcome(row, live_price):
 
     pnl = round(price - entry if side == "LONG" else entry - price, 4)
     return "OPEN", price, pnl, "Still open"
+
+
+def _result_from_outcome(outcome):
+    outcome = str(outcome or "").upper().strip()
+    if outcome == "TP":
+        return "WIN"
+    if outcome == "SL":
+        return "LOSS"
+    return ""
+
+
+def _normalize_active_trade_lifecycle(row):
+    """
+    Backward-compatible migration for old active_trades rows that used TP/SL
+    as lifecycle status. New lifecycle status is OPEN or CLOSED only.
+    """
+    status = str(row.get("status", "")).upper().strip()
+
+    if status not in {"TP", "SL"}:
+        return status, False
+
+    outcome = status
+    result = _result_from_outcome(outcome)
+
+    row["status"] = "CLOSED"
+    row["outcome"] = row.get("outcome") or outcome
+    row["result"] = row.get("result") or result
+    if not row.get("result_reason"):
+        row["result_reason"] = "Legacy TP/SL lifecycle status normalized"
+
+    symbol = str(row.get("symbol", "")).upper().strip() or "UNKNOWN"
+    print(
+        f"[OutcomeTracker NORMALIZE] {symbol}: legacy status={status} "
+        f"normalized to status=CLOSED outcome={outcome} result={result}"
+    )
+
+    return "CLOSED", True
 
 
 def _extract_missing_column(error_text):
@@ -678,7 +715,7 @@ def track_trade_outcomes(limit=None):
         max_checks = None
 
     for row in rows:
-        status = str(row.get("status", "")).upper().strip()
+        status, _ = _normalize_active_trade_lifecycle(row)
 
         if status != "OPEN":
             updated_rows.append(row)
@@ -753,9 +790,16 @@ def track_trade_outcomes(limit=None):
             row["result_reason"] = reason
 
             if outcome in ["TP", "SL"]:
-                row["status"] = outcome
+                result = _result_from_outcome(outcome)
+                row["status"] = "CLOSED"
+                row["outcome"] = outcome
+                row["result"] = result
                 _append_outcome(row, outcome, exit_price, pnl_points, reason)
                 closed += 1
+                print(
+                    f"[OutcomeTracker NORMALIZE] {symbol}: "
+                    f"status=CLOSED outcome={outcome} result={result}"
+                )
                 print(f"[OutcomeTracker] {symbol} closed: {outcome} @ {exit_price}")
             else:
                 still_open += 1
@@ -773,7 +817,7 @@ def track_trade_outcomes(limit=None):
         "target", "entry_price", "stop_loss", "tp", "rr", "score", "rank_score",
         "quantity", "qty", "position_size", "capital_used", "risk_amount", "risk_per_trade_pct", "risk_per_share",
         "paper_trade_id", "is_paper_trade", "alert_sent", "market_status",
-        "status", "last_checked_at", "last_price", "pnl_points", "result_reason"
+        "status", "outcome", "result", "last_checked_at", "last_price", "pnl_points", "result_reason"
     ]
 
     final_fields = fields or default_fields
