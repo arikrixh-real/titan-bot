@@ -36,6 +36,16 @@ DASHBOARD_VISUAL_VERSION = "REAL_PNL_QTY_SYNC_FIX_V1"
 PAPER_ACCOUNT_PATH = "/".join(["data", "paper_trading", "paper_account.json"])
 DASHBOARD_SYNC_STATUS_PATH = "/".join(["data", "runtime", "dashboard_sync_status.json"])
 PAPER_ENGINE_STATUS_PATH = "/".join(["data", "runtime", "paper_engine_status.json"])
+RUNTIME_STATUS_TABLE = "runtime_status"
+RUNTIME_STATUS_KEYS = [
+    "dashboard_sync",
+    "titan_heartbeat",
+    "daemon_health",
+    "titan_runtime_status",
+    "live_price_monitor_status",
+    "master_brain_status",
+    "paper_engine_status",
+]
 
 
 # =========================================================
@@ -357,6 +367,54 @@ def get_supabase_connection_status():
         return "CONNECTED"
     except Exception:
         return "DEGRADED"
+
+
+@st.cache_data(ttl=AUTO_REFRESH_SECONDS)
+def get_supabase_runtime_status_payloads():
+    if supabase is None:
+        return {}
+    try:
+        result = (
+            supabase.table(RUNTIME_STATUS_TABLE)
+            .select("status_key,payload,timestamp_ist")
+            .in_("status_key", RUNTIME_STATUS_KEYS)
+            .execute()
+        )
+    except Exception:
+        return {}
+
+    rows = result.data if isinstance(result.data, list) else []
+    payloads = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        status_key = str(row.get("status_key") or "").strip()
+        payload = row.get("payload")
+        if not status_key or not isinstance(payload, dict):
+            continue
+        payloads[status_key] = payload
+    return payloads
+
+
+def build_runtime_status_from_supabase():
+    payloads = get_supabase_runtime_status_payloads()
+    if not payloads:
+        return None
+
+    dashboard_sync = payloads.get("dashboard_sync")
+    data = dict(dashboard_sync) if isinstance(dashboard_sync, dict) else {}
+    mapping = {
+        "heartbeat": payloads.get("titan_heartbeat"),
+        "daemon_health": payloads.get("daemon_health"),
+        "runtime_status": payloads.get("titan_runtime_status"),
+        "live_price_monitor_status": payloads.get("live_price_monitor_status"),
+        "master_brain_status": payloads.get("master_brain_status"),
+        "paper_engine_status": payloads.get("paper_engine_status"),
+    }
+    for target_key, payload in mapping.items():
+        if isinstance(payload, dict):
+            data[target_key] = payload
+    return data if data else None
 
 
 # =========================================================
@@ -1586,7 +1644,9 @@ def format_runtime_timestamp(value):
 
 
 def get_dashboard_runtime_status():
-    data = safe_read_json(DASHBOARD_SYNC_STATUS_PATH, {})
+    data = build_runtime_status_from_supabase()
+    if not isinstance(data, dict):
+        data = safe_read_json(DASHBOARD_SYNC_STATUS_PATH, {})
     if not isinstance(data, dict):
         data = {}
 
@@ -1632,7 +1692,14 @@ def get_dashboard_runtime_status():
 
 
 def get_paper_engine_runtime_status():
-    data = safe_read_json(PAPER_ENGINE_STATUS_PATH, {})
+    runtime_data = build_runtime_status_from_supabase()
+    data = (
+        runtime_data.get("paper_engine_status")
+        if isinstance(runtime_data, dict) and isinstance(runtime_data.get("paper_engine_status"), dict)
+        else None
+    )
+    if not isinstance(data, dict):
+        data = safe_read_json(PAPER_ENGINE_STATUS_PATH, {})
     if not isinstance(data, dict):
         data = {}
 
