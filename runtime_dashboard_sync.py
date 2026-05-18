@@ -22,6 +22,7 @@ RUNTIME_STATUS_SOURCES = {
     "titan_heartbeat": HEARTBEAT_PATH,
     "daemon_health": DAEMON_HEALTH_PATH,
     "titan_runtime_status": RUNTIME_STATUS_PATH,
+    "scanner_status": SCANNER_STATUS_PATH,
     "live_price_monitor_status": LIVE_PRICE_MONITOR_STATUS_PATH,
     "master_brain_status": MASTER_BRAIN_STATUS_PATH,
     "paper_engine_status": PAPER_ENGINE_STATUS_PATH,

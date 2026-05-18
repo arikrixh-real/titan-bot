@@ -36,12 +36,16 @@ DASHBOARD_VISUAL_VERSION = "REAL_PNL_QTY_SYNC_FIX_V1"
 PAPER_ACCOUNT_PATH = "/".join(["data", "paper_trading", "paper_account.json"])
 DASHBOARD_SYNC_STATUS_PATH = "/".join(["data", "runtime", "dashboard_sync_status.json"])
 PAPER_ENGINE_STATUS_PATH = "/".join(["data", "runtime", "paper_engine_status.json"])
+SCANNER_STATUS_PATH = "/".join(["data", "runtime", "scanner_status.json"])
+LIVE_PRICE_MONITOR_STATUS_PATH = "/".join(["data", "runtime", "live_price_monitor_status.json"])
 RUNTIME_STATUS_TABLE = "runtime_status"
+RUNTIME_FRESH_SECONDS = 15 * 60
 RUNTIME_STATUS_KEYS = [
     "dashboard_sync",
     "titan_heartbeat",
     "daemon_health",
     "titan_runtime_status",
+    "scanner_status",
     "live_price_monitor_status",
     "master_brain_status",
     "paper_engine_status",
@@ -392,6 +396,9 @@ def get_supabase_runtime_status_payloads():
         payload = row.get("payload")
         if not status_key or not isinstance(payload, dict):
             continue
+        payload = dict(payload)
+        if row.get("timestamp_ist") and not payload.get("timestamp_ist"):
+            payload["timestamp_ist"] = row.get("timestamp_ist")
         payloads[status_key] = payload
     return payloads
 
@@ -407,6 +414,7 @@ def build_runtime_status_from_supabase():
         "heartbeat": payloads.get("titan_heartbeat"),
         "daemon_health": payloads.get("daemon_health"),
         "runtime_status": payloads.get("titan_runtime_status"),
+        "scanner_status": payloads.get("scanner_status"),
         "live_price_monitor_status": payloads.get("live_price_monitor_status"),
         "master_brain_status": payloads.get("master_brain_status"),
         "paper_engine_status": payloads.get("paper_engine_status"),
@@ -1643,42 +1651,111 @@ def format_runtime_timestamp(value):
     return str(value or "No heartbeat yet")
 
 
-def get_dashboard_runtime_status():
+def get_runtime_payload(runtime_key, local_path=None):
     data = build_runtime_status_from_supabase()
-    if not isinstance(data, dict):
-        data = safe_read_json(DASHBOARD_SYNC_STATUS_PATH, {})
-    if not isinstance(data, dict):
-        data = {}
+    if isinstance(data, dict) and isinstance(data.get(runtime_key), dict):
+        return data.get(runtime_key), "SUPABASE_RUNTIME_STATUS"
+    if local_path:
+        data = safe_read_json(local_path, {})
+        if isinstance(data, dict):
+            return data, "LOCAL_RUNTIME_JSON"
+    return {}, "UNAVAILABLE"
 
-    daemon_health = data.get("daemon_health") if isinstance(data.get("daemon_health"), dict) else {}
-    heartbeat = data.get("heartbeat") if isinstance(data.get("heartbeat"), dict) else {}
-    runtime_status = data.get("runtime_status") if isinstance(data.get("runtime_status"), dict) else {}
-    autonomous_summary = (
-        data.get("autonomous_runtime_summary")
-        if isinstance(data.get("autonomous_runtime_summary"), dict)
-        else {}
+
+def runtime_payload_dt(payload):
+    if not isinstance(payload, dict):
+        return None
+    return parse_dt(
+        payload.get("timestamp_ist")
+        or payload.get("last_runtime_update")
+        or payload.get("updated_at")
+        or payload.get("created_at")
+        or payload.get("timestamp")
     )
 
-    daemon_status = str(
-        daemon_health.get("status")
-        or heartbeat.get("status")
-        or data.get("status")
-        or "WAITING"
+
+def runtime_payload_is_fresh(payload, fresh_seconds=RUNTIME_FRESH_SECONDS):
+    dt = runtime_payload_dt(payload)
+    if not dt:
+        return False
+    return (datetime.now(IST) - dt).total_seconds() <= fresh_seconds
+
+
+def runtime_payload_status(payload):
+    if not isinstance(payload, dict):
+        return ""
+    return str(
+        payload.get("status")
+        or payload.get("readiness_status")
+        or payload.get("health_check_status")
+        or ""
     ).upper()
+
+
+def runtime_payload_active(payload):
+    status = runtime_payload_status(payload)
+    if not status:
+        return False
+    inactive_markers = ("STOPPED", "FAILED", "ERROR", "INACTIVE", "STALE")
+    return not any(marker in status for marker in inactive_markers)
+
+
+def runtime_status_with_freshness(payload, active_status="ACTIVE", waiting_status="WAITING"):
+    if not isinstance(payload, dict) or not payload:
+        return waiting_status
+    if not runtime_payload_is_fresh(payload):
+        return "STALE"
+    if runtime_payload_active(payload):
+        return active_status
+    return runtime_payload_status(payload) or waiting_status
+
+
+def get_dashboard_runtime_status():
+    daemon_health, _ = get_runtime_payload("daemon_health", "/".join(["data", "runtime", "daemon_health.json"]))
+    heartbeat, _ = get_runtime_payload("heartbeat", "/".join(["data", "runtime", "titan_heartbeat.json"]))
+    runtime_status, _ = get_runtime_payload("runtime_status", "/".join(["data", "runtime", "titan_runtime_status.json"]))
+    scanner_status, _ = get_runtime_payload("scanner_status", SCANNER_STATUS_PATH)
+    master_brain_status, _ = get_runtime_payload("master_brain_status", "/".join(["data", "runtime", "master_brain_status.json"]))
+    paper_engine_status, _ = get_runtime_payload("paper_engine_status", PAPER_ENGINE_STATUS_PATH)
+    live_price_monitor_status, _ = get_runtime_payload("live_price_monitor_status", LIVE_PRICE_MONITOR_STATUS_PATH)
+
+    daemon_fresh = runtime_payload_is_fresh(daemon_health)
+    heartbeat_fresh = runtime_payload_is_fresh(heartbeat)
+    runtime_fresh = runtime_payload_is_fresh(runtime_status)
+    daemon_alive = (
+        daemon_fresh
+        and runtime_payload_status(daemon_health) == "RUNNING"
+    ) or (
+        heartbeat_fresh
+        and runtime_payload_status(heartbeat) == "ALIVE"
+    )
+
+    if daemon_alive:
+        daemon_status = runtime_payload_status(daemon_health) or runtime_payload_status(heartbeat)
+    elif daemon_health or heartbeat or runtime_status:
+        daemon_status = "STALE" if not (daemon_fresh or heartbeat_fresh or runtime_fresh) else "WAITING"
+    else:
+        daemon_status = "WAITING"
+
     runtime_mode = str(
         runtime_status.get("mode")
         or daemon_health.get("mode")
         or heartbeat.get("mode")
         or "UNKNOWN"
     )
-    heartbeat_timestamp = heartbeat.get("timestamp_ist") or daemon_health.get("timestamp_ist") or data.get("timestamp_ist")
+    heartbeat_timestamp = heartbeat.get("timestamp_ist") or daemon_health.get("timestamp_ist") or runtime_status.get("timestamp_ist")
     ticks_completed = daemon_health.get("ticks_completed")
     ticks_text = f"{int(ticks_completed):,}" if isinstance(ticks_completed, (int, float)) else str(ticks_completed or "0")
-    attention_reasons = autonomous_summary.get("attention_reasons")
-    if not isinstance(attention_reasons, list):
-        attention_reasons = []
-    attention_reasons = [str(reason) for reason in attention_reasons if reason]
-    autonomous_status = "NEEDS ATTENTION" if bool(autonomous_summary.get("needs_attention")) else "OK"
+
+    runtime_checks = {
+        "daemon_not_alive": daemon_alive,
+        "scanner_stale": runtime_payload_is_fresh(scanner_status) and runtime_payload_active(scanner_status),
+        "master_brain_stale": runtime_payload_is_fresh(master_brain_status) and runtime_payload_active(master_brain_status),
+        "paper_engine_stale": runtime_payload_is_fresh(paper_engine_status) and runtime_payload_active(paper_engine_status),
+        "live_price_monitor_stale": runtime_payload_is_fresh(live_price_monitor_status) and runtime_payload_active(live_price_monitor_status),
+    }
+    attention_reasons = [reason for reason, ok in runtime_checks.items() if not ok]
+    autonomous_status = "NEEDS ATTENTION" if attention_reasons else "OK"
     autonomous_sub = ", ".join(attention_reasons) if attention_reasons else "Runtime attention checks clear"
 
     return {
@@ -1688,6 +1765,38 @@ def get_dashboard_runtime_status():
         "ticks_completed": ticks_text,
         "autonomous_runtime_status": autonomous_status,
         "autonomous_runtime_sub": autonomous_sub,
+    }
+
+
+def get_scanner_runtime_status():
+    data, source = get_runtime_payload("scanner_status", SCANNER_STATUS_PATH)
+    timestamp = runtime_payload_dt(data)
+    status = runtime_status_with_freshness(data, active_status="ACTIVE")
+    if not market_open and status not in {"STALE", "WAITING"}:
+        status = "MARKET CLOSED"
+    stocks_checked = int(first_number(data.get("stocks_checked"), default=0)) if isinstance(data, dict) else 0
+    return {
+        "payload": data if isinstance(data, dict) else {},
+        "source": source,
+        "timestamp": timestamp,
+        "age": age_text_from_dt(timestamp),
+        "status": status,
+        "stocks_checked": stocks_checked,
+    }
+
+
+def get_live_price_monitor_runtime_status():
+    data, source = get_runtime_payload("live_price_monitor_status", LIVE_PRICE_MONITOR_STATUS_PATH)
+    timestamp = runtime_payload_dt(data)
+    status = runtime_status_with_freshness(data, active_status="ACTIVE")
+    if not market_open and status not in {"STALE", "WAITING"}:
+        status = "MARKET CLOSED"
+    return {
+        "payload": data if isinstance(data, dict) else {},
+        "source": source,
+        "timestamp": timestamp,
+        "age": age_text_from_dt(timestamp),
+        "status": status,
     }
 
 
@@ -1774,21 +1883,18 @@ def last_scan_display_from_dt(dt, market_open=None):
 
 def derive_titan_status(master_activity_time=None, github_data=None, supabase_status="OFFLINE", market_open=None):
     market_open = is_market_open_now() if market_open is None else market_open
-    github_data = github_data or {}
-    github_status_value = str(github_data.get("status") or "").upper()
-    github_healthy = github_status_value in {"SUCCESS", "RUNNING"}
     supabase_healthy = supabase_status == "CONNECTED"
 
     if master_activity_time:
         age_seconds = (datetime.now(IST) - master_activity_time).total_seconds()
         if age_seconds <= 6 * 3600:
             return "ONLINE" if market_open else "RESEARCH MODE"
-        if age_seconds <= 24 * 3600 and (github_healthy or supabase_healthy):
+        if age_seconds <= 24 * 3600 and supabase_healthy:
             return "DELAYED"
 
-    if not market_open and (github_healthy or supabase_healthy):
+    if not market_open and supabase_healthy:
         return "RESEARCH MODE"
-    if github_healthy or supabase_healthy:
+    if supabase_healthy:
         return "DELAYED"
     return "OFFLINE"
 
@@ -2363,6 +2469,9 @@ github_age = age_text_from_dt(github_data["last_run_time"])
 supabase_status = get_supabase_connection_status()
 runtime_status_data = get_dashboard_runtime_status()
 paper_engine_runtime_data = get_paper_engine_runtime_status()
+scanner_runtime_data = get_scanner_runtime_status()
+live_price_monitor_runtime_data = get_live_price_monitor_runtime_status()
+real_latest_scan_time = scanner_runtime_data["timestamp"]
 
 
 # Counts
@@ -2411,7 +2520,7 @@ trade_performance_percent = accuracy_percent
 rr_display = "1:2"
 
 master_brain_data = get_master_brain_status(
-    github_time=github_data.get("last_run_time"),
+    github_time=None,
     scan_time=latest_dt(real_latest_scan_time, latest_phase_report_time),
     outcome_time=trade_result_stats.get("latest_outcome_time"),
 )
@@ -2420,12 +2529,11 @@ master_shadow_data = get_master_shadow_dashboard_data()
 master_activity_time = latest_dt(
     master_brain_data.get("last_activity"),
     latest_phase_report_time,
-    github_data.get("last_run_time"),
     real_latest_scan_time,
 )
 
-last_scan_age = last_scan_display_from_dt(real_latest_scan_time, market_open)
-scan_status = derive_scan_status(real_latest_scan_time, master_activity_time, market_open)
+last_scan_age = scanner_runtime_data["age"]
+scan_status = scanner_runtime_data["status"]
 titan_status = derive_titan_status(master_activity_time, github_data, supabase_status, market_open)
 github_display_status = market_aware_status(github_status, market_open, "WAITING")
 master_brain_display_status = market_aware_status(master_brain_data["master_status"], market_open, "RESEARCH MODE")
@@ -2479,7 +2587,6 @@ if scan_health:
     latest_final_passed = int(scan_health.get("final_passed") or 0)
     latest_health_alerts = int(scan_health.get("alerts_sent") or 0)
     latest_scan_health_age = last_scan_display_from_dt(latest_scan_health_time, market_open)
-    upstox_live_price_status = derive_upstox_status(latest_scan_health_time, latest_stocks_checked, market_open)
 else:
     latest_stocks_checked = 0
     latest_trend_passed = 0
@@ -2489,7 +2596,11 @@ else:
     latest_final_passed = 0
     latest_health_alerts = 0
     latest_scan_health_age = "Market closed / research mode" if not market_open else "No live price scan yet"
-    upstox_live_price_status = derive_upstox_status(None, 0, market_open)
+
+live_price_monitor_payload = live_price_monitor_runtime_data["payload"]
+latest_live_price_checked = int(first_number(live_price_monitor_payload.get("symbols_checked"), default=0))
+upstox_live_price_status = live_price_monitor_runtime_data["status"]
+upstox_live_price_age = live_price_monitor_runtime_data["age"]
 
 
 # =========================================================
@@ -2531,7 +2642,7 @@ with c3:
     status_card("Supabase Status", supabase_status, "Memory database connection")
 
 with c4:
-    metric_card("Last Scan", last_scan_age, f"GitHub last run: {github_age}")
+    metric_card("Last Scan", last_scan_age, f"Runtime source: {scanner_runtime_data['source']}")
 
 with c5:
     status_card(
@@ -2820,7 +2931,7 @@ if scan_health:
         status_card(
             "Upstox Live Price",
             upstox_live_price_status,
-            f"Live price scan: {latest_stocks_checked}/50 · {latest_scan_health_age}"
+            f"Live price scan: {latest_live_price_checked}/5 · {upstox_live_price_age}"
         )
 
     with h2:
