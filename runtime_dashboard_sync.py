@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 from supabase import create_client
+from dotenv import load_dotenv
 
 
 DASHBOARD_SYNC_STATUS_PATH = Path("data") / "runtime" / "dashboard_sync_status.json"
@@ -16,6 +17,9 @@ LIVE_PRICE_MONITOR_STATUS_PATH = Path("data") / "runtime" / "live_price_monitor_
 DAEMON_HEALTH_PATH = Path("data") / "runtime" / "daemon_health.json"
 RUNTIME_STATUS_TABLE = "runtime_status"
 IST = timezone(timedelta(hours=5, minutes=30))
+
+
+load_dotenv()
 
 
 RUNTIME_STATUS_SOURCES = {
@@ -71,19 +75,39 @@ def latest_timestamp(*payloads):
 
 def get_supabase_client():
     url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    if not url or not key:
-        return None
+    key = os.getenv("SUPABASE_KEY")
+    missing_env_vars = []
+    if not url:
+        missing_env_vars.append("SUPABASE_URL")
+    if not key:
+        missing_env_vars.append("SUPABASE_KEY")
+    if missing_env_vars:
+        for env_var in missing_env_vars:
+            print(f"[DashboardSync ERROR] missing env var: {env_var}")
+        return None, missing_env_vars, None
     try:
-        return create_client(url, key)
-    except Exception:
-        return None
+        return create_client(url, key), [], None
+    except Exception as exc:
+        error = f"Supabase client creation failed: {exc}"
+        print(f"[DashboardSync ERROR] {error}")
+        return None, [], error
 
 
 def upsert_runtime_status_rows(payloads, dashboard_payload):
-    client = get_supabase_client()
+    client, missing_env_vars, client_error = get_supabase_client()
+    sync_result = {
+        "supabase_sync_enabled": client is not None,
+        "rows_attempted": 0,
+        "rows_written": 0,
+        "sync_error": None,
+    }
     if client is None:
-        return False
+        if missing_env_vars:
+            sync_result["sync_error"] = "missing env var: " + ", ".join(missing_env_vars)
+        else:
+            sync_result["sync_error"] = client_error or "Supabase client unavailable"
+        print(f"[DashboardSync RESULT] {json.dumps(sync_result, sort_keys=True)}")
+        return sync_result
 
     now_ist = datetime.now(IST).isoformat()
     rows = []
@@ -95,6 +119,7 @@ def upsert_runtime_status_rows(payloads, dashboard_payload):
                 "status_key": status_key,
                 "payload": payload,
                 "timestamp_ist": payload.get("timestamp_ist") or now_ist,
+                "updated_at": now_ist,
             }
         )
 
@@ -107,18 +132,27 @@ def upsert_runtime_status_rows(payloads, dashboard_payload):
                 or dashboard_payload.get("autonomous_runtime_summary", {}).get("last_runtime_update")
                 or now_ist
             ),
+            "updated_at": now_ist,
         }
     )
+    sync_result["rows_attempted"] = len(rows)
 
     try:
-        client.table(RUNTIME_STATUS_TABLE).upsert(
+        response = client.table(RUNTIME_STATUS_TABLE).upsert(
             rows,
             on_conflict="status_key",
         ).execute()
-        return True
+        response_rows = getattr(response, "data", None)
+        if isinstance(response_rows, list):
+            sync_result["rows_written"] = len(response_rows)
+        else:
+            sync_result["rows_written"] = len(rows)
+        print(f"[DashboardSync RESULT] {json.dumps(sync_result, sort_keys=True)}")
+        return sync_result
     except Exception as exc:
-        print(f"[DashboardSync WARN] Supabase runtime_status upsert failed: {exc}")
-        return False
+        sync_result["sync_error"] = str(exc)
+        print(f"[DashboardSync RESULT] {json.dumps(sync_result, sort_keys=True)}")
+        return sync_result
 
 
 def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
@@ -219,10 +253,12 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
         }
     }
 
+    sync_result = upsert_runtime_status_rows(runtime_payloads, payload)
+    payload["supabase_sync"] = sync_result
+
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
-    upsert_runtime_status_rows(runtime_payloads, payload)
     return payload
 
 
