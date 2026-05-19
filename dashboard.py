@@ -1730,6 +1730,10 @@ def get_latest_scan_symbols_breakdown():
         "timestamp": latest_time,
         "is_fresh": True,
         "has_data": checked > 0,
+        "scanner_cycle_id": None,
+        "scan_finished_at_ist": None,
+        "scan_duration_seconds": None,
+        "scan_only": False,
     }
 
 
@@ -1754,6 +1758,10 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         "is_fresh": False,
         "has_data": False,
         "limited_runtime": False,
+        "scanner_cycle_id": None,
+        "scan_finished_at_ist": None,
+        "scan_duration_seconds": None,
+        "scan_only": False,
     }
 
     supabase_scanner_payload = get_supabase_scanner_status_payload()
@@ -1780,6 +1788,10 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "is_fresh": True,
             "has_data": True,
             "limited_runtime": False,
+            "scanner_cycle_id": supabase_scanner_payload.get("scanner_cycle_id"),
+            "scan_finished_at_ist": supabase_scanner_payload.get("scan_finished_at_ist"),
+            "scan_duration_seconds": supabase_scanner_payload.get("scan_duration_seconds"),
+            "scan_only": bool(supabase_scanner_payload.get("scan_only")),
         }
 
     scanner_payload = (
@@ -1810,6 +1822,10 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "is_fresh": True,
             "has_data": True,
             "limited_runtime": False,
+            "scanner_cycle_id": scanner_payload.get("scanner_cycle_id"),
+            "scan_finished_at_ist": scanner_payload.get("scan_finished_at_ist"),
+            "scan_duration_seconds": scanner_payload.get("scan_duration_seconds"),
+            "scan_only": bool(scanner_payload.get("scan_only")),
         }
 
     scan_symbols_breakdown = get_latest_scan_symbols_breakdown()
@@ -1830,6 +1846,10 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "is_fresh": True,
             "has_data": True,
             "limited_runtime": True,
+            "scanner_cycle_id": scanner_payload.get("scanner_cycle_id"),
+            "scan_finished_at_ist": scanner_payload.get("scan_finished_at_ist"),
+            "scan_duration_seconds": scanner_payload.get("scan_duration_seconds"),
+            "scan_only": bool(scanner_payload.get("scan_only")),
         }
 
     return zero
@@ -1898,6 +1918,44 @@ def age_text_from_dt(dt):
 
     days = hours // 24
     return f"{days}d ago"
+
+
+def scanner_cycle_age_text(dt):
+    if not dt:
+        return "No scanner cycle timestamp"
+
+    seconds = int((datetime.now(IST) - dt).total_seconds())
+    if seconds < 0:
+        seconds = 0
+
+    if seconds < 60:
+        unit = "second" if seconds == 1 else "seconds"
+        return f"{seconds} {unit} ago"
+
+    minutes = seconds // 60
+    unit = "minute" if minutes == 1 else "minutes"
+    return f"{minutes} {unit} ago"
+
+
+def scan_duration_text(value):
+    if value in [None, ""]:
+        return "Not reported"
+    try:
+        seconds = float(value)
+    except Exception:
+        return "Not reported"
+    if seconds < 0:
+        seconds = 0
+    if seconds == int(seconds):
+        return f"{int(seconds)} seconds"
+    return f"{seconds:.1f} seconds"
+
+
+def scanner_cycle_suffix(value):
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return text[-8:]
 
 
 def format_runtime_timestamp(value):
@@ -2903,6 +2961,20 @@ latest_entry_passed = scan_breakdown["entry_passed"]
 latest_final_passed = scan_breakdown["final_passed"]
 latest_health_alerts = scan_breakdown["alerts_this_scan"]
 latest_scan_health_age = last_scan_display_from_dt(scan_breakdown.get("timestamp"), market_open)
+scanner_finished_at = parse_dt(scan_breakdown.get("scan_finished_at_ist")) or scan_breakdown.get("timestamp")
+scanner_cycle_suffix_text = scanner_cycle_suffix(scan_breakdown.get("scanner_cycle_id"))
+scanner_refresh_proof = (
+    f"Last scanner cycle: {scanner_cycle_age_text(scanner_finished_at)} | "
+    f"Scan duration: {scan_duration_text(scan_breakdown.get('scan_duration_seconds'))} | "
+    f"Source: {scan_breakdown.get('source', 'UNKNOWN')}"
+)
+if scanner_cycle_suffix_text:
+    scanner_refresh_proof = f"{scanner_refresh_proof} | Cycle: ...{scanner_cycle_suffix_text}"
+final_passed_subtitle = (
+    "Final quality filter not run in scanner-only mode"
+    if scan_breakdown.get("scan_only") and latest_final_passed == 0
+    else "Quality filter passed"
+)
 if not scan_breakdown.get("is_fresh"):
     latest_scan_health_age = "Stale scan breakdown" if scan_breakdown.get("timestamp") else (
         "Market closed / research mode" if not market_open else "No live price scan yet"
@@ -3221,7 +3293,7 @@ if scan_breakdown.get("limited_runtime"):
         "Scanner runtime is active, but detailed gate breakdown is not available yet.\n\n"
         "Next VPS scan cycle will update this once scanner_status publishes gate counts."
     )
-    st.caption(f"Scan breakdown source: {scan_breakdown.get('source', 'SUPABASE_RUNTIME_SCANNER')}")
+    st.caption(scanner_refresh_proof)
 
 elif scan_breakdown.get("has_data"):
     b1, b2, b3, b4, b5, b6 = st.columns(6)
@@ -3242,7 +3314,7 @@ elif scan_breakdown.get("has_data"):
         metric_card("Entry Passed", f"{latest_entry_passed:,}", "Breakout ready")
 
     with b6:
-        metric_card("Final Passed", f"{latest_final_passed:,}", "Quality filter passed")
+        metric_card("Final Passed", f"{latest_final_passed:,}", final_passed_subtitle)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -3261,7 +3333,7 @@ elif scan_breakdown.get("has_data"):
     with h3:
         metric_card("Live Trades Count", f"{live_trades_count:,}", "Open trades only")
 
-    st.caption(f"Scan breakdown source: {scan_breakdown.get('source', 'UNKNOWN')}")
+    st.caption(scanner_refresh_proof)
 
 else:
     st.caption("Awaiting VPS scanner breakdown")
@@ -3285,7 +3357,7 @@ else:
     with b6:
         metric_card("Final Passed", "0", "Awaiting VPS scanner breakdown")
 
-    st.caption(f"Scan breakdown source: {scan_breakdown.get('source', 'FALLBACK_AWAITING_VPS_SCANNER')}")
+    st.caption(scanner_refresh_proof)
 
 st.markdown("</div>", unsafe_allow_html=True)
 
