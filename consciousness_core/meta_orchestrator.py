@@ -12,21 +12,28 @@ from consciousness_core.belief_graph import (
 )
 from consciousness_core.causal_reasoning import run_causal_reasoning
 from consciousness_core.confidence_recalibration import run_confidence_recalibration
+from consciousness_core.contradiction_arbitrator import run_contradiction_arbitrator
 from consciousness_core.data_collector import collect_observations
 from consciousness_core.daily_review_engine import run_daily_review_engine
+from consciousness_core.deep_causal_reasoning import run_deep_causal_reasoning
 from consciousness_core.evolution_bridge import get_last_bridge_dedup_count, write_evolution_bridge_queue
 from consciousness_core.experience_clustering import run_experience_clustering
 from consciousness_core.experience_memory import update_experience_memory
 from consciousness_core.goal_manager import update_goals
 from consciousness_core.improvement_planner import create_improvement_proposals, get_last_consolidated_proposals
+from consciousness_core.institutional_reasoning_summary import run_institutional_reasoning_summary
 from consciousness_core.internal_question_engine import generate_internal_questions
 from consciousness_core.learning_engine import run_learning_engine
+from consciousness_core.liquidity_intelligence import run_liquidity_intelligence
+from consciousness_core.manipulation_intelligence import run_manipulation_intelligence
 from consciousness_core.meta_learning import run_meta_learning
+from consciousness_core.multi_agent_debate import run_multi_agent_debate
 from consciousness_core.promotion_gate import run_promotion_gate
 from consciousness_core.real_experience_memory import run_real_experience_memory
 from consciousness_core.reflection_engine import reflect
 from consciousness_core.report import write_report
 from consciousness_core.research_lab import run_research_lab
+from consciousness_core.autonomous_research_scientist import run_autonomous_research_scientist
 from consciousness_core.research_mission_generator import generate_research_missions, get_last_consolidated_missions
 from consciousness_core.sandbox_evolution import run_sandbox_evolution
 from consciousness_core.safety_gate import evaluate_proposal
@@ -39,6 +46,7 @@ from consciousness_core.thought_memory import (
     append_thought,
 )
 from consciousness_core.weakness_hunter import get_last_duplicates_merged, hunt_weaknesses
+from consciousness_core.world_model_expansion import run_world_model_expansion
 from consciousness_core.world_model_memory import run_world_model_memory
 from consciousness_core.world_graph import update_world_graph
 
@@ -61,9 +69,10 @@ def _write_health(payload):
     atomic_write_json(HEALTH_PATH, payload)
 
 
-def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=None, phase3=None):
+def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=None, phase3=None, phase_a=None):
     phase2 = phase2 or {}
     phase3 = phase3 or {}
+    phase_a = phase_a or {}
     top_beliefs = sorted(
         beliefs.values(),
         key=lambda belief: float(belief.get("confidence") or 0),
@@ -119,6 +128,39 @@ def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=
         "world_model_memory": {
             "market_laws": phase3.get("world_model_memory", {}).get("market_laws", [])[:10],
             "engine_memory": phase3.get("world_model_memory", {}).get("engine_memory", {}),
+        },
+        "phase_a_institutional_reasoning": {
+            "multi_agent_debate": {
+                "final_consensus": phase_a.get("multi_agent_debate", {}).get("final_consensus"),
+                "contradiction_level": phase_a.get("multi_agent_debate", {}).get("contradiction_level"),
+                "suggested_action_bias": phase_a.get("multi_agent_debate", {}).get("suggested_action_bias"),
+            },
+            "deep_causal_reasoning": {
+                "strongest_causal_chains": phase_a.get("deep_causal_reasoning", {}).get("strongest_causal_chains", [])[:5],
+                "weakest_causal_links": phase_a.get("deep_causal_reasoning", {}).get("weakest_causal_links", [])[:5],
+            },
+            "manipulation_intelligence": {
+                "suspicion_score": phase_a.get("manipulation_intelligence", {}).get("suspicion_score"),
+                "trap_patterns": phase_a.get("manipulation_intelligence", {}).get("trap_patterns", [])[:5],
+            },
+            "liquidity_intelligence": {
+                "liquidity_regime": phase_a.get("liquidity_intelligence", {}).get("liquidity_regime"),
+                "liquidity_stress": phase_a.get("liquidity_intelligence", {}).get("liquidity_stress", {}),
+            },
+            "autonomous_research": phase_a.get("autonomous_research", {}).get("ranked_discoveries", [])[:5],
+            "world_model_expansion": {
+                "confidence_reliability_memory": phase_a.get("world_model_expansion", {}).get("confidence_reliability_memory", {}),
+                "manipulation_memory": phase_a.get("world_model_expansion", {}).get("manipulation_memory", {}),
+            },
+            "contradiction_arbitration": {
+                "overall_severity": phase_a.get("contradiction_arbitration", {}).get("overall_severity"),
+                "aggregate_confidence_adjustment": phase_a.get("contradiction_arbitration", {}).get("aggregate_confidence_adjustment"),
+                "contradictions": phase_a.get("contradiction_arbitration", {}).get("contradictions", [])[:5],
+            },
+            "institutional_reasoning_summary": {
+                "recommended_caution_aggression_level": phase_a.get("institutional_reasoning_summary", {}).get("recommended_caution_aggression_level"),
+                "top_institutional_concerns": phase_a.get("institutional_reasoning_summary", {}).get("top_institutional_concerns", [])[:5],
+            },
         },
     }
     atomic_write_json(CONTEXT_PATH, context)
@@ -194,13 +236,31 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             "confidence_recalibration": confidence_recalibration,
             "world_model_memory": world_model_memory,
         }
+        multi_agent_debate = run_multi_agent_debate()
+        deep_causal_reasoning = run_deep_causal_reasoning()
+        manipulation_intelligence = run_manipulation_intelligence()
+        liquidity_intelligence = run_liquidity_intelligence()
+        autonomous_research = run_autonomous_research_scientist()
+        world_model_expansion = run_world_model_expansion()
+        contradiction_arbitration = run_contradiction_arbitrator()
+        institutional_reasoning_summary = run_institutional_reasoning_summary()
+        phase_a = {
+            "multi_agent_debate": multi_agent_debate,
+            "deep_causal_reasoning": deep_causal_reasoning,
+            "manipulation_intelligence": manipulation_intelligence,
+            "liquidity_intelligence": liquidity_intelligence,
+            "autonomous_research": autonomous_research,
+            "world_model_expansion": world_model_expansion,
+            "contradiction_arbitration": contradiction_arbitration,
+            "institutional_reasoning_summary": institutional_reasoning_summary,
+        }
         consolidation_stats = {
             "duplicates_merged": get_last_duplicates_merged(),
             "consolidated_missions": get_last_consolidated_missions(),
             "consolidated_proposals": get_last_consolidated_proposals() + get_last_bridge_dedup_count(),
             "consolidated_beliefs": get_last_beliefs_consolidated(),
         }
-        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3)
+        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a)
         approved_count = len(approved_queue)
         rejected_count = list(safety_decisions.values()).count("REJECTED")
         summary = _summary(observation_packet, reflection, weaknesses, proposals, approved_count)
@@ -248,7 +308,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
         core_state["active_weaknesses"] = weaknesses[:20]
         core_state["latest_summary"] = summary
         core_state = save_state(core_state, core_state_path)
-        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3)
+        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a)
 
         report = write_report(
             core_state,
@@ -264,6 +324,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             consolidation_stats=consolidation_stats,
             phase2=phase2,
             phase3=phase3,
+            phase_a=phase_a,
         )
         health = {
             "status": "OK",

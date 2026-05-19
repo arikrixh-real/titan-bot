@@ -21,6 +21,7 @@ def write_report(
     consolidation_stats=None,
     phase2=None,
     phase3=None,
+    phase_a=None,
     path_json=REPORT_JSON_PATH,
     path_txt=REPORT_TXT_PATH,
 ):
@@ -29,6 +30,7 @@ def write_report(
     consolidation_stats = consolidation_stats or {}
     phase2 = phase2 or {}
     phase3 = phase3 or {}
+    phase_a = phase_a or {}
     top_beliefs = sorted(
         beliefs.values(),
         key=lambda belief: float(belief.get("confidence") or 0),
@@ -97,6 +99,43 @@ def write_report(
         "phase3_world_model_memory": {
             "market_laws": phase3.get("world_model_memory", {}).get("market_laws", [])[:10],
             "engine_memory": phase3.get("world_model_memory", {}).get("engine_memory", {}),
+        },
+        "phase_a_institutional_reasoning": {
+            "multi_agent_debate": {
+                "final_debate_summary": phase_a.get("multi_agent_debate", {}).get("final_debate_summary"),
+                "final_consensus": phase_a.get("multi_agent_debate", {}).get("final_consensus"),
+                "contradiction_level": phase_a.get("multi_agent_debate", {}).get("contradiction_level"),
+                "confidence_adjustment": phase_a.get("multi_agent_debate", {}).get("confidence_adjustment"),
+                "suggested_action_bias": phase_a.get("multi_agent_debate", {}).get("suggested_action_bias"),
+            },
+            "deep_causal_reasoning": {
+                "strongest_causal_chains": phase_a.get("deep_causal_reasoning", {}).get("strongest_causal_chains", [])[:10],
+                "weakest_causal_links": phase_a.get("deep_causal_reasoning", {}).get("weakest_causal_links", [])[:10],
+                "contradiction_chains": phase_a.get("deep_causal_reasoning", {}).get("contradiction_chains", [])[:10],
+            },
+            "manipulation_intelligence": {
+                "suspicion_score": phase_a.get("manipulation_intelligence", {}).get("suspicion_score"),
+                "manipulation_patterns": phase_a.get("manipulation_intelligence", {}).get("manipulation_patterns", [])[:10],
+                "no_trade_recommendations": phase_a.get("manipulation_intelligence", {}).get("no_trade_recommendations", [])[:10],
+            },
+            "liquidity_intelligence": {
+                "liquidity_regime": phase_a.get("liquidity_intelligence", {}).get("liquidity_regime"),
+                "liquidity_stress": phase_a.get("liquidity_intelligence", {}).get("liquidity_stress", {}),
+                "thin_liquidity": phase_a.get("liquidity_intelligence", {}).get("thin_liquidity"),
+                "strong_participation": phase_a.get("liquidity_intelligence", {}).get("strong_participation"),
+            },
+            "autonomous_research": phase_a.get("autonomous_research", {}).get("ranked_discoveries", [])[:10],
+            "world_model_expansion": {
+                "macro_memory": phase_a.get("world_model_expansion", {}).get("macro_memory", {}),
+                "liquidity_cycle_memory": phase_a.get("world_model_expansion", {}).get("liquidity_cycle_memory", {}),
+                "confidence_reliability_memory": phase_a.get("world_model_expansion", {}).get("confidence_reliability_memory", {}),
+            },
+            "contradiction_arbitration": {
+                "overall_severity": phase_a.get("contradiction_arbitration", {}).get("overall_severity"),
+                "aggregate_confidence_adjustment": phase_a.get("contradiction_arbitration", {}).get("aggregate_confidence_adjustment"),
+                "contradictions": phase_a.get("contradiction_arbitration", {}).get("contradictions", [])[:10],
+            },
+            "institutional_reasoning_summary": phase_a.get("institutional_reasoning_summary", {}),
         },
         "next_focus": state.get("current_focus"),
     }
@@ -209,6 +248,28 @@ def write_report(
         lines.append("- Study next: " + "; ".join(phase3_review["what_to_study_next"][:5]))
     if report["phase3_world_model_memory"]["market_laws"]:
         lines.append("- Market law: " + report["phase3_world_model_memory"]["market_laws"][0])
+    lines.append("")
+    lines.append("Phase A institutional reasoning:")
+    phase_a_report = report["phase_a_institutional_reasoning"]
+    debate = phase_a_report["multi_agent_debate"]
+    manipulation = phase_a_report["manipulation_intelligence"]
+    liquidity = phase_a_report["liquidity_intelligence"]
+    arbitration = phase_a_report["contradiction_arbitration"]
+    institutional_summary = phase_a_report["institutional_reasoning_summary"]
+    lines.append(f"- Debate consensus: {debate.get('final_consensus')}")
+    lines.append(f"- Debate contradiction level: {debate.get('contradiction_level')}")
+    lines.append(f"- Suggested action bias: {debate.get('suggested_action_bias')}")
+    lines.append(f"- Liquidity regime: {liquidity.get('liquidity_regime')}")
+    lines.append(f"- Liquidity stress: {liquidity.get('liquidity_stress', {}).get('state')} score={liquidity.get('liquidity_stress', {}).get('score')}")
+    lines.append(f"- Manipulation suspicion: {manipulation.get('suspicion_score')}")
+    lines.append(f"- Contradiction severity: {arbitration.get('overall_severity')} adjustment={arbitration.get('aggregate_confidence_adjustment')}")
+    lines.append(f"- Research discoveries: {len(phase_a_report['autonomous_research'])}")
+    lines.append(f"- Caution/aggression level: {institutional_summary.get('recommended_caution_aggression_level')}")
+    if arbitration.get("contradictions"):
+        lines.append("- Top contradiction: " + str(arbitration["contradictions"][0].get("type")))
+    if institutional_summary.get("top_institutional_concerns"):
+        lines.append("- Top concern: " + institutional_summary["top_institutional_concerns"][0])
+    lines.append("- Safety: read-only, sandbox-safe, recommendation-only; no live mutation.")
     lines.append("")
     lines.append("Insufficient evidence areas:")
     if report["insufficient_evidence_areas"]:
