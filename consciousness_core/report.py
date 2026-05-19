@@ -24,6 +24,7 @@ def write_report(
     phase_a=None,
     phase_b=None,
     phase_c=None,
+    phase_d=None,
     path_json=REPORT_JSON_PATH,
     path_txt=REPORT_TXT_PATH,
 ):
@@ -35,6 +36,7 @@ def write_report(
     phase_a = phase_a or {}
     phase_b = phase_b or {}
     phase_c = phase_c or {}
+    phase_d = phase_d or {}
     top_beliefs = sorted(
         beliefs.values(),
         key=lambda belief: float(belief.get("confidence") or 0),
@@ -184,6 +186,13 @@ def write_report(
             "validation_depth": phase_c.get("validation_depth", {}),
             "institutional_infrastructure_awareness": phase_c.get("institutional_infrastructure_awareness", {}),
             "phase_c_summary": phase_c.get("phase_c_summary", {}),
+        },
+        "phase_d_autonomous_experiment_feedback": {
+            "experiments": phase_d.get("experiments", {}),
+            "paper_feedback": phase_d.get("paper_feedback", {}),
+            "belief_validation": phase_d.get("belief_validation", {}),
+            "promotion_memory": phase_d.get("promotion_memory", {}),
+            "phase_d_summary": phase_d.get("phase_d_summary", {}),
         },
         "next_focus": state.get("current_focus"),
     }
@@ -361,6 +370,26 @@ def write_report(
     if data_c.get("missing_data_warnings"):
         lines.append("- Missing data warning: " + str(data_c["missing_data_warnings"][0]))
     lines.append("- Safety: Phase C is read-only, sandbox-safe, recommendation-only, and cannot mutate live execution.")
+    lines.append("")
+    lines.append("Phase D autonomous experiment feedback:")
+    phase_d_report = report["phase_d_autonomous_experiment_feedback"]
+    experiments_d = phase_d_report["experiments"]
+    feedback_d = phase_d_report["paper_feedback"]
+    validation_d = phase_d_report["belief_validation"]
+    memory_d = phase_d_report["promotion_memory"]
+    exp_summary_d = experiments_d.get("summary", {})
+    feedback_summary_d = feedback_d.get("summary", {})
+    validation_summary_d = validation_d.get("summary", {})
+    memory_summary_d = memory_d.get("summary", {})
+    lines.append(f"- Experiments: {exp_summary_d.get('experiment_count', 0)} skipped={exp_summary_d.get('skipped_count', 0)}")
+    lines.append(f"- Feedback: pass={feedback_summary_d.get('pass_count', 0)} fail={feedback_summary_d.get('fail_count', 0)} uncertain={feedback_summary_d.get('uncertain_count', 0)}")
+    lines.append(f"- Beliefs: proved={validation_summary_d.get('proved', 0)} disproved={validation_summary_d.get('disproved', 0)} uncertain={validation_summary_d.get('uncertain', 0)}")
+    lines.append(f"- Promotion memory: total={memory_summary_d.get('total_records', 0)} new={memory_summary_d.get('new_records', 0)}")
+    latest_decisions_d = memory_d.get("latest_decisions", [])
+    if latest_decisions_d:
+        latest_decision_d = latest_decisions_d[-1]
+        lines.append(f"- Latest decision: {latest_decision_d.get('proposal_id')} -> {latest_decision_d.get('promotion_decision')}")
+    lines.append("- Safety: Phase D is paper/sandbox-only and cannot execute broker orders, change Telegram/Supabase, override risk, or mutate master-brain live decisions.")
     lines.append("")
     lines.append("Insufficient evidence areas:")
     if report["insufficient_evidence_areas"]:

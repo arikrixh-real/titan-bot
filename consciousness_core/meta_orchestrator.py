@@ -42,8 +42,13 @@ from consciousness_core.autonomous_research_scientist import run_autonomous_rese
 from consciousness_core.adaptive_attention_allocator import run_adaptive_attention_allocator
 from consciousness_core.autonomous_evolution_ecosystem import run_autonomous_evolution_ecosystem
 from consciousness_core.autonomous_goal_hierarchy import run_autonomous_goal_hierarchy
+from consciousness_core.belief_validation import run_belief_validation
 from consciousness_core.evolution_memory_civilization import run_evolution_memory_civilization
+from consciousness_core.experiment_runner import run_experiment_runner
 from consciousness_core.intelligence_amplification import run_intelligence_amplification
+from consciousness_core.paper_feedback_loop import run_paper_feedback_loop
+from consciousness_core.phase_d_summary import run_phase_d_summary
+from consciousness_core.promotion_memory import run_promotion_memory
 from consciousness_core.recursive_intelligence_summary import run_recursive_intelligence_summary
 from consciousness_core.recursive_meta_learning import run_recursive_meta_learning
 from consciousness_core.recursive_world_model import run_recursive_world_model
@@ -86,12 +91,13 @@ def _write_health(payload):
     atomic_write_json(HEALTH_PATH, payload)
 
 
-def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=None, phase3=None, phase_a=None, phase_b=None, phase_c=None):
+def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=None, phase3=None, phase_a=None, phase_b=None, phase_c=None, phase_d=None):
     phase2 = phase2 or {}
     phase3 = phase3 or {}
     phase_a = phase_a or {}
     phase_b = phase_b or {}
     phase_c = phase_c or {}
+    phase_d = phase_d or {}
     top_beliefs = sorted(
         beliefs.values(),
         key=lambda belief: float(belief.get("confidence") or 0),
@@ -231,6 +237,14 @@ def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=
             "institutional_gap_score": phase_c.get("institutional_infrastructure_awareness", {}).get("institutional_gap_score"),
             "safety_scope": "read_only_sandbox_recommendation_only",
         },
+        "phase_d_autonomous_experiment_feedback": {
+            "experiments": phase_d.get("experiments", {}).get("experiments", [])[:10],
+            "paper_feedback": phase_d.get("paper_feedback", {}).get("feedback", [])[:10],
+            "belief_validations": phase_d.get("belief_validation", {}).get("belief_validations", [])[:10],
+            "latest_promotion_decisions": phase_d.get("promotion_memory", {}).get("latest_decisions", [])[-10:],
+            "phase_d_summary": phase_d.get("phase_d_summary", {}),
+            "safety_scope": "paper_sandbox_only_no_live_execution_no_master_brain_live_mutation",
+        },
     }
     atomic_write_json(CONTEXT_PATH, context)
     return context
@@ -362,13 +376,25 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             "institutional_infrastructure_awareness": institutional_infrastructure_awareness,
             "phase_c_summary": phase_c_summary,
         }
+        experiments = run_experiment_runner()
+        paper_feedback = run_paper_feedback_loop()
+        belief_validation = run_belief_validation()
+        promotion_memory = run_promotion_memory()
+        phase_d_summary = run_phase_d_summary()
+        phase_d = {
+            "experiments": experiments,
+            "paper_feedback": paper_feedback,
+            "belief_validation": belief_validation,
+            "promotion_memory": promotion_memory,
+            "phase_d_summary": phase_d_summary,
+        }
         consolidation_stats = {
             "duplicates_merged": get_last_duplicates_merged(),
             "consolidated_missions": get_last_consolidated_missions(),
             "consolidated_proposals": get_last_consolidated_proposals() + get_last_bridge_dedup_count(),
             "consolidated_beliefs": get_last_beliefs_consolidated(),
         }
-        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a, phase_b=phase_b, phase_c=phase_c)
+        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a, phase_b=phase_b, phase_c=phase_c, phase_d=phase_d)
         approved_count = len(approved_queue)
         rejected_count = list(safety_decisions.values()).count("REJECTED")
         summary = _summary(observation_packet, reflection, weaknesses, proposals, approved_count)
@@ -416,7 +442,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
         core_state["active_weaknesses"] = weaknesses[:20]
         core_state["latest_summary"] = summary
         core_state = save_state(core_state, core_state_path)
-        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a, phase_b=phase_b, phase_c=phase_c)
+        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a, phase_b=phase_b, phase_c=phase_c, phase_d=phase_d)
 
         report = write_report(
             core_state,
@@ -435,6 +461,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             phase_a=phase_a,
             phase_b=phase_b,
             phase_c=phase_c,
+            phase_d=phase_d,
         )
         health = {
             "status": "OK",
