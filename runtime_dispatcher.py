@@ -15,6 +15,7 @@ MAX_DISPATCH_LOG_BYTES = 5 * 1024 * 1024
 CYCLE_DEADLINE_SECONDS = 285
 DEFAULT_TASK_TIMEOUT_SECONDS = 60
 TASK_TIMEOUT_SECONDS = {
+    "ohlc_refresh": 120,
     "setup_engine": 240,
     "master_brain": 240,
     "scanner": 120,

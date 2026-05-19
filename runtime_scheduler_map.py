@@ -66,6 +66,7 @@ def get_scheduler_map(mode):
             "runtime_snapshot_logger",
         ]
         scheduler_map["every_5_minutes"] = [
+            "ohlc_refresh",
             "scanner",
             "light_news_pulse",
             "setup_engine",

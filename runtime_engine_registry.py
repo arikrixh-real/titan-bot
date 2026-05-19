@@ -13,6 +13,7 @@ from runtime_memory_compression import run_memory_compression
 from runtime_weekly_report import run_weekly_report
 from runtime_dashboard_sync import run_dashboard_sync
 from runtime_scanner import run_scanner
+from runtime_ohlc_refresh import run_ohlc_refresh
 from runtime_journal import run_journal
 from runtime_master_brain import run_master_brain
 from runtime_volatility_check import run_volatility_check
@@ -71,6 +72,7 @@ def get_engine_registry():
         "memory_compression": run_memory_compression,
         "weekly_report": run_weekly_report,
         "dashboard_sync": run_dashboard_sync,
+        "ohlc_refresh": run_ohlc_refresh,
         "scanner": run_scanner,
         "journal": run_journal,
         "master_brain": run_master_brain,
