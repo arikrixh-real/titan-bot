@@ -10,6 +10,7 @@ from runtime_timeout import run_with_timeout
 
 DISPATCH_LOG_PATH = Path("data/runtime/dispatch_log.jsonl")
 DISPATCH_LOG_PREVIOUS_PATH = Path("data/runtime/dispatch_log_previous.jsonl")
+SCANNER_DEBUG_LOG_PATH = Path("data/runtime/scanner_dispatch_debug.jsonl")
 MAX_DISPATCH_LOG_BYTES = 5 * 1024 * 1024
 CYCLE_DEADLINE_SECONDS = 285
 DEFAULT_TASK_TIMEOUT_SECONDS = 60
@@ -52,6 +53,26 @@ def append_dispatch_log(timestamp_ist, mode, dispatch_preview):
         pass
 
 
+def append_scanner_debug_log(timestamp_ist, mode, event, reason=None):
+    payload = {
+        "timestamp_ist": timestamp_ist,
+        "mode": mode,
+        "task": "scanner",
+        "event": event,
+    }
+    if reason:
+        payload["reason"] = reason
+
+    print(json.dumps(payload, separators=(",", ":")))
+
+    try:
+        SCANNER_DEBUG_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with SCANNER_DEBUG_LOG_PATH.open("a", encoding="utf-8") as log_file:
+            log_file.write(json.dumps(payload, separators=(",", ":")) + "\n")
+    except OSError:
+        pass
+
+
 def _task_timeout_seconds(task):
     return TASK_TIMEOUT_SECONDS.get(task, DEFAULT_TASK_TIMEOUT_SECONDS)
 
@@ -67,6 +88,13 @@ def preview_dispatch(value=None):
     cycle_started_at = time.monotonic()
 
     for task in due_tasks:
+        if task == "scanner":
+            append_scanner_debug_log(
+                tick["timestamp_ist"],
+                tick["mode"],
+                "SCANNER_TASK_DUE",
+            )
+
         if _cycle_budget_remaining(cycle_started_at) <= 0:
             dispatch_preview.append(
                 {
@@ -75,6 +103,13 @@ def preview_dispatch(value=None):
                     "executed": False,
                 }
             )
+            if task == "scanner":
+                append_scanner_debug_log(
+                    tick["timestamp_ist"],
+                    tick["mode"],
+                    "SCANNER_TASK_SKIPPED",
+                    "SKIPPED_CYCLE_DEADLINE",
+                )
             continue
 
         handler = get_registered_handler(task)
@@ -111,6 +146,21 @@ def preview_dispatch(value=None):
         else:
             action = "WOULD_DISPATCH"
             executed = False
+
+        if task == "scanner":
+            if executed:
+                append_scanner_debug_log(
+                    tick["timestamp_ist"],
+                    tick["mode"],
+                    "SCANNER_TASK_EXECUTED",
+                )
+            else:
+                append_scanner_debug_log(
+                    tick["timestamp_ist"],
+                    tick["mode"],
+                    "SCANNER_TASK_SKIPPED",
+                    action,
+                )
 
         dispatch_preview.append(
             {
