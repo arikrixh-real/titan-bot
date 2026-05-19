@@ -120,6 +120,19 @@ def _write_worker_health(task, **updates):
             pass
 
 
+def _is_placeholder_handler(handler):
+    if handler is None:
+        return True
+
+    handler_name = getattr(handler, "__name__", "")
+    handler_repr = repr(handler)
+    return (
+        "placeholder" in handler_name
+        or "placeholder" in handler_repr
+        or "<locals>" in handler_repr
+    )
+
+
 def _log_runtime_error(source, error, mode):
     try:
         log_runtime_error(source=source, error=error, mode=mode)
@@ -167,6 +180,16 @@ def _run_worker(task, sleep_seconds, intent):
                     status="MISSING_HANDLER",
                     last_finished_at=_now_ist(),
                     last_error=f"no registered handler for {task}",
+                )
+                time.sleep(sleep_seconds)
+                continue
+
+            if _is_placeholder_handler(handler):
+                _write_worker_health(
+                    task,
+                    status="SKIPPED_PLACEHOLDER",
+                    last_finished_at=_now_ist(),
+                    last_error=None,
                 )
                 time.sleep(sleep_seconds)
                 continue
