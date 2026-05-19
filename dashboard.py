@@ -1579,6 +1579,168 @@ def get_latest_scan_health():
         return None
 
 
+def truthy_scan_value(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value > 0
+    text = str(value or "").strip().upper()
+    return text in {"1", "TRUE", "YES", "Y", "PASS", "PASSED", "SUCCESS", "VALID", "OK"}
+
+
+def latest_scan_symbols_rows():
+    if supabase is None:
+        return []
+
+    rows = []
+    for col in ["created_at", "updated_at", "timestamp", "scan_time", "time", "datetime"]:
+        try:
+            result = (
+                supabase.table("scan_symbols")
+                .select("*")
+                .order(col, desc=True)
+                .limit(1000)
+                .execute()
+            )
+            rows = [row for row in (result.data or []) if isinstance(row, dict)]
+            if rows:
+                break
+        except Exception:
+            continue
+
+    if not rows:
+        return []
+
+    latest = rows[0]
+    for group_key in ["scan_id", "scan_uuid", "run_id", "batch_id", "cycle_id"]:
+        group_value = latest.get(group_key)
+        if group_value not in [None, ""]:
+            grouped = [row for row in rows if row.get(group_key) == group_value]
+            if grouped:
+                return grouped
+
+    latest_time = row_time(latest)
+    if not latest_time:
+        return [latest]
+
+    return [
+        row for row in rows
+        if row_time(row) and abs((latest_time - row_time(row)).total_seconds()) <= RUNTIME_FRESH_SECONDS
+    ]
+
+
+def count_scan_symbol_passes(rows, keys):
+    count = 0
+    for row in rows:
+        value = first_present(row, keys)
+        if truthy_scan_value(value):
+            count += 1
+    return count
+
+
+def get_latest_scan_symbols_breakdown():
+    rows = latest_scan_symbols_rows()
+    if not rows:
+        return None
+
+    latest_time = latest_dt(*[row_time(row) for row in rows])
+    if not dt_is_fresh(latest_time):
+        return None
+
+    checked = len(rows)
+    trend = count_scan_symbol_passes(rows, ["trend_passed", "trend_ok", "trend_valid", "passed_trend"])
+    momentum = count_scan_symbol_passes(rows, ["momentum_passed", "momentum_ok", "momentum_valid", "passed_momentum"])
+    structure = count_scan_symbol_passes(rows, ["structure_passed", "structure_ok", "structure_valid", "passed_structure"])
+    entry = count_scan_symbol_passes(rows, ["entry_passed", "entry_ok", "entry_valid", "breakout_ready", "passed_entry"])
+    final = count_scan_symbol_passes(rows, ["final_passed", "final_ok", "quality_passed", "passed_final", "is_signal"])
+
+    return {
+        "stocks_checked": checked,
+        "trend_passed": trend,
+        "momentum_passed": momentum,
+        "structure_passed": structure,
+        "entry_passed": entry,
+        "final_passed": final,
+        "alerts_this_scan": count_scan_symbol_passes(rows, ["alert_sent", "alerts_sent", "telegram_sent"]),
+        "source": "SUPABASE_SCAN_SYMBOLS",
+        "timestamp": latest_time,
+        "is_fresh": True,
+        "has_data": checked > 0,
+    }
+
+
+def runtime_breakdown_has_data(data):
+    keys = ["stocks_checked", "trend_passed", "momentum_passed", "structure_passed", "entry_passed", "final_passed", "alerts_sent"]
+    return any(int(first_number(data.get(key), default=0)) > 0 for key in keys)
+
+
+def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_health):
+    zero = {
+        "stocks_checked": 0,
+        "trend_passed": 0,
+        "momentum_passed": 0,
+        "structure_passed": 0,
+        "entry_passed": 0,
+        "final_passed": 0,
+        "alerts_this_scan": 0,
+        "source": "ZERO_FALLBACK",
+        "timestamp": None,
+        "is_fresh": False,
+        "has_data": False,
+    }
+
+    scanner_payload = (
+        scanner_runtime_data.get("payload")
+        if isinstance(scanner_runtime_data, dict) and isinstance(scanner_runtime_data.get("payload"), dict)
+        else {}
+    )
+    scanner_fresh = bool(scanner_runtime_data.get("is_fresh")) if isinstance(scanner_runtime_data, dict) else False
+    if scanner_fresh and runtime_breakdown_has_data(scanner_payload):
+        master_payload = master_runtime_data if isinstance(master_runtime_data, dict) else {}
+        alerts = first_number(
+            scanner_payload.get("alerts_sent"),
+            scanner_payload.get("alerts_this_scan"),
+            master_payload.get("alerts_sent"),
+            master_payload.get("alerts_this_scan"),
+            default=0,
+        )
+        return {
+            "stocks_checked": int(first_number(scanner_payload.get("stocks_checked"), default=0)),
+            "trend_passed": int(first_number(scanner_payload.get("trend_passed"), default=0)),
+            "momentum_passed": int(first_number(scanner_payload.get("momentum_passed"), default=0)),
+            "structure_passed": int(first_number(scanner_payload.get("structure_passed"), default=0)),
+            "entry_passed": int(first_number(scanner_payload.get("entry_passed"), default=0)),
+            "final_passed": int(first_number(scanner_payload.get("final_passed"), default=0)),
+            "alerts_this_scan": int(alerts),
+            "source": "SUPABASE_RUNTIME_SCANNER_STATUS",
+            "timestamp": scanner_runtime_data.get("timestamp"),
+            "is_fresh": True,
+            "has_data": True,
+        }
+
+    scan_symbols_breakdown = get_latest_scan_symbols_breakdown()
+    if scan_symbols_breakdown:
+        return scan_symbols_breakdown
+
+    scan_health_time = row_time(scan_health)
+    if scan_health and dt_is_fresh(scan_health_time):
+        return {
+            "stocks_checked": int(first_number(scan_health.get("stocks_checked"), default=0)),
+            "trend_passed": int(first_number(scan_health.get("trend_passed"), default=0)),
+            "momentum_passed": int(first_number(scan_health.get("momentum_passed"), default=0)),
+            "structure_passed": int(first_number(scan_health.get("structure_passed"), default=0)),
+            "entry_passed": int(first_number(scan_health.get("entry_passed"), default=0)),
+            "final_passed": int(first_number(scan_health.get("final_passed"), default=0)),
+            "alerts_this_scan": int(first_number(scan_health.get("alerts_sent"), default=0)),
+            "source": "SUPABASE_SCAN_HEALTH_LOGS",
+            "timestamp": scan_health_time,
+            "is_fresh": True,
+            "has_data": True,
+        }
+
+    return zero
+
+
 def parse_dt(value):
     if not value:
         return None
@@ -1681,6 +1843,12 @@ def runtime_payload_is_fresh(payload, fresh_seconds=RUNTIME_FRESH_SECONDS):
     return (datetime.now(IST) - dt).total_seconds() <= fresh_seconds
 
 
+def dt_is_fresh(dt, fresh_seconds=RUNTIME_FRESH_SECONDS):
+    if not dt:
+        return False
+    return (datetime.now(IST) - dt).total_seconds() <= fresh_seconds
+
+
 def runtime_payload_status(payload):
     if not isinstance(payload, dict):
         return ""
@@ -1770,18 +1938,26 @@ def get_dashboard_runtime_status():
 
 def get_scanner_runtime_status():
     data, source = get_runtime_payload("scanner_status", SCANNER_STATUS_PATH)
+    payload = data if isinstance(data, dict) else {}
     timestamp = runtime_payload_dt(data)
     status = runtime_status_with_freshness(data, active_status="ACTIVE")
     if not market_open and status not in {"STALE", "WAITING"}:
         status = "MARKET CLOSED"
-    stocks_checked = int(first_number(data.get("stocks_checked"), default=0)) if isinstance(data, dict) else 0
     return {
-        "payload": data if isinstance(data, dict) else {},
+        "payload": payload,
         "source": source,
         "timestamp": timestamp,
+        "timestamp_ist": payload.get("timestamp_ist") or payload.get("timestamp"),
         "age": age_text_from_dt(timestamp),
         "status": status,
-        "stocks_checked": stocks_checked,
+        "is_fresh": runtime_payload_is_fresh(payload),
+        "stocks_checked": int(first_number(payload.get("stocks_checked"), default=0)),
+        "trend_passed": int(first_number(payload.get("trend_passed"), default=0)),
+        "momentum_passed": int(first_number(payload.get("momentum_passed"), default=0)),
+        "structure_passed": int(first_number(payload.get("structure_passed"), default=0)),
+        "entry_passed": int(first_number(payload.get("entry_passed"), default=0)),
+        "final_passed": int(first_number(payload.get("final_passed"), default=0)),
+        "alerts_sent": int(first_number(payload.get("alerts_sent"), default=0)),
     }
 
 
@@ -2036,15 +2212,33 @@ def _local_active_trades_count(paths):
     return None, None, "local_active_trades_unavailable"
 
 
+def get_runtime_paper_open_positions_count():
+    data, _ = get_runtime_payload("paper_engine_status", PAPER_ENGINE_STATUS_PATH)
+    if not isinstance(data, dict) or not runtime_payload_is_fresh(data):
+        return 0
+
+    summary = data.get("paper_performance_summary")
+    if not isinstance(summary, dict):
+        summary = {}
+
+    return int(first_number(
+        summary.get("open_positions_count"),
+        data.get("open_positions_count"),
+        data.get("open_trades_count"),
+        default=0,
+    ))
+
+
 def get_live_trades_count():
     """
     FINAL CANONICAL LIVE TRADE FIX:
     Live trades should come from active/open trades, not trade_results.
 
     Priority:
-    1. Local active_trades.csv
-    2. Supabase trades fallback
-    3. 0 if nothing available
+    1. Supabase trades
+    2. Runtime paper_engine_status open positions
+    3. Local active_trades.csv fallback
+    4. 0 if nothing available
 
     NOTE:
     trade_results is for CLOSED TP/SL performance only.
@@ -2059,11 +2253,18 @@ def get_live_trades_count():
         "trades/active_trades.csv",
     ]
 
+    supabase_count = get_supabase_live_trades_count(fallback_reason="primary_source")
+    if supabase_count > 0:
+        return supabase_count
+
+    runtime_open_count = get_runtime_paper_open_positions_count()
+    if runtime_open_count > 0:
+        return runtime_open_count
+
     local_count, local_path, fallback_reason = _local_active_trades_count(possible_paths)
     if local_count is not None:
         return local_count
 
-    supabase_count = get_supabase_live_trades_count(fallback_reason=fallback_reason)
     return supabase_count
 
 
@@ -2471,6 +2672,7 @@ runtime_status_data = get_dashboard_runtime_status()
 paper_engine_runtime_data = get_paper_engine_runtime_status()
 scanner_runtime_data = get_scanner_runtime_status()
 live_price_monitor_runtime_data = get_live_price_monitor_runtime_status()
+master_runtime_data, _ = get_runtime_payload("master_brain_status", "/".join(["data", "runtime", "master_brain_status.json"]))
 real_latest_scan_time = scanner_runtime_data["timestamp"]
 
 
@@ -2578,24 +2780,19 @@ outcome_tracker_status = derive_activity_status(trade_result_stats.get("latest_o
 if open_outcome_trades > 0 or closed_trades > 0:
     outcome_tracker_status = "ACTIVE" if market_open else "RESEARCH MODE"
 
-if scan_health:
-    latest_stocks_checked = int(scan_health.get("stocks_checked") or 0)
-    latest_trend_passed = int(scan_health.get("trend_passed") or 0)
-    latest_momentum_passed = int(scan_health.get("momentum_passed") or 0)
-    latest_structure_passed = int(scan_health.get("structure_passed") or 0)
-    latest_entry_passed = int(scan_health.get("entry_passed") or 0)
-    latest_final_passed = int(scan_health.get("final_passed") or 0)
-    latest_health_alerts = int(scan_health.get("alerts_sent") or 0)
-    latest_scan_health_age = last_scan_display_from_dt(latest_scan_health_time, market_open)
-else:
-    latest_stocks_checked = 0
-    latest_trend_passed = 0
-    latest_momentum_passed = 0
-    latest_structure_passed = 0
-    latest_entry_passed = 0
-    latest_final_passed = 0
-    latest_health_alerts = 0
-    latest_scan_health_age = "Market closed / research mode" if not market_open else "No live price scan yet"
+scan_breakdown = get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_health)
+latest_stocks_checked = scan_breakdown["stocks_checked"]
+latest_trend_passed = scan_breakdown["trend_passed"]
+latest_momentum_passed = scan_breakdown["momentum_passed"]
+latest_structure_passed = scan_breakdown["structure_passed"]
+latest_entry_passed = scan_breakdown["entry_passed"]
+latest_final_passed = scan_breakdown["final_passed"]
+latest_health_alerts = scan_breakdown["alerts_this_scan"]
+latest_scan_health_age = last_scan_display_from_dt(scan_breakdown.get("timestamp"), market_open)
+if not scan_breakdown.get("is_fresh"):
+    latest_scan_health_age = "Stale scan breakdown" if scan_breakdown.get("timestamp") else (
+        "Market closed / research mode" if not market_open else "No live price scan yet"
+    )
 
 live_price_monitor_payload = live_price_monitor_runtime_data["payload"]
 latest_live_price_checked = int(first_number(live_price_monitor_payload.get("symbols_checked"), default=0))
@@ -2902,7 +3099,7 @@ st.markdown("</div>", unsafe_allow_html=True)
 st.markdown("<div class='section'>", unsafe_allow_html=True)
 st.markdown("<div class='section-title'>🔍 Scan Breakdown · Why No Alerts?</div>", unsafe_allow_html=True)
 
-if scan_health:
+if scan_breakdown.get("has_data"):
     b1, b2, b3, b4, b5, b6 = st.columns(6)
 
     with b1:
