@@ -1724,6 +1724,8 @@ def get_latest_scan_symbols_breakdown():
         "momentum_passed": momentum,
         "structure_passed": structure,
         "entry_passed": entry,
+        "breakout_ready_count": entry,
+        "entry_stage_available": True,
         "final_passed": final,
         "alerts_this_scan": count_scan_symbol_passes(rows, ["alert_sent", "alerts_sent", "telegram_sent"]),
         "source": "SUPABASE_SCAN_SYMBOLS",
@@ -1734,10 +1736,12 @@ def get_latest_scan_symbols_breakdown():
         "scan_finished_at_ist": None,
         "scan_duration_seconds": None,
         "scan_only": False,
+        "repeated_data_signature": False,
+        "repeated_data_warning": None,
     }
 
 
-SCAN_BREAKDOWN_GATE_KEYS = ["trend_passed", "momentum_passed", "structure_passed", "entry_passed", "final_passed"]
+SCAN_BREAKDOWN_GATE_KEYS = ["trend_passed", "momentum_passed", "structure_passed", "breakout_ready_count", "entry_passed", "final_passed"]
 
 
 def scanner_payload_has_gate_breakdown(data):
@@ -1751,6 +1755,8 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         "momentum_passed": 0,
         "structure_passed": 0,
         "entry_passed": 0,
+        "breakout_ready_count": 0,
+        "entry_stage_available": False,
         "final_passed": 0,
         "alerts_this_scan": 0,
         "source": "FALLBACK_AWAITING_VPS_SCANNER",
@@ -1762,6 +1768,8 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         "scan_finished_at_ist": None,
         "scan_duration_seconds": None,
         "scan_only": False,
+        "repeated_data_signature": False,
+        "repeated_data_warning": None,
     }
 
     supabase_scanner_payload = get_supabase_scanner_status_payload()
@@ -1781,6 +1789,8 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "momentum_passed": int(first_number(supabase_scanner_payload.get("momentum_passed"), default=0)),
             "structure_passed": int(first_number(supabase_scanner_payload.get("structure_passed"), default=0)),
             "entry_passed": int(first_number(supabase_scanner_payload.get("entry_passed"), default=0)),
+            "breakout_ready_count": int(first_number(supabase_scanner_payload.get("breakout_ready_count"), supabase_scanner_payload.get("entry_passed"), default=0)),
+            "entry_stage_available": bool(supabase_scanner_payload.get("entry_stage_available")),
             "final_passed": int(first_number(supabase_scanner_payload.get("final_passed"), default=0)),
             "alerts_this_scan": int(alerts),
             "source": "SUPABASE_RUNTIME_SCANNER",
@@ -1792,6 +1802,8 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "scan_finished_at_ist": supabase_scanner_payload.get("scan_finished_at_ist"),
             "scan_duration_seconds": supabase_scanner_payload.get("scan_duration_seconds"),
             "scan_only": bool(supabase_scanner_payload.get("scan_only")),
+            "repeated_data_signature": bool(supabase_scanner_payload.get("repeated_data_signature")),
+            "repeated_data_warning": supabase_scanner_payload.get("repeated_data_warning"),
         }
 
     scanner_payload = (
@@ -1815,6 +1827,8 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "momentum_passed": int(first_number(scanner_payload.get("momentum_passed"), default=0)),
             "structure_passed": int(first_number(scanner_payload.get("structure_passed"), default=0)),
             "entry_passed": int(first_number(scanner_payload.get("entry_passed"), default=0)),
+            "breakout_ready_count": int(first_number(scanner_payload.get("breakout_ready_count"), scanner_payload.get("entry_passed"), default=0)),
+            "entry_stage_available": bool(scanner_payload.get("entry_stage_available")),
             "final_passed": int(first_number(scanner_payload.get("final_passed"), default=0)),
             "alerts_this_scan": int(alerts),
             "source": "SUPABASE_RUNTIME_SCANNER",
@@ -1826,6 +1840,8 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "scan_finished_at_ist": scanner_payload.get("scan_finished_at_ist"),
             "scan_duration_seconds": scanner_payload.get("scan_duration_seconds"),
             "scan_only": bool(scanner_payload.get("scan_only")),
+            "repeated_data_signature": bool(scanner_payload.get("repeated_data_signature")),
+            "repeated_data_warning": scanner_payload.get("repeated_data_warning"),
         }
 
     scan_symbols_breakdown = get_latest_scan_symbols_breakdown()
@@ -1839,6 +1855,8 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "momentum_passed": 0,
             "structure_passed": 0,
             "entry_passed": 0,
+            "breakout_ready_count": int(first_number(scanner_payload.get("breakout_ready_count"), scanner_payload.get("entry_passed"), default=0)),
+            "entry_stage_available": bool(scanner_payload.get("entry_stage_available")),
             "final_passed": 0,
             "alerts_this_scan": int(first_number(scanner_payload.get("alerts_sent"), scanner_payload.get("alerts_this_scan"), default=0)),
             "source": "SUPABASE_RUNTIME_SCANNER",
@@ -1850,6 +1868,8 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "scan_finished_at_ist": scanner_payload.get("scan_finished_at_ist"),
             "scan_duration_seconds": scanner_payload.get("scan_duration_seconds"),
             "scan_only": bool(scanner_payload.get("scan_only")),
+            "repeated_data_signature": bool(scanner_payload.get("repeated_data_signature")),
+            "repeated_data_warning": scanner_payload.get("repeated_data_warning"),
         }
 
     return zero
@@ -2958,6 +2978,7 @@ latest_trend_passed = scan_breakdown["trend_passed"]
 latest_momentum_passed = scan_breakdown["momentum_passed"]
 latest_structure_passed = scan_breakdown["structure_passed"]
 latest_entry_passed = scan_breakdown["entry_passed"]
+latest_breakout_ready = scan_breakdown.get("breakout_ready_count", latest_entry_passed)
 latest_final_passed = scan_breakdown["final_passed"]
 latest_health_alerts = scan_breakdown["alerts_this_scan"]
 latest_scan_health_age = last_scan_display_from_dt(scan_breakdown.get("timestamp"), market_open)
@@ -2971,9 +2992,19 @@ scanner_refresh_proof = (
 if scanner_cycle_suffix_text:
     scanner_refresh_proof = f"{scanner_refresh_proof} | Cycle: ...{scanner_cycle_suffix_text}"
 final_passed_subtitle = (
-    "Final quality filter not run in scanner-only mode"
+    "Final quality filter not run in scanner-only mode."
     if scan_breakdown.get("scan_only") and latest_final_passed == 0
     else "Quality filter passed"
+)
+breakout_ready_subtitle = (
+    "Alias of breakout-ready scanner gate"
+    if scan_breakdown.get("scan_only") and not scan_breakdown.get("entry_stage_available")
+    else "Breakout ready"
+)
+scanner_input_warning = (
+    scan_breakdown.get("repeated_data_warning")
+    if scan_breakdown.get("repeated_data_signature")
+    else None
 )
 if not scan_breakdown.get("is_fresh"):
     latest_scan_health_age = "Stale scan breakdown" if scan_breakdown.get("timestamp") else (
@@ -3294,6 +3325,8 @@ if scan_breakdown.get("limited_runtime"):
         "Next VPS scan cycle will update this once scanner_status publishes gate counts."
     )
     st.caption(scanner_refresh_proof)
+    if scanner_input_warning:
+        st.caption("Scanner input unchanged from previous cycle.")
 
 elif scan_breakdown.get("has_data"):
     b1, b2, b3, b4, b5, b6 = st.columns(6)
@@ -3311,7 +3344,7 @@ elif scan_breakdown.get("has_data"):
         metric_card("Structure Passed", f"{latest_structure_passed:,}", "Clean structure")
 
     with b5:
-        metric_card("Entry Passed", f"{latest_entry_passed:,}", "Breakout ready")
+        metric_card("Breakout Ready", f"{latest_breakout_ready:,}", breakout_ready_subtitle)
 
     with b6:
         metric_card("Final Passed", f"{latest_final_passed:,}", final_passed_subtitle)
@@ -3334,6 +3367,8 @@ elif scan_breakdown.get("has_data"):
         metric_card("Live Trades Count", f"{live_trades_count:,}", "Open trades only")
 
     st.caption(scanner_refresh_proof)
+    if scanner_input_warning:
+        st.caption("Scanner input unchanged from previous cycle.")
 
 else:
     st.caption("Awaiting VPS scanner breakdown")
@@ -3352,7 +3387,7 @@ else:
         metric_card("Structure Passed", "0", "Awaiting VPS scanner breakdown")
 
     with b5:
-        metric_card("Entry Passed", "0", "Awaiting VPS scanner breakdown")
+        metric_card("Breakout Ready", "0", "Awaiting VPS scanner breakdown")
 
     with b6:
         metric_card("Final Passed", "0", "Awaiting VPS scanner breakdown")

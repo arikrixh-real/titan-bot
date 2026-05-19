@@ -1,4 +1,5 @@
 import json
+import hashlib
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -17,6 +18,7 @@ from engines.time_filter import current_bot_mode
 
 IST = timezone(timedelta(hours=5, minutes=30))
 SCANNER_STATUS_PATH = Path("data") / "runtime" / "scanner_status.json"
+SCANNER_PREVIOUS_SIGNATURE_PATH = Path("data") / "runtime" / "scanner_previous_signature.json"
 
 
 def _timestamp_ist():
@@ -35,6 +37,34 @@ def _read_previous_run_count(path):
     except Exception:
         return None
     return None
+
+
+def _read_previous_data_signature(path=SCANNER_PREVIOUS_SIGNATURE_PATH):
+    try:
+        path = Path(path)
+        if not path.exists():
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        signature = payload.get("data_signature") if isinstance(payload, dict) else None
+        return signature if isinstance(signature, str) and signature else None
+    except Exception:
+        return None
+
+
+def _write_previous_data_signature(signature, scanner_cycle_id, timestamp_ist, path=SCANNER_PREVIOUS_SIGNATURE_PATH):
+    try:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "data_signature": signature,
+            "scanner_cycle_id": scanner_cycle_id,
+            "timestamp_ist": timestamp_ist,
+        }
+        tmp_path = path.with_suffix(f"{path.suffix}.tmp")
+        tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        tmp_path.replace(path)
+    except Exception:
+        pass
 
 
 def _scan_mode(load_debug):
@@ -75,6 +105,15 @@ def _last_ohlc(data):
             "Low": float(last["Low"]),
             "Close": float(last["Close"]),
         }
+    except Exception:
+        return None
+
+
+def _last_close(data):
+    try:
+        if data is None or data.empty or "Close" not in data.columns:
+            return None
+        return float(data["Close"].iloc[-1])
     except Exception:
         return None
 
@@ -120,6 +159,29 @@ def _latest_timestamp(first, second):
     return max(first, second)
 
 
+def _data_signature(signature_rows):
+    normalized_rows = []
+    for row in sorted(signature_rows, key=lambda item: item["symbol"]):
+        normalized_rows.append(
+            {
+                "symbol": row["symbol"],
+                "latest_candle_timestamp": row["latest_candle_timestamp"],
+                "close": row["close"],
+            }
+        )
+    raw = json.dumps(normalized_rows, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _candle_age_minutes(latest_candle_dt, now_ist):
+    if latest_candle_dt is None:
+        return None
+    try:
+        return round(max((now_ist - latest_candle_dt).total_seconds(), 0) / 60, 2)
+    except Exception:
+        return None
+
+
 def _status_payload(
     *,
     mode,
@@ -133,6 +195,10 @@ def _status_payload(
     candidate_details,
     errors,
     latest_candle_timestamp,
+    latest_candle_age_minutes,
+    data_signature,
+    repeated_data_signature,
+    repeated_data_warning,
     stale_symbol_count,
     stale_symbols,
     stale_data_warning,
@@ -161,15 +227,22 @@ def _status_payload(
         "trend_passed": trend_passed,
         "momentum_passed": momentum_passed,
         "structure_passed": structure_passed,
-        "entry_passed": breakout_ready_count,
+        "entry_passed": None,
+        "entry_stage_available": False,
+        "entry_passed_note": "No independent entry-stage engine runs in scanner-only mode; use breakout_ready_count for this scanner gate.",
         "final_passed": 0,
+        "final_passed_note": "Final quality filter not run in scanner-only mode.",
         "alerts_sent": 0,
         "breakout_ready_count": breakout_ready_count,
         "passed_setups": passed_setups,
-        "missing_fields": ["final_passed"],
+        "missing_fields": ["entry_passed", "final_passed"],
         "candidate_symbols": candidate_symbols[:5],
         "candidate_details": candidate_details[:5],
         "latest_candle_timestamp": latest_candle_timestamp,
+        "latest_candle_age_minutes": latest_candle_age_minutes,
+        "data_signature": data_signature,
+        "repeated_data_signature": repeated_data_signature,
+        "repeated_data_warning": repeated_data_warning,
         "stale_symbol_count": stale_symbol_count,
         "stale_symbols": stale_symbols[:20],
         "stale_data_warning": stale_data_warning,
@@ -187,6 +260,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     scanner_cycle_id = f"{scan_started_at_ist}-{uuid4()}"
     previous_run_count = _read_previous_run_count(path)
     run_count = previous_run_count + 1 if previous_run_count is not None else None
+    previous_data_signature = _read_previous_data_signature()
 
     stocks_checked = 0
     trend_passed = 0
@@ -203,6 +277,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     today_ist = datetime.now(IST).date()
     latest_candle_dt = None
     stale_symbols = []
+    signature_rows = []
 
     try:
         cached_symbols = load_cached_stock_data() or {}
@@ -216,6 +291,13 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         stocks_checked += 1
         candle_dt = _last_candle_timestamp(data)
         latest_candle_dt = _latest_timestamp(latest_candle_dt, candle_dt)
+        signature_rows.append(
+            {
+                "symbol": str(symbol),
+                "latest_candle_timestamp": candle_dt.isoformat() if candle_dt else None,
+                "close": _last_close(data),
+            }
+        )
         if market_mode and (candle_dt is None or candle_dt.date() < today_ist):
             stale_symbols.append(symbol)
 
@@ -257,9 +339,17 @@ def run_scanner(path=SCANNER_STATUS_PATH):
             continue
 
     scan_finished_at_ist = _timestamp_ist()
+    finished_dt = datetime.now(IST)
     scan_duration_seconds = round(time.monotonic() - started_monotonic, 3)
     stale_symbol_count = len(stale_symbols)
     stale_data_warning = bool(market_mode and stale_symbol_count > 0)
+    data_signature = _data_signature(signature_rows)
+    repeated_data_signature = bool(previous_data_signature and previous_data_signature == data_signature)
+    repeated_data_warning = (
+        "Scanner input data unchanged from previous cycle"
+        if repeated_data_signature
+        else None
+    )
     payload = _status_payload(
         mode=mode,
         stocks_checked=stocks_checked,
@@ -272,6 +362,10 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         candidate_details=candidate_details,
         errors=errors,
         latest_candle_timestamp=latest_candle_dt.isoformat() if latest_candle_dt else None,
+        latest_candle_age_minutes=_candle_age_minutes(latest_candle_dt, finished_dt),
+        data_signature=data_signature,
+        repeated_data_signature=repeated_data_signature,
+        repeated_data_warning=repeated_data_warning,
         stale_symbol_count=stale_symbol_count,
         stale_symbols=stale_symbols,
         stale_data_warning=stale_data_warning,
@@ -284,6 +378,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    _write_previous_data_signature(data_signature, scanner_cycle_id, scan_finished_at_ist)
     return payload
 
 

@@ -1,6 +1,6 @@
 {
   "alerts_sent": 0,
-  "breakout_ready_count": 8,
+  "breakout_ready_count": 7,
   "candidate_details": [
     {
       "last_ohlc": {
@@ -40,12 +40,12 @@
     },
     {
       "last_ohlc": {
-        "Close": 84.0999984741211,
-        "High": 84.75,
-        "Low": 84.0
+        "Close": 385.0,
+        "High": 388.7000122070313,
+        "Low": 384.8999938964844
       },
       "side": "SHORT",
-      "symbol": "ZEEL"
+      "symbol": "NTPC"
     }
   ],
   "candidate_symbols": [
@@ -53,31 +53,64 @@
     "SJVN",
     "IDEA",
     "SUZLON",
-    "ZEEL"
+    "NTPC"
   ],
-  "entry_passed": 8,
+  "data_signature": "06258587e5d2d7c4ef93269e5fbfb9ffaf475ab79707debe1c43ffa6ce21f950",
+  "entry_passed": null,
+  "entry_passed_note": "No independent entry-stage engine runs in scanner-only mode; use breakout_ready_count for this scanner gate.",
+  "entry_stage_available": false,
   "errors": 0,
   "final_passed": 0,
+  "final_passed_note": "Final quality filter not run in scanner-only mode.",
   "journal_writes": false,
+  "latest_candle_age_minutes": 1412.37,
+  "latest_candle_timestamp": "2026-05-18T15:15:00+05:30",
   "missing_fields": [
+    "entry_passed",
     "final_passed"
   ],
   "mode": "SCAN_ONLY_CACHED_50",
-  "momentum_passed": 8,
-  "passed_setups": 8,
+  "momentum_passed": 7,
+  "passed_setups": 7,
   "real_scanner_called": true,
-  "scan_duration_seconds": 0.547,
-  "scan_finished_at_ist": "2026-05-19T11:03:35.488524+05:30",
+  "repeated_data_signature": false,
+  "repeated_data_warning": null,
+  "scan_duration_seconds": 1.718,
+  "scan_finished_at_ist": "2026-05-19T14:47:22.409132+05:30",
   "scan_only": true,
-  "scan_started_at_ist": "2026-05-19T11:03:34.937628+05:30",
-  "scanner_cycle_id": "2026-05-19T11:03:34.937628+05:30-c6942655-f43d-4208-b443-e5f852dc122e",
+  "scan_started_at_ist": "2026-05-19T14:47:20.690148+05:30",
+  "scanner_cycle_id": "2026-05-19T14:47:20.690148+05:30-01e9cc26-3815-4271-b961-2f0f5aadbf37",
   "source": "VPS_RUNTIME_SCANNER",
-  "status": "SCAN_ONLY_COMPLETE",
+  "stale_data_warning": true,
+  "stale_symbol_count": 50,
+  "stale_symbols": [
+    "NIFTYBEES",
+    "BANKBARODA",
+    "CANBK",
+    "PNB",
+    "IDFCFIRSTB",
+    "FEDERALBNK",
+    "YESBANK",
+    "SAIL",
+    "NMDC",
+    "GAIL",
+    "ONGC",
+    "BEL",
+    "BHEL",
+    "IRFC",
+    "IREDA",
+    "RVNL",
+    "NBCC",
+    "NHPC",
+    "SJVN",
+    "TATASTEEL"
+  ],
+  "status": "SCAN_ONLY_STALE_OHLC",
   "stocks_checked": 50,
-  "structure_passed": 14,
+  "structure_passed": 13,
   "supabase_writes": false,
   "telegram_alerts": false,
-  "timestamp_ist": "2026-05-19T11:03:35.488524+05:30",
+  "timestamp_ist": "2026-05-19T14:47:22.409132+05:30",
   "trade_creation": false,
-  "trend_passed": 18
+  "trend_passed": 17
 }
