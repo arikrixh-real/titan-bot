@@ -1,6 +1,8 @@
 import json
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from engines.setup_engine import (
     breakout_ready,
@@ -18,6 +20,20 @@ SCANNER_STATUS_PATH = Path("data") / "runtime" / "scanner_status.json"
 
 def _timestamp_ist():
     return datetime.now(IST).isoformat()
+
+
+def _read_previous_run_count(path):
+    try:
+        path = Path(path)
+        if not path.exists():
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        run_count = payload.get("run_count") if isinstance(payload, dict) else None
+        if isinstance(run_count, int) and not isinstance(run_count, bool):
+            return run_count
+    except Exception:
+        return None
+    return None
 
 
 def _scan_mode(load_debug):
@@ -74,9 +90,18 @@ def _status_payload(
     candidate_symbols,
     candidate_details,
     errors,
+    scanner_cycle_id,
+    scan_started_at_ist,
+    scan_finished_at_ist,
+    scan_duration_seconds,
+    run_count=None,
 ):
-    return {
-        "timestamp_ist": _timestamp_ist(),
+    payload = {
+        "timestamp_ist": scan_finished_at_ist,
+        "scanner_cycle_id": scanner_cycle_id,
+        "scan_started_at_ist": scan_started_at_ist,
+        "scan_finished_at_ist": scan_finished_at_ist,
+        "scan_duration_seconds": scan_duration_seconds,
         "mode": mode,
         "status": "SCAN_ONLY_COMPLETE",
         "source": "VPS_RUNTIME_SCANNER",
@@ -100,9 +125,19 @@ def _status_payload(
         "candidate_details": candidate_details[:5],
         "errors": errors,
     }
+    if run_count is not None:
+        payload["run_count"] = run_count
+    return payload
 
 
 def run_scanner(path=SCANNER_STATUS_PATH):
+    path = Path(path)
+    started_monotonic = time.monotonic()
+    scan_started_at_ist = _timestamp_ist()
+    scanner_cycle_id = f"{scan_started_at_ist}-{uuid4()}"
+    previous_run_count = _read_previous_run_count(path)
+    run_count = previous_run_count + 1 if previous_run_count is not None else None
+
     stocks_checked = 0
     trend_passed = 0
     structure_passed = 0
@@ -162,6 +197,8 @@ def run_scanner(path=SCANNER_STATUS_PATH):
             errors += 1
             continue
 
+    scan_finished_at_ist = _timestamp_ist()
+    scan_duration_seconds = round(time.monotonic() - started_monotonic, 3)
     payload = _status_payload(
         mode=mode,
         stocks_checked=stocks_checked,
@@ -173,9 +210,13 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         candidate_symbols=candidate_symbols,
         candidate_details=candidate_details,
         errors=errors,
+        scanner_cycle_id=scanner_cycle_id,
+        scan_started_at_ist=scan_started_at_ist,
+        scan_finished_at_ist=scan_finished_at_ist,
+        scan_duration_seconds=scan_duration_seconds,
+        run_count=run_count,
     )
 
-    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     return payload

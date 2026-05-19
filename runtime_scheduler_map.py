@@ -85,6 +85,7 @@ def get_scheduler_map(mode):
             "daily_review",
         ]
         scheduler_map["every_5_minutes"] = [
+            "scanner",
             "learning_engine",
             "experience_memory",
             "runtime_snapshot_logger",
@@ -94,7 +95,6 @@ def get_scheduler_map(mode):
             "next_day_preparation",
         ]
         scheduler_map["every_30_minutes"] = [
-            "scanner",
             "evolution_engine",
             "replay_batch",
         ]
