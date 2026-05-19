@@ -33,6 +33,7 @@ TASK_TIMEOUT_SECONDS = {
     "outcome_tracker": 45,
     "evolution_engine": 60,
     "consciousness_core": 60,
+    "report_aggregator": 60,
 }
 
 WORKER_TASKS = {
@@ -54,6 +55,7 @@ WORKER_TASKS = {
     "market_regime_update": 30,
     "sector_strength": 30,
     "learning_engine": 60,
+    "report_aggregator": 60,
     "consciousness_core": 60,
     "scenario_simulation": 90,
     "next_day_preparation": 120,
@@ -83,6 +85,7 @@ IMPORTANT_INTELLIGENCE_TASKS = {
     "backtesting",
     "synthetic_simulation",
     "next_day_preparation",
+    "report_aggregator",
     "consciousness_core",
 }
 

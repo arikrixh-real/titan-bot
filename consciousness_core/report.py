@@ -25,6 +25,7 @@ def write_report(
     phase_b=None,
     phase_c=None,
     phase_d=None,
+    report_vault_packet=None,
     path_json=REPORT_JSON_PATH,
     path_txt=REPORT_TXT_PATH,
 ):
@@ -37,6 +38,7 @@ def write_report(
     phase_b = phase_b or {}
     phase_c = phase_c or {}
     phase_d = phase_d or {}
+    report_vault_packet = report_vault_packet or {}
     top_beliefs = sorted(
         beliefs.values(),
         key=lambda belief: float(belief.get("confidence") or 0),
@@ -193,6 +195,19 @@ def write_report(
             "belief_validation": phase_d.get("belief_validation", {}),
             "promotion_memory": phase_d.get("promotion_memory", {}),
             "phase_d_summary": phase_d.get("phase_d_summary", {}),
+        },
+        "report_vault_intelligence": {
+            "available": bool(report_vault_packet),
+            "generated_at": report_vault_packet.get("generated_at"),
+            "packet_hash": report_vault_packet.get("packet_hash"),
+            "report_count": report_vault_packet.get("report_count"),
+            "summary": report_vault_packet.get("summary"),
+            "top_ranked_reports": report_vault_packet.get("ranked_reports", [])[:10],
+            "merged_findings": report_vault_packet.get("merged_findings", [])[:10],
+            "conflicts": report_vault_packet.get("conflicts", [])[:10],
+            "missing_data": report_vault_packet.get("missing_data", [])[:10],
+            "trusted_summarized_input": True,
+            "safety_scope": report_vault_packet.get("safety_scope", "summarized_context_only_no_live_mutation"),
         },
         "next_focus": state.get("current_focus"),
     }
@@ -390,6 +405,22 @@ def write_report(
         latest_decision_d = latest_decisions_d[-1]
         lines.append(f"- Latest decision: {latest_decision_d.get('proposal_id')} -> {latest_decision_d.get('promotion_decision')}")
     lines.append("- Safety: Phase D is paper/sandbox-only and cannot execute broker orders, change Telegram/Supabase, override risk, or mutate master-brain live decisions.")
+    lines.append("")
+    lines.append("Report vault intelligence:")
+    vault = report["report_vault_intelligence"]
+    if vault["available"]:
+        lines.append(f"- Reports summarized: {vault.get('report_count')}")
+        lines.append(f"- Summary: {vault.get('summary')}")
+        if vault.get("top_ranked_reports"):
+            top_vault_report = vault["top_ranked_reports"][0]
+            lines.append(
+                f"- Top vault signal: {top_vault_report.get('severity')} {top_vault_report.get('source_worker')} - {top_vault_report.get('summary')}"
+            )
+        lines.append(f"- Conflicts: {len(vault.get('conflicts', []))}")
+        lines.append(f"- Missing data: {len(vault.get('missing_data', []))}")
+    else:
+        lines.append("- No report vault packet available yet.")
+    lines.append("- Safety: trusted summarized input only; raw reports remain separate and no live behavior is mutated.")
     lines.append("")
     lines.append("Insufficient evidence areas:")
     if report["insufficient_evidence_areas"]:

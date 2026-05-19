@@ -75,6 +75,7 @@ from consciousness_core.institutional_infrastructure_awareness import run_instit
 
 HEALTH_PATH = Path("data") / "consciousness_core" / "consciousness_health.json"
 CONTEXT_PATH = Path("data") / "consciousness_core" / "consciousness_context.json"
+REPORT_VAULT_PACKET_PATH = Path("data") / "report_vault" / "latest_aggregated_packet.json"
 
 
 def _summary(observation_packet, reflection, weaknesses, proposals, approved_count):
@@ -91,7 +92,43 @@ def _write_health(payload):
     atomic_write_json(HEALTH_PATH, payload)
 
 
-def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=None, phase3=None, phase_a=None, phase_b=None, phase_c=None, phase_d=None):
+def _load_report_vault_packet():
+    try:
+        import json
+
+        with REPORT_VAULT_PACKET_PATH.open("r", encoding="utf-8") as packet_file:
+            packet = json.load(packet_file)
+        return packet if isinstance(packet, dict) else {}
+    except Exception:
+        return {}
+
+
+def _compact_report_vault_packet(packet):
+    if not packet:
+        return {
+            "available": False,
+            "packet_path": str(REPORT_VAULT_PACKET_PATH),
+            "trusted_summarized_input": True,
+            "summary": "No report vault intelligence packet available yet.",
+        }
+    return {
+        "available": True,
+        "packet_path": str(REPORT_VAULT_PACKET_PATH),
+        "generated_at": packet.get("generated_at"),
+        "packet_hash": packet.get("packet_hash"),
+        "report_count": packet.get("report_count"),
+        "source_workers": packet.get("source_workers", [])[:20],
+        "summary": packet.get("summary"),
+        "top_ranked_reports": packet.get("ranked_reports", [])[:10],
+        "merged_findings": packet.get("merged_findings", [])[:10],
+        "conflicts": packet.get("conflicts", [])[:10],
+        "missing_data": packet.get("missing_data", [])[:10],
+        "trusted_summarized_input": True,
+        "safety_scope": packet.get("safety_scope", "summarized_context_only_no_live_mutation"),
+    }
+
+
+def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=None, phase3=None, phase_a=None, phase_b=None, phase_c=None, phase_d=None, report_vault_packet=None):
     phase2 = phase2 or {}
     phase3 = phase3 or {}
     phase_a = phase_a or {}
@@ -111,6 +148,7 @@ def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=
         for weakness in weaknesses
         if weakness.get("type") in {"weak_confidence_calibration", "high_confidence_loss", "confidence_warning"}
     ]
+    report_vault_intelligence = _compact_report_vault_packet(report_vault_packet)
     context = {
         "current_focus": state.get("current_focus"),
         "active_regime_warnings": no_trade_warnings[:10],
@@ -120,6 +158,7 @@ def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=
         "research_priorities": missions[:10],
         "no_trade_warnings": no_trade_warnings[:10],
         "confidence_warnings": confidence_warnings[:10],
+        "report_vault_intelligence": report_vault_intelligence,
         "sandbox_results": phase2.get("sandbox_results", {}).get("results", [])[:10],
         "promotion_recommendations": phase2.get("promotion_recommendations", {}).get("recommendations", [])[:10],
         "causal_lessons": phase2.get("causal_reasoning", {}).get("causal_lessons", [])[:10],
@@ -256,6 +295,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
     try:
         core_state, core_state_path = load_state()
         observation_packet = collect_observations()
+        report_vault_packet = _load_report_vault_packet()
         observations = observation_packet.get("observations", [])
         beliefs = decay_stale_beliefs(load_beliefs())
         reset_belief_consolidation_count()
@@ -337,7 +377,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             "contradiction_arbitration": contradiction_arbitration,
             "institutional_reasoning_summary": institutional_reasoning_summary,
         }
-        _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a)
+        _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a, report_vault_packet=report_vault_packet)
         strategy_genome_evolution = run_strategy_genome_evolution()
         recursive_meta_learning = run_recursive_meta_learning()
         adaptive_attention = run_adaptive_attention_allocator()
@@ -394,7 +434,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             "consolidated_proposals": get_last_consolidated_proposals() + get_last_bridge_dedup_count(),
             "consolidated_beliefs": get_last_beliefs_consolidated(),
         }
-        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a, phase_b=phase_b, phase_c=phase_c, phase_d=phase_d)
+        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a, phase_b=phase_b, phase_c=phase_c, phase_d=phase_d, report_vault_packet=report_vault_packet)
         approved_count = len(approved_queue)
         rejected_count = list(safety_decisions.values()).count("REJECTED")
         summary = _summary(observation_packet, reflection, weaknesses, proposals, approved_count)
@@ -442,7 +482,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
         core_state["active_weaknesses"] = weaknesses[:20]
         core_state["latest_summary"] = summary
         core_state = save_state(core_state, core_state_path)
-        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a, phase_b=phase_b, phase_c=phase_c, phase_d=phase_d)
+        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a, phase_b=phase_b, phase_c=phase_c, phase_d=phase_d, report_vault_packet=report_vault_packet)
 
         report = write_report(
             core_state,
@@ -462,6 +502,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             phase_b=phase_b,
             phase_c=phase_c,
             phase_d=phase_d,
+            report_vault_packet=report_vault_packet,
         )
         health = {
             "status": "OK",

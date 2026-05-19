@@ -14,6 +14,7 @@ DATA_SOURCES = (
     "data/runtime/intelligence_state/*.json",
     "data/runtime/titan_runtime_status.json",
     "data/runtime/dashboard_sync_status.json",
+    "data/report_vault/latest_aggregated_packet.json",
     "data/memory/evolution_state.json",
     "reports/evolution_report.txt",
     "data/research/*.json",
@@ -33,6 +34,7 @@ CRITICAL_PATTERNS = {
     "data/runtime/worker_health.json",
     "data/runtime/daemon_health.json",
     "data/runtime/titan_runtime_status.json",
+    "data/report_vault/latest_aggregated_packet.json",
     "data/memory/evolution_state.json",
     "reports/evolution_report.txt",
     "data/journals/trade_outcomes.csv",
@@ -352,10 +354,64 @@ def _observations_from_no_trade(source, payload, timestamp):
     return observations
 
 
+def _observations_from_report_vault(source, payload, timestamp):
+    if not isinstance(payload, dict):
+        return []
+    observations = []
+    summary = payload.get("summary")
+    if summary:
+        observations.append(
+            _normalized_observation(
+                source,
+                "report_vault_intelligence",
+                "aggregated_summary",
+                summary,
+                {
+                    "packet_hash": payload.get("packet_hash"),
+                    "report_count": payload.get("report_count"),
+                    "source_workers": payload.get("source_workers", []),
+                    "trusted_summarized_input": payload.get("trusted_summarized_input"),
+                },
+                entity="report_aggregator",
+                timestamp=payload.get("generated_at") or timestamp,
+                severity="MEDIUM" if payload.get("report_count") else "LOW",
+            )
+        )
+    for finding in (payload.get("merged_findings") or [])[:20]:
+        observations.append(
+            _normalized_observation(
+                source,
+                "report_vault_intelligence",
+                "merged_finding",
+                finding.get("finding") if isinstance(finding, dict) else finding,
+                finding,
+                entity="report_aggregator",
+                timestamp=payload.get("generated_at") or timestamp,
+                severity=(finding.get("severity") if isinstance(finding, dict) else "MEDIUM"),
+            )
+        )
+    for conflict in (payload.get("conflicts") or [])[:20]:
+        observations.append(
+            _normalized_observation(
+                source,
+                "report_vault_intelligence",
+                "report_conflict",
+                conflict.get("subject") if isinstance(conflict, dict) else conflict,
+                conflict,
+                entity="report_aggregator",
+                timestamp=payload.get("generated_at") or timestamp,
+                severity="HIGH",
+            )
+        )
+    return observations
+
+
 def _observations_from_payload(source, content, meta, timestamp):
     observations = []
     lower_source = source.lower()
-    if source.endswith("worker_health.json"):
+    if source.endswith("latest_aggregated_packet.json"):
+        observations.extend(_observations_from_report_vault(source, content, timestamp))
+    elif source.endswith("worker_health.json"):
         observations.extend(_observations_from_worker_health(source, content, timestamp))
     elif "/intelligence_state/" in lower_source:
         observations.extend(_observations_from_intelligence_state(source, content, timestamp))
