@@ -162,7 +162,7 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
     }
     heartbeat = runtime_payloads["titan_heartbeat"]
     runtime_status = runtime_payloads["titan_runtime_status"]
-    scanner_status = read_json_safe(SCANNER_STATUS_PATH)
+    scanner_status = runtime_payloads["scanner_status"]
     master_brain_status = runtime_payloads["master_brain_status"]
     paper_engine_status = runtime_payloads["paper_engine_status"]
     live_price_monitor_status = runtime_payloads["live_price_monitor_status"]
@@ -226,6 +226,7 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
         "heartbeat": heartbeat or {},
         "daemon_health": daemon_health or {},
         "runtime_status": runtime_status or {},
+        "scanner_status": scanner_status or {},
         "live_price_monitor_status": live_price_monitor_status or {},
         "master_brain_status": master_brain_status or {},
         "paper_engine_status": paper_engine_status or {},

@@ -94,6 +94,7 @@ def get_scheduler_map(mode):
             "next_day_preparation",
         ]
         scheduler_map["every_30_minutes"] = [
+            "scanner",
             "evolution_engine",
             "replay_batch",
         ]
