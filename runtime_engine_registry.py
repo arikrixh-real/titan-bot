@@ -72,6 +72,26 @@ def run_daily_review_handler(state=None, state_path=None, intelligence_state=Non
     return {"status": "ok"}
 
 
+def run_scenario_simulation_handler(state=None, state_path=None, intelligence_state=None):
+    try:
+        from consciousness_core.real_scenario_simulation import run_real_scenario_simulation
+    except Exception as exc:
+        return {"status": "error", "error": f"real_scenario_simulation import failed: {exc}"}
+
+    run_real_scenario_simulation()
+    return {"status": "ok"}
+
+
+def run_next_day_preparation_handler(state=None, state_path=None, intelligence_state=None):
+    try:
+        from consciousness_core.next_day_preparation_engine import run_next_day_preparation
+    except Exception as exc:
+        return {"status": "error", "error": f"next_day_preparation_engine import failed: {exc}"}
+
+    run_next_day_preparation()
+    return {"status": "ok"}
+
+
 PLACEHOLDER_TASKS = (
     "daily_review",
     "experience_memory",
@@ -134,6 +154,8 @@ def get_engine_registry():
         "learning_engine": run_learning_engine_handler,
         "experience_memory": run_experience_memory_handler,
         "daily_review": run_daily_review_handler,
+        "scenario_simulation": run_scenario_simulation_handler,
+        "next_day_preparation": run_next_day_preparation_handler,
     }
 
     for task_name in PLACEHOLDER_TASKS:

@@ -23,6 +23,7 @@ def write_report(
     phase3=None,
     phase_a=None,
     phase_b=None,
+    phase_c=None,
     path_json=REPORT_JSON_PATH,
     path_txt=REPORT_TXT_PATH,
 ):
@@ -33,6 +34,7 @@ def write_report(
     phase3 = phase3 or {}
     phase_a = phase_a or {}
     phase_b = phase_b or {}
+    phase_c = phase_c or {}
     top_beliefs = sorted(
         beliefs.values(),
         key=lambda belief: float(belief.get("confidence") or 0),
@@ -173,6 +175,15 @@ def write_report(
                 "permanent_market_laws": phase_b.get("evolution_memory_civilization", {}).get("permanent_market_laws", [])[:20],
             },
             "recursive_intelligence_summary": phase_b.get("recursive_intelligence_summary", {}),
+        },
+        "phase_c_real_world_intelligence": {
+            "scenario_simulation": phase_c.get("real_scenario_simulation", {}),
+            "next_day_preparation": phase_c.get("next_day_preparation", {}),
+            "paper_testing_ecosystem": phase_c.get("paper_testing_ecosystem", {}),
+            "data_quality_intelligence": phase_c.get("data_quality_intelligence", {}),
+            "validation_depth": phase_c.get("validation_depth", {}),
+            "institutional_infrastructure_awareness": phase_c.get("institutional_infrastructure_awareness", {}),
+            "phase_c_summary": phase_c.get("phase_c_summary", {}),
         },
         "next_focus": state.get("current_focus"),
     }
@@ -330,6 +341,26 @@ def write_report(
         weak_mutation = ecosystem_b["weakest_mutations"][0]
         lines.append(f"- Weakest mutation: {weak_mutation.get('genome_id')} score={weak_mutation.get('sandbox_score')} risk={weak_mutation.get('risk_score')}")
     lines.append("- Safety: Phase B is read-only, sandbox-safe, recommendation-only, and cannot mutate live strategies or execution.")
+    lines.append("")
+    lines.append("Phase C real-world intelligence:")
+    phase_c_report = report["phase_c_real_world_intelligence"]
+    scenario_c = phase_c_report["scenario_simulation"]
+    next_day_c = phase_c_report["next_day_preparation"]
+    paper_c = phase_c_report["paper_testing_ecosystem"]
+    data_c = phase_c_report["data_quality_intelligence"]
+    validation_c = phase_c_report["validation_depth"]
+    infra_c = phase_c_report["institutional_infrastructure_awareness"]
+    lines.append(f"- Dominant scenario: {scenario_c.get('dominant_scenario')}")
+    lines.append(f"- Next-day bias: {next_day_c.get('next_day_bias')}")
+    lines.append(f"- Paper-test health: {paper_c.get('paper_test_health', {}).get('state')} score={paper_c.get('paper_test_health', {}).get('score')}")
+    lines.append(f"- Data quality score: {data_c.get('data_quality_score')}")
+    lines.append(f"- Validation depth: {validation_c.get('validation_depth_score')} promotion_allowed={validation_c.get('promotion_allowed')}")
+    lines.append(f"- Infrastructure level: {infra_c.get('current_infra_level')} gap={infra_c.get('institutional_gap_score')}")
+    if validation_c.get("blockers"):
+        lines.append("- Top validation blocker: " + str(validation_c["blockers"][0]))
+    if data_c.get("missing_data_warnings"):
+        lines.append("- Missing data warning: " + str(data_c["missing_data_warnings"][0]))
+    lines.append("- Safety: Phase C is read-only, sandbox-safe, recommendation-only, and cannot mutate live execution.")
     lines.append("")
     lines.append("Insufficient evidence areas:")
     if report["insufficient_evidence_areas"]:
