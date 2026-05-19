@@ -431,6 +431,35 @@ def build_runtime_status_from_supabase():
     return data if data else None
 
 
+@st.cache_data(ttl=AUTO_REFRESH_SECONDS)
+def get_supabase_scanner_status_payload():
+    if supabase is None:
+        return {}
+    try:
+        result = (
+            supabase.table(RUNTIME_STATUS_TABLE)
+            .select("payload,timestamp_ist")
+            .eq("status_key", "scanner_status")
+            .limit(1)
+            .execute()
+        )
+    except Exception:
+        return {}
+
+    rows = result.data if isinstance(result.data, list) else []
+    if not rows or not isinstance(rows[0], dict):
+        return {}
+
+    payload = rows[0].get("payload")
+    if not isinstance(payload, dict):
+        return {}
+
+    payload = dict(payload)
+    if rows[0].get("timestamp_ist") and not payload.get("timestamp_ist"):
+        payload["timestamp_ist"] = rows[0].get("timestamp_ist")
+    return payload
+
+
 # =========================================================
 # SAFE LOCAL FILE HELPERS
 # =========================================================
@@ -1726,6 +1755,32 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         "has_data": False,
         "limited_runtime": False,
     }
+
+    supabase_scanner_payload = get_supabase_scanner_status_payload()
+    supabase_stocks_checked = int(first_number(supabase_scanner_payload.get("stocks_checked"), default=0))
+    if supabase_stocks_checked > 0:
+        master_payload = master_runtime_data if isinstance(master_runtime_data, dict) else {}
+        alerts = first_number(
+            supabase_scanner_payload.get("alerts_sent"),
+            supabase_scanner_payload.get("alerts_this_scan"),
+            master_payload.get("alerts_sent"),
+            master_payload.get("alerts_this_scan"),
+            default=0,
+        )
+        return {
+            "stocks_checked": supabase_stocks_checked,
+            "trend_passed": int(first_number(supabase_scanner_payload.get("trend_passed"), default=0)),
+            "momentum_passed": int(first_number(supabase_scanner_payload.get("momentum_passed"), default=0)),
+            "structure_passed": int(first_number(supabase_scanner_payload.get("structure_passed"), default=0)),
+            "entry_passed": int(first_number(supabase_scanner_payload.get("entry_passed"), default=0)),
+            "final_passed": int(first_number(supabase_scanner_payload.get("final_passed"), default=0)),
+            "alerts_this_scan": int(alerts),
+            "source": "SUPABASE_RUNTIME_SCANNER",
+            "timestamp": runtime_payload_dt(supabase_scanner_payload),
+            "is_fresh": True,
+            "has_data": True,
+            "limited_runtime": False,
+        }
 
     scanner_payload = (
         scanner_runtime_data.get("payload")
