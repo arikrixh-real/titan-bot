@@ -42,6 +42,36 @@ def run_consciousness_core_handler(state=None, state_path=None, intelligence_sta
     return result if isinstance(result, dict) else {"status": "ok"}
 
 
+def run_learning_engine_handler(state=None, state_path=None, intelligence_state=None):
+    try:
+        from consciousness_core.learning_engine import run_learning_engine
+    except Exception as exc:
+        return {"status": "error", "error": f"learning_engine import failed: {exc}"}
+
+    run_learning_engine()
+    return {"status": "ok"}
+
+
+def run_experience_memory_handler(state=None, state_path=None, intelligence_state=None):
+    try:
+        from consciousness_core.real_experience_memory import run_real_experience_memory
+    except Exception as exc:
+        return {"status": "error", "error": f"real_experience_memory import failed: {exc}"}
+
+    run_real_experience_memory()
+    return {"status": "ok"}
+
+
+def run_daily_review_handler(state=None, state_path=None, intelligence_state=None):
+    try:
+        from consciousness_core.daily_review_engine import run_daily_review_engine
+    except Exception as exc:
+        return {"status": "error", "error": f"daily_review_engine import failed: {exc}"}
+
+    run_daily_review_engine()
+    return {"status": "ok"}
+
+
 PLACEHOLDER_TASKS = (
     "daily_review",
     "experience_memory",
@@ -101,10 +131,13 @@ def get_engine_registry():
         "paper_engine": run_paper_engine,
         "runtime_snapshot_logger": log_runtime_snapshot,
         "consciousness_core": run_consciousness_core_handler,
+        "learning_engine": run_learning_engine_handler,
+        "experience_memory": run_experience_memory_handler,
+        "daily_review": run_daily_review_handler,
     }
 
     for task_name in PLACEHOLDER_TASKS:
-        registry[task_name] = _make_placeholder_handler(task_name)
+        registry.setdefault(task_name, _make_placeholder_handler(task_name))
 
     return registry
 

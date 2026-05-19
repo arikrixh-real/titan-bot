@@ -20,6 +20,7 @@ def write_report(
     approved_queue=None,
     consolidation_stats=None,
     phase2=None,
+    phase3=None,
     path_json=REPORT_JSON_PATH,
     path_txt=REPORT_TXT_PATH,
 ):
@@ -27,6 +28,7 @@ def write_report(
     approved_queue = approved_queue or []
     consolidation_stats = consolidation_stats or {}
     phase2 = phase2 or {}
+    phase3 = phase3 or {}
     top_beliefs = sorted(
         beliefs.values(),
         key=lambda belief: float(belief.get("confidence") or 0),
@@ -69,6 +71,33 @@ def write_report(
         "strategy_mutations": phase2.get("strategy_mutations", {}).get("mutations", [])[:20],
         "research_experiments": phase2.get("research_experiments", {}).get("experiments", [])[:20],
         "meta_learning": phase2.get("meta_learning", {}),
+        "phase3_real_experience_memory": {
+            "repeated_failure_patterns": phase3.get("real_experience_memory", {}).get("repeated_failure_patterns", [])[:10],
+            "repeated_success_patterns": phase3.get("real_experience_memory", {}).get("repeated_success_patterns", [])[:10],
+            "engine_reliability_memory": phase3.get("real_experience_memory", {}).get("engine_reliability_memory", [])[:10],
+        },
+        "phase3_daily_review": {
+            "what_worked": phase3.get("daily_review", {}).get("what_worked", [])[:10],
+            "what_failed": phase3.get("daily_review", {}).get("what_failed", [])[:10],
+            "what_was_missing": phase3.get("daily_review", {}).get("what_was_missing", [])[:10],
+            "which_engines_were_weak": phase3.get("daily_review", {}).get("which_engines_were_weak", [])[:10],
+            "what_to_study_next": phase3.get("daily_review", {}).get("what_to_study_next", [])[:10],
+            "what_should_be_avoided_tomorrow": phase3.get("daily_review", {}).get("what_should_be_avoided_tomorrow", [])[:10],
+            "what_needs_paper_testing": phase3.get("daily_review", {}).get("what_needs_paper_testing", [])[:10],
+        },
+        "phase3_learning_directives": phase3.get("learning_engine", {}).get("directives", [])[:20],
+        "phase3_experience_clusters": phase3.get("experience_clustering", {}).get("clusters", [])[:20],
+        "phase3_stock_personality_symbol_count": len(phase3.get("stock_personality", {}).get("symbols", {})),
+        "phase3_confidence_recalibration": {
+            "overconfidence_warnings": phase3.get("confidence_recalibration", {}).get("overconfidence_warnings", [])[:10],
+            "weak_calibration_evidence": phase3.get("confidence_recalibration", {}).get("weak_calibration_evidence", [])[:10],
+            "sample_size_warning": phase3.get("confidence_recalibration", {}).get("sample_size_warning"),
+            "approved_for_test_only": phase3.get("confidence_recalibration", {}).get("approved_for_test_only"),
+        },
+        "phase3_world_model_memory": {
+            "market_laws": phase3.get("world_model_memory", {}).get("market_laws", [])[:10],
+            "engine_memory": phase3.get("world_model_memory", {}).get("engine_memory", {}),
+        },
         "next_focus": state.get("current_focus"),
     }
     atomic_write_json(path_json, report)
@@ -167,6 +196,19 @@ def write_report(
         lines.append(f"- Recurring weakness count: {meta.get('recurring_weakness_count')}")
     else:
         lines.append("- No meta-learning data yet.")
+    lines.append("")
+    lines.append("Phase 3 experiential intelligence:")
+    phase3_review = report["phase3_daily_review"]
+    lines.append(f"- Real experience failures: {len(report['phase3_real_experience_memory']['repeated_failure_patterns'])}")
+    lines.append(f"- Daily review failures: {len(phase3_review['what_failed'])}")
+    lines.append(f"- Learning directives: {len(report['phase3_learning_directives'])}")
+    lines.append(f"- Experience clusters: {len(report['phase3_experience_clusters'])}")
+    lines.append(f"- Stock personalities: {report['phase3_stock_personality_symbol_count']}")
+    lines.append(f"- Confidence test-only: {report['phase3_confidence_recalibration'].get('approved_for_test_only')}")
+    if phase3_review["what_to_study_next"]:
+        lines.append("- Study next: " + "; ".join(phase3_review["what_to_study_next"][:5]))
+    if report["phase3_world_model_memory"]["market_laws"]:
+        lines.append("- Market law: " + report["phase3_world_model_memory"]["market_laws"][0])
     lines.append("")
     lines.append("Insufficient evidence areas:")
     if report["insufficient_evidence_areas"]:

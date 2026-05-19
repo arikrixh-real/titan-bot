@@ -11,14 +11,19 @@ from consciousness_core.belief_graph import (
     update_beliefs_from_weaknesses,
 )
 from consciousness_core.causal_reasoning import run_causal_reasoning
+from consciousness_core.confidence_recalibration import run_confidence_recalibration
 from consciousness_core.data_collector import collect_observations
+from consciousness_core.daily_review_engine import run_daily_review_engine
 from consciousness_core.evolution_bridge import get_last_bridge_dedup_count, write_evolution_bridge_queue
+from consciousness_core.experience_clustering import run_experience_clustering
 from consciousness_core.experience_memory import update_experience_memory
 from consciousness_core.goal_manager import update_goals
 from consciousness_core.improvement_planner import create_improvement_proposals, get_last_consolidated_proposals
 from consciousness_core.internal_question_engine import generate_internal_questions
+from consciousness_core.learning_engine import run_learning_engine
 from consciousness_core.meta_learning import run_meta_learning
 from consciousness_core.promotion_gate import run_promotion_gate
+from consciousness_core.real_experience_memory import run_real_experience_memory
 from consciousness_core.reflection_engine import reflect
 from consciousness_core.report import write_report
 from consciousness_core.research_lab import run_research_lab
@@ -26,6 +31,7 @@ from consciousness_core.research_mission_generator import generate_research_miss
 from consciousness_core.sandbox_evolution import run_sandbox_evolution
 from consciousness_core.safety_gate import evaluate_proposal
 from consciousness_core.state import atomic_write_json, load_state, now_ist, save_state
+from consciousness_core.stock_personality import run_stock_personality
 from consciousness_core.strategy_mutation_lab import run_strategy_mutation_lab
 from consciousness_core.thought_memory import (
     append_internal_narrative,
@@ -33,6 +39,7 @@ from consciousness_core.thought_memory import (
     append_thought,
 )
 from consciousness_core.weakness_hunter import get_last_duplicates_merged, hunt_weaknesses
+from consciousness_core.world_model_memory import run_world_model_memory
 from consciousness_core.world_graph import update_world_graph
 
 
@@ -54,8 +61,9 @@ def _write_health(payload):
     atomic_write_json(HEALTH_PATH, payload)
 
 
-def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=None):
+def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=None, phase3=None):
     phase2 = phase2 or {}
+    phase3 = phase3 or {}
     top_beliefs = sorted(
         beliefs.values(),
         key=lambda belief: float(belief.get("confidence") or 0),
@@ -89,6 +97,29 @@ def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=
         },
         "strategy_mutations": phase2.get("strategy_mutations", {}).get("mutations", [])[:10],
         "meta_learning": phase2.get("meta_learning", {}),
+        "real_experience_memory": {
+            "repeated_failure_patterns": phase3.get("real_experience_memory", {}).get("repeated_failure_patterns", [])[:5],
+            "repeated_success_patterns": phase3.get("real_experience_memory", {}).get("repeated_success_patterns", [])[:5],
+            "engine_reliability_memory": phase3.get("real_experience_memory", {}).get("engine_reliability_memory", [])[:5],
+        },
+        "daily_review": {
+            "what_worked": phase3.get("daily_review", {}).get("what_worked", [])[:5],
+            "what_failed": phase3.get("daily_review", {}).get("what_failed", [])[:5],
+            "which_engines_were_weak": phase3.get("daily_review", {}).get("which_engines_were_weak", [])[:5],
+            "what_to_study_next": phase3.get("daily_review", {}).get("what_to_study_next", [])[:5],
+        },
+        "learning_directives": phase3.get("learning_engine", {}).get("directives", [])[:10],
+        "experience_clusters": phase3.get("experience_clustering", {}).get("clusters", [])[:10],
+        "stock_personality": phase3.get("stock_personality", {}).get("symbols", {}),
+        "confidence_recalibration": {
+            "weak_calibration_evidence": phase3.get("confidence_recalibration", {}).get("weak_calibration_evidence", [])[:10],
+            "sample_size_warning": phase3.get("confidence_recalibration", {}).get("sample_size_warning"),
+            "approved_for_test_only": phase3.get("confidence_recalibration", {}).get("approved_for_test_only"),
+        },
+        "world_model_memory": {
+            "market_laws": phase3.get("world_model_memory", {}).get("market_laws", [])[:10],
+            "engine_memory": phase3.get("world_model_memory", {}).get("engine_memory", {}),
+        },
     }
     atomic_write_json(CONTEXT_PATH, context)
     return context
@@ -147,13 +178,29 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             "promotion_recommendations": promotion_recommendations,
             "meta_learning": meta_learning,
         }
+        real_experience_memory = run_real_experience_memory()
+        daily_review = run_daily_review_engine()
+        learning_directives = run_learning_engine()
+        experience_clusters = run_experience_clustering()
+        stock_personality = run_stock_personality()
+        confidence_recalibration = run_confidence_recalibration()
+        world_model_memory = run_world_model_memory()
+        phase3 = {
+            "real_experience_memory": real_experience_memory,
+            "daily_review": daily_review,
+            "learning_engine": learning_directives,
+            "experience_clustering": experience_clusters,
+            "stock_personality": stock_personality,
+            "confidence_recalibration": confidence_recalibration,
+            "world_model_memory": world_model_memory,
+        }
         consolidation_stats = {
             "duplicates_merged": get_last_duplicates_merged(),
             "consolidated_missions": get_last_consolidated_missions(),
             "consolidated_proposals": get_last_consolidated_proposals() + get_last_bridge_dedup_count(),
             "consolidated_beliefs": get_last_beliefs_consolidated(),
         }
-        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2)
+        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3)
         approved_count = len(approved_queue)
         rejected_count = list(safety_decisions.values()).count("REJECTED")
         summary = _summary(observation_packet, reflection, weaknesses, proposals, approved_count)
@@ -201,7 +248,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
         core_state["active_weaknesses"] = weaknesses[:20]
         core_state["latest_summary"] = summary
         core_state = save_state(core_state, core_state_path)
-        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2)
+        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3)
 
         report = write_report(
             core_state,
@@ -216,6 +263,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             approved_queue=approved_queue,
             consolidation_stats=consolidation_stats,
             phase2=phase2,
+            phase3=phase3,
         )
         health = {
             "status": "OK",
