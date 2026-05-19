@@ -15,6 +15,7 @@ DATA_SOURCES = (
     "data/runtime/titan_runtime_status.json",
     "data/runtime/dashboard_sync_status.json",
     "data/report_vault/latest_aggregated_packet.json",
+    "data/knowledge_vault/reports/knowledge_to_consciousness_packet.json",
     "data/memory/evolution_state.json",
     "reports/evolution_report.txt",
     "data/research/*.json",
@@ -35,6 +36,7 @@ CRITICAL_PATTERNS = {
     "data/runtime/daemon_health.json",
     "data/runtime/titan_runtime_status.json",
     "data/report_vault/latest_aggregated_packet.json",
+    "data/knowledge_vault/reports/knowledge_to_consciousness_packet.json",
     "data/memory/evolution_state.json",
     "reports/evolution_report.txt",
     "data/journals/trade_outcomes.csv",
@@ -406,11 +408,70 @@ def _observations_from_report_vault(source, payload, timestamp):
     return observations
 
 
+def _observations_from_knowledge_vault(source, payload, timestamp):
+    if not isinstance(payload, dict):
+        return []
+    observations = []
+    generated_at = payload.get("generated_at") or timestamp
+    for item in (payload.get("observations") or [])[:100]:
+        if not isinstance(item, dict):
+            continue
+        observations.append(
+            _normalized_observation(
+                source,
+                item.get("type") or "knowledge_vault_intelligence",
+                item.get("metric") or "knowledge_item",
+                item.get("value"),
+                {
+                    "evidence": item.get("evidence", []),
+                    "safety": item.get("safety"),
+                    "packet_hash": payload.get("packet_hash"),
+                },
+                entity=item.get("entity") or "knowledge_vault",
+                timestamp=generated_at,
+                severity=item.get("severity") or "LOW",
+            )
+        )
+    for warning in (payload.get("extraction_warnings") or [])[:50]:
+        observations.append(
+            _normalized_observation(
+                source,
+                "knowledge_vault_intelligence",
+                "insufficient_extraction",
+                warning.get("reason") if isinstance(warning, dict) else warning,
+                warning,
+                entity=(warning.get("source_file") if isinstance(warning, dict) else "knowledge_vault"),
+                timestamp=generated_at,
+                severity="MEDIUM",
+            )
+        )
+    if not observations:
+        observations.append(
+            _normalized_observation(
+                source,
+                "knowledge_vault_intelligence",
+                "packet_seen",
+                payload.get("status"),
+                {
+                    "run_stats": payload.get("run_stats", {}),
+                    "packet_hash": payload.get("packet_hash"),
+                    "note": "insufficient extraction: no knowledge observations available",
+                },
+                entity="knowledge_vault",
+                timestamp=generated_at,
+                severity="LOW",
+            )
+        )
+    return observations
+
+
 def _observations_from_payload(source, content, meta, timestamp):
     observations = []
     lower_source = source.lower()
     if source.endswith("latest_aggregated_packet.json"):
         observations.extend(_observations_from_report_vault(source, content, timestamp))
+    elif source.endswith("knowledge_to_consciousness_packet.json"):
+        observations.extend(_observations_from_knowledge_vault(source, content, timestamp))
     elif source.endswith("worker_health.json"):
         observations.extend(_observations_from_worker_health(source, content, timestamp))
     elif "/intelligence_state/" in lower_source:
