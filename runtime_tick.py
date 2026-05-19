@@ -4,6 +4,16 @@ from utils.market_hours import as_ist_datetime
 
 
 _LAST_EMITTED_SLOTS = {}
+_INTERVAL_SECONDS = {
+    "every_1_second": 1,
+    "every_5_seconds": 5,
+    "every_10_seconds": 10,
+    "every_1_minute": 60,
+    "every_5_minutes": 300,
+    "every_15_minutes": 900,
+    "every_30_minutes": 1800,
+    "every_1_hour": 3600,
+}
 
 
 def _slot_key(now, interval_seconds):
@@ -51,28 +61,21 @@ def get_due_tasks(value=None):
     mode = current_bot_mode(now)
     scheduler_map = get_scheduler_map(mode)
 
-    due_tasks = list(scheduler_map.get("every_1_second", []))
+    due_tasks = []
 
-    if _is_due(now, mode, "every_5_seconds", 5, value_was_provided):
-        due_tasks.extend(scheduler_map.get("every_5_seconds", []))
+    for interval_name, tasks in scheduler_map.items():
+        interval_seconds = _INTERVAL_SECONDS.get(interval_name)
+        if interval_seconds is None:
+            continue
 
-    if _is_due(now, mode, "every_10_seconds", 10, value_was_provided):
-        due_tasks.extend(scheduler_map.get("every_10_seconds", []))
-
-    if _is_due(now, mode, "every_1_minute", 60, value_was_provided):
-        due_tasks.extend(scheduler_map.get("every_1_minute", []))
-
-    if _is_due(now, mode, "every_5_minutes", 300, value_was_provided):
-        due_tasks.extend(scheduler_map.get("every_5_minutes", []))
-
-    if _is_due(now, mode, "every_15_minutes", 900, value_was_provided):
-        due_tasks.extend(scheduler_map.get("every_15_minutes", []))
-
-    if _is_due(now, mode, "every_30_minutes", 1800, value_was_provided):
-        due_tasks.extend(scheduler_map.get("every_30_minutes", []))
-
-    if _is_due(now, mode, "every_1_hour", 3600, value_was_provided):
-        due_tasks.extend(scheduler_map.get("every_1_hour", []))
+        if interval_seconds == 1 or _is_due(
+            now,
+            mode,
+            interval_name,
+            interval_seconds,
+            value_was_provided,
+        ):
+            due_tasks.extend(tasks)
 
     return {
         "timestamp_ist": now.isoformat(),

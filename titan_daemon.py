@@ -5,6 +5,7 @@ from pathlib import Path
 
 from runtime_lock import acquire_lock, refresh_lock, release_lock
 from runtime_dispatcher import preview_dispatch
+from runtime_scheduler_map import get_scheduler_map
 from runtime_health import write_daemon_health
 from runtime_error_log import log_runtime_error
 
@@ -91,9 +92,15 @@ def main():
         f"execution_owner={intent['execution_owner']} "
         f"live_execution_enabled={intent['live_execution_enabled']} "
         f"telegram_enabled={intent['telegram_enabled']} "
-        f"lifecycle_mutation_enabled={intent['lifecycle_mutation_enabled']}"
+        f"lifecycle_mutation_enabled={intent['lifecycle_mutation_enabled']}",
+        flush=True,
     )
-    print(f"TITAN daemon contract: {intent['execution_contract']}")
+    print(f"TITAN daemon contract: {intent['execution_contract']}", flush=True)
+    print(
+        "SCHEDULER_MAP_MARKET_MODE="
+        f"{json.dumps(get_scheduler_map('MARKET_MODE'), separators=(',', ':'), sort_keys=True)}",
+        flush=True,
+    )
 
     last_printed_at = 0.0
     ticks_completed = 0
@@ -124,7 +131,8 @@ def main():
                         f"runtime_mode={intent['runtime_mode']} "
                         f"execution_owner={intent['execution_owner']} "
                         f"ticks_completed={ticks_completed} "
-                        f"last_dispatch_count={last_dispatch_count}"
+                        f"last_dispatch_count={last_dispatch_count}",
+                        flush=True,
                     )
                     last_printed_at = now
             except Exception as exc:

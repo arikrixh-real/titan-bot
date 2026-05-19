@@ -63,7 +63,7 @@ def append_scanner_debug_log(timestamp_ist, mode, event, reason=None):
     if reason:
         payload["reason"] = reason
 
-    print(json.dumps(payload, separators=(",", ":")))
+    print(json.dumps(payload, separators=(",", ":")), flush=True)
 
     try:
         SCANNER_DEBUG_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -84,6 +84,7 @@ def _cycle_budget_remaining(started_at):
 def preview_dispatch(value=None):
     tick = get_due_tasks(value)
     due_tasks = tick["due_tasks"]
+    print(f"DUE_TASKS={json.dumps(due_tasks, separators=(',', ':'))}", flush=True)
     dispatch_preview = []
     cycle_started_at = time.monotonic()
 
