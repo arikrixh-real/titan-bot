@@ -1911,7 +1911,9 @@ def get_dashboard_runtime_status():
         or heartbeat.get("mode")
         or "UNKNOWN"
     )
+    heartbeat_dt = runtime_payload_dt(heartbeat)
     heartbeat_timestamp = heartbeat.get("timestamp_ist") or daemon_health.get("timestamp_ist") or runtime_status.get("timestamp_ist")
+    heartbeat_age = f"Latest beat: {age_text_from_dt(heartbeat_dt)}" if heartbeat_dt else "No heartbeat yet"
     ticks_completed = daemon_health.get("ticks_completed")
     ticks_text = f"{int(ticks_completed):,}" if isinstance(ticks_completed, (int, float)) else str(ticks_completed or "0")
 
@@ -1929,6 +1931,7 @@ def get_dashboard_runtime_status():
     return {
         "daemon_status": daemon_status,
         "runtime_mode": runtime_mode,
+        "heartbeat_age": heartbeat_age,
         "heartbeat_timestamp": format_runtime_timestamp(heartbeat_timestamp),
         "ticks_completed": ticks_text,
         "autonomous_runtime_status": autonomous_status,
@@ -2827,7 +2830,7 @@ st.markdown("<div class='subtitle'>Dashboard Real PnL Fix V1</div>", unsafe_allo
 st.markdown("<div class='section'>", unsafe_allow_html=True)
 st.markdown("<div class='section-title'>🧠 Top Control Status</div>", unsafe_allow_html=True)
 
-c1, c2, c3, c4, c5 = st.columns(5)
+c1, c2, c3, c4 = st.columns(4)
 
 with c1:
     status_card("TITAN Status", titan_status, market_mode_label())
@@ -2839,18 +2842,10 @@ with c3:
     status_card("Supabase Status", supabase_status, "Memory database connection")
 
 with c4:
-    metric_card("Last Scan", last_scan_age, f"Runtime source: {scanner_runtime_data['source']}")
-
-with c5:
-    status_card(
-        "Paper Simulation",
-        paper_engine_runtime_data["status"],
-        (
-            f"Open: {paper_engine_runtime_data['open_positions_count']:,} | "
-            f"Closed: {paper_engine_runtime_data['closed_positions_count']:,}<br>"
-            f"Equity: {format_inr(paper_engine_runtime_data['equity'])}<br>"
-            f"Realized PnL: {format_signed_inr(paper_engine_runtime_data['realized_pnl'])}"
-        ),
+    metric_card(
+        "TITAN Heartbeat",
+        runtime_status_data["heartbeat_age"],
+        "Supabase runtime_status / titan_heartbeat",
     )
 
 if github_data["url"]:
@@ -3061,7 +3056,7 @@ st.markdown("</div>", unsafe_allow_html=True)
 st.markdown("<div class='section'>", unsafe_allow_html=True)
 st.markdown("<div class='section-title'>🟢 Engine Running Status</div>", unsafe_allow_html=True)
 
-r1, r2 = st.columns(2)
+r1, r2 = st.columns([1, 1])
 
 with r1:
     small_status("Scan Engine", scan_status, f"Last scan: {last_scan_age}")
@@ -3077,13 +3072,13 @@ with r1:
             f"Ticks: {runtime_status_data['ticks_completed']}"
         ),
     )
+
+with r2:
     small_status(
         "Autonomous Runtime",
         runtime_status_data["autonomous_runtime_status"],
         runtime_status_data["autonomous_runtime_sub"],
     )
-
-with r2:
     small_status("News Engine", news_status, f"News: {news_gathered:,} · Latest: {news_memory_data['age']}")
     small_status("Telegram Alert Engine", telegram_status, telegram_status_sub)
     small_status("Learning / Evolution", learning_status, master_brain_data["evolution_sub"])
