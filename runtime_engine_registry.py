@@ -26,6 +26,22 @@ from runtime_paper_engine import run_paper_engine
 from runtime_snapshot_logger import log_runtime_snapshot
 
 
+def run_consciousness_core_handler(state=None, state_path=None, intelligence_state=None):
+    try:
+        from consciousness_core.meta_orchestrator import run_consciousness_core
+    except Exception as exc:
+        return {"status": "error", "error": f"consciousness_core import failed: {exc}"}
+
+    result = run_consciousness_core(
+        state=state,
+        state_path=state_path,
+        intelligence_state=intelligence_state,
+    )
+    if isinstance(result, dict) and result.get("status") == "ok":
+        return {"status": "ok"}
+    return result if isinstance(result, dict) else {"status": "ok"}
+
+
 PLACEHOLDER_TASKS = (
     "daily_review",
     "experience_memory",
@@ -84,6 +100,7 @@ def get_engine_registry():
         "sector_strength": run_sector_strength,
         "paper_engine": run_paper_engine,
         "runtime_snapshot_logger": log_runtime_snapshot,
+        "consciousness_core": run_consciousness_core_handler,
     }
 
     for task_name in PLACEHOLDER_TASKS:
