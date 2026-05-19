@@ -15,6 +15,7 @@ PRINT_INTERVAL_SECONDS = 30
 TICK_SECONDS = 1
 DAEMON_HEALTH_PATH = Path("data") / "runtime" / "daemon_health.json"
 RUNTIME_MODE_ENV = "TITAN_RUNTIME_MASTER_BRAIN_MODE"
+CONTINUOUS_WORKERS_ENV = "TITAN_CONTINUOUS_WORKERS"
 
 
 def _runtime_intent():
@@ -86,13 +87,15 @@ def main():
         return
 
     intent = _runtime_intent()
+    continuous_workers_enabled = os.getenv(CONTINUOUS_WORKERS_ENV) == "1"
     print(
         "TITAN daemon starting "
         f"runtime_mode={intent['runtime_mode']} "
         f"execution_owner={intent['execution_owner']} "
         f"live_execution_enabled={intent['live_execution_enabled']} "
         f"telegram_enabled={intent['telegram_enabled']} "
-        f"lifecycle_mutation_enabled={intent['lifecycle_mutation_enabled']}",
+        f"lifecycle_mutation_enabled={intent['lifecycle_mutation_enabled']} "
+        f"continuous_workers_enabled={continuous_workers_enabled}",
         flush=True,
     )
     print(f"TITAN daemon contract: {intent['execution_contract']}", flush=True)
@@ -105,15 +108,24 @@ def main():
     last_printed_at = 0.0
     ticks_completed = 0
     last_dispatch_count = 0
-    latest_mode = "UNKNOWN"
+    latest_mode = "CONTINUOUS_WORKERS" if continuous_workers_enabled else "UNKNOWN"
 
     try:
+        if continuous_workers_enabled:
+            from runtime_continuous_workers import start_continuous_workers
+
+            start_continuous_workers(intent=intent)
+
         while True:
             try:
-                dispatch_result = preview_dispatch()
-                ticks_completed += 1
-                latest_mode = dispatch_result["mode"]
-                last_dispatch_count = len(dispatch_result["dispatch_preview"])
+                if continuous_workers_enabled:
+                    ticks_completed += 1
+                    last_dispatch_count = 0
+                else:
+                    dispatch_result = preview_dispatch()
+                    ticks_completed += 1
+                    latest_mode = dispatch_result["mode"]
+                    last_dispatch_count = len(dispatch_result["dispatch_preview"])
 
                 _write_daemon_health(
                     mode=latest_mode,
@@ -131,7 +143,8 @@ def main():
                         f"runtime_mode={intent['runtime_mode']} "
                         f"execution_owner={intent['execution_owner']} "
                         f"ticks_completed={ticks_completed} "
-                        f"last_dispatch_count={last_dispatch_count}",
+                        f"last_dispatch_count={last_dispatch_count} "
+                        f"continuous_workers_enabled={continuous_workers_enabled}",
                         flush=True,
                     )
                     last_printed_at = now
