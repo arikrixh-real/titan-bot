@@ -1,16 +1,16 @@
 TITAN EVOLUTION REPORT
 ============================================================
-Updated: 2026-05-05 21:30:37
+Updated: 2026-05-17 22:33:30
 
 GLOBAL PERFORMANCE
 ------------------------------------------------------------
-Closed trades      : 0
-Wins               : 0
-Losses             : 0
-Win rate           : 0.0%
-Average RR         : 0.0
-Avg score winners  : 0.0
-Avg score losers   : 0.0
+Closed trades      : 2
+Wins               : 1
+Losses             : 1
+Win rate           : 50.0%
+Average RR         : 2.0
+Avg score winners  : 3.04
+Avg score losers   : 3.2
 
 EVOLUTION CONTROLS
 ------------------------------------------------------------
@@ -20,15 +20,18 @@ Ranking confidence : 1.0  | old: 1.0
 
 NOTES
 ------------------------------------------------------------
-- Waiting for more closed trades. Need at least 5, found 0.
+- Waiting for more closed trades. Need at least 5, found 2.
 
 TOP SYMBOL MEMORY
 ------------------------------------------------------------
+TCS: trades=1, wins=1, losses=0, win_rate=100.0%, weight=1.0117
+TATASTEEL: trades=1, wins=0, losses=1, win_rate=0.0%, weight=0.9883
 
 SIDE MEMORY
 ------------------------------------------------------------
 LONG: trades=0, wins=0, losses=0, win_rate=0.0%, weight=1.0
-SHORT: trades=0, wins=0, losses=0, win_rate=0.0%, weight=1.0
+SHORT: trades=2, wins=1, losses=1, win_rate=50.0%, weight=1.0
 
 REASON / SETUP TAG MEMORY
 ------------------------------------------------------------
+general: trades=2, wins=1, losses=1, win_rate=50.0%, weight=1.0

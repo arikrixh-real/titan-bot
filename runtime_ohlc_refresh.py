@@ -107,6 +107,15 @@ def run_ohlc_refresh():
         payload["refreshed_count"] = refreshed_count
         payload["failed_count"] = failed_count
         payload["skipped_count"] = skipped_count
+        payload["symbol_results"] = result.get("symbol_results") or []
+        payload["skip_reasons"] = {}
+        for item in payload["symbol_results"]:
+            if not isinstance(item, dict) or item.get("status") != "SKIPPED":
+                continue
+            reason = item.get("reason") or "UNKNOWN"
+            payload["skip_reasons"][reason] = payload["skip_reasons"].get(reason, 0) + 1
+        if refreshed_count == 0 and skipped_count == len(symbols):
+            payload["skipped_reason"] = "ALL_SYMBOLS_RETURNED_EMPTY_OR_UNUSABLE_OHLC"
         payload["result_summary"] = result
         return payload
     except Exception as exc:

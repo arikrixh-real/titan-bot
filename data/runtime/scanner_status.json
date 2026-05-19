@@ -1,72 +1,83 @@
 {
-  "breakout_ready_count": 10,
+  "alerts_sent": 0,
+  "breakout_ready_count": 8,
   "candidate_details": [
     {
       "last_ohlc": {
-        "Close": 261.20001220703125,
-        "High": 261.8500061035156,
-        "Low": 260.79998779296875
+        "Close": 427.5,
+        "High": 427.7999877929688,
+        "Low": 426.0499877929688
       },
-      "side": "SHORT",
-      "symbol": "BANKBARODA"
+      "side": "LONG",
+      "symbol": "BEL"
     },
     {
       "last_ohlc": {
-        "Close": 397.7999877929688,
-        "High": 398.9500122070313,
-        "Low": 397.0
+        "Close": 73.0,
+        "High": 73.30000305175781,
+        "Low": 73.0
       },
       "side": "SHORT",
-      "symbol": "BHEL"
+      "symbol": "SJVN"
     },
     {
       "last_ohlc": {
-        "Close": 98.56999969482422,
-        "High": 98.87000274658205,
-        "Low": 98.5500030517578
+        "Close": 12.979999542236328,
+        "High": 13.020000457763672,
+        "Low": 12.779999732971191
       },
-      "side": "SHORT",
-      "symbol": "IRFC"
+      "side": "LONG",
+      "symbol": "IDEA"
     },
     {
       "last_ohlc": {
-        "Close": 126.6500015258789,
-        "High": 127.19000244140624,
-        "Low": 126.6500015258789
+        "Close": 53.41999816894531,
+        "High": 53.43000030517578,
+        "Low": 53.25
       },
-      "side": "SHORT",
-      "symbol": "IREDA"
+      "side": "LONG",
+      "symbol": "SUZLON"
     },
     {
       "last_ohlc": {
-        "Close": 93.79000091552734,
-        "High": 94.06999969482422,
-        "Low": 93.58000183105467
+        "Close": 84.0999984741211,
+        "High": 84.75,
+        "Low": 84.0
       },
       "side": "SHORT",
-      "symbol": "NBCC"
+      "symbol": "ZEEL"
     }
   ],
   "candidate_symbols": [
-    "BANKBARODA",
-    "BHEL",
-    "IRFC",
-    "IREDA",
-    "NBCC"
+    "BEL",
+    "SJVN",
+    "IDEA",
+    "SUZLON",
+    "ZEEL"
   ],
+  "entry_passed": 8,
   "errors": 0,
+  "final_passed": 0,
   "journal_writes": false,
+  "missing_fields": [
+    "final_passed"
+  ],
   "mode": "SCAN_ONLY_CACHED_50",
-  "momentum_passed": 10,
-  "passed_setups": 10,
+  "momentum_passed": 8,
+  "passed_setups": 8,
   "real_scanner_called": true,
+  "scan_duration_seconds": 0.547,
+  "scan_finished_at_ist": "2026-05-19T11:03:35.488524+05:30",
   "scan_only": true,
+  "scan_started_at_ist": "2026-05-19T11:03:34.937628+05:30",
+  "scanner_cycle_id": "2026-05-19T11:03:34.937628+05:30-c6942655-f43d-4208-b443-e5f852dc122e",
+  "source": "VPS_RUNTIME_SCANNER",
   "status": "SCAN_ONLY_COMPLETE",
   "stocks_checked": 50,
-  "structure_passed": 18,
+  "structure_passed": 14,
   "supabase_writes": false,
   "telegram_alerts": false,
-  "timestamp_ist": "2026-05-17T11:30:47.889697+05:30",
+  "timestamp_ist": "2026-05-19T11:03:35.488524+05:30",
   "trade_creation": false,
-  "trend_passed": 29
+  "trend_passed": 18
 }

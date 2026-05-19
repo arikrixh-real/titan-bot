@@ -1,8 +1,30 @@
 {
+  "cache_meta_updated": false,
   "failed_prices": 0,
-  "price_results": [],
-  "status": "NO_OPEN_PAPER_POSITIONS",
-  "successful_prices": 0,
-  "symbols_checked": 0,
-  "timestamp_ist": "2026-05-17T12:16:09.708347+05:30"
+  "health_check_price": 1334.1,
+  "health_check_source": "LIVE_PRICE_CACHE",
+  "health_check_status": "NETWORK_BLOCKED",
+  "health_check_symbol": "RELIANCE",
+  "max_symbols_per_run": 5,
+  "meta_cache_exists": false,
+  "meta_cache_updated": false,
+  "network_or_token_failure_count": 1,
+  "price_cache_meta_path": "data/live_price_cache_meta.json",
+  "price_results": [
+    {
+      "price": 1334.1,
+      "reason": "Socket blocked while calling Upstox; using cache if available",
+      "source": "LIVE_PRICE_CACHE",
+      "status": "NETWORK_BLOCKED",
+      "symbol": "RELIANCE"
+    }
+  ],
+  "readiness_status": "FAIL_META_CACHE_MISSING",
+  "status": "NO_OPEN_POSITIONS_HEALTH_CHECK_COMPLETE",
+  "successful_prices": 1,
+  "symbols_checked": 1,
+  "timestamp_ist": "2026-05-19T11:59:38.342416+05:30",
+  "token_action_required": false,
+  "token_status": "CACHE_OR_FALLBACK",
+  "upstox_extended_token_recommended": true
 }

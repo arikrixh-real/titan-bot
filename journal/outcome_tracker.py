@@ -29,10 +29,11 @@ import json
 import os
 import re
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from data.live_price import get_strict_fresh_price_debug
+from journal.trade_id import build_setup_signature
 from journal.trade_journal import ACTIVE_FIELDS, _ensure_csv as _ensure_active_csv_schema
 from utils.market_hours import is_trade_window, trade_window_text
 
@@ -190,6 +191,54 @@ def _json_safe(value):
         return value
 
     return str(value)
+
+
+def _today_bounds_iso():
+    start = datetime.now(IST).replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+    return start.isoformat(), end.isoformat()
+
+
+def _row_setup_signature(row):
+    if not isinstance(row, dict):
+        return ""
+    existing = str(row.get("setup_signature") or "").strip().upper()
+    if existing:
+        return existing
+    return build_setup_signature(
+        row.get("symbol"),
+        row.get("side") or row.get("direction"),
+        row.get("entry") or row.get("entry_price") or row.get("price"),
+        row.get("sl") or row.get("stop_loss") or row.get("stoploss"),
+        row.get("target") or row.get("tp") or row.get("target_price") or row.get("t1"),
+    )
+
+
+def _same_day_trade_result_setup_exists(setup_signature, exclude_trade_id=""):
+    if SUPABASE is None or not setup_signature:
+        return False
+
+    start_iso, end_iso = _today_bounds_iso()
+    for time_col in ("opened_at", "created_at", "closed_at"):
+        try:
+            result = (
+                SUPABASE.table("trade_results")
+                .select("*")
+                .gte(time_col, start_iso)
+                .lt(time_col, end_iso)
+                .limit(1000)
+                .execute()
+            )
+        except Exception:
+            continue
+
+        for row in result.data or []:
+            if exclude_trade_id and str(row.get("trade_id") or "").strip() == exclude_trade_id:
+                continue
+            if _row_setup_signature(row) == setup_signature:
+                return True
+
+    return False
 
 
 def _read_reinforcement_memory():
@@ -652,13 +701,19 @@ def _save_trade_result_to_supabase(outcome_row):
 
     result = "WIN" if outcome == "TP" else "LOSS"
     trade_id = str(outcome_row.get("trade_id", "")).strip()
+    setup_signature = _row_setup_signature(outcome_row)
 
     if not trade_id:
         print("[OutcomeTracker DB] Missing trade_id. Result not saved.")
         return False
+    if setup_signature and _same_day_trade_result_setup_exists(setup_signature, exclude_trade_id=trade_id):
+        print(f"[OutcomeTracker DB] DUPLICATE_SETUP_SKIPPED: {setup_signature}")
+        return False
 
     payload = {
         "trade_id": trade_id,
+        "setup_signature": setup_signature,
+        "trade_date": datetime.now(IST).strftime("%Y-%m-%d"),
         "symbol": outcome_row.get("symbol", ""),
         "side": outcome_row.get("side", ""),
         "entry": _safe_float(outcome_row.get("entry")),

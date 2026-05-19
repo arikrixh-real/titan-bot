@@ -36,7 +36,7 @@ try:
 except Exception:
     get_live_price = None
 
-from journal.trade_id import build_canonical_trade_id
+from journal.trade_id import build_canonical_trade_id, build_setup_signature
 from utils.market_hours import is_trade_window, trade_window_text
 
 
@@ -54,6 +54,8 @@ LEGACY_TRADE_RESULTS_FILE = "trade_results.csv"
 
 ACTIVE_COLUMNS = [
     "trade_id",
+    "setup_signature",
+    "trade_date",
     "scan_id",
     "symbol",
     "side",
@@ -89,6 +91,8 @@ ACTIVE_COLUMNS = [
 
 RESULT_COLUMNS = [
     "trade_id",
+    "setup_signature",
+    "trade_date",
     "scan_id",
     "symbol",
     "side",
@@ -122,6 +126,10 @@ def _now():
 
 def _now_iso():
     return datetime.now(IST).isoformat()
+
+
+def _today_key():
+    return datetime.now(IST).strftime("%Y-%m-%d")
 
 
 def _safe_float(value, default=0.0):
@@ -290,6 +298,48 @@ def _supabase_open_trade_exists(client, symbol, side):
         return False
 
 
+def _row_setup_signature(row):
+    if not isinstance(row, dict):
+        return ""
+    existing = str(row.get("setup_signature") or "").strip().upper()
+    if existing:
+        return existing
+    return build_setup_signature(
+        row.get("symbol"),
+        row.get("side") or row.get("direction"),
+        row.get("entry") or row.get("entry_price") or row.get("price"),
+        row.get("sl") or row.get("stop_loss") or row.get("stoploss"),
+        row.get("target") or row.get("tp") or row.get("target_price") or row.get("t1"),
+    )
+
+
+def _same_day_setup_exists(client, table_name, setup_signature):
+    if client is None or not setup_signature:
+        return False
+
+    start = datetime.now(IST).replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + pd.Timedelta(days=1)
+
+    for time_col in ("opened_at", "created_at", "closed_at"):
+        try:
+            result = (
+                client.table(table_name)
+                .select("*")
+                .gte(time_col, start.isoformat())
+                .lt(time_col, end.isoformat())
+                .limit(1000)
+                .execute()
+            )
+        except Exception:
+            continue
+
+        for row in result.data or []:
+            if _row_setup_signature(row) == setup_signature:
+                return True
+
+    return False
+
+
 def _local_open_trade_exists(active_df, symbol, side):
     try:
         open_df = active_df[
@@ -311,6 +361,26 @@ def _local_open_trade_exists(active_df, symbol, side):
         return False
 
 
+def _local_same_day_setup_exists(active_df, setup_signature):
+    try:
+        if not setup_signature or active_df.empty:
+            return False
+
+        today = _today_key()
+        df = active_df.copy()
+        if "trade_date" in df.columns:
+            df = df[df["trade_date"].astype(str) == today]
+
+        for row in df.to_dict("records"):
+            if _row_setup_signature(row) == setup_signature.upper():
+                return True
+
+        return False
+
+    except Exception:
+        return False
+
+
 def _insert_trade_to_supabase(row):
     """
     Safe Supabase insert for dashboard live-trade sync.
@@ -323,16 +393,22 @@ def _insert_trade_to_supabase(row):
 
     symbol = str(row.get("symbol", "")).strip().upper()
     side = str(row.get("side", "")).strip().upper()
+    setup_signature = str(row.get("setup_signature") or "").strip().upper()
 
     if not symbol or not side:
         return False
 
     if _supabase_open_trade_exists(client, symbol, side):
         return False
+    if setup_signature and _same_day_setup_exists(client, "trades", setup_signature):
+        print(f"[TradeExecution] DUPLICATE_SETUP_SKIPPED: {setup_signature}")
+        return False
 
     # Include useful fields; _safe_supabase_insert removes any missing schema columns.
     payload = {
         "trade_id": str(row.get("trade_id", "")),
+        "setup_signature": setup_signature,
+        "trade_date": str(row.get("trade_date") or _today_key()),
         "symbol": symbol,
         "side": side,
         "status": "OPEN",
@@ -373,8 +449,15 @@ def _insert_result_to_supabase_minimal(result_row):
     if client is None:
         return False
 
+    setup_signature = str(result_row.get("setup_signature") or "").strip().upper()
+    if setup_signature and _same_day_setup_exists(client, "trade_results", setup_signature):
+        print(f"[TradeExecution] DUPLICATE_SETUP_SKIPPED: {setup_signature}")
+        return False
+
     payload = {
         "trade_id": str(result_row.get("trade_id", "")),
+        "setup_signature": setup_signature,
+        "trade_date": str(result_row.get("trade_date") or _today_key()),
         "symbol": str(result_row.get("symbol", "")).upper(),
         "side": str(result_row.get("side", "")).upper(),
         "entry": _safe_float(result_row.get("entry")),
@@ -511,9 +594,19 @@ def add_good_setups_as_live_trades(
         )
         if not trade_id:
             continue
+        setup_signature = build_setup_signature(symbol, side, entry, sl, target)
+        if not setup_signature:
+            continue
+
+        if _local_same_day_setup_exists(active_df, setup_signature):
+            duplicate_skipped += 1
+            print(f"[TradeExecution] DUPLICATE_SETUP_SKIPPED: {setup_signature}")
+            continue
 
         row = {
             "trade_id": trade_id,
+            "setup_signature": setup_signature,
+            "trade_date": _today_key(),
             "scan_id": safe_scan_id,
             "symbol": symbol,
             "side": side,
@@ -657,6 +750,8 @@ def update_live_trade_outcomes():
 
         result_row = {
             "trade_id": row.get("trade_id", ""),
+            "setup_signature": row.get("setup_signature", ""),
+            "trade_date": row.get("trade_date") or _today_key(),
             "scan_id": row.get("scan_id", ""),
             "symbol": symbol,
             "side": side,

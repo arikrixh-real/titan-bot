@@ -36,7 +36,7 @@ from titan_master_brain.execution_engine import (
     print_execution_packets,
     send_telegram_signals,
 )
-from journal.trade_id import build_canonical_trade_id
+from journal.trade_id import build_canonical_trade_id, build_setup_signature
 from journal.outcome_tracker import track_trade_outcomes
 from runtime_global_lock import acquire_global_runtime_lock, release_global_runtime_lock
 from utils.market_hours import TRADE_WINDOW_END, TRADE_WINDOW_START, is_trade_window
@@ -388,6 +388,111 @@ def _safe_supabase_update(client, table_name, payload, match_column, match_value
     return False
 
 
+def _day_bounds_iso():
+    start = _now_ist().replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+    return start.isoformat(), end.isoformat()
+
+
+def _packet_setup_signature(packet):
+    if not isinstance(packet, dict):
+        return ""
+
+    symbol = _deep_get(packet, ["symbol", "stock", "ticker", "name"])
+    side = _deep_get(packet, ["side", "direction", "trade_side"])
+    entry = _deep_get(packet, ["entry", "entry_price", "price"])
+    sl = _deep_get(packet, ["sl", "stop_loss", "stoploss"])
+    target = _deep_get(packet, ["target", "tp", "target_price", "t1"])
+    return build_setup_signature(symbol, side, entry, sl, target)
+
+
+def _row_setup_signature(row):
+    if not isinstance(row, dict):
+        return ""
+
+    existing = str(row.get("setup_signature") or "").strip().upper()
+    if existing:
+        return existing
+
+    return build_setup_signature(
+        row.get("symbol"),
+        row.get("side") or row.get("direction"),
+        row.get("entry") or row.get("entry_price") or row.get("price"),
+        row.get("sl") or row.get("stop_loss") or row.get("stoploss"),
+        row.get("target") or row.get("tp") or row.get("target_price") or row.get("t1"),
+    )
+
+
+def _same_day_setup_exists(client, setup_signature):
+    if client is None or not setup_signature:
+        return False
+
+    start_iso, end_iso = _day_bounds_iso()
+
+    for time_col in ("opened_at", "created_at", "closed_at"):
+        try:
+            result = (
+                client.table("trade_results")
+                .select("*")
+                .gte(time_col, start_iso)
+                .lt(time_col, end_iso)
+                .limit(1000)
+                .execute()
+            )
+        except Exception:
+            continue
+
+        for row in result.data or []:
+            if _row_setup_signature(row) == setup_signature:
+                return True
+
+    return False
+
+
+def filter_duplicate_setup_packets(execution_result):
+    """
+    Suppress same-day duplicate setup packets before Telegram send.
+    """
+    if not isinstance(execution_result, dict):
+        return execution_result
+
+    packets = execution_result.get("packets", []) or []
+    if not packets:
+        return execution_result
+
+    supabase = _get_supabase()
+    if supabase is None:
+        return execution_result
+
+    filtered = []
+    skipped = []
+    seen = set()
+
+    for packet in packets:
+        signature = _packet_setup_signature(packet)
+        if not signature:
+            filtered.append(packet)
+            continue
+
+        if signature in seen or _same_day_setup_exists(supabase, signature):
+            skipped.append(signature)
+            print(f"[TradeResults] DUPLICATE_SETUP_SKIPPED before Telegram: {signature}")
+            continue
+
+        seen.add(signature)
+        packet["setup_signature"] = signature
+        filtered.append(packet)
+
+    if skipped:
+        execution_result = dict(execution_result)
+        execution_result["packets"] = filtered
+        execution_result["count"] = len(filtered)
+        execution_result["duplicate_setup_skipped"] = skipped
+        execution_result["execution_mode"] = "READY_FOR_TELEGRAM" if filtered else "NO_EXECUTION"
+
+    return execution_result
+
+
 # =========================================================
 # MARKET CLOSE HANDLER
 # =========================================================
@@ -570,13 +675,21 @@ def save_sent_packets_to_trade_results(sent_packets, context=None):
                 tp,
                 source="TradeResults",
             )
+            setup_signature = build_setup_signature(symbol, side, entry, sl, tp)
 
             if not trade_id:
                 print(f"[TradeResults] Skipped packet because canonical trade_id could not be generated: {symbol} {side}")
                 continue
+            if not setup_signature:
+                print(f"[TradeResults] Skipped packet because setup_signature could not be generated: {symbol} {side}")
+                continue
 
             if symbol in TEST_SYMBOLS:
                 print(f"[TradeResults] Skipped test symbol: {symbol}")
+                continue
+
+            if _same_day_setup_exists(supabase, setup_signature):
+                print(f"[TradeResults] DUPLICATE_SETUP_SKIPPED: {setup_signature}")
                 continue
 
             # FINAL DUPLICATE PROTECTION
@@ -586,6 +699,8 @@ def save_sent_packets_to_trade_results(sent_packets, context=None):
 
             row = {
                 "trade_id": trade_id,
+                "setup_signature": setup_signature,
+                "trade_date": _now_ist().strftime("%Y-%m-%d"),
                 "symbol": symbol,
                 "side": side,
                 "entry": entry,
@@ -2113,6 +2228,7 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
     print_daily_alert_selection(daily_alert_result)
 
     execution_result = prepare_execution_packets(daily_alert_result)
+    execution_result = filter_duplicate_setup_packets(execution_result)
     print_execution_packets(execution_result)
 
     sent_packets = []

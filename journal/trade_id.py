@@ -3,6 +3,9 @@ Shared trade identity helpers.
 
 Canonical trade_id format:
 scan_id|symbol|side|entry|sl|target
+
+Stable setup_signature format:
+symbol|side|entry|sl|target
 """
 
 FALLBACK_SCAN_ID = "NO_SCAN"
@@ -84,3 +87,16 @@ def build_canonical_trade_id(
         return ""
 
     return "|".join([safe_scan_id, safe_symbol, safe_side, safe_entry, safe_sl, safe_target])
+
+
+def build_setup_signature(symbol, side, entry, sl, target):
+    safe_symbol = _normalize_symbol(symbol)
+    safe_side = _normalize_side(side)
+    safe_entry = _normalize_price(entry)
+    safe_sl = _normalize_price(sl)
+    safe_target = _normalize_price(target)
+
+    if not all([safe_symbol, safe_side, safe_entry, safe_sl, safe_target]):
+        return ""
+
+    return "|".join([safe_symbol, safe_side, safe_entry, safe_sl, safe_target])

@@ -1,8 +1,9 @@
 {
-  "symbol": "EICHERMOT",
+  "symbol": "RELIANCE",
   "status": "NETWORK_BLOCKED",
-  "last_price": 7047.0,
+  "last_price": 1334.1,
   "source": "CACHE",
-  "timestamp": "2026-05-15T14:48:18.593351",
+  "token_type_used": "ACCESS_TOKEN",
+  "timestamp": "2026-05-19T11:59:38.392855",
   "reason": "Socket blocked while calling Upstox; using cache if available"
 }

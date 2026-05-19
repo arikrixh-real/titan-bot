@@ -12,6 +12,7 @@ from engines.setup_engine import (
     structure_ok,
     trend_direction,
 )
+from engines.time_filter import current_bot_mode
 
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -78,6 +79,47 @@ def _last_ohlc(data):
         return None
 
 
+def _parse_candle_timestamp(value):
+    try:
+        if value is None:
+            return None
+        parsed = __import__("pandas").to_datetime(value, errors="coerce")
+        if parsed is None or parsed is __import__("pandas").NaT:
+            return None
+        if getattr(parsed, "tzinfo", None) is None:
+            parsed = parsed.tz_localize(timezone.utc)
+        return parsed.to_pydatetime().astimezone(IST)
+    except Exception:
+        return None
+
+
+def _last_candle_timestamp(data):
+    try:
+        if data is None or data.empty:
+            return None
+
+        for column in ["Datetime", "Date", "timestamp", "time"]:
+            if column in data.columns:
+                dt = _parse_candle_timestamp(data[column].iloc[-1])
+                if dt:
+                    return dt
+
+        index = getattr(data, "index", None)
+        if index is not None and len(index) > 0:
+            return _parse_candle_timestamp(index[-1])
+    except Exception:
+        return None
+    return None
+
+
+def _latest_timestamp(first, second):
+    if first is None:
+        return second
+    if second is None:
+        return first
+    return max(first, second)
+
+
 def _status_payload(
     *,
     mode,
@@ -90,6 +132,10 @@ def _status_payload(
     candidate_symbols,
     candidate_details,
     errors,
+    latest_candle_timestamp,
+    stale_symbol_count,
+    stale_symbols,
+    stale_data_warning,
     scanner_cycle_id,
     scan_started_at_ist,
     scan_finished_at_ist,
@@ -103,7 +149,7 @@ def _status_payload(
         "scan_finished_at_ist": scan_finished_at_ist,
         "scan_duration_seconds": scan_duration_seconds,
         "mode": mode,
-        "status": "SCAN_ONLY_COMPLETE",
+        "status": "SCAN_ONLY_STALE_OHLC" if stale_data_warning else "SCAN_ONLY_COMPLETE",
         "source": "VPS_RUNTIME_SCANNER",
         "scan_only": True,
         "real_scanner_called": True,
@@ -123,6 +169,10 @@ def _status_payload(
         "missing_fields": ["final_passed"],
         "candidate_symbols": candidate_symbols[:5],
         "candidate_details": candidate_details[:5],
+        "latest_candle_timestamp": latest_candle_timestamp,
+        "stale_symbol_count": stale_symbol_count,
+        "stale_symbols": stale_symbols[:20],
+        "stale_data_warning": stale_data_warning,
         "errors": errors,
     }
     if run_count is not None:
@@ -148,6 +198,11 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     candidate_details = []
     errors = 0
     mode = "SCAN_ONLY"
+    bot_mode = current_bot_mode(datetime.now(IST))
+    market_mode = bot_mode == "MARKET_MODE"
+    today_ist = datetime.now(IST).date()
+    latest_candle_dt = None
+    stale_symbols = []
 
     try:
         cached_symbols = load_cached_stock_data() or {}
@@ -159,6 +214,10 @@ def run_scanner(path=SCANNER_STATUS_PATH):
 
     for symbol, data in cached_symbols.items():
         stocks_checked += 1
+        candle_dt = _last_candle_timestamp(data)
+        latest_candle_dt = _latest_timestamp(latest_candle_dt, candle_dt)
+        if market_mode and (candle_dt is None or candle_dt.date() < today_ist):
+            stale_symbols.append(symbol)
 
         try:
             trend = trend_direction(data)
@@ -199,6 +258,8 @@ def run_scanner(path=SCANNER_STATUS_PATH):
 
     scan_finished_at_ist = _timestamp_ist()
     scan_duration_seconds = round(time.monotonic() - started_monotonic, 3)
+    stale_symbol_count = len(stale_symbols)
+    stale_data_warning = bool(market_mode and stale_symbol_count > 0)
     payload = _status_payload(
         mode=mode,
         stocks_checked=stocks_checked,
@@ -210,6 +271,10 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         candidate_symbols=candidate_symbols,
         candidate_details=candidate_details,
         errors=errors,
+        latest_candle_timestamp=latest_candle_dt.isoformat() if latest_candle_dt else None,
+        stale_symbol_count=stale_symbol_count,
+        stale_symbols=stale_symbols,
+        stale_data_warning=stale_data_warning,
         scanner_cycle_id=scanner_cycle_id,
         scan_started_at_ist=scan_started_at_ist,
         scan_finished_at_ist=scan_finished_at_ist,

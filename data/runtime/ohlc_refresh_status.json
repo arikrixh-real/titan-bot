@@ -1,14 +1,23 @@
 {
+  "bounded_refresh": true,
+  "duration_seconds": 4.484,
   "error_message": null,
   "error_type": null,
+  "failed_count": 0,
+  "max_runtime_refresh_symbols": 50,
+  "refreshed_count": 0,
   "result_summary": {
     "failed": 0,
-    "refreshed": 118,
-    "requested": 120,
-    "skipped": 2
+    "refreshed": 0,
+    "requested": 50,
+    "skipped": 50
   },
-  "status": "COMPLETED",
-  "symbols_requested": 120,
-  "timestamp_ist": "2026-05-17T10:59:43.466824+05:30",
-  "trade_window": false
+  "skipped_count": 50,
+  "skipped_reason": null,
+  "source": "YFINANCE",
+  "status": "NO_REFRESHED_SYMBOLS",
+  "symbol_source": "scan_selection_state",
+  "symbols_requested": 50,
+  "timestamp_ist": "2026-05-19T14:01:03.690562+05:30",
+  "trade_window": true
 }

@@ -1,17 +1,32 @@
 {
   "version": "1.0",
-  "last_updated": "2026-05-05 21:30:37",
-  "total_closed_trades": 0,
-  "total_wins": 0,
-  "total_losses": 0,
-  "win_rate": 0.0,
-  "avg_rr": 0.0,
-  "avg_score_winners": 0.0,
-  "avg_score_losers": 0.0,
+  "last_updated": "2026-05-17 22:33:30",
+  "total_closed_trades": 2,
+  "total_wins": 1,
+  "total_losses": 1,
+  "win_rate": 0.5,
+  "avg_rr": 2.0,
+  "avg_score_winners": 3.04,
+  "avg_score_losers": 3.2,
   "score_boost": 1.0,
   "filter_strictness": 1.0,
   "ranking_confidence": 1.0,
-  "symbol_memory": {},
+  "symbol_memory": {
+    "TATASTEEL": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "win_rate": 0.0,
+      "weight": 0.9883
+    },
+    "TCS": {
+      "trades": 1,
+      "wins": 1,
+      "losses": 0,
+      "win_rate": 1.0,
+      "weight": 1.0117
+    }
+  },
   "side_memory": {
     "LONG": {
       "trades": 0,
@@ -21,15 +36,23 @@
       "weight": 1.0
     },
     "SHORT": {
-      "trades": 0,
-      "wins": 0,
-      "losses": 0,
-      "win_rate": 0.0,
+      "trades": 2,
+      "wins": 1,
+      "losses": 1,
+      "win_rate": 0.5,
       "weight": 1.0
     }
   },
-  "reason_memory": {},
+  "reason_memory": {
+    "general": {
+      "trades": 2,
+      "wins": 1,
+      "losses": 1,
+      "win_rate": 0.5,
+      "weight": 1.0
+    }
+  },
   "evolution_notes": [
-    "Waiting for more closed trades. Need at least 5, found 0."
+    "Waiting for more closed trades. Need at least 5, found 2."
   ]
 }

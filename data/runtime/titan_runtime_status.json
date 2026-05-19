@@ -1,22 +1,26 @@
 {
-  "timestamp_ist": "2026-05-17T13:59:40.417685+05:30",
-  "mode": "WEEKEND_MODE",
+  "timestamp_ist": "2026-05-19T11:59:37.870087+05:30",
+  "mode": "MARKET_MODE",
   "live_allowed_engines": [
-    "dashboard_sync"
+    "live_price_monitor",
+    "scanner",
+    "setup_engine",
+    "master_brain",
+    "journal",
+    "outcome_tracker",
+    "telegram_alerts",
+    "risk_filter"
   ],
   "research_allowed_engines": [
-    "historical_replay",
-    "backtesting",
-    "synthetic_simulation",
-    "learning_engine",
-    "evolution_engine",
-    "memory_compression",
-    "weekly_report"
+    "light_news_pulse",
+    "light_market_context"
   ],
   "blocked_engines": [
-    "telegram_alerts",
-    "live_trade_creation",
-    "live_scanner"
+    "historical_replay",
+    "deep_backtesting",
+    "heavy_evolution",
+    "memory_rebuild",
+    "strategy_mutation"
   ],
-  "reason": "Non-trading day; live scanning is not included in observed permissions."
+  "reason": "Market window is active; runtime behavior remains controlled elsewhere."
 }

@@ -76,6 +76,7 @@ def refresh_ohlc_cache(symbols=None, pause_seconds=0.2):
     refreshed = []
     skipped = []
     failed = []
+    symbol_results = []
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -94,14 +95,35 @@ def refresh_ohlc_cache(symbols=None, pause_seconds=0.2):
 
             if df is None or df.empty:
                 skipped.append(symbol)
+                symbol_results.append({
+                    "symbol": symbol,
+                    "status": "SKIPPED",
+                    "reason": "YFINANCE_EMPTY_FRAME",
+                })
                 print(f"[OHLCRefresh] skipped {symbol}: no data")
                 continue
 
             if _save_symbol_frame(symbol, df):
                 refreshed.append(symbol)
+                last_timestamp = None
+                try:
+                    last_timestamp = str(df.index[-1])
+                except Exception:
+                    last_timestamp = None
+                symbol_results.append({
+                    "symbol": symbol,
+                    "status": "REFRESHED",
+                    "reason": None,
+                    "latest_candle_timestamp": last_timestamp,
+                })
                 print(f"[OHLCRefresh] refreshed {symbol}")
             else:
                 skipped.append(symbol)
+                symbol_results.append({
+                    "symbol": symbol,
+                    "status": "SKIPPED",
+                    "reason": "EMPTY_NORMALIZED_DATA",
+                })
                 print(f"[OHLCRefresh] skipped {symbol}: empty normalized data")
 
             if pause_seconds > 0:
@@ -109,6 +131,11 @@ def refresh_ohlc_cache(symbols=None, pause_seconds=0.2):
 
         except Exception as exc:
             failed.append({"symbol": symbol, "error": str(exc)})
+            symbol_results.append({
+                "symbol": symbol,
+                "status": "FAILED",
+                "reason": str(exc),
+            })
             print(f"[OHLCRefresh] failed {symbol}: {exc}")
 
     print("========== OHLC REFRESH SUMMARY ==========")
@@ -129,6 +156,7 @@ def refresh_ohlc_cache(symbols=None, pause_seconds=0.2):
         "refreshed": len(refreshed),
         "skipped": len(skipped),
         "failed": len(failed),
+        "symbol_results": symbol_results,
     }
 
 
