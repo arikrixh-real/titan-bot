@@ -1,13 +1,21 @@
 import json
 import os
+import inspect
 import tempfile
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from pathlib import Path
 
 from runtime_engine_registry import get_registered_handler
 from runtime_error_log import log_runtime_error
+from runtime_intelligence_state import (
+    ensure_intelligence_state,
+    save_intelligence_state,
+    state_hash,
+    state_path_for_task,
+)
 from runtime_lock import acquire_lock, release_lock
 from runtime_timeout import run_with_timeout
 
@@ -61,6 +69,20 @@ WORKER_TASKS = {
     "paper_engine": 240,
 }
 
+IMPORTANT_INTELLIGENCE_TASKS = {
+    "evolution_engine",
+    "learning_engine",
+    "experience_memory",
+    "memory_compression",
+    "scenario_simulation",
+    "daily_review",
+    "replay_batch",
+    "historical_replay",
+    "backtesting",
+    "synthetic_simulation",
+    "next_day_preparation",
+}
+
 _health_lock = threading.Lock()
 _health = {}
 _workers_started = False
@@ -111,6 +133,13 @@ def _write_worker_health(task, **updates):
                 "error_count": 0,
                 "timeout_count": 0,
                 "last_error": None,
+                "intelligence_state_path": (
+                    str(state_path_for_task(task))
+                    if task in IMPORTANT_INTELLIGENCE_TASKS
+                    else None
+                ),
+                "intelligence_run_count": None,
+                "last_status": "STARTING",
             },
         )
         current.update(updates)
@@ -155,6 +184,38 @@ def _record_error(task, error, mode):
     )
 
 
+def _intelligence_handler(handler, state, state_path):
+    try:
+        signature = inspect.signature(handler)
+    except (TypeError, ValueError):
+        return handler
+
+    supports_kwargs = any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    )
+    supported_names = set(signature.parameters)
+    requested_kwargs = {
+        "state": state,
+        "state_path": str(state_path),
+        "intelligence_state": state,
+    }
+
+    if supports_kwargs:
+        handler_kwargs = requested_kwargs
+    else:
+        handler_kwargs = {
+            name: value
+            for name, value in requested_kwargs.items()
+            if name in supported_names
+        }
+
+    if not handler_kwargs:
+        return handler
+
+    return partial(handler, **handler_kwargs)
+
+
 def _run_worker(task, sleep_seconds, intent):
     mode = (intent or {}).get("runtime_mode", "UNKNOWN")
 
@@ -164,6 +225,10 @@ def _run_worker(task, sleep_seconds, intent):
         lock_name = f"task_{task}"
         lock_acquired = False
         started_at = _now_ist()
+        run_started_monotonic = time.monotonic()
+        intelligence_state = None
+        intelligence_state_path = None
+        is_intelligence_task = task in IMPORTANT_INTELLIGENCE_TASKS
 
         try:
             _write_worker_health(
@@ -174,22 +239,76 @@ def _run_worker(task, sleep_seconds, intent):
             )
 
             handler = get_registered_handler(task)
+
+            if is_intelligence_task:
+                intelligence_state, intelligence_state_path = ensure_intelligence_state(task)
+                intelligence_state["last_input_hash"] = state_hash(intelligence_state)
+                _write_worker_health(
+                    task,
+                    intelligence_state_path=str(intelligence_state_path),
+                    intelligence_run_count=intelligence_state.get("run_count", 0),
+                    last_status=intelligence_state.get("last_status"),
+                )
+
             if not handler:
+                if intelligence_state is not None:
+                    runtime_seconds = time.monotonic() - run_started_monotonic
+                    intelligence_state, intelligence_state_path = save_intelligence_state(
+                        task,
+                        intelligence_state,
+                        "MISSING_HANDLER",
+                        runtime_seconds,
+                        error=f"no registered handler for {task}",
+                    )
                 _write_worker_health(
                     task,
                     status="MISSING_HANDLER",
                     last_finished_at=_now_ist(),
                     last_error=f"no registered handler for {task}",
+                    intelligence_state_path=(
+                        str(intelligence_state_path) if intelligence_state_path else None
+                    ),
+                    intelligence_run_count=(
+                        intelligence_state.get("run_count")
+                        if intelligence_state is not None
+                        else None
+                    ),
+                    last_status=(
+                        intelligence_state.get("last_status")
+                        if intelligence_state is not None
+                        else "MISSING_HANDLER"
+                    ),
                 )
                 time.sleep(sleep_seconds)
                 continue
 
             if _is_placeholder_handler(handler):
+                if intelligence_state is not None:
+                    runtime_seconds = time.monotonic() - run_started_monotonic
+                    intelligence_state, intelligence_state_path = save_intelligence_state(
+                        task,
+                        intelligence_state,
+                        "SKIPPED_PLACEHOLDER",
+                        runtime_seconds,
+                    )
                 _write_worker_health(
                     task,
                     status="SKIPPED_PLACEHOLDER",
                     last_finished_at=_now_ist(),
                     last_error=None,
+                    intelligence_state_path=(
+                        str(intelligence_state_path) if intelligence_state_path else None
+                    ),
+                    intelligence_run_count=(
+                        intelligence_state.get("run_count")
+                        if intelligence_state is not None
+                        else None
+                    ),
+                    last_status=(
+                        intelligence_state.get("last_status")
+                        if intelligence_state is not None
+                        else "SKIPPED_PLACEHOLDER"
+                    ),
                 )
                 time.sleep(sleep_seconds)
                 continue
@@ -204,10 +323,26 @@ def _run_worker(task, sleep_seconds, intent):
                 time.sleep(sleep_seconds)
                 continue
 
+            if intelligence_state is not None:
+                handler = _intelligence_handler(
+                    handler,
+                    intelligence_state,
+                    intelligence_state_path,
+                )
+
             result = run_with_timeout(handler, _task_timeout_seconds(task))
             run_count = _health.get(task, {}).get("run_count", 0) + 1
+            runtime_seconds = time.monotonic() - run_started_monotonic
 
             if result.get("status") == "timeout":
+                if intelligence_state is not None:
+                    intelligence_state, intelligence_state_path = save_intelligence_state(
+                        task,
+                        intelligence_state,
+                        "TIMEOUT",
+                        runtime_seconds,
+                        error=f"timeout after {result.get('timeout_seconds')} seconds",
+                    )
                 _write_worker_health(
                     task,
                     status="TIMEOUT",
@@ -215,20 +350,99 @@ def _run_worker(task, sleep_seconds, intent):
                     run_count=run_count,
                     timeout_count=_health.get(task, {}).get("timeout_count", 0) + 1,
                     last_error=f"timeout after {result.get('timeout_seconds')} seconds",
+                    intelligence_state_path=(
+                        str(intelligence_state_path) if intelligence_state_path else None
+                    ),
+                    intelligence_run_count=(
+                        intelligence_state.get("run_count")
+                        if intelligence_state is not None
+                        else None
+                    ),
+                    last_status=(
+                        intelligence_state.get("last_status")
+                        if intelligence_state is not None
+                        else "TIMEOUT"
+                    ),
                 )
             elif result.get("status") == "ok":
+                if intelligence_state is not None:
+                    intelligence_state, intelligence_state_path = save_intelligence_state(
+                        task,
+                        intelligence_state,
+                        "OK",
+                        runtime_seconds,
+                    )
                 _write_worker_health(
                     task,
                     status="OK",
                     last_finished_at=_now_ist(),
                     run_count=run_count,
                     last_error=None,
+                    intelligence_state_path=(
+                        str(intelligence_state_path) if intelligence_state_path else None
+                    ),
+                    intelligence_run_count=(
+                        intelligence_state.get("run_count")
+                        if intelligence_state is not None
+                        else None
+                    ),
+                    last_status=(
+                        intelligence_state.get("last_status")
+                        if intelligence_state is not None
+                        else "OK"
+                    ),
                 )
             else:
                 error = RuntimeError(result.get("error") or f"{task} returned {result}")
-                _write_worker_health(task, run_count=run_count)
+                if intelligence_state is not None:
+                    intelligence_state, intelligence_state_path = save_intelligence_state(
+                        task,
+                        intelligence_state,
+                        "ERROR",
+                        runtime_seconds,
+                        error=error,
+                    )
+                _write_worker_health(
+                    task,
+                    run_count=run_count,
+                    intelligence_state_path=(
+                        str(intelligence_state_path) if intelligence_state_path else None
+                    ),
+                    intelligence_run_count=(
+                        intelligence_state.get("run_count")
+                        if intelligence_state is not None
+                        else None
+                    ),
+                    last_status=(
+                        intelligence_state.get("last_status")
+                        if intelligence_state is not None
+                        else "ERROR"
+                    ),
+                )
                 _record_error(task, error, mode)
         except Exception as exc:
+            if intelligence_state is not None:
+                try:
+                    runtime_seconds = time.monotonic() - run_started_monotonic
+                    intelligence_state, intelligence_state_path = save_intelligence_state(
+                        task,
+                        intelligence_state,
+                        "ERROR",
+                        runtime_seconds,
+                        error=exc,
+                    )
+                    _write_worker_health(
+                        task,
+                        intelligence_state_path=str(intelligence_state_path),
+                        intelligence_run_count=intelligence_state.get("run_count"),
+                        last_status=intelligence_state.get("last_status"),
+                    )
+                except Exception as state_exc:
+                    print(
+                        f"INTELLIGENCE_STATE_ERROR task={task} "
+                        f"path={intelligence_state_path} error={state_exc}",
+                        flush=True,
+                    )
             _record_error(task, exc, mode)
         finally:
             if lock_acquired:
