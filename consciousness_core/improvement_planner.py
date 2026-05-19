@@ -1,9 +1,15 @@
 from pathlib import Path
 
+from consciousness_core.deduplication import SEVERITY_RANK, append_evidence, proposal_key, stronger_label
 from consciousness_core.state import atomic_write_json, now_ist, stable_hash
 
 
 QUEUE_PATH = Path("data") / "consciousness_core" / "improvement_queue.json"
+LAST_CONSOLIDATED_PROPOSALS = 0
+
+
+def get_last_consolidated_proposals():
+    return LAST_CONSOLIDATED_PROPOSALS
 
 
 def load_improvement_queue(path=QUEUE_PATH):
@@ -37,6 +43,8 @@ def _proposal(title, reason, evidence, risk_level, target_engine, suggested_acti
 
 
 def create_improvement_proposals(weaknesses, goals, missions, path=QUEUE_PATH):
+    global LAST_CONSOLIDATED_PROPOSALS
+    LAST_CONSOLIDATED_PROPOSALS = 0
     proposals = []
     for weakness in weaknesses[:30]:
         weakness_type = weakness.get("type")
@@ -162,12 +170,35 @@ def create_improvement_proposals(weaknesses, goals, missions, path=QUEUE_PATH):
                 {"action": "observe_only"},
             )
         )
-    existing = {proposal["proposal_id"]: proposal for proposal in load_improvement_queue(path) if isinstance(proposal, dict)}
+    existing = {}
+    existing_by_key = {}
+    for stored in load_improvement_queue(path):
+        if not isinstance(stored, dict) or not stored.get("proposal_id"):
+            continue
+        key = proposal_key(stored)
+        current = existing_by_key.get(key)
+        if current:
+            LAST_CONSOLIDATED_PROPOSALS += 1
+            current["evidence"] = append_evidence(current.get("evidence"), stored.get("evidence"))
+            current["risk_level"] = stronger_label(current.get("risk_level"), stored.get("risk_level"), SEVERITY_RANK)
+            current["updated_at"] = now_ist()
+            continue
+        existing[stored["proposal_id"]] = stored
+        existing_by_key[key] = stored
     unique_proposals = {}
     for proposal in proposals:
-        current = existing.get(proposal["proposal_id"], {})
-        proposal["created_at"] = current.get("created_at", proposal["created_at"])
+        key = proposal_key(proposal)
+        current = existing_by_key.get(key)
+        if current:
+            LAST_CONSOLIDATED_PROPOSALS += 1
+            current["evidence"] = append_evidence(current.get("evidence"), proposal.get("evidence"))
+            current["risk_level"] = stronger_label(current.get("risk_level"), proposal.get("risk_level"), SEVERITY_RANK)
+            current["reason"] = current.get("reason") or proposal.get("reason")
+            current["updated_at"] = now_ist()
+            unique_proposals[current["proposal_id"]] = current
+            continue
         existing[proposal["proposal_id"]] = proposal
+        existing_by_key[key] = proposal
         unique_proposals[proposal["proposal_id"]] = proposal
     queue = list(existing.values())[-200:]
     atomic_write_json(path, queue)

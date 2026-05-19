@@ -18,11 +18,13 @@ def write_report(
     safety_decisions,
     observation_packet=None,
     approved_queue=None,
+    consolidation_stats=None,
     path_json=REPORT_JSON_PATH,
     path_txt=REPORT_TXT_PATH,
 ):
     observation_packet = observation_packet or {}
     approved_queue = approved_queue or []
+    consolidation_stats = consolidation_stats or {}
     top_beliefs = sorted(
         beliefs.values(),
         key=lambda belief: float(belief.get("confidence") or 0),
@@ -35,6 +37,9 @@ def write_report(
         "unchanged_observations_skipped": observation_packet.get("unchanged_observation_count", 0),
         "missing_data": observation_packet.get("missing_patterns", []),
         "weaknesses_detected": len(weaknesses),
+        "duplicates_merged": int(consolidation_stats.get("duplicates_merged") or 0),
+        "consolidated_missions": int(consolidation_stats.get("consolidated_missions") or 0),
+        "consolidated_proposals": int(consolidation_stats.get("consolidated_proposals") or 0),
         "beliefs_changed": len(top_beliefs),
         "proposals_approved_for_testing": approved_queue,
         "proposals_rejected": [
@@ -63,6 +68,9 @@ def write_report(
         f"- New evidence observations processed: {report['real_evidence_found']}",
         f"- Unchanged observations skipped by hash: {report['unchanged_observations_skipped']}",
         f"- Missing data patterns: {len(report['missing_data'])}",
+        f"- Duplicate weaknesses merged: {report['duplicates_merged']}",
+        f"- Missions consolidated: {report['consolidated_missions']}",
+        f"- Proposals consolidated: {report['consolidated_proposals']}",
         "",
         "Active weaknesses:",
     ]

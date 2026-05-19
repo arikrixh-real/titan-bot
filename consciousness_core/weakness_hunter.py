@@ -1,3 +1,4 @@
+from consciousness_core.deduplication import SEVERITY_RANK, append_evidence, stronger_label
 from consciousness_core.state import stable_hash
 
 
@@ -9,6 +10,8 @@ IMPORTANT_PLACEHOLDER_WORKERS = {
     "replay_batch",
     "next_day_preparation",
 }
+
+LAST_DUPLICATES_MERGED = 0
 
 
 def _weakness(kind, severity, affected_engine, evidence, investigation, action):
@@ -30,6 +33,35 @@ def _weakness(kind, severity, affected_engine, evidence, investigation, action):
 
 def _text(value):
     return str(value or "").upper()
+
+
+def get_last_duplicates_merged():
+    return LAST_DUPLICATES_MERGED
+
+
+def _cluster_key(weakness):
+    return (
+        str(weakness.get("affected_engine") or "").strip().lower(),
+        str(weakness.get("type") or "").strip().lower(),
+        str(weakness.get("proposed_action") or "").strip().lower(),
+    )
+
+
+def _cluster_weaknesses(weaknesses):
+    global LAST_DUPLICATES_MERGED
+    LAST_DUPLICATES_MERGED = 0
+    clustered = {}
+    for weakness in weaknesses:
+        key = _cluster_key(weakness)
+        current = clustered.get(key)
+        if not current:
+            clustered[key] = weakness
+            continue
+        LAST_DUPLICATES_MERGED += 1
+        current["severity"] = stronger_label(current.get("severity"), weakness.get("severity"), SEVERITY_RANK)
+        current["evidence"] = append_evidence(current.get("evidence"), weakness.get("evidence"))
+        current["recommended_investigation"] = current.get("recommended_investigation") or weakness.get("recommended_investigation")
+    return list(clustered.values())
 
 
 def hunt_weaknesses(observation_packet, reflection=None):
@@ -221,7 +253,4 @@ def hunt_weaknesses(observation_packet, reflection=None):
                 "do not infer strategy changes from unavailable optional data",
             )
         )
-    unique = {}
-    for weakness in weaknesses:
-        unique[weakness["weakness_id"]] = weakness
-    return list(unique.values())[:100]
+    return _cluster_weaknesses(weaknesses)[:100]

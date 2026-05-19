@@ -3,19 +3,21 @@ from pathlib import Path
 
 from consciousness_core.belief_graph import (
     decay_stale_beliefs,
+    get_last_beliefs_consolidated,
     load_beliefs,
+    reset_belief_consolidation_count,
     save_beliefs,
     update_belief,
     update_beliefs_from_weaknesses,
 )
 from consciousness_core.data_collector import collect_observations
-from consciousness_core.evolution_bridge import write_evolution_bridge_queue
+from consciousness_core.evolution_bridge import get_last_bridge_dedup_count, write_evolution_bridge_queue
 from consciousness_core.goal_manager import update_goals
-from consciousness_core.improvement_planner import create_improvement_proposals
+from consciousness_core.improvement_planner import create_improvement_proposals, get_last_consolidated_proposals
 from consciousness_core.internal_question_engine import generate_internal_questions
 from consciousness_core.reflection_engine import reflect
 from consciousness_core.report import write_report
-from consciousness_core.research_mission_generator import generate_research_missions
+from consciousness_core.research_mission_generator import generate_research_missions, get_last_consolidated_missions
 from consciousness_core.safety_gate import evaluate_proposal
 from consciousness_core.state import atomic_write_json, load_state, now_ist, save_state
 from consciousness_core.thought_memory import (
@@ -23,7 +25,7 @@ from consciousness_core.thought_memory import (
     append_reflection,
     append_thought,
 )
-from consciousness_core.weakness_hunter import hunt_weaknesses
+from consciousness_core.weakness_hunter import get_last_duplicates_merged, hunt_weaknesses
 from consciousness_core.world_graph import update_world_graph
 
 
@@ -81,6 +83,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
         observation_packet = collect_observations()
         observations = observation_packet.get("observations", [])
         beliefs = decay_stale_beliefs(load_beliefs())
+        reset_belief_consolidation_count()
         questions = generate_internal_questions(observation_packet, core_state)
         reflection = reflect(observation_packet, core_state, beliefs)
         update_world_graph(observations, reflection.get("lessons"))
@@ -109,6 +112,12 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             proposal["proposal_id"]: evaluate_proposal(proposal) for proposal in proposals
         }
         approved_queue = write_evolution_bridge_queue(proposals, safety_decisions)
+        consolidation_stats = {
+            "duplicates_merged": get_last_duplicates_merged(),
+            "consolidated_missions": get_last_consolidated_missions(),
+            "consolidated_proposals": get_last_consolidated_proposals() + get_last_bridge_dedup_count(),
+            "consolidated_beliefs": get_last_beliefs_consolidated(),
+        }
         context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue)
         approved_count = len(approved_queue)
         rejected_count = list(safety_decisions.values()).count("REJECTED")
@@ -170,6 +179,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             safety_decisions,
             observation_packet=observation_packet,
             approved_queue=approved_queue,
+            consolidation_stats=consolidation_stats,
         )
         health = {
             "status": "OK",
@@ -180,6 +190,10 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             "goals_count": len(goals),
             "weaknesses_count": len(weaknesses),
             "proposals_count": len(proposals),
+            "duplicates_merged": consolidation_stats["duplicates_merged"],
+            "consolidated_missions": consolidation_stats["consolidated_missions"],
+            "consolidated_proposals": consolidation_stats["consolidated_proposals"],
+            "consolidated_beliefs": consolidation_stats["consolidated_beliefs"],
             "approved_for_test_count": approved_count,
             "rejected_count": rejected_count,
             "context_path": str(CONTEXT_PATH),

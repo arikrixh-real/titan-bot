@@ -1,9 +1,17 @@
 from pathlib import Path
 
+from consciousness_core.deduplication import PRIORITY_RANK, append_evidence, semantic_key, stronger_label
 from consciousness_core.state import atomic_write_json, now_ist, stable_hash
 
 
 MISSIONS_PATH = Path("data") / "consciousness_core" / "research_missions.json"
+LAST_CONSOLIDATED_MISSIONS = 0
+
+
+def get_last_consolidated_missions():
+    return LAST_CONSOLIDATED_MISSIONS
+
+
 def load_missions(path=MISSIONS_PATH):
     try:
         import json
@@ -48,19 +56,36 @@ def _mission_from_weakness(weakness):
 
 
 def generate_research_missions(weaknesses, goals, path=MISSIONS_PATH):
+    global LAST_CONSOLIDATED_MISSIONS
+    LAST_CONSOLIDATED_MISSIONS = 0
     existing = {
         mission["mission_id"]: mission
         for mission in load_missions(path)
-        if isinstance(mission, dict) and mission.get("target_engine")
+        if isinstance(mission, dict) and mission.get("target_engine") and mission.get("mission_id")
+    }
+    existing_by_key = {
+        semantic_key(mission.get("target_engine"), mission.get("title"), mission.get("reason")): mission
+        for mission in existing.values()
     }
     for weakness in weaknesses:
         mission = _mission_from_weakness(weakness)
-        mission_id = mission["mission_id"]
-        current = existing.get(mission_id, {})
-        mission["created_at"] = current.get("created_at", mission["created_at"])
-        mission["evidence"] = (current.get("evidence") or [])[-10:] + mission["evidence"][:5]
+        key = semantic_key(mission.get("target_engine"), mission.get("title"), mission.get("reason"))
+        current = existing_by_key.get(key)
+        if current:
+            LAST_CONSOLIDATED_MISSIONS += 1
+            current["evidence"] = append_evidence(current.get("evidence"), mission.get("evidence"))
+            current["priority"] = stronger_label(current.get("priority"), mission.get("priority"), PRIORITY_RANK)
+            current["status"] = current.get("status") or mission.get("status")
+            current["updated_at"] = now_ist()
+            existing[current["mission_id"]] = current
+            continue
         mission["updated_at"] = now_ist()
-        existing[mission_id] = mission
-    missions = sorted(existing.values(), key=lambda item: item.get("priority", ""), reverse=True)[-200:]
+        existing[mission["mission_id"]] = mission
+        existing_by_key[key] = mission
+    missions = sorted(
+        existing.values(),
+        key=lambda item: PRIORITY_RANK.get(str(item.get("priority") or "").upper(), 0),
+        reverse=True,
+    )[:200]
     atomic_write_json(path, missions)
     return missions

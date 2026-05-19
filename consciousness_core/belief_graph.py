@@ -1,10 +1,13 @@
 from pathlib import Path
+from difflib import SequenceMatcher
 
+from consciousness_core.deduplication import normalize_text
 from consciousness_core.state import atomic_write_json, now_ist, stable_hash
 
 
 BELIEFS_PATH = Path("data") / "consciousness_core" / "beliefs.json"
 MAX_SOURCE_EVENTS = 30
+LAST_BELIEFS_CONSOLIDATED = 0
 
 
 def load_beliefs(path=BELIEFS_PATH):
@@ -24,13 +27,39 @@ def _belief_id(statement):
     return "belief_" + stable_hash(statement)[:16]
 
 
+def reset_belief_consolidation_count():
+    global LAST_BELIEFS_CONSOLIDATED
+    LAST_BELIEFS_CONSOLIDATED = 0
+
+
+def get_last_beliefs_consolidated():
+    return LAST_BELIEFS_CONSOLIDATED
+
+
+def _find_similar_belief(beliefs, statement):
+    target = normalize_text(statement)
+    if not target:
+        return None
+    for belief in beliefs.values():
+        existing = normalize_text(belief.get("statement"))
+        if existing == target or SequenceMatcher(None, existing, target).ratio() >= 0.92:
+            return belief
+    return None
+
+
 def update_belief(beliefs, statement, evidence=None, delta=0.04, contradiction=False):
+    global LAST_BELIEFS_CONSOLIDATED
     if not statement:
         return beliefs
     belief_id = _belief_id(statement)
-    belief = beliefs.setdefault(
-        belief_id,
-        {
+    belief = beliefs.get(belief_id)
+    if not belief:
+        belief = _find_similar_belief(beliefs, statement)
+        if belief:
+            LAST_BELIEFS_CONSOLIDATED += 1
+            belief_id = belief.get("belief_id", belief_id)
+    if not belief:
+        belief = {
             "belief_id": belief_id,
             "statement": statement,
             "confidence": 0.5,
@@ -43,8 +72,8 @@ def update_belief(beliefs, statement, evidence=None, delta=0.04, contradiction=F
             "last_seen": now_ist(),
             "source_events": [],
             "status": "ACTIVE",
-        },
-    )
+        }
+        beliefs[belief_id] = belief
     if contradiction:
         belief["contradiction_count"] += 1
         belief["failure_count"] += 1
