@@ -19,12 +19,14 @@ def write_report(
     observation_packet=None,
     approved_queue=None,
     consolidation_stats=None,
+    phase2=None,
     path_json=REPORT_JSON_PATH,
     path_txt=REPORT_TXT_PATH,
 ):
     observation_packet = observation_packet or {}
     approved_queue = approved_queue or []
     consolidation_stats = consolidation_stats or {}
+    phase2 = phase2 or {}
     top_beliefs = sorted(
         beliefs.values(),
         key=lambda belief: float(belief.get("confidence") or 0),
@@ -54,6 +56,19 @@ def write_report(
         "research_missions": missions[:20],
         "improvement_proposals": proposals[:20],
         "safety_decisions": safety_decisions,
+        "sandbox_results": phase2.get("sandbox_results", {}).get("results", [])[:20],
+        "promotion_recommendations": phase2.get("promotion_recommendations", {}).get("recommendations", [])[:20],
+        "causal_lessons": phase2.get("causal_reasoning", {}).get("causal_lessons", [])[:20],
+        "experience_memory_highlights": {
+            "repeated_failure_patterns": phase2.get("experience_memory", {}).get("repeated_failure_patterns", [])[:10],
+            "repeated_success_patterns": phase2.get("experience_memory", {}).get("repeated_success_patterns", [])[:10],
+            "weak_engines": phase2.get("experience_memory", {}).get("weak_engines", [])[:10],
+            "strong_engines": phase2.get("experience_memory", {}).get("strong_engines", [])[:10],
+            "regime_lessons": phase2.get("experience_memory", {}).get("regime_lessons", [])[:10],
+        },
+        "strategy_mutations": phase2.get("strategy_mutations", {}).get("mutations", [])[:20],
+        "research_experiments": phase2.get("research_experiments", {}).get("experiments", [])[:20],
+        "meta_learning": phase2.get("meta_learning", {}),
         "next_focus": state.get("current_focus"),
     }
     atomic_write_json(path_json, report)
@@ -99,6 +114,59 @@ def write_report(
     lines.append("")
     lines.append("Safety decisions:")
     lines.extend(f"- {proposal_id}: {decision}" for proposal_id, decision in safety_decisions.items())
+    lines.append("")
+    lines.append("Sandbox results:")
+    if report["sandbox_results"]:
+        lines.extend(
+            f"- {item.get('proposal_id')}: {item.get('recommendation')} score={item.get('promotion_score')} risk={item.get('risk_score')}"
+            for item in report["sandbox_results"][:10]
+        )
+    else:
+        lines.append("- No sandbox evaluations this cycle.")
+    lines.append("")
+    lines.append("Promotion recommendations:")
+    if report["promotion_recommendations"]:
+        lines.extend(
+            f"- {item.get('proposal_id')}: {item.get('status')} ({item.get('target_engine')})"
+            for item in report["promotion_recommendations"][:10]
+        )
+    else:
+        lines.append("- No promotion recommendations.")
+    lines.append("")
+    lines.append("Causal lessons:")
+    if report["causal_lessons"]:
+        lines.extend(
+            f"- {item.get('cause_type')} -> {item.get('effect_type')}: {item.get('lesson')}"
+            for item in report["causal_lessons"][:10]
+        )
+    else:
+        lines.append("- No causal lessons yet.")
+    lines.append("")
+    lines.append("Experience memory highlights:")
+    highlights = report["experience_memory_highlights"]
+    lines.append(f"- Repeated failures: {len(highlights['repeated_failure_patterns'])}")
+    lines.append(f"- Repeated successes: {len(highlights['repeated_success_patterns'])}")
+    lines.append(f"- Weak engines: {', '.join(item.get('engine', '') for item in highlights['weak_engines']) or 'none'}")
+    lines.append(f"- Strong engines: {', '.join(item.get('engine', '') for item in highlights['strong_engines']) or 'none'}")
+    lines.append("")
+    lines.append("Strategy mutations:")
+    if report["strategy_mutations"]:
+        lines.extend(
+            f"- {item.get('mutation_id')}: {item.get('description')} [{item.get('apply_scope')}]"
+            for item in report["strategy_mutations"][:10]
+        )
+    else:
+        lines.append("- No mutation candidates.")
+    lines.append("")
+    lines.append("Meta-learning status:")
+    meta = report["meta_learning"]
+    if meta:
+        lines.append(f"- Status: {meta.get('learning_status')}")
+        lines.append(f"- Proposal quality: {meta.get('proposal_quality')}")
+        lines.append(f"- Duplicate rate: {meta.get('duplicate_rate')}")
+        lines.append(f"- Recurring weakness count: {meta.get('recurring_weakness_count')}")
+    else:
+        lines.append("- No meta-learning data yet.")
     lines.append("")
     lines.append("Insufficient evidence areas:")
     if report["insufficient_evidence_areas"]:

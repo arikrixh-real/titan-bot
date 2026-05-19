@@ -10,16 +10,23 @@ from consciousness_core.belief_graph import (
     update_belief,
     update_beliefs_from_weaknesses,
 )
+from consciousness_core.causal_reasoning import run_causal_reasoning
 from consciousness_core.data_collector import collect_observations
 from consciousness_core.evolution_bridge import get_last_bridge_dedup_count, write_evolution_bridge_queue
+from consciousness_core.experience_memory import update_experience_memory
 from consciousness_core.goal_manager import update_goals
 from consciousness_core.improvement_planner import create_improvement_proposals, get_last_consolidated_proposals
 from consciousness_core.internal_question_engine import generate_internal_questions
+from consciousness_core.meta_learning import run_meta_learning
+from consciousness_core.promotion_gate import run_promotion_gate
 from consciousness_core.reflection_engine import reflect
 from consciousness_core.report import write_report
+from consciousness_core.research_lab import run_research_lab
 from consciousness_core.research_mission_generator import generate_research_missions, get_last_consolidated_missions
+from consciousness_core.sandbox_evolution import run_sandbox_evolution
 from consciousness_core.safety_gate import evaluate_proposal
 from consciousness_core.state import atomic_write_json, load_state, now_ist, save_state
+from consciousness_core.strategy_mutation_lab import run_strategy_mutation_lab
 from consciousness_core.thought_memory import (
     append_internal_narrative,
     append_reflection,
@@ -47,7 +54,8 @@ def _write_health(payload):
     atomic_write_json(HEALTH_PATH, payload)
 
 
-def _write_context(state, weaknesses, beliefs, missions, approved_queue):
+def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=None):
+    phase2 = phase2 or {}
     top_beliefs = sorted(
         beliefs.values(),
         key=lambda belief: float(belief.get("confidence") or 0),
@@ -70,6 +78,17 @@ def _write_context(state, weaknesses, beliefs, missions, approved_queue):
         "research_priorities": missions[:10],
         "no_trade_warnings": no_trade_warnings[:10],
         "confidence_warnings": confidence_warnings[:10],
+        "sandbox_results": phase2.get("sandbox_results", {}).get("results", [])[:10],
+        "promotion_recommendations": phase2.get("promotion_recommendations", {}).get("recommendations", [])[:10],
+        "causal_lessons": phase2.get("causal_reasoning", {}).get("causal_lessons", [])[:10],
+        "experience_memory_highlights": {
+            "repeated_failure_patterns": phase2.get("experience_memory", {}).get("repeated_failure_patterns", [])[:5],
+            "repeated_success_patterns": phase2.get("experience_memory", {}).get("repeated_success_patterns", [])[:5],
+            "weak_engines": phase2.get("experience_memory", {}).get("weak_engines", [])[:5],
+            "strong_engines": phase2.get("experience_memory", {}).get("strong_engines", [])[:5],
+        },
+        "strategy_mutations": phase2.get("strategy_mutations", {}).get("mutations", [])[:10],
+        "meta_learning": phase2.get("meta_learning", {}),
     }
     atomic_write_json(CONTEXT_PATH, context)
     return context
@@ -112,13 +131,29 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             proposal["proposal_id"]: evaluate_proposal(proposal) for proposal in proposals
         }
         approved_queue = write_evolution_bridge_queue(proposals, safety_decisions)
+        sandbox_results = run_sandbox_evolution()
+        experience_memory = update_experience_memory()
+        causal_reasoning = run_causal_reasoning()
+        research_experiments = run_research_lab()
+        strategy_mutations = run_strategy_mutation_lab()
+        promotion_recommendations = run_promotion_gate()
+        meta_learning = run_meta_learning()
+        phase2 = {
+            "sandbox_results": sandbox_results,
+            "experience_memory": experience_memory,
+            "causal_reasoning": causal_reasoning,
+            "research_experiments": research_experiments,
+            "strategy_mutations": strategy_mutations,
+            "promotion_recommendations": promotion_recommendations,
+            "meta_learning": meta_learning,
+        }
         consolidation_stats = {
             "duplicates_merged": get_last_duplicates_merged(),
             "consolidated_missions": get_last_consolidated_missions(),
             "consolidated_proposals": get_last_consolidated_proposals() + get_last_bridge_dedup_count(),
             "consolidated_beliefs": get_last_beliefs_consolidated(),
         }
-        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue)
+        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2)
         approved_count = len(approved_queue)
         rejected_count = list(safety_decisions.values()).count("REJECTED")
         summary = _summary(observation_packet, reflection, weaknesses, proposals, approved_count)
@@ -166,7 +201,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
         core_state["active_weaknesses"] = weaknesses[:20]
         core_state["latest_summary"] = summary
         core_state = save_state(core_state, core_state_path)
-        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue)
+        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2)
 
         report = write_report(
             core_state,
@@ -180,6 +215,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             observation_packet=observation_packet,
             approved_queue=approved_queue,
             consolidation_stats=consolidation_stats,
+            phase2=phase2,
         )
         health = {
             "status": "OK",
