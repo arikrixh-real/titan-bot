@@ -34,11 +34,21 @@ from consciousness_core.reflection_engine import reflect
 from consciousness_core.report import write_report
 from consciousness_core.research_lab import run_research_lab
 from consciousness_core.autonomous_research_scientist import run_autonomous_research_scientist
+from consciousness_core.adaptive_attention_allocator import run_adaptive_attention_allocator
+from consciousness_core.autonomous_evolution_ecosystem import run_autonomous_evolution_ecosystem
+from consciousness_core.autonomous_goal_hierarchy import run_autonomous_goal_hierarchy
+from consciousness_core.evolution_memory_civilization import run_evolution_memory_civilization
+from consciousness_core.intelligence_amplification import run_intelligence_amplification
+from consciousness_core.recursive_intelligence_summary import run_recursive_intelligence_summary
+from consciousness_core.recursive_meta_learning import run_recursive_meta_learning
+from consciousness_core.recursive_world_model import run_recursive_world_model
 from consciousness_core.research_mission_generator import generate_research_missions, get_last_consolidated_missions
 from consciousness_core.sandbox_evolution import run_sandbox_evolution
 from consciousness_core.safety_gate import evaluate_proposal
+from consciousness_core.self_improvement_scoring import run_self_improvement_scoring
 from consciousness_core.state import atomic_write_json, load_state, now_ist, save_state
 from consciousness_core.stock_personality import run_stock_personality
+from consciousness_core.strategy_genome_evolution import run_strategy_genome_evolution
 from consciousness_core.strategy_mutation_lab import run_strategy_mutation_lab
 from consciousness_core.thought_memory import (
     append_internal_narrative,
@@ -69,10 +79,11 @@ def _write_health(payload):
     atomic_write_json(HEALTH_PATH, payload)
 
 
-def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=None, phase3=None, phase_a=None):
+def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=None, phase3=None, phase_a=None, phase_b=None):
     phase2 = phase2 or {}
     phase3 = phase3 or {}
     phase_a = phase_a or {}
+    phase_b = phase_b or {}
     top_beliefs = sorted(
         beliefs.values(),
         key=lambda belief: float(belief.get("confidence") or 0),
@@ -161,6 +172,46 @@ def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=
                 "recommended_caution_aggression_level": phase_a.get("institutional_reasoning_summary", {}).get("recommended_caution_aggression_level"),
                 "top_institutional_concerns": phase_a.get("institutional_reasoning_summary", {}).get("top_institutional_concerns", [])[:5],
             },
+        },
+        "phase_b_recursive_intelligence": {
+            "strategy_genomes": phase_b.get("strategy_genome_evolution", {}).get("survivor_ranking", [])[:10],
+            "recursive_meta_learning": {
+                "self_improvement_score": phase_b.get("recursive_meta_learning", {}).get("self_improvement_score"),
+                "weakest_meta_area": phase_b.get("recursive_meta_learning", {}).get("weakest_meta_area"),
+                "next_self_improvement_focus": phase_b.get("recursive_meta_learning", {}).get("next_self_improvement_focus"),
+            },
+            "adaptive_attention": phase_b.get("adaptive_attention", {}).get("attention_items", [])[:10],
+            "evolution_ecosystem": {
+                "evolution_cycles": phase_b.get("evolution_ecosystem", {}).get("evolution_cycles"),
+                "strongest_mutations": phase_b.get("evolution_ecosystem", {}).get("strongest_mutations", [])[:5],
+                "weakest_mutations": phase_b.get("evolution_ecosystem", {}).get("weakest_mutations", [])[:5],
+                "next_evolution_direction": phase_b.get("evolution_ecosystem", {}).get("next_evolution_direction"),
+            },
+            "intelligence_amplification": {
+                "amplification_score": phase_b.get("intelligence_amplification", {}).get("amplification_score"),
+                "improvement_trend": phase_b.get("intelligence_amplification", {}).get("improvement_trend"),
+                "intelligence_growth_state": phase_b.get("intelligence_amplification", {}).get("intelligence_growth_state"),
+            },
+            "self_improvement_scoring": {
+                "overall_recursive_score": phase_b.get("self_improvement_scoring", {}).get("overall_recursive_score"),
+                "recursive_growth_status": phase_b.get("self_improvement_scoring", {}).get("recursive_growth_status"),
+            },
+            "goal_hierarchy": {
+                "top_goal": phase_b.get("autonomous_goal_hierarchy", {}).get("top_goal"),
+                "ranked_goals": phase_b.get("autonomous_goal_hierarchy", {}).get("ranked_goals", [])[:10],
+            },
+            "recursive_world_model": {
+                "liquidity_cycles": phase_b.get("recursive_world_model", {}).get("liquidity_cycles", {}),
+                "adaptive_regime_memory": phase_b.get("recursive_world_model", {}).get("adaptive_regime_memory", {}),
+            },
+            "memory_civilization": {
+                "permanent_market_laws": phase_b.get("evolution_memory_civilization", {}).get("permanent_market_laws", [])[:10],
+            },
+            "recursive_summary": {
+                "recursive_intelligence_status": phase_b.get("recursive_intelligence_summary", {}).get("recursive_intelligence_status"),
+                "self_improvement_trajectory": phase_b.get("recursive_intelligence_summary", {}).get("self_improvement_trajectory", {}),
+            },
+            "safety_scope": "read_only_sandbox_recommendation_only",
         },
     }
     atomic_write_json(CONTEXT_PATH, context)
@@ -254,13 +305,36 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             "contradiction_arbitration": contradiction_arbitration,
             "institutional_reasoning_summary": institutional_reasoning_summary,
         }
+        _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a)
+        strategy_genome_evolution = run_strategy_genome_evolution()
+        recursive_meta_learning = run_recursive_meta_learning()
+        adaptive_attention = run_adaptive_attention_allocator()
+        evolution_ecosystem = run_autonomous_evolution_ecosystem()
+        intelligence_amplification = run_intelligence_amplification()
+        self_improvement_scoring = run_self_improvement_scoring()
+        autonomous_goal_hierarchy = run_autonomous_goal_hierarchy()
+        recursive_world_model = run_recursive_world_model()
+        evolution_memory_civilization = run_evolution_memory_civilization()
+        recursive_intelligence_summary = run_recursive_intelligence_summary()
+        phase_b = {
+            "strategy_genome_evolution": strategy_genome_evolution,
+            "recursive_meta_learning": recursive_meta_learning,
+            "adaptive_attention": adaptive_attention,
+            "evolution_ecosystem": evolution_ecosystem,
+            "intelligence_amplification": intelligence_amplification,
+            "self_improvement_scoring": self_improvement_scoring,
+            "autonomous_goal_hierarchy": autonomous_goal_hierarchy,
+            "recursive_world_model": recursive_world_model,
+            "evolution_memory_civilization": evolution_memory_civilization,
+            "recursive_intelligence_summary": recursive_intelligence_summary,
+        }
         consolidation_stats = {
             "duplicates_merged": get_last_duplicates_merged(),
             "consolidated_missions": get_last_consolidated_missions(),
             "consolidated_proposals": get_last_consolidated_proposals() + get_last_bridge_dedup_count(),
             "consolidated_beliefs": get_last_beliefs_consolidated(),
         }
-        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a)
+        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a, phase_b=phase_b)
         approved_count = len(approved_queue)
         rejected_count = list(safety_decisions.values()).count("REJECTED")
         summary = _summary(observation_packet, reflection, weaknesses, proposals, approved_count)
@@ -308,7 +382,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
         core_state["active_weaknesses"] = weaknesses[:20]
         core_state["latest_summary"] = summary
         core_state = save_state(core_state, core_state_path)
-        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a)
+        context = _write_context(core_state, weaknesses, beliefs, missions, approved_queue, phase2=phase2, phase3=phase3, phase_a=phase_a, phase_b=phase_b)
 
         report = write_report(
             core_state,
@@ -325,6 +399,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             phase2=phase2,
             phase3=phase3,
             phase_a=phase_a,
+            phase_b=phase_b,
         )
         health = {
             "status": "OK",

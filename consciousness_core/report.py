@@ -22,6 +22,7 @@ def write_report(
     phase2=None,
     phase3=None,
     phase_a=None,
+    phase_b=None,
     path_json=REPORT_JSON_PATH,
     path_txt=REPORT_TXT_PATH,
 ):
@@ -31,6 +32,7 @@ def write_report(
     phase2 = phase2 or {}
     phase3 = phase3 or {}
     phase_a = phase_a or {}
+    phase_b = phase_b or {}
     top_beliefs = sorted(
         beliefs.values(),
         key=lambda belief: float(belief.get("confidence") or 0),
@@ -136,6 +138,41 @@ def write_report(
                 "contradictions": phase_a.get("contradiction_arbitration", {}).get("contradictions", [])[:10],
             },
             "institutional_reasoning_summary": phase_a.get("institutional_reasoning_summary", {}),
+        },
+        "phase_b_recursive_intelligence": {
+            "strategy_genome_survivors": phase_b.get("strategy_genome_evolution", {}).get("survivor_ranking", [])[:20],
+            "recursive_meta_learning": phase_b.get("recursive_meta_learning", {}),
+            "adaptive_attention": phase_b.get("adaptive_attention", {}).get("attention_items", [])[:20],
+            "evolution_ecosystem": {
+                "evolution_cycles": phase_b.get("evolution_ecosystem", {}).get("evolution_cycles"),
+                "active_mutations": phase_b.get("evolution_ecosystem", {}).get("active_mutations", [])[:20],
+                "retired_mutations": phase_b.get("evolution_ecosystem", {}).get("retired_mutations", [])[:20],
+                "strongest_mutations": phase_b.get("evolution_ecosystem", {}).get("strongest_mutations", [])[:10],
+                "weakest_mutations": phase_b.get("evolution_ecosystem", {}).get("weakest_mutations", [])[:10],
+                "recurring_failures": phase_b.get("evolution_ecosystem", {}).get("recurring_failures", [])[:10],
+                "recurring_successes": phase_b.get("evolution_ecosystem", {}).get("recurring_successes", [])[:10],
+                "next_evolution_direction": phase_b.get("evolution_ecosystem", {}).get("next_evolution_direction"),
+            },
+            "intelligence_amplification": phase_b.get("intelligence_amplification", {}),
+            "self_improvement_scoring": phase_b.get("self_improvement_scoring", {}),
+            "autonomous_goal_hierarchy": {
+                "top_goal": phase_b.get("autonomous_goal_hierarchy", {}).get("top_goal"),
+                "ranked_goals": phase_b.get("autonomous_goal_hierarchy", {}).get("ranked_goals", [])[:20],
+            },
+            "recursive_world_model": {
+                "macro_memory": phase_b.get("recursive_world_model", {}).get("macro_memory", {}),
+                "liquidity_cycles": phase_b.get("recursive_world_model", {}).get("liquidity_cycles", {}),
+                "volatility_cycles": phase_b.get("recursive_world_model", {}).get("volatility_cycles", {}),
+                "manipulation_memory": phase_b.get("recursive_world_model", {}).get("manipulation_memory", {}),
+                "adaptive_regime_memory": phase_b.get("recursive_world_model", {}).get("adaptive_regime_memory", {}),
+            },
+            "evolution_memory_civilization": {
+                "short_term_memory": phase_b.get("evolution_memory_civilization", {}).get("short_term_memory", {}),
+                "medium_term_memory": phase_b.get("evolution_memory_civilization", {}).get("medium_term_memory", {}),
+                "long_term_memory": phase_b.get("evolution_memory_civilization", {}).get("long_term_memory", {}),
+                "permanent_market_laws": phase_b.get("evolution_memory_civilization", {}).get("permanent_market_laws", [])[:20],
+            },
+            "recursive_intelligence_summary": phase_b.get("recursive_intelligence_summary", {}),
         },
         "next_focus": state.get("current_focus"),
     }
@@ -270,6 +307,29 @@ def write_report(
     if institutional_summary.get("top_institutional_concerns"):
         lines.append("- Top concern: " + institutional_summary["top_institutional_concerns"][0])
     lines.append("- Safety: read-only, sandbox-safe, recommendation-only; no live mutation.")
+    lines.append("")
+    lines.append("Mega Phase B recursive intelligence:")
+    phase_b_report = report["phase_b_recursive_intelligence"]
+    meta_b = phase_b_report["recursive_meta_learning"]
+    ecosystem_b = phase_b_report["evolution_ecosystem"]
+    amplification_b = phase_b_report["intelligence_amplification"]
+    score_b = phase_b_report["self_improvement_scoring"]
+    summary_b = phase_b_report["recursive_intelligence_summary"]
+    lines.append(f"- Recursive score: {score_b.get('overall_recursive_score')} status={score_b.get('recursive_growth_status')}")
+    lines.append(f"- Meta self-improvement: {meta_b.get('self_improvement_score')} weakest={meta_b.get('weakest_meta_area')}")
+    lines.append(f"- Evolution cycles: {ecosystem_b.get('evolution_cycles')} active={len(ecosystem_b.get('active_mutations', []))} retired={len(ecosystem_b.get('retired_mutations', []))}")
+    lines.append(f"- Amplification: {amplification_b.get('amplification_score')} trend={amplification_b.get('improvement_trend')}")
+    lines.append(f"- Recursive status: {summary_b.get('recursive_intelligence_status')}")
+    if phase_b_report["adaptive_attention"]:
+        top_attention = phase_b_report["adaptive_attention"][0]
+        lines.append(f"- Top attention: {top_attention.get('focus_area')} weight={top_attention.get('resource_weight')} reason={top_attention.get('reason')}")
+    if ecosystem_b.get("strongest_mutations"):
+        top_mutation = ecosystem_b["strongest_mutations"][0]
+        lines.append(f"- Strongest mutation: {top_mutation.get('genome_id')} score={top_mutation.get('sandbox_score')} risk={top_mutation.get('risk_score')}")
+    if ecosystem_b.get("weakest_mutations"):
+        weak_mutation = ecosystem_b["weakest_mutations"][0]
+        lines.append(f"- Weakest mutation: {weak_mutation.get('genome_id')} score={weak_mutation.get('sandbox_score')} risk={weak_mutation.get('risk_score')}")
+    lines.append("- Safety: Phase B is read-only, sandbox-safe, recommendation-only, and cannot mutate live strategies or execution.")
     lines.append("")
     lines.append("Insufficient evidence areas:")
     if report["insufficient_evidence_areas"]:
