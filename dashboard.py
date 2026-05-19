@@ -1669,9 +1669,11 @@ def get_latest_scan_symbols_breakdown():
     }
 
 
-def runtime_breakdown_has_data(data):
-    keys = ["stocks_checked", "trend_passed", "momentum_passed", "structure_passed", "entry_passed", "final_passed", "alerts_sent"]
-    return any(int(first_number(data.get(key), default=0)) > 0 for key in keys)
+SCAN_BREAKDOWN_GATE_KEYS = ["trend_passed", "momentum_passed", "structure_passed", "entry_passed", "final_passed"]
+
+
+def scanner_payload_has_gate_breakdown(data):
+    return isinstance(data, dict) and any(data.get(key) not in [None, ""] for key in SCAN_BREAKDOWN_GATE_KEYS)
 
 
 def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_health):
@@ -1683,10 +1685,11 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         "entry_passed": 0,
         "final_passed": 0,
         "alerts_this_scan": 0,
-        "source": "ZERO_FALLBACK",
+        "source": "FALLBACK_AWAITING_VPS_SCANNER",
         "timestamp": None,
         "is_fresh": False,
         "has_data": False,
+        "limited_runtime": False,
     }
 
     scanner_payload = (
@@ -1695,7 +1698,7 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         else {}
     )
     scanner_fresh = bool(scanner_runtime_data.get("is_fresh")) if isinstance(scanner_runtime_data, dict) else False
-    if scanner_fresh and runtime_breakdown_has_data(scanner_payload):
+    if scanner_fresh and scanner_payload_has_gate_breakdown(scanner_payload):
         master_payload = master_runtime_data if isinstance(master_runtime_data, dict) else {}
         alerts = first_number(
             scanner_payload.get("alerts_sent"),
@@ -1712,30 +1715,31 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "entry_passed": int(first_number(scanner_payload.get("entry_passed"), default=0)),
             "final_passed": int(first_number(scanner_payload.get("final_passed"), default=0)),
             "alerts_this_scan": int(alerts),
-            "source": "SUPABASE_RUNTIME_SCANNER_STATUS",
+            "source": "SUPABASE_RUNTIME_SCANNER",
             "timestamp": scanner_runtime_data.get("timestamp"),
             "is_fresh": True,
             "has_data": True,
+            "limited_runtime": False,
         }
 
     scan_symbols_breakdown = get_latest_scan_symbols_breakdown()
     if scan_symbols_breakdown:
         return scan_symbols_breakdown
 
-    scan_health_time = row_time(scan_health)
-    if scan_health and dt_is_fresh(scan_health_time):
+    if scanner_fresh and scanner_payload:
         return {
-            "stocks_checked": int(first_number(scan_health.get("stocks_checked"), default=0)),
-            "trend_passed": int(first_number(scan_health.get("trend_passed"), default=0)),
-            "momentum_passed": int(first_number(scan_health.get("momentum_passed"), default=0)),
-            "structure_passed": int(first_number(scan_health.get("structure_passed"), default=0)),
-            "entry_passed": int(first_number(scan_health.get("entry_passed"), default=0)),
-            "final_passed": int(first_number(scan_health.get("final_passed"), default=0)),
-            "alerts_this_scan": int(first_number(scan_health.get("alerts_sent"), default=0)),
-            "source": "SUPABASE_SCAN_HEALTH_LOGS",
-            "timestamp": scan_health_time,
+            "stocks_checked": int(first_number(scanner_payload.get("stocks_checked"), default=0)),
+            "trend_passed": 0,
+            "momentum_passed": 0,
+            "structure_passed": 0,
+            "entry_passed": 0,
+            "final_passed": 0,
+            "alerts_this_scan": int(first_number(scanner_payload.get("alerts_sent"), scanner_payload.get("alerts_this_scan"), default=0)),
+            "source": "SUPABASE_RUNTIME_SCANNER",
+            "timestamp": scanner_runtime_data.get("timestamp"),
             "is_fresh": True,
             "has_data": True,
+            "limited_runtime": True,
         }
 
     return zero
@@ -3094,7 +3098,25 @@ st.markdown("</div>", unsafe_allow_html=True)
 st.markdown("<div class='section'>", unsafe_allow_html=True)
 st.markdown("<div class='section-title'>🔍 Scan Breakdown · Why No Alerts?</div>", unsafe_allow_html=True)
 
-if scan_breakdown.get("has_data"):
+if scan_breakdown.get("limited_runtime"):
+    b1, b2, b3 = st.columns(3)
+
+    with b1:
+        metric_card("Stocks Checked", f"{latest_stocks_checked:,}", "Latest VPS scanner runtime")
+
+    with b2:
+        status_card("Scanner Status", scanner_runtime_data["status"], "VPS runtime scanner_status")
+
+    with b3:
+        metric_card("Last Scanner Update", latest_scan_health_age, "scanner_status timestamp")
+
+    st.info(
+        "Scanner runtime is active, but detailed gate breakdown is not available yet.\n\n"
+        "Next VPS scan cycle will update this once scanner_status publishes gate counts."
+    )
+    st.caption(f"Scan breakdown source: {scan_breakdown.get('source', 'SUPABASE_RUNTIME_SCANNER')}")
+
+elif scan_breakdown.get("has_data"):
     b1, b2, b3, b4, b5, b6 = st.columns(6)
 
     with b1:
@@ -3132,8 +3154,31 @@ if scan_breakdown.get("has_data"):
     with h3:
         metric_card("Live Trades Count", f"{live_trades_count:,}", "Open trades only")
 
+    st.caption(f"Scan breakdown source: {scan_breakdown.get('source', 'UNKNOWN')}")
+
 else:
-    st.info("No scan breakdown data yet. Wait for the next GitHub 5-minute scan after scan health logging is pushed.")
+    st.caption("Awaiting VPS scanner breakdown")
+    b1, b2, b3, b4, b5, b6 = st.columns(6)
+
+    with b1:
+        metric_card("Stocks Checked", "0", "Awaiting VPS scanner breakdown")
+
+    with b2:
+        metric_card("Trend Passed", "0", "Awaiting VPS scanner breakdown")
+
+    with b3:
+        metric_card("Momentum Passed", "0", "Awaiting VPS scanner breakdown")
+
+    with b4:
+        metric_card("Structure Passed", "0", "Awaiting VPS scanner breakdown")
+
+    with b5:
+        metric_card("Entry Passed", "0", "Awaiting VPS scanner breakdown")
+
+    with b6:
+        metric_card("Final Passed", "0", "Awaiting VPS scanner breakdown")
+
+    st.caption(f"Scan breakdown source: {scan_breakdown.get('source', 'FALLBACK_AWAITING_VPS_SCANNER')}")
 
 st.markdown("</div>", unsafe_allow_html=True)
 
