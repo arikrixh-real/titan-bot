@@ -1,12 +1,19 @@
 import multiprocessing
 import queue
+import time
 import traceback
 
 
 def _run_handler(handler, result_queue):
     try:
+        started_monotonic = time.monotonic()
         handler()
-        result_queue.put({"status": "ok"})
+        result_queue.put(
+            {
+                "status": "ok",
+                "child_duration_seconds": round(time.monotonic() - started_monotonic, 3),
+            }
+        )
     except BaseException as exc:
         result_queue.put(
             {
@@ -15,9 +22,41 @@ def _run_handler(handler, result_queue):
                 "traceback": traceback.format_exc(),
             }
         )
+    finally:
+        result_queue.close()
+        result_queue.join_thread()
 
 
-def run_with_timeout(handler, timeout_seconds):
+def _queue_result(result_queue, process, queue_grace_seconds):
+    deadline = time.monotonic() + max(float(queue_grace_seconds or 0), 0.0)
+
+    while True:
+        try:
+            return result_queue.get_nowait()
+        except queue.Empty:
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(0.05)
+
+    if process.exitcode == 0:
+        return {"status": "ok"}
+
+    return {
+        "status": "error",
+        "error": f"handler exited without result exitcode={process.exitcode}",
+        "traceback": "",
+        "termination_reason": "exited_without_result",
+    }
+
+
+def run_with_timeout(
+    handler,
+    timeout_seconds,
+    *,
+    terminate_grace_seconds=5,
+    kill_grace_seconds=5,
+    queue_grace_seconds=2,
+):
     """
     Runs a top-level task handler with a hard timeout.
 
@@ -30,34 +69,37 @@ def run_with_timeout(handler, timeout_seconds):
         args=(handler, result_queue),
     )
 
-    process.start()
-    process.join(timeout_seconds)
-
-    if process.is_alive():
-        process.terminate()
-        process.join(5)
+    started_monotonic = time.monotonic()
+    try:
+        process.start()
+        process.join(timeout_seconds)
 
         if process.is_alive():
-            process.kill()
-            process.join(5)
+            timeout_at_seconds = round(time.monotonic() - started_monotonic, 3)
+            process.terminate()
+            process.join(terminate_grace_seconds)
 
-        return {
-            "status": "timeout",
-            "timeout_seconds": timeout_seconds,
-            "exitcode": process.exitcode,
-        }
+            if process.is_alive():
+                process.kill()
+                process.join(kill_grace_seconds)
+                termination_reason = "timeout_kill_after_terminate_grace"
+            else:
+                termination_reason = "timeout_terminate"
 
-    try:
-        result = result_queue.get_nowait()
-    except queue.Empty:
-        if process.exitcode == 0:
-            result = {"status": "ok"}
-        else:
-            result = {
-                "status": "error",
-                "error": f"handler exited without result exitcode={process.exitcode}",
-                "traceback": "",
+            return {
+                "status": "timeout",
+                "timeout_seconds": timeout_seconds,
+                "exitcode": process.exitcode,
+                "duration_seconds": round(time.monotonic() - started_monotonic, 3),
+                "timeout_at_seconds": timeout_at_seconds,
+                "termination_reason": termination_reason,
             }
 
-    result["exitcode"] = process.exitcode
-    return result
+        result = _queue_result(result_queue, process, queue_grace_seconds)
+        result["exitcode"] = process.exitcode
+        result.setdefault("duration_seconds", round(time.monotonic() - started_monotonic, 3))
+        return result
+    finally:
+        result_queue.close()
+        result_queue.join_thread()
+        process.close()
