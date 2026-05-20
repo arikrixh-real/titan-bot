@@ -27,8 +27,8 @@ DEFAULT_TASK_TIMEOUT_SECONDS = 60
 TASK_TIMEOUT_SECONDS = {
     "ohlc_refresh": 120,
     "setup_engine": 240,
-    "master_brain": 240,
-    "scanner": 120,
+    "master_brain": 600,
+    "scanner": 300,
     "news_pulse": 45,
     "light_news_pulse": 45,
     "outcome_tracker": 45,
@@ -37,6 +37,14 @@ TASK_TIMEOUT_SECONDS = {
     "report_aggregator": 60,
     "knowledge_vault_runner": 120,
     "experience_vault_runner": 120,
+}
+TASK_TERMINATE_GRACE_SECONDS = {
+    "master_brain": 60,
+    "scanner": 45,
+}
+TASK_LOCK_STALE_SECONDS = {
+    "master_brain": 720,
+    "scanner": 420,
 }
 
 WORKER_TASKS = {
@@ -111,6 +119,17 @@ def _task_timeout_seconds(task):
     return TASK_TIMEOUT_SECONDS.get(task, DEFAULT_TASK_TIMEOUT_SECONDS)
 
 
+def _task_terminate_grace_seconds(task):
+    return TASK_TERMINATE_GRACE_SECONDS.get(task, 5)
+
+
+def _task_lock_stale_seconds(task):
+    timeout_seconds = _task_timeout_seconds(task)
+    terminate_grace_seconds = _task_terminate_grace_seconds(task)
+    default_stale_seconds = max(300, timeout_seconds + terminate_grace_seconds + 60)
+    return TASK_LOCK_STALE_SECONDS.get(task, default_stale_seconds)
+
+
 def _atomic_write_json(path, payload):
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = None
@@ -147,6 +166,9 @@ def _write_worker_health(task, **updates):
                 "error_count": 0,
                 "timeout_count": 0,
                 "last_error": None,
+                "last_duration_seconds": None,
+                "last_timeout_seconds": None,
+                "last_timeout_reason": None,
                 "intelligence_state_path": (
                     str(state_path_for_task(task))
                     if task in IMPORTANT_INTELLIGENCE_TASKS
@@ -266,9 +288,13 @@ def _run_worker(task, sleep_seconds, intent):
                 task,
                 status="RUNNING",
                 last_started_at=started_at,
+                active_run_started_at=started_at,
+                active_timeout_seconds=_task_timeout_seconds(task),
+                last_timeout_reason=None,
                 last_error=None,
                 runtime_mode=current_runtime_mode,
                 mode_allowed=True,
+                last_status="RUNNING",
             )
 
             handler = get_registered_handler(task)
@@ -280,7 +306,8 @@ def _run_worker(task, sleep_seconds, intent):
                     task,
                     intelligence_state_path=str(intelligence_state_path),
                     intelligence_run_count=intelligence_state.get("run_count", 0),
-                    last_status=intelligence_state.get("last_status"),
+                    intelligence_last_status=intelligence_state.get("last_status"),
+                    last_status="RUNNING",
                 )
 
             if not handler:
@@ -346,12 +373,17 @@ def _run_worker(task, sleep_seconds, intent):
                 time.sleep(sleep_seconds)
                 continue
 
-            lock_acquired = acquire_lock(lock_name)
+            lock_acquired = acquire_lock(
+                lock_name,
+                stale_after_seconds=_task_lock_stale_seconds(task),
+            )
             if not lock_acquired:
                 _write_worker_health(
                     task,
                     status="SKIPPED_LOCKED",
                     last_finished_at=_now_ist(),
+                    last_error=f"{task} previous run still active",
+                    lock_stale_after_seconds=_task_lock_stale_seconds(task),
                 )
                 time.sleep(sleep_seconds)
                 continue
@@ -363,7 +395,12 @@ def _run_worker(task, sleep_seconds, intent):
                     intelligence_state_path,
                 )
 
-            result = run_with_timeout(handler, _task_timeout_seconds(task))
+            timeout_seconds = _task_timeout_seconds(task)
+            result = run_with_timeout(
+                handler,
+                timeout_seconds,
+                terminate_grace_seconds=_task_terminate_grace_seconds(task),
+            )
             run_count = _health.get(task, {}).get("run_count", 0) + 1
             runtime_seconds = time.monotonic() - run_started_monotonic
 
@@ -381,8 +418,15 @@ def _run_worker(task, sleep_seconds, intent):
                     status="TIMEOUT",
                     last_finished_at=_now_ist(),
                     run_count=run_count,
+                    last_duration_seconds=round(runtime_seconds, 3),
+                    last_timeout_seconds=result.get("timeout_seconds"),
+                    last_timeout_reason=result.get("termination_reason"),
+                    last_exitcode=result.get("exitcode"),
                     timeout_count=_health.get(task, {}).get("timeout_count", 0) + 1,
-                    last_error=f"timeout after {result.get('timeout_seconds')} seconds",
+                    last_error=(
+                        f"timeout after {result.get('timeout_seconds')} seconds "
+                        f"reason={result.get('termination_reason')}"
+                    ),
                     intelligence_state_path=(
                         str(intelligence_state_path) if intelligence_state_path else None
                     ),
@@ -410,6 +454,10 @@ def _run_worker(task, sleep_seconds, intent):
                     status="OK",
                     last_finished_at=_now_ist(),
                     run_count=run_count,
+                    last_duration_seconds=round(runtime_seconds, 3),
+                    last_timeout_seconds=None,
+                    last_timeout_reason=None,
+                    last_exitcode=result.get("exitcode"),
                     last_error=None,
                     intelligence_state_path=(
                         str(intelligence_state_path) if intelligence_state_path else None
@@ -438,6 +486,10 @@ def _run_worker(task, sleep_seconds, intent):
                 _write_worker_health(
                     task,
                     run_count=run_count,
+                    last_duration_seconds=round(runtime_seconds, 3),
+                    last_timeout_seconds=None,
+                    last_timeout_reason=result.get("termination_reason"),
+                    last_exitcode=result.get("exitcode"),
                     intelligence_state_path=(
                         str(intelligence_state_path) if intelligence_state_path else None
                     ),

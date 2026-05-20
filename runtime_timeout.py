@@ -3,18 +3,35 @@ import time
 import traceback
 
 
+def _safe_close(resource):
+    try:
+        resource.close()
+    except (EOFError, BrokenPipeError, OSError, ValueError):
+        pass
+
+
+def _safe_send(result_conn, payload):
+    try:
+        result_conn.send(payload)
+        return True
+    except (BrokenPipeError, EOFError, OSError):
+        return False
+
+
 def _run_handler(handler, result_conn):
     try:
         started_monotonic = time.monotonic()
         handler()
-        result_conn.send(
+        _safe_send(
+            result_conn,
             {
                 "status": "ok",
                 "child_duration_seconds": round(time.monotonic() - started_monotonic, 3),
             }
         )
     except BaseException as exc:
-        result_conn.send(
+        _safe_send(
+            result_conn,
             {
                 "status": "error",
                 "error": repr(exc),
@@ -22,7 +39,7 @@ def _run_handler(handler, result_conn):
             }
         )
     finally:
-        result_conn.close()
+        _safe_close(result_conn)
 
 
 def _pipe_result(result_conn, process, result_grace_seconds):
@@ -32,7 +49,7 @@ def _pipe_result(result_conn, process, result_grace_seconds):
         if result_conn.poll(0):
             try:
                 return result_conn.recv()
-            except (EOFError, OSError):
+            except (EOFError, BrokenPipeError, OSError):
                 break
 
         if time.monotonic() >= deadline:
@@ -72,9 +89,11 @@ def run_with_timeout(
     )
 
     started_monotonic = time.monotonic()
+    process_started = False
     try:
         process.start()
-        child_result_conn.close()
+        process_started = True
+        _safe_close(child_result_conn)
         process.join(timeout_seconds)
 
         if process.is_alive():
@@ -103,10 +122,17 @@ def run_with_timeout(
         result.setdefault("duration_seconds", round(time.monotonic() - started_monotonic, 3))
         return result
     finally:
-        result_conn.close()
-        child_result_conn.close()
-        if process.is_alive():
-            process.kill()
-            process.join(kill_grace_seconds)
-        if not process.is_alive():
-            process.close()
+        _safe_close(result_conn)
+        _safe_close(child_result_conn)
+        if process_started:
+            try:
+                if process.is_alive():
+                    process.kill()
+                    process.join(kill_grace_seconds)
+            except (OSError, ValueError):
+                pass
+            try:
+                if not process.is_alive():
+                    process.close()
+            except (OSError, ValueError):
+                pass

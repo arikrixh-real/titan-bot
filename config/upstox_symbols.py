@@ -68,6 +68,7 @@ MANUAL_INSTRUMENT_KEYS = {
     "SRF": "NSE_EQ|INE647A01010",
     "APOLLOHOSP": "NSE_EQ|INE437A01024",
     "LICI": "NSE_EQ|INE0J1Y01017",
+    "OFSS": "NSE_EQ|INE881D01027",
     # Current Upstox trading_symbol is TMPV; keep local legacy alias for existing TITAN symbols.
     "TATAMOTORS": "NSE_EQ|INE155A01022",
     "TATASTEEL": "NSE_EQ|INE081A01020",
