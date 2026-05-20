@@ -1,21 +1,20 @@
 import multiprocessing
-import queue
 import time
 import traceback
 
 
-def _run_handler(handler, result_queue):
+def _run_handler(handler, result_conn):
     try:
         started_monotonic = time.monotonic()
         handler()
-        result_queue.put(
+        result_conn.send(
             {
                 "status": "ok",
                 "child_duration_seconds": round(time.monotonic() - started_monotonic, 3),
             }
         )
     except BaseException as exc:
-        result_queue.put(
+        result_conn.send(
             {
                 "status": "error",
                 "error": repr(exc),
@@ -23,20 +22,23 @@ def _run_handler(handler, result_queue):
             }
         )
     finally:
-        result_queue.close()
-        result_queue.join_thread()
+        result_conn.close()
 
 
-def _queue_result(result_queue, process, queue_grace_seconds):
-    deadline = time.monotonic() + max(float(queue_grace_seconds or 0), 0.0)
+def _pipe_result(result_conn, process, result_grace_seconds):
+    deadline = time.monotonic() + max(float(result_grace_seconds or 0), 0.0)
 
     while True:
-        try:
-            return result_queue.get_nowait()
-        except queue.Empty:
-            if time.monotonic() >= deadline:
+        if result_conn.poll(0):
+            try:
+                return result_conn.recv()
+            except (EOFError, OSError):
                 break
-            time.sleep(0.05)
+
+        if time.monotonic() >= deadline:
+            break
+
+        time.sleep(0.05)
 
     if process.exitcode == 0:
         return {"status": "ok"}
@@ -63,15 +65,16 @@ def run_with_timeout(
     A process boundary lets the dispatcher terminate blocked network/IO work
     without changing business logic inside the handler.
     """
-    result_queue = multiprocessing.Queue(maxsize=1)
+    result_conn, child_result_conn = multiprocessing.Pipe(duplex=False)
     process = multiprocessing.Process(
         target=_run_handler,
-        args=(handler, result_queue),
+        args=(handler, child_result_conn),
     )
 
     started_monotonic = time.monotonic()
     try:
         process.start()
+        child_result_conn.close()
         process.join(timeout_seconds)
 
         if process.is_alive():
@@ -95,11 +98,15 @@ def run_with_timeout(
                 "termination_reason": termination_reason,
             }
 
-        result = _queue_result(result_queue, process, queue_grace_seconds)
+        result = _pipe_result(result_conn, process, queue_grace_seconds)
         result["exitcode"] = process.exitcode
         result.setdefault("duration_seconds", round(time.monotonic() - started_monotonic, 3))
         return result
     finally:
-        result_queue.close()
-        result_queue.join_thread()
-        process.close()
+        result_conn.close()
+        child_result_conn.close()
+        if process.is_alive():
+            process.kill()
+            process.join(kill_grace_seconds)
+        if not process.is_alive():
+            process.close()
