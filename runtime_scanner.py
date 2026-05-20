@@ -110,6 +110,145 @@ def _fresh_int(payload, key):
         return None
 
 
+def _optional_int(value):
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _list_count(payload, key):
+    if not isinstance(payload, dict):
+        return None
+    value = payload.get(key)
+    return len(value) if isinstance(value, list) else None
+
+
+def _nested_selected_count(payload, key):
+    if not isinstance(payload, dict):
+        return None
+    nested = payload.get(key)
+    if not isinstance(nested, dict):
+        return None
+    selected = nested.get("selected")
+    return len(selected) if isinstance(selected, list) else None
+
+
+def _first_count(payload, keys):
+    if not isinstance(payload, dict):
+        return None, None
+    for key in keys:
+        value = _optional_int(payload.get(key))
+        if value is not None:
+            return value, key
+    return None, None
+
+
+def _final_count_timestamp(payload):
+    dt = _payload_dt(payload)
+    return dt.isoformat() if dt else None
+
+
+def _resolve_final_count(master_payload, setup_payload, final_debug):
+    """
+    Read-only resolver for actual final candidate counts already emitted by
+    setup_engine/master_brain outputs. Zero is a valid count; None means no
+    usable source exists.
+    """
+    count, key = _first_count(
+        master_payload,
+        (
+            "final_passed",
+            "final_selected_count",
+            "selected_count",
+            "selected_candidates_count",
+        ),
+    )
+    if count is None:
+        count = _nested_selected_count(master_payload, "final_decisions")
+        key = "final_decisions.selected" if count is not None else None
+    if count is None:
+        count = _list_count(master_payload, "selected")
+        key = "selected" if count is not None else None
+    if count is not None:
+        return {
+            "entry_passed": _optional_int(master_payload.get("entry_passed")),
+            "final_passed": count,
+            "final_count_source": "master_brain_status",
+            "final_passed_note": (
+                f"Real final count read from data/runtime/master_brain_status.json field {key}."
+            ),
+            "entry_stage_available": _optional_int(master_payload.get("entry_passed")) is not None,
+            "available": True,
+            "timestamp": _final_count_timestamp(master_payload),
+        }
+
+    count, key = _first_count(
+        setup_payload,
+        (
+            "final_passed",
+            "final_selected_count",
+            "selected_count",
+            "selected_candidates_count",
+        ),
+    )
+    if count is not None:
+        return {
+            "entry_passed": _optional_int(setup_payload.get("entry_passed")),
+            "final_passed": count,
+            "final_count_source": "setup_engine_status",
+            "final_passed_note": (
+                f"Real final count read from data/runtime/setup_engine_status.json field {key}."
+            ),
+            "entry_stage_available": _optional_int(setup_payload.get("entry_passed")) is not None,
+            "available": True,
+            "timestamp": _final_count_timestamp(setup_payload),
+        }
+
+    debug_count, debug_key = _first_count(final_debug, ("final_passed",))
+    if debug_count is not None:
+        return {
+            "entry_passed": _optional_int(final_debug.get("entry_passed")),
+            "final_passed": debug_count,
+            "final_count_source": "setup_engine_status",
+            "final_passed_note": (
+                "Real setup_engine final count read from "
+                f"data/debug/final_rejection_breakdown.json field {debug_key}."
+            ),
+            "entry_stage_available": _optional_int(final_debug.get("entry_passed")) is not None,
+            "available": True,
+            "timestamp": _final_count_timestamp(final_debug),
+        }
+
+    missing = []
+    if not isinstance(setup_payload, dict) or not setup_payload:
+        missing.append("data/runtime/setup_engine_status.json missing or empty")
+    else:
+        missing.append("setup_engine_status has no final count field")
+    if not isinstance(master_payload, dict) or not master_payload:
+        missing.append("data/runtime/master_brain_status.json missing or empty")
+    else:
+        missing.append("master_brain_status has no selected/final count field")
+    if not isinstance(final_debug, dict) or not final_debug:
+        missing.append("data/debug/final_rejection_breakdown.json missing or empty")
+    else:
+        missing.append("final_rejection_breakdown has no final_passed field")
+
+    return {
+        "entry_passed": None,
+        "final_passed": None,
+        "final_count_source": "unavailable",
+        "final_passed_note": "Final count unavailable: " + "; ".join(missing) + ".",
+        "entry_stage_available": False,
+        "available": False,
+        "timestamp": None,
+    }
+
+
 def _read_previous_run_count(path):
     try:
         path = Path(path)
@@ -346,6 +485,7 @@ def _status_payload(
     entry_stage_available,
     entry_passed,
     final_passed,
+    final_passed_note,
     fallback_reason,
     pipeline_health,
     final_count_source,
@@ -415,11 +555,10 @@ def _status_payload(
         ),
         "final_passed": final_passed,
         "final_passed_note": (
-            "Final count unavailable from current runtime output."
-            if final_passed is None and not scan_only
-            else (
-                "Final quality filter not run in scanner-only mode."
-                if scan_only
+            final_passed_note
+            or (
+                "Final count unavailable from current runtime output."
+                if final_passed is None
                 else None
             )
         ),
@@ -450,7 +589,7 @@ def _full_pipeline_health(ohlc_fallback_required, partial_stale_tolerated, stale
     setup_payload, setup_ok = _task_available("setup_engine", SETUP_ENGINE_STATUS_PATH)
 
     final_debug = _read_json(FINAL_REJECTION_DEBUG_PATH)
-    final_debug_fresh = _payload_fresh(final_debug)
+    final_count = _resolve_final_count(master_payload, setup_payload, final_debug)
 
     fallback_reasons = []
     if ohlc_fallback_required:
@@ -473,12 +612,14 @@ def _full_pipeline_health(ohlc_fallback_required, partial_stale_tolerated, stale
             "partial_stale_tolerated": partial_stale_tolerated,
             "stale_symbol_ratio": stale_symbol_ratio,
             "stale_policy": stale_policy,
-            "final_counts_available": final_debug_fresh,
+            "final_counts_available": final_count["available"],
+            "final_count_timestamp": final_count["timestamp"],
         },
-        "entry_passed": _fresh_int(final_debug, "entry_passed") if final_debug_fresh else None,
-        "final_passed": _fresh_int(final_debug, "final_passed") if final_debug_fresh else None,
-        "final_count_source": "final_rejection_breakdown" if final_debug_fresh else "unavailable",
-        "entry_stage_available": final_debug_fresh,
+        "entry_passed": final_count["entry_passed"],
+        "final_passed": final_count["final_passed"],
+        "final_passed_note": final_count["final_passed_note"],
+        "final_count_source": final_count["final_count_source"],
+        "entry_stage_available": final_count["entry_stage_available"],
         "master_status": master_payload.get("status"),
         "setup_status": setup_payload.get("status"),
     }
@@ -633,6 +774,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         entry_stage_available=pipeline["entry_stage_available"],
         entry_passed=pipeline["entry_passed"],
         final_passed=pipeline["final_passed"],
+        final_passed_note=pipeline["final_passed_note"],
         fallback_reason=pipeline["fallback_reason"],
         pipeline_health=pipeline["pipeline_health"],
         final_count_source=pipeline["final_count_source"],
