@@ -40,6 +40,20 @@ def run_knowledge_vault_runner_handler(state=None, state_path=None, intelligence
     return result if isinstance(result, dict) else {"status": "ok"}
 
 
+def run_experience_vault_runner_handler(state=None, state_path=None, intelligence_state=None):
+    try:
+        from experience_vault_runner.runner import run_experience_vault_runner
+    except Exception as exc:
+        return {"status": "error", "error": f"experience_vault_runner import failed: {exc}"}
+
+    result = run_experience_vault_runner(
+        state=state,
+        state_path=state_path,
+        intelligence_state=intelligence_state,
+    )
+    return result if isinstance(result, dict) else {"status": "ok"}
+
+
 def run_report_aggregator_handler(state=None, state_path=None, intelligence_state=None):
     try:
         from report_vault.report_aggregator import run_report_aggregator
@@ -180,6 +194,7 @@ def get_engine_registry():
         "runtime_snapshot_logger": log_runtime_snapshot,
         "report_aggregator": run_report_aggregator_handler,
         "knowledge_vault_runner": run_knowledge_vault_runner_handler,
+        "experience_vault_runner": run_experience_vault_runner_handler,
         "consciousness_core": run_consciousness_core_handler,
         "learning_engine": run_learning_engine_handler,
         "experience_memory": run_experience_memory_handler,

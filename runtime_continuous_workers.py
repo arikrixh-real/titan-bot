@@ -35,6 +35,7 @@ TASK_TIMEOUT_SECONDS = {
     "consciousness_core": 60,
     "report_aggregator": 60,
     "knowledge_vault_runner": 120,
+    "experience_vault_runner": 120,
 }
 
 WORKER_TASKS = {
@@ -58,6 +59,7 @@ WORKER_TASKS = {
     "learning_engine": 60,
     "report_aggregator": 60,
     "knowledge_vault_runner": 300,
+    "experience_vault_runner": 300,
     "consciousness_core": 60,
     "scenario_simulation": 90,
     "next_day_preparation": 120,
@@ -89,6 +91,7 @@ IMPORTANT_INTELLIGENCE_TASKS = {
     "next_day_preparation",
     "report_aggregator",
     "knowledge_vault_runner",
+    "experience_vault_runner",
     "consciousness_core",
 }
 

@@ -16,6 +16,7 @@ DATA_SOURCES = (
     "data/runtime/dashboard_sync_status.json",
     "data/report_vault/latest_aggregated_packet.json",
     "data/knowledge_vault/reports/knowledge_to_consciousness_packet.json",
+    "data/experience_vault/reports/external_experience_packet.json",
     "data/memory/evolution_state.json",
     "reports/evolution_report.txt",
     "data/research/*.json",
@@ -250,31 +251,31 @@ def _observations_from_trade_outcomes(source, rows, timestamp):
         symbol = row.get("symbol") or row.get("trade_id")
         if outcome in {"SL", "LOSS"} or (pnl is not None and pnl < 0):
             severity = "HIGH" if score is not None and score >= 3.0 else "MEDIUM"
-            observations.append(
-                _normalized_observation(
-                    source,
-                    "trade_outcome",
-                    "trade_loss",
-                    pnl,
-                    row,
-                    entity=symbol,
-                    timestamp=row.get("closed_at") or timestamp,
-                    severity=severity,
-                )
+            observation = _normalized_observation(
+                source,
+                "trade_outcome",
+                "trade_loss",
+                pnl,
+                row,
+                entity=symbol,
+                timestamp=row.get("closed_at") or timestamp,
+                severity=severity,
             )
+            observation["source_type"] = "NATIVE_EXPERIENCE"
+            observations.append(observation)
         if score is not None and score >= 3.0 and (outcome in {"SL", "LOSS"} or (pnl is not None and pnl < 0)):
-            observations.append(
-                _normalized_observation(
-                    source,
-                    "trade_outcome",
-                    "high_confidence_loss",
-                    score,
-                    row,
-                    entity=symbol,
-                    timestamp=row.get("closed_at") or timestamp,
-                    severity="HIGH",
-                )
+            observation = _normalized_observation(
+                source,
+                "trade_outcome",
+                "high_confidence_loss",
+                score,
+                row,
+                entity=symbol,
+                timestamp=row.get("closed_at") or timestamp,
+                severity="HIGH",
             )
+            observation["source_type"] = "NATIVE_EXPERIENCE"
+            observations.append(observation)
     return observations
 
 
@@ -465,6 +466,84 @@ def _observations_from_knowledge_vault(source, payload, timestamp):
     return observations
 
 
+def _observations_from_experience_vault(source, payload, timestamp):
+    if not isinstance(payload, dict):
+        return []
+    observations = []
+    generated_at = payload.get("generated_at") or timestamp
+    packet_hash = payload.get("packet_hash")
+    for item in (payload.get("observations") or [])[:150]:
+        if not isinstance(item, dict):
+            continue
+        evidence = {
+            "evidence": item.get("evidence", []),
+            "lesson": item.get("lesson"),
+            "safety": item.get("safety"),
+            "packet_hash": packet_hash,
+            "source_type": "EXTERNAL_EXPERIENCE",
+            "trust_level": "IMPORTED_UNVALIDATED",
+        }
+        observation = _normalized_observation(
+            source,
+            item.get("type") or "external_experience",
+            item.get("metric") or "imported_lesson",
+            item.get("value"),
+            evidence,
+            entity=item.get("entity") or "experience_vault",
+            timestamp=generated_at,
+            severity=item.get("severity") or "MEDIUM",
+        )
+        observation["source_type"] = "EXTERNAL_EXPERIENCE"
+        observation["trust_level"] = "IMPORTED_UNVALIDATED"
+        observation["validation_status"] = item.get("validation_status", "UNVALIDATED")
+        observation["external_experience_status"] = item.get("status", "UNVALIDATED")
+        observations.append(observation)
+
+    for warning in (payload.get("extraction_warnings") or [])[:50]:
+        observation = _normalized_observation(
+            source,
+            "external_experience",
+            "insufficient_extraction",
+            warning.get("reason") if isinstance(warning, dict) else warning,
+            {
+                "warning": warning,
+                "packet_hash": packet_hash,
+                "source_type": "EXTERNAL_EXPERIENCE",
+                "trust_level": "IMPORTED_UNVALIDATED",
+            },
+            entity=(warning.get("source_file") if isinstance(warning, dict) else "experience_vault"),
+            timestamp=generated_at,
+            severity="MEDIUM",
+        )
+        observation["source_type"] = "EXTERNAL_EXPERIENCE"
+        observation["trust_level"] = "IMPORTED_UNVALIDATED"
+        observation["validation_status"] = "UNVALIDATED"
+        observations.append(observation)
+
+    if not observations:
+        observation = _normalized_observation(
+            source,
+            "external_experience",
+            "packet_seen",
+            payload.get("status"),
+            {
+                "run_stats": payload.get("run_stats", {}),
+                "packet_hash": packet_hash,
+                "source_type": "EXTERNAL_EXPERIENCE",
+                "trust_level": "IMPORTED_UNVALIDATED",
+                "note": "external experience packet contains no lessons yet",
+            },
+            entity="experience_vault",
+            timestamp=generated_at,
+            severity="LOW",
+        )
+        observation["source_type"] = "EXTERNAL_EXPERIENCE"
+        observation["trust_level"] = "IMPORTED_UNVALIDATED"
+        observation["validation_status"] = "UNVALIDATED"
+        observations.append(observation)
+    return observations
+
+
 def _observations_from_payload(source, content, meta, timestamp):
     observations = []
     lower_source = source.lower()
@@ -472,6 +551,8 @@ def _observations_from_payload(source, content, meta, timestamp):
         observations.extend(_observations_from_report_vault(source, content, timestamp))
     elif source.endswith("knowledge_to_consciousness_packet.json"):
         observations.extend(_observations_from_knowledge_vault(source, content, timestamp))
+    elif source.endswith("external_experience_packet.json"):
+        observations.extend(_observations_from_experience_vault(source, content, timestamp))
     elif source.endswith("worker_health.json"):
         observations.extend(_observations_from_worker_health(source, content, timestamp))
     elif "/intelligence_state/" in lower_source:
