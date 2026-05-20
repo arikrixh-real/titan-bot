@@ -19,10 +19,94 @@ from engines.time_filter import current_bot_mode
 IST = timezone(timedelta(hours=5, minutes=30))
 SCANNER_STATUS_PATH = Path("data") / "runtime" / "scanner_status.json"
 SCANNER_PREVIOUS_SIGNATURE_PATH = Path("data") / "runtime" / "scanner_previous_signature.json"
+MASTER_BRAIN_STATUS_PATH = Path("data") / "runtime" / "master_brain_status.json"
+SETUP_ENGINE_STATUS_PATH = Path("data") / "runtime" / "setup_engine_status.json"
+WORKER_HEALTH_PATH = Path("data") / "runtime" / "worker_health.json"
+FINAL_REJECTION_DEBUG_PATH = Path("data") / "debug" / "final_rejection_breakdown.json"
+RUNTIME_FRESH_SECONDS = 15 * 60
+MARKET_CANDLE_STALE_MINUTES = 45
 
 
 def _timestamp_ist():
     return datetime.now(IST).isoformat()
+
+
+def _read_json(path):
+    try:
+        path = Path(path)
+        if not path.exists():
+            return {}
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _payload_dt(payload):
+    if not isinstance(payload, dict):
+        return None
+    value = (
+        payload.get("timestamp_ist")
+        or payload.get("last_finished_at")
+        or payload.get("last_started_at")
+        or payload.get("timestamp")
+        or payload.get("updated_at")
+        or payload.get("created_at")
+    )
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=IST)
+        return parsed.astimezone(IST)
+    except Exception:
+        return None
+
+
+def _payload_fresh(payload, fresh_seconds=RUNTIME_FRESH_SECONDS):
+    dt = _payload_dt(payload)
+    if not dt:
+        return False
+    return (datetime.now(IST) - dt).total_seconds() <= fresh_seconds
+
+
+def _payload_active(payload):
+    if not isinstance(payload, dict) or not payload:
+        return False
+    status = str(payload.get("status") or "").upper()
+    if not status:
+        return False
+    inactive_markers = ("FAILED", "ERROR", "STOPPED", "INACTIVE", "TIMEOUT", "STALE")
+    return not any(marker in status for marker in inactive_markers)
+
+
+def _fresh_active_payload(path):
+    payload = _read_json(path)
+    return payload, bool(_payload_fresh(payload) and _payload_active(payload))
+
+
+def _worker_health_task_ok(task):
+    payload = _read_json(WORKER_HEALTH_PATH)
+    task_payload = payload.get(task) if isinstance(payload, dict) else None
+    return bool(_payload_fresh(task_payload) and _payload_active(task_payload))
+
+
+def _task_available(task, status_path):
+    payload, payload_ok = _fresh_active_payload(status_path)
+    return payload, bool(payload_ok or _worker_health_task_ok(task))
+
+
+def _fresh_int(payload, key):
+    if not _payload_fresh(payload):
+        return None
+    value = payload.get(key)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _read_previous_run_count(path):
@@ -67,7 +151,10 @@ def _write_previous_data_signature(signature, scanner_cycle_id, timestamp_ist, p
         pass
 
 
-def _scan_mode(load_debug):
+def _scan_mode(load_debug, scan_only):
+    if not scan_only:
+        return "FULL_RUNTIME_PIPELINE"
+
     if not isinstance(load_debug, dict):
         return "SCAN_ONLY"
 
@@ -206,8 +293,26 @@ def _status_payload(
     scan_started_at_ist,
     scan_finished_at_ist,
     scan_duration_seconds,
+    scan_only,
+    entry_stage_available,
+    entry_passed,
+    final_passed,
+    fallback_reason,
+    pipeline_health,
     run_count=None,
 ):
+    status = "FULL_RUNTIME_PIPELINE_COMPLETE"
+    if stale_data_warning:
+        status = "SCAN_ONLY_STALE_OHLC"
+    elif scan_only:
+        status = "SCAN_ONLY_FALLBACK"
+
+    missing_fields = []
+    if entry_passed is None:
+        missing_fields.append("entry_passed")
+    if final_passed is None:
+        missing_fields.append("final_passed")
+
     payload = {
         "timestamp_ist": scan_finished_at_ist,
         "scanner_cycle_id": scanner_cycle_id,
@@ -215,9 +320,11 @@ def _status_payload(
         "scan_finished_at_ist": scan_finished_at_ist,
         "scan_duration_seconds": scan_duration_seconds,
         "mode": mode,
-        "status": "SCAN_ONLY_STALE_OHLC" if stale_data_warning else "SCAN_ONLY_COMPLETE",
+        "status": status,
         "source": "VPS_RUNTIME_SCANNER",
-        "scan_only": True,
+        "scan_only": scan_only,
+        "fallback_reason": fallback_reason,
+        "pipeline_health": pipeline_health,
         "real_scanner_called": True,
         "trade_creation": False,
         "telegram_alerts": False,
@@ -227,15 +334,31 @@ def _status_payload(
         "trend_passed": trend_passed,
         "momentum_passed": momentum_passed,
         "structure_passed": structure_passed,
-        "entry_passed": None,
-        "entry_stage_available": False,
-        "entry_passed_note": "No independent entry-stage engine runs in scanner-only mode; use breakout_ready_count for this scanner gate.",
-        "final_passed": 0,
-        "final_passed_note": "Final quality filter not run in scanner-only mode.",
+        "entry_passed": entry_passed,
+        "entry_stage_available": entry_stage_available,
+        "entry_passed_note": (
+            "Full setup engine entry count unavailable."
+            if entry_passed is None and not scan_only
+            else (
+                "No independent entry-stage engine runs in scanner-only mode; use breakout_ready_count for this scanner gate."
+                if scan_only
+                else None
+            )
+        ),
+        "final_passed": final_passed,
+        "final_passed_note": (
+            "Full setup engine final count unavailable."
+            if final_passed is None and not scan_only
+            else (
+                "Final quality filter not run in scanner-only mode."
+                if scan_only
+                else None
+            )
+        ),
         "alerts_sent": 0,
         "breakout_ready_count": breakout_ready_count,
         "passed_setups": passed_setups,
-        "missing_fields": ["entry_passed", "final_passed"],
+        "missing_fields": missing_fields,
         "candidate_symbols": candidate_symbols[:5],
         "candidate_details": candidate_details[:5],
         "latest_candle_timestamp": latest_candle_timestamp,
@@ -251,6 +374,40 @@ def _status_payload(
     if run_count is not None:
         payload["run_count"] = run_count
     return payload
+
+
+def _full_pipeline_health(stale_data_warning):
+    master_payload, master_ok = _task_available("master_brain", MASTER_BRAIN_STATUS_PATH)
+    setup_payload, setup_ok = _task_available("setup_engine", SETUP_ENGINE_STATUS_PATH)
+
+    final_debug = _read_json(FINAL_REJECTION_DEBUG_PATH)
+    final_debug_fresh = _payload_fresh(final_debug)
+
+    fallback_reasons = []
+    if stale_data_warning:
+        fallback_reasons.append("OHLC_STALE")
+    if not master_ok:
+        fallback_reasons.append("MASTER_BRAIN_UNAVAILABLE")
+    if not setup_ok:
+        fallback_reasons.append("SETUP_ENGINE_UNAVAILABLE")
+
+    scan_only = bool(fallback_reasons)
+    return {
+        "scan_only": scan_only,
+        "fallback_reason": "|".join(fallback_reasons) if fallback_reasons else None,
+        "pipeline_health": {
+            "scanner_ok": True,
+            "master_brain_ok": master_ok,
+            "setup_engine_ok": setup_ok,
+            "ohlc_stale": stale_data_warning,
+            "final_counts_available": final_debug_fresh,
+        },
+        "entry_passed": _fresh_int(final_debug, "entry_passed") if final_debug_fresh else None,
+        "final_passed": _fresh_int(final_debug, "final_passed") if final_debug_fresh else None,
+        "entry_stage_available": final_debug_fresh,
+        "master_status": master_payload.get("status"),
+        "setup_status": setup_payload.get("status"),
+    }
 
 
 def run_scanner(path=SCANNER_STATUS_PATH):
@@ -278,11 +435,11 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     latest_candle_dt = None
     stale_symbols = []
     signature_rows = []
+    load_debug = {}
 
     try:
         cached_symbols = load_cached_stock_data() or {}
         load_debug = get_last_load_debug() or {}
-        mode = _scan_mode(load_debug)
     except Exception:
         cached_symbols = {}
         errors += 1
@@ -342,7 +499,17 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     finished_dt = datetime.now(IST)
     scan_duration_seconds = round(time.monotonic() - started_monotonic, 3)
     stale_symbol_count = len(stale_symbols)
-    stale_data_warning = bool(market_mode and stale_symbol_count > 0)
+    stale_data_warning = bool(
+        market_mode
+        and (
+            stale_symbol_count > 0
+            or _candle_age_minutes(latest_candle_dt, finished_dt) is None
+            or _candle_age_minutes(latest_candle_dt, finished_dt) > MARKET_CANDLE_STALE_MINUTES
+        )
+    )
+    pipeline = _full_pipeline_health(stale_data_warning)
+    scan_only = pipeline["scan_only"]
+    mode = _scan_mode(load_debug, scan_only)
     data_signature = _data_signature(signature_rows)
     repeated_data_signature = bool(previous_data_signature and previous_data_signature == data_signature)
     repeated_data_warning = (
@@ -373,6 +540,12 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         scan_started_at_ist=scan_started_at_ist,
         scan_finished_at_ist=scan_finished_at_ist,
         scan_duration_seconds=scan_duration_seconds,
+        scan_only=scan_only,
+        entry_stage_available=pipeline["entry_stage_available"],
+        entry_passed=pipeline["entry_passed"],
+        final_passed=pipeline["final_passed"],
+        fallback_reason=pipeline["fallback_reason"],
+        pipeline_health=pipeline["pipeline_health"],
         run_count=run_count,
     )
 

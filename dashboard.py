@@ -1748,6 +1748,17 @@ def scanner_payload_has_gate_breakdown(data):
     return isinstance(data, dict) and any(data.get(key) not in [None, ""] for key in SCAN_BREAKDOWN_GATE_KEYS)
 
 
+def optional_int_number(*values):
+    for value in values:
+        if value is None or value == "":
+            continue
+        try:
+            return int(float(value))
+        except Exception:
+            continue
+    return None
+
+
 def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_health):
     zero = {
         "stocks_checked": 0,
@@ -1791,7 +1802,7 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "entry_passed": int(first_number(supabase_scanner_payload.get("entry_passed"), default=0)),
             "breakout_ready_count": int(first_number(supabase_scanner_payload.get("breakout_ready_count"), supabase_scanner_payload.get("entry_passed"), default=0)),
             "entry_stage_available": bool(supabase_scanner_payload.get("entry_stage_available")),
-            "final_passed": int(first_number(supabase_scanner_payload.get("final_passed"), default=0)),
+            "final_passed": optional_int_number(supabase_scanner_payload.get("final_passed")),
             "alerts_this_scan": int(alerts),
             "source": "SUPABASE_RUNTIME_SCANNER",
             "timestamp": runtime_payload_dt(supabase_scanner_payload),
@@ -1829,9 +1840,9 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "entry_passed": int(first_number(scanner_payload.get("entry_passed"), default=0)),
             "breakout_ready_count": int(first_number(scanner_payload.get("breakout_ready_count"), scanner_payload.get("entry_passed"), default=0)),
             "entry_stage_available": bool(scanner_payload.get("entry_stage_available")),
-            "final_passed": int(first_number(scanner_payload.get("final_passed"), default=0)),
+            "final_passed": optional_int_number(scanner_payload.get("final_passed")),
             "alerts_this_scan": int(alerts),
-            "source": "SUPABASE_RUNTIME_SCANNER",
+            "source": scanner_runtime_data.get("source", "LOCAL_RUNTIME_JSON"),
             "timestamp": scanner_runtime_data.get("timestamp"),
             "is_fresh": True,
             "has_data": True,
@@ -2980,6 +2991,7 @@ latest_structure_passed = scan_breakdown["structure_passed"]
 latest_entry_passed = scan_breakdown["entry_passed"]
 latest_breakout_ready = scan_breakdown.get("breakout_ready_count", latest_entry_passed)
 latest_final_passed = scan_breakdown["final_passed"]
+latest_final_passed_display = "N/A" if latest_final_passed is None else f"{latest_final_passed:,}"
 latest_health_alerts = scan_breakdown["alerts_this_scan"]
 latest_scan_health_age = last_scan_display_from_dt(scan_breakdown.get("timestamp"), market_open)
 scanner_finished_at = parse_dt(scan_breakdown.get("scan_finished_at_ist")) or scan_breakdown.get("timestamp")
@@ -2992,7 +3004,9 @@ scanner_refresh_proof = (
 if scanner_cycle_suffix_text:
     scanner_refresh_proof = f"{scanner_refresh_proof} | Cycle: ...{scanner_cycle_suffix_text}"
 final_passed_subtitle = (
-    "Final quality filter not run in scanner-only mode."
+    "Full setup engine final count unavailable."
+    if latest_final_passed is None
+    else "Final quality filter not run in scanner-only mode."
     if scan_breakdown.get("scan_only") and latest_final_passed == 0
     else "Quality filter passed"
 )
@@ -3347,7 +3361,7 @@ elif scan_breakdown.get("has_data"):
         metric_card("Breakout Ready", f"{latest_breakout_ready:,}", breakout_ready_subtitle)
 
     with b6:
-        metric_card("Final Passed", f"{latest_final_passed:,}", final_passed_subtitle)
+        metric_card("Final Passed", latest_final_passed_display, final_passed_subtitle)
 
     st.markdown("<br>", unsafe_allow_html=True)
 

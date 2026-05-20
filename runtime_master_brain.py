@@ -259,26 +259,18 @@ def _run_read_only_master_brain():
     try:
         scanner_status = json.loads(SCANNER_STATUS_PATH.read_text(encoding="utf-8"))
         payload = _base_payload(scanner_status)
-
-        if scanner_status.get("scan_only") is not True:
-            payload.update(
-                {
-                    "status": "MASTER_BRAIN_READ_ONLY_SKIPPED",
-                    "error_type": "ScanOnlyValidationError",
-                    "error_message": "scanner_status.scan_only must be true",
-                }
-            )
-            _write_status(payload)
-            return payload
+        scanner_scan_only = bool(scanner_status.get("scan_only"))
 
         candidate_details = scanner_status.get("candidate_details", [])
         if not isinstance(candidate_details, list):
             candidate_details = []
 
         setups = _sanitized_setups(candidate_details)
+        for setup in setups:
+            setup["scan_only"] = scanner_scan_only
         context = {
             "source": "scanner_status.json",
-            "scan_only": True,
+            "scan_only": scanner_scan_only,
             "observe_only": True,
             "execution_allowed": False,
         }
