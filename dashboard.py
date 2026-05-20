@@ -37,6 +37,8 @@ PAPER_ACCOUNT_PATH = "/".join(["data", "paper_trading", "paper_account.json"])
 DASHBOARD_SYNC_STATUS_PATH = "/".join(["data", "runtime", "dashboard_sync_status.json"])
 PAPER_ENGINE_STATUS_PATH = "/".join(["data", "runtime", "paper_engine_status.json"])
 SCANNER_STATUS_PATH = "/".join(["data", "runtime", "scanner_status.json"])
+REJECTION_HEATMAP_PATH = "/".join(["data", "runtime", "rejection_heatmap.json"])
+SIDEWAYS_ANALYSIS_PATH = "/".join(["data", "runtime", "sideways_analysis.json"])
 LIVE_PRICE_MONITOR_STATUS_PATH = "/".join(["data", "runtime", "live_price_monitor_status.json"])
 RUNTIME_STATUS_TABLE = "runtime_status"
 RUNTIME_FRESH_SECONDS = 15 * 60
@@ -1770,6 +1772,8 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
     zero = {
         "stocks_checked": 0,
         "trend_passed": 0,
+        "strict_trend_passed": 0,
+        "adaptive_trend_passed": 0,
         "momentum_passed": 0,
         "structure_passed": 0,
         "entry_passed": 0,
@@ -1811,6 +1815,8 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         return {
             "stocks_checked": supabase_stocks_checked,
             "trend_passed": int(first_number(supabase_scanner_payload.get("trend_passed"), default=0)),
+            "strict_trend_passed": int(first_number(supabase_scanner_payload.get("strict_trend_passed"), default=0)),
+            "adaptive_trend_passed": int(first_number(supabase_scanner_payload.get("adaptive_trend_passed"), default=0)),
             "momentum_passed": int(first_number(supabase_scanner_payload.get("momentum_passed"), default=0)),
             "structure_passed": int(first_number(supabase_scanner_payload.get("structure_passed"), default=0)),
             "entry_passed": int(first_number(supabase_scanner_payload.get("entry_passed"), default=0)),
@@ -1856,6 +1862,8 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         return {
             "stocks_checked": int(first_number(scanner_payload.get("stocks_checked"), default=0)),
             "trend_passed": int(first_number(scanner_payload.get("trend_passed"), default=0)),
+            "strict_trend_passed": int(first_number(scanner_payload.get("strict_trend_passed"), default=0)),
+            "adaptive_trend_passed": int(first_number(scanner_payload.get("adaptive_trend_passed"), default=0)),
             "momentum_passed": int(first_number(scanner_payload.get("momentum_passed"), default=0)),
             "structure_passed": int(first_number(scanner_payload.get("structure_passed"), default=0)),
             "entry_passed": int(first_number(scanner_payload.get("entry_passed"), default=0)),
@@ -1891,6 +1899,8 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         return {
             "stocks_checked": int(first_number(scanner_payload.get("stocks_checked"), default=0)),
             "trend_passed": 0,
+            "strict_trend_passed": 0,
+            "adaptive_trend_passed": 0,
             "momentum_passed": 0,
             "structure_passed": 0,
             "entry_passed": 0,
@@ -2911,6 +2921,8 @@ paper_engine_runtime_data = get_paper_engine_runtime_status()
 scanner_runtime_data = get_scanner_runtime_status()
 live_price_monitor_runtime_data = get_live_price_monitor_runtime_status()
 master_runtime_data, _ = get_runtime_payload("master_brain_status", "/".join(["data", "runtime", "master_brain_status.json"]))
+rejection_heatmap_data = safe_read_json(REJECTION_HEATMAP_PATH, {})
+sideways_analysis_data = safe_read_json(SIDEWAYS_ANALYSIS_PATH, {})
 real_latest_scan_time = scanner_runtime_data["timestamp"]
 
 
@@ -3021,6 +3033,8 @@ if open_outcome_trades > 0 or closed_trades > 0:
 scan_breakdown = get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_health)
 latest_stocks_checked = scan_breakdown["stocks_checked"]
 latest_trend_passed = scan_breakdown["trend_passed"]
+latest_strict_trend_passed = int(first_number(scan_breakdown.get("strict_trend_passed"), default=0))
+latest_adaptive_trend_passed = int(first_number(scan_breakdown.get("adaptive_trend_passed"), default=0))
 latest_momentum_passed = scan_breakdown["momentum_passed"]
 latest_structure_passed = scan_breakdown["structure_passed"]
 latest_entry_passed = scan_breakdown["entry_passed"]
@@ -3059,6 +3073,11 @@ scanner_input_warning = (
     scan_breakdown.get("repeated_data_warning")
     if scan_breakdown.get("repeated_data_signature")
     else None
+)
+trend_passed_subtitle = (
+    f"Strict {latest_strict_trend_passed:,} + adaptive {latest_adaptive_trend_passed:,}"
+    if latest_adaptive_trend_passed
+    else "Strict trend pass"
 )
 if not scan_breakdown.get("is_fresh"):
     latest_scan_health_age = "Stale scan breakdown" if scan_breakdown.get("timestamp") else (
@@ -3389,7 +3408,7 @@ elif scan_breakdown.get("has_data"):
         metric_card("Stocks Checked", f"{latest_stocks_checked:,}", "Latest scan cycle")
 
     with b2:
-        metric_card("Trend Passed", f"{latest_trend_passed:,}", "Valid trend / side")
+        metric_card("Trend Passed", f"{latest_trend_passed:,}", trend_passed_subtitle)
 
     with b3:
         metric_card("Momentum Passed", f"{latest_momentum_passed:,}", "Strong momentum")
@@ -3419,6 +3438,18 @@ elif scan_breakdown.get("has_data"):
 
     with h3:
         metric_card("Live Trades Count", f"{live_trades_count:,}", "Open trades only")
+
+    rejection_counts = rejection_heatmap_data.get("rejection_counts") if isinstance(rejection_heatmap_data, dict) else {}
+    if isinstance(rejection_counts, dict) and rejection_counts:
+        st.markdown("### Top Rejection Reasons")
+        for reason, count in list(rejection_counts.items())[:5]:
+            st.caption(f"{reason}: {count}")
+
+    sideways_reasons = sideways_analysis_data.get("top_sideways_reasons") if isinstance(sideways_analysis_data, dict) else {}
+    if isinstance(sideways_reasons, dict) and sideways_reasons:
+        st.markdown("### Top Sideways Reasons")
+        for reason, count in list(sideways_reasons.items())[:5]:
+            st.caption(f"{reason}: {count}")
 
     st.caption(scanner_refresh_proof)
     if scanner_input_warning:

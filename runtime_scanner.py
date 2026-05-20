@@ -1,10 +1,13 @@
 import json
 import hashlib
 import time
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from signal_path_diagnostics import add_example, build_scan_report, save_scan_report
+from trend_diagnostics import apply_adaptive_trend, explain_trend, save_trend_diagnostics
 from engines.setup_engine import (
     breakout_ready,
     get_last_load_debug,
@@ -13,6 +16,7 @@ from engines.setup_engine import (
     structure_ok,
     trend_direction,
 )
+from engines.market_filter import market_regime_status
 from engines.time_filter import current_bot_mode
 
 
@@ -458,6 +462,8 @@ def _status_payload(
     mode,
     stocks_checked,
     trend_passed,
+    strict_trend_passed,
+    adaptive_trend_passed,
     structure_passed,
     momentum_passed,
     breakout_ready_count,
@@ -540,6 +546,8 @@ def _status_payload(
         "journal_writes": False,
         "stocks_checked": stocks_checked,
         "trend_passed": trend_passed,
+        "strict_trend_passed": strict_trend_passed,
+        "adaptive_trend_passed": adaptive_trend_passed,
         "momentum_passed": momentum_passed,
         "structure_passed": structure_passed,
         "entry_passed": entry_passed,
@@ -622,6 +630,83 @@ def _full_pipeline_health(ohlc_fallback_required, partial_stale_tolerated, stale
         "entry_stage_available": final_count["entry_stage_available"],
         "master_status": master_payload.get("status"),
         "setup_status": setup_payload.get("status"),
+        "final_debug": final_debug,
+    }
+
+
+def _market_filter_diagnostics(pipeline, stale_policy_result):
+    health = pipeline.get("pipeline_health") if isinstance(pipeline, dict) else {}
+    final_debug = pipeline.get("final_debug") if isinstance(pipeline, dict) else {}
+    return {
+        "market_regime": final_debug.get("market_status") if isinstance(final_debug, dict) else None,
+        "volatility_filter": {
+            "ohlc_stale": bool(health.get("ohlc_stale")),
+            "stale_policy": stale_policy_result.get("stale_policy"),
+            "stale_symbol_ratio": stale_policy_result.get("stale_symbol_ratio"),
+            "partial_stale_tolerated": stale_policy_result.get("partial_stale_tolerated"),
+        },
+        "news_filter": None,
+        "risk_filter": None,
+        "runtime_filters": {
+            "scan_only": bool(pipeline.get("scan_only")),
+            "fallback_reason": pipeline.get("fallback_reason"),
+            "master_brain_ok": bool(health.get("master_brain_ok")),
+            "setup_engine_ok": bool(health.get("setup_engine_ok")),
+        },
+    }
+
+
+def _setup_engine_rejections_from_debug(final_debug, entry_passed, final_passed):
+    if not isinstance(final_debug, dict) or not _payload_fresh(final_debug):
+        return Counter(), {}, None
+
+    reasons = Counter()
+    for reason, count in (final_debug.get("breakdown") or {}).items():
+        try:
+            reasons[str(reason)] += int(count)
+        except Exception:
+            continue
+
+    examples = {}
+    symbols_by_reason = final_debug.get("symbols_by_reason") or {}
+    if isinstance(symbols_by_reason, dict):
+        for reason, symbols in symbols_by_reason.items():
+            if isinstance(symbols, list):
+                examples[str(reason)] = [str(symbol) for symbol in symbols[:8]]
+
+    rejected = final_debug.get("total_final_rejections_after_entry")
+    if rejected is None and final_passed is not None and entry_passed is not None:
+        rejected = max(int(entry_passed) - int(final_passed), 0)
+    return reasons, examples, rejected
+
+
+def _regime_diagnostics():
+    try:
+        status = market_regime_status()
+    except Exception as exc:
+        status = {
+            "market_ok": True,
+            "reason": f"regime diagnostics unavailable: {exc}",
+            "regime": "UNKNOWN",
+            "status": "UNKNOWN",
+        }
+
+    if not isinstance(status, dict):
+        status = {"market_ok": True, "regime": str(status or "UNKNOWN")}
+
+    current_regime = (
+        status.get("regime")
+        or status.get("status")
+        or status.get("direction")
+        or "UNKNOWN"
+    )
+    blocked = "market_ok" in status and not bool(status.get("market_ok"))
+    return {
+        "current_regime": current_regime,
+        "allowed_regimes": "fail-open market_regime_status",
+        "rejected_regimes": [current_regime] if blocked else [],
+        "candidates_blocked_by_regime_mismatch": 0,
+        "market_status": status,
     }
 
 
@@ -636,6 +721,8 @@ def run_scanner(path=SCANNER_STATUS_PATH):
 
     stocks_checked = 0
     trend_passed = 0
+    strict_trend_passed = 0
+    adaptive_trend_passed = 0
     structure_passed = 0
     momentum_passed = 0
     breakout_ready_count = 0
@@ -651,6 +738,16 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     stale_symbols = []
     signature_rows = []
     load_debug = {}
+    trend_reasons = Counter()
+    structure_reasons = Counter()
+    momentum_reasons = Counter()
+    entry_reasons = Counter()
+    trend_examples = {}
+    structure_examples = {}
+    momentum_examples = {}
+    entry_examples = {}
+    trend_diagnostic_symbols = []
+    regime_diagnostics = _regime_diagnostics()
 
     try:
         cached_symbols = load_cached_stock_data() or {}
@@ -675,20 +772,41 @@ def run_scanner(path=SCANNER_STATUS_PATH):
 
         try:
             trend = trend_direction(data)
-            side = _side_from_trend(trend)
+            trend_diagnostic = apply_adaptive_trend(
+                explain_trend(symbol, data, trend),
+                regime_diagnostics,
+            )
+            trend_diagnostic_symbols.append(trend_diagnostic)
+            strict_side = _side_from_trend(trend)
+            side = strict_side
+            if side is None and trend_diagnostic.get("adaptive_accepted"):
+                side = trend_diagnostic.get("adaptive_side")
             if side is None:
+                reason = str(trend or "NO_VALID_TREND")
+                trend_reasons[reason] += 1
+                add_example(trend_examples, reason, symbol)
                 continue
             trend_passed += 1
+            if strict_side is None:
+                adaptive_trend_passed += 1
+            else:
+                strict_trend_passed += 1
 
             if not structure_ok(data, side=side):
+                structure_reasons["STRUCTURE_FAIL"] += 1
+                add_example(structure_examples, "STRUCTURE_FAIL", symbol)
                 continue
             structure_passed += 1
 
             if not strong_momentum(data, side=side):
+                momentum_reasons["MOMENTUM_FAIL"] += 1
+                add_example(momentum_examples, "MOMENTUM_FAIL", symbol)
                 continue
             momentum_passed += 1
 
             if not breakout_ready(data, side=side):
+                entry_reasons["NOT_READY"] += 1
+                add_example(entry_examples, "NOT_READY", symbol)
                 continue
             breakout_ready_count += 1
 
@@ -747,6 +865,8 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         mode=mode,
         stocks_checked=stocks_checked,
         trend_passed=trend_passed,
+        strict_trend_passed=strict_trend_passed,
+        adaptive_trend_passed=adaptive_trend_passed,
         structure_passed=structure_passed,
         momentum_passed=momentum_passed,
         breakout_ready_count=breakout_ready_count,
@@ -779,6 +899,43 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         pipeline_health=pipeline["pipeline_health"],
         final_count_source=pipeline["final_count_source"],
         run_count=run_count,
+    )
+
+    setup_reasons, setup_examples, setup_rejected = _setup_engine_rejections_from_debug(
+        pipeline.get("final_debug"),
+        pipeline.get("entry_passed"),
+        pipeline.get("final_passed"),
+    )
+    diagnostics_final_passed = None if scan_only else pipeline["final_passed"]
+    diagnostics_report = build_scan_report(
+        scan_cycle_id=scanner_cycle_id,
+        stocks_checked=stocks_checked,
+        trend_passed=trend_passed,
+        momentum_passed=momentum_passed,
+        structure_passed=structure_passed,
+        entry_passed=breakout_ready_count,
+        final_passed=diagnostics_final_passed,
+        alerts_sent=0,
+        trend_reasons=trend_reasons,
+        trend_examples=trend_examples,
+        momentum_reasons=momentum_reasons,
+        momentum_examples=momentum_examples,
+        structure_reasons=structure_reasons,
+        structure_examples=structure_examples,
+        entry_reasons=entry_reasons,
+        entry_examples=entry_examples,
+        setup_reasons=setup_reasons,
+        setup_examples=setup_examples,
+        setup_received=0 if scan_only else breakout_ready_count,
+        setup_rejected=0 if scan_only else setup_rejected,
+        market_filters=_market_filter_diagnostics(pipeline, stale_policy_result),
+        breakout_ready=breakout_ready_count,
+    )
+    save_scan_report(diagnostics_report)
+    save_trend_diagnostics(
+        scanner_cycle_id,
+        trend_diagnostic_symbols,
+        regime_diagnostics=regime_diagnostics,
     )
 
     path.parent.mkdir(parents=True, exist_ok=True)
