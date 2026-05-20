@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from engines.time_filter import get_mode_permissions
+from runtime_mode_router import runtime_mode_snapshot
 from utils.market_hours import IST, as_ist_datetime
 
 
@@ -24,6 +25,7 @@ def build_runtime_status(value=None):
 
 def write_runtime_status(path=STATUS_PATH, value=None):
     status = build_runtime_status(value)
+    status["runtime_mode"] = runtime_mode_snapshot()
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(status, indent=2), encoding="utf-8")

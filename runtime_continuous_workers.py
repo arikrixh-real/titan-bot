@@ -17,6 +17,7 @@ from runtime_intelligence_state import (
     state_path_for_task,
 )
 from runtime_lock import acquire_lock, release_lock
+from runtime_mode_router import runtime_mode_snapshot, should_run_task
 from runtime_timeout import run_with_timeout
 
 
@@ -78,6 +79,7 @@ WORKER_TASKS = {
 }
 
 IMPORTANT_INTELLIGENCE_TASKS = {
+    "master_brain",
     "evolution_engine",
     "learning_engine",
     "experience_memory",
@@ -243,11 +245,30 @@ def _run_worker(task, sleep_seconds, intent):
         is_intelligence_task = task in IMPORTANT_INTELLIGENCE_TASKS
 
         try:
+            mode_snapshot = runtime_mode_snapshot()
+            current_runtime_mode = mode_snapshot["current_mode"]
+            mode = current_runtime_mode
+
+            if not should_run_task(task):
+                _write_worker_health(
+                    task,
+                    status="WAITING_FOR_MODE",
+                    last_finished_at=_now_ist(),
+                    last_error=None,
+                    runtime_mode=current_runtime_mode,
+                    mode_allowed=False,
+                    last_mode_skip_at=_now_ist(),
+                )
+                time.sleep(sleep_seconds)
+                continue
+
             _write_worker_health(
                 task,
                 status="RUNNING",
                 last_started_at=started_at,
                 last_error=None,
+                runtime_mode=current_runtime_mode,
+                mode_allowed=True,
             )
 
             handler = get_registered_handler(task)
