@@ -14,10 +14,97 @@ def _extract_market_reason(market_data):
     return "UNKNOWN"
 
 
+def _source_summary(advisory, name):
+    if not isinstance(advisory, dict):
+        return {}
+    sources = advisory.get("sources")
+    if not isinstance(sources, dict):
+        return {}
+    source = sources.get(name)
+    return source if isinstance(source, dict) else {}
+
+
+def _summary_payload(source):
+    payload = source.get("summary") if isinstance(source, dict) else {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _append_advisory_context(context, advisory):
+    sources = advisory.get("sources") if isinstance(advisory, dict) else {}
+    sources = sources if isinstance(sources, dict) else {}
+
+    consciousness = _summary_payload(_source_summary(advisory, "consciousness"))
+    report_vault = _summary_payload(_source_summary(advisory, "report_vault"))
+    experience_vault = _summary_payload(_source_summary(advisory, "experience_vault"))
+    knowledge_vault = _summary_payload(_source_summary(advisory, "knowledge_vault"))
+
+    stale_or_missing = []
+    for name, source in sources.items():
+        status = str(source.get("status") or "UNKNOWN").upper() if isinstance(source, dict) else "UNKNOWN"
+        warning = source.get("warning") if isinstance(source, dict) else None
+        if status in {"STALE", "MISSING", "CORRUPT"}:
+            stale_or_missing.append(
+                {
+                    "source": name,
+                    "status": status,
+                    "path": source.get("path") if isinstance(source, dict) else None,
+                    "warning": warning,
+                }
+            )
+
+    no_trade_warnings = consciousness.get("no_trade_warnings") or []
+    safety_warnings = []
+    if report_vault.get("conflicts"):
+        safety_warnings.append("Report vault conflicts are present.")
+    if stale_or_missing:
+        safety_warnings.append("One or more advisory intelligence packets are stale, missing, or corrupt.")
+    if no_trade_warnings:
+        safety_warnings.append("Consciousness no-trade warnings are present.")
+
+    context["advisory_intelligence"] = {
+        "mode": "READ_ONLY_ADVISORY",
+        "status": advisory.get("status") if isinstance(advisory, dict) else "UNAVAILABLE",
+        "status_path": "data/runtime/advisory_intelligence_status.json",
+        "direct_score_changes": False,
+        "alert_changes": False,
+        "execution_changes": False,
+        "journal_writes": False,
+        "consciousness_warnings": {
+            "top_weaknesses": consciousness.get("top_weaknesses") or [],
+            "active_regime_warnings": consciousness.get("active_regime_warnings") or [],
+            "no_trade_warnings": no_trade_warnings,
+            "confidence_warnings": consciousness.get("confidence_warnings") or [],
+            "current_focus": consciousness.get("current_focus"),
+        },
+        "report_vault_conflicts": report_vault.get("conflicts") or [],
+        "report_vault_missing_data": report_vault.get("missing_data") or [],
+        "experience_vault_lesson_count": experience_vault.get("lesson_count", 0),
+        "experience_vault_trust_level": experience_vault.get("trust_level"),
+        "knowledge_vault_observation_count": knowledge_vault.get("observation_count", 0),
+        "knowledge_vault_belief_count": knowledge_vault.get("belief_count", 0),
+        "stale_or_missing_packet_warnings": stale_or_missing,
+        "safety_warnings": safety_warnings,
+    }
+
+    if stale_or_missing:
+        context["why"].append(
+            f"Advisory intelligence has {len(stale_or_missing)} stale/missing/corrupt packet warning(s)."
+        )
+    if report_vault.get("conflicts"):
+        context["why"].append(
+            f"Report vault advisory detected {len(report_vault.get('conflicts') or [])} conflict(s)."
+        )
+    if no_trade_warnings:
+        context["recommended_stance"].append(
+            "Advisory no-trade warnings are present; keep them advisory until hard gates consume them."
+        )
+
+
 def build_context(master_input):
     market_packet = master_input.get("market", {})
     setup_packet = master_input.get("setups", {})
     memory_packet = master_input.get("memory", {})
+    advisory_packet = master_input.get("advisory_intelligence", {})
 
     market_data = market_packet.get("data", {})
     setup_count = setup_packet.get("count", 0)
@@ -33,6 +120,14 @@ def build_context(master_input):
         "setup_environment": "UNKNOWN",
         "learning_environment": "UNKNOWN",
         "context_confidence": "LOW",
+        "advisory_intelligence": {
+            "mode": "READ_ONLY_ADVISORY",
+            "status": "UNAVAILABLE",
+            "direct_score_changes": False,
+            "alert_changes": False,
+            "execution_changes": False,
+            "journal_writes": False,
+        },
         "why": [],
         "recommended_stance": [],
         "next_questions": []
@@ -113,5 +208,7 @@ def build_context(master_input):
 
     if market_ok and setup_count > 0 and confirmed >= 5:
         context["context_confidence"] = "HIGH"
+
+    _append_advisory_context(context, advisory_packet)
 
     return context
