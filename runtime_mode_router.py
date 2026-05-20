@@ -28,6 +28,7 @@ ALWAYS_ON_TASKS = {
 }
 
 MARKET_MODE_TASKS = {
+    "ohlc_refresh",
     "master_brain",
     "scanner",
     "setup_engine",
