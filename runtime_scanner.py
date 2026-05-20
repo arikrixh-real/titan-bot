@@ -25,6 +25,7 @@ WORKER_HEALTH_PATH = Path("data") / "runtime" / "worker_health.json"
 FINAL_REJECTION_DEBUG_PATH = Path("data") / "debug" / "final_rejection_breakdown.json"
 RUNTIME_FRESH_SECONDS = 15 * 60
 MARKET_CANDLE_STALE_MINUTES = 45
+PARTIAL_STALE_TOLERANCE_RATIO = 0.15
 
 
 def _timestamp_ist():
@@ -269,6 +270,50 @@ def _candle_age_minutes(latest_candle_dt, now_ist):
         return None
 
 
+def _stale_policy(stale_symbol_count, stocks_checked, latest_candle_age_minutes, market_mode):
+    stale_symbol_ratio = (
+        round(stale_symbol_count / stocks_checked, 4)
+        if stocks_checked > 0
+        else 0.0
+    )
+    global_stale = bool(
+        market_mode
+        and (
+            latest_candle_age_minutes is None
+            or latest_candle_age_minutes > MARKET_CANDLE_STALE_MINUTES
+        )
+    )
+    partial_stale_tolerated = bool(
+        market_mode
+        and stale_symbol_count > 0
+        and not global_stale
+        and stale_symbol_ratio <= PARTIAL_STALE_TOLERANCE_RATIO
+    )
+    stale_ratio_fallback = bool(
+        market_mode
+        and stale_symbol_count > 0
+        and stale_symbol_ratio > PARTIAL_STALE_TOLERANCE_RATIO
+    )
+    fallback_required = bool(global_stale or stale_ratio_fallback)
+
+    if fallback_required and global_stale:
+        policy = "GLOBAL_LATEST_CANDLE_STALE_FALLBACK"
+    elif fallback_required:
+        policy = "STALE_SYMBOL_RATIO_FALLBACK"
+    elif partial_stale_tolerated:
+        policy = "PARTIAL_STALE_TOLERATED_15_PERCENT"
+    else:
+        policy = "OHLC_FRESH"
+
+    return {
+        "fallback_required": fallback_required,
+        "partial_stale_tolerated": partial_stale_tolerated,
+        "stale_symbol_ratio": stale_symbol_ratio,
+        "stale_policy": policy,
+        "global_stale": global_stale,
+    }
+
+
 def _status_payload(
     *,
     mode,
@@ -289,6 +334,10 @@ def _status_payload(
     stale_symbol_count,
     stale_symbols,
     stale_data_warning,
+    ohlc_fallback_required,
+    partial_stale_tolerated,
+    stale_symbol_ratio,
+    stale_policy,
     scanner_cycle_id,
     scan_started_at_ist,
     scan_finished_at_ist,
@@ -299,13 +348,27 @@ def _status_payload(
     final_passed,
     fallback_reason,
     pipeline_health,
+    final_count_source,
     run_count=None,
 ):
     status = "FULL_RUNTIME_PIPELINE_COMPLETE"
-    if stale_data_warning:
+    if ohlc_fallback_required:
         status = "SCAN_ONLY_STALE_OHLC"
     elif scan_only:
         status = "SCAN_ONLY_FALLBACK"
+
+    if ohlc_fallback_required:
+        dashboard_status_message = "True stale OHLC fallback active"
+    elif partial_stale_tolerated:
+        dashboard_status_message = "Partial stale symbols tolerated; warning only"
+    elif final_passed is None:
+        dashboard_status_message = "Final count unavailable from current runtime output"
+    elif scan_only:
+        dashboard_status_message = "Scanner-only fallback active"
+    elif final_passed == 0:
+        dashboard_status_message = "No setups found"
+    else:
+        dashboard_status_message = "Full runtime pipeline active"
 
     missing_fields = []
     if entry_passed is None:
@@ -325,6 +388,11 @@ def _status_payload(
         "scan_only": scan_only,
         "fallback_reason": fallback_reason,
         "pipeline_health": pipeline_health,
+        "partial_stale_tolerated": partial_stale_tolerated,
+        "stale_symbol_ratio": stale_symbol_ratio,
+        "stale_policy": stale_policy,
+        "final_count_source": final_count_source,
+        "dashboard_status_message": dashboard_status_message,
         "real_scanner_called": True,
         "trade_creation": False,
         "telegram_alerts": False,
@@ -347,7 +415,7 @@ def _status_payload(
         ),
         "final_passed": final_passed,
         "final_passed_note": (
-            "Full setup engine final count unavailable."
+            "Final count unavailable from current runtime output."
             if final_passed is None and not scan_only
             else (
                 "Final quality filter not run in scanner-only mode."
@@ -369,6 +437,7 @@ def _status_payload(
         "stale_symbol_count": stale_symbol_count,
         "stale_symbols": stale_symbols[:20],
         "stale_data_warning": stale_data_warning,
+        "ohlc_fallback_required": ohlc_fallback_required,
         "errors": errors,
     }
     if run_count is not None:
@@ -376,7 +445,7 @@ def _status_payload(
     return payload
 
 
-def _full_pipeline_health(stale_data_warning):
+def _full_pipeline_health(ohlc_fallback_required, partial_stale_tolerated, stale_symbol_ratio, stale_policy):
     master_payload, master_ok = _task_available("master_brain", MASTER_BRAIN_STATUS_PATH)
     setup_payload, setup_ok = _task_available("setup_engine", SETUP_ENGINE_STATUS_PATH)
 
@@ -384,7 +453,7 @@ def _full_pipeline_health(stale_data_warning):
     final_debug_fresh = _payload_fresh(final_debug)
 
     fallback_reasons = []
-    if stale_data_warning:
+    if ohlc_fallback_required:
         fallback_reasons.append("OHLC_STALE")
     if not master_ok:
         fallback_reasons.append("MASTER_BRAIN_UNAVAILABLE")
@@ -399,11 +468,16 @@ def _full_pipeline_health(stale_data_warning):
             "scanner_ok": True,
             "master_brain_ok": master_ok,
             "setup_engine_ok": setup_ok,
-            "ohlc_stale": stale_data_warning,
+            "ohlc_refresh_ok": not ohlc_fallback_required,
+            "ohlc_stale": ohlc_fallback_required,
+            "partial_stale_tolerated": partial_stale_tolerated,
+            "stale_symbol_ratio": stale_symbol_ratio,
+            "stale_policy": stale_policy,
             "final_counts_available": final_debug_fresh,
         },
         "entry_passed": _fresh_int(final_debug, "entry_passed") if final_debug_fresh else None,
         "final_passed": _fresh_int(final_debug, "final_passed") if final_debug_fresh else None,
+        "final_count_source": "final_rejection_breakdown" if final_debug_fresh else "unavailable",
         "entry_stage_available": final_debug_fresh,
         "master_status": master_payload.get("status"),
         "setup_status": setup_payload.get("status"),
@@ -499,15 +573,26 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     finished_dt = datetime.now(IST)
     scan_duration_seconds = round(time.monotonic() - started_monotonic, 3)
     stale_symbol_count = len(stale_symbols)
+    latest_candle_age_minutes = _candle_age_minutes(latest_candle_dt, finished_dt)
+    stale_policy_result = _stale_policy(
+        stale_symbol_count,
+        stocks_checked,
+        latest_candle_age_minutes,
+        market_mode,
+    )
     stale_data_warning = bool(
         market_mode
         and (
             stale_symbol_count > 0
-            or _candle_age_minutes(latest_candle_dt, finished_dt) is None
-            or _candle_age_minutes(latest_candle_dt, finished_dt) > MARKET_CANDLE_STALE_MINUTES
+            or stale_policy_result["fallback_required"]
         )
     )
-    pipeline = _full_pipeline_health(stale_data_warning)
+    pipeline = _full_pipeline_health(
+        stale_policy_result["fallback_required"],
+        stale_policy_result["partial_stale_tolerated"],
+        stale_policy_result["stale_symbol_ratio"],
+        stale_policy_result["stale_policy"],
+    )
     scan_only = pipeline["scan_only"]
     mode = _scan_mode(load_debug, scan_only)
     data_signature = _data_signature(signature_rows)
@@ -529,13 +614,17 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         candidate_details=candidate_details,
         errors=errors,
         latest_candle_timestamp=latest_candle_dt.isoformat() if latest_candle_dt else None,
-        latest_candle_age_minutes=_candle_age_minutes(latest_candle_dt, finished_dt),
+        latest_candle_age_minutes=latest_candle_age_minutes,
         data_signature=data_signature,
         repeated_data_signature=repeated_data_signature,
         repeated_data_warning=repeated_data_warning,
         stale_symbol_count=stale_symbol_count,
         stale_symbols=stale_symbols,
         stale_data_warning=stale_data_warning,
+        ohlc_fallback_required=stale_policy_result["fallback_required"],
+        partial_stale_tolerated=stale_policy_result["partial_stale_tolerated"],
+        stale_symbol_ratio=stale_policy_result["stale_symbol_ratio"],
+        stale_policy=stale_policy_result["stale_policy"],
         scanner_cycle_id=scanner_cycle_id,
         scan_started_at_ist=scan_started_at_ist,
         scan_finished_at_ist=scan_finished_at_ist,
@@ -546,6 +635,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         final_passed=pipeline["final_passed"],
         fallback_reason=pipeline["fallback_reason"],
         pipeline_health=pipeline["pipeline_health"],
+        final_count_source=pipeline["final_count_source"],
         run_count=run_count,
     )
 

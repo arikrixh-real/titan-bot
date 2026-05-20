@@ -1736,6 +1736,13 @@ def get_latest_scan_symbols_breakdown():
         "scan_finished_at_ist": None,
         "scan_duration_seconds": None,
         "scan_only": False,
+        "partial_stale_tolerated": False,
+        "stale_symbol_ratio": None,
+        "stale_policy": None,
+        "pipeline_health": {},
+        "fallback_reason": None,
+        "final_count_source": "supabase_scan_symbols",
+        "dashboard_status_message": "Full runtime pipeline active" if final > 0 else "No setups found",
         "repeated_data_signature": False,
         "repeated_data_warning": None,
     }
@@ -1768,7 +1775,7 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         "entry_passed": 0,
         "breakout_ready_count": 0,
         "entry_stage_available": False,
-        "final_passed": 0,
+        "final_passed": None,
         "alerts_this_scan": 0,
         "source": "FALLBACK_AWAITING_VPS_SCANNER",
         "timestamp": None,
@@ -1779,6 +1786,13 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         "scan_finished_at_ist": None,
         "scan_duration_seconds": None,
         "scan_only": False,
+        "partial_stale_tolerated": False,
+        "stale_symbol_ratio": None,
+        "stale_policy": None,
+        "pipeline_health": {},
+        "fallback_reason": None,
+        "final_count_source": "unavailable",
+        "dashboard_status_message": "Final count unavailable from current runtime output",
         "repeated_data_signature": False,
         "repeated_data_warning": None,
     }
@@ -1813,6 +1827,13 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "scan_finished_at_ist": supabase_scanner_payload.get("scan_finished_at_ist"),
             "scan_duration_seconds": supabase_scanner_payload.get("scan_duration_seconds"),
             "scan_only": bool(supabase_scanner_payload.get("scan_only")),
+            "partial_stale_tolerated": bool(supabase_scanner_payload.get("partial_stale_tolerated")),
+            "stale_symbol_ratio": supabase_scanner_payload.get("stale_symbol_ratio"),
+            "stale_policy": supabase_scanner_payload.get("stale_policy"),
+            "pipeline_health": supabase_scanner_payload.get("pipeline_health") if isinstance(supabase_scanner_payload.get("pipeline_health"), dict) else {},
+            "fallback_reason": supabase_scanner_payload.get("fallback_reason"),
+            "final_count_source": supabase_scanner_payload.get("final_count_source") or "unavailable",
+            "dashboard_status_message": supabase_scanner_payload.get("dashboard_status_message"),
             "repeated_data_signature": bool(supabase_scanner_payload.get("repeated_data_signature")),
             "repeated_data_warning": supabase_scanner_payload.get("repeated_data_warning"),
         }
@@ -1851,6 +1872,13 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "scan_finished_at_ist": scanner_payload.get("scan_finished_at_ist"),
             "scan_duration_seconds": scanner_payload.get("scan_duration_seconds"),
             "scan_only": bool(scanner_payload.get("scan_only")),
+            "partial_stale_tolerated": bool(scanner_payload.get("partial_stale_tolerated")),
+            "stale_symbol_ratio": scanner_payload.get("stale_symbol_ratio"),
+            "stale_policy": scanner_payload.get("stale_policy"),
+            "pipeline_health": scanner_payload.get("pipeline_health") if isinstance(scanner_payload.get("pipeline_health"), dict) else {},
+            "fallback_reason": scanner_payload.get("fallback_reason"),
+            "final_count_source": scanner_payload.get("final_count_source") or "unavailable",
+            "dashboard_status_message": scanner_payload.get("dashboard_status_message"),
             "repeated_data_signature": bool(scanner_payload.get("repeated_data_signature")),
             "repeated_data_warning": scanner_payload.get("repeated_data_warning"),
         }
@@ -1868,7 +1896,7 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "entry_passed": 0,
             "breakout_ready_count": int(first_number(scanner_payload.get("breakout_ready_count"), scanner_payload.get("entry_passed"), default=0)),
             "entry_stage_available": bool(scanner_payload.get("entry_stage_available")),
-            "final_passed": 0,
+            "final_passed": optional_int_number(scanner_payload.get("final_passed")),
             "alerts_this_scan": int(first_number(scanner_payload.get("alerts_sent"), scanner_payload.get("alerts_this_scan"), default=0)),
             "source": "SUPABASE_RUNTIME_SCANNER",
             "timestamp": scanner_runtime_data.get("timestamp"),
@@ -1879,6 +1907,13 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "scan_finished_at_ist": scanner_payload.get("scan_finished_at_ist"),
             "scan_duration_seconds": scanner_payload.get("scan_duration_seconds"),
             "scan_only": bool(scanner_payload.get("scan_only")),
+            "partial_stale_tolerated": bool(scanner_payload.get("partial_stale_tolerated")),
+            "stale_symbol_ratio": scanner_payload.get("stale_symbol_ratio"),
+            "stale_policy": scanner_payload.get("stale_policy"),
+            "pipeline_health": scanner_payload.get("pipeline_health") if isinstance(scanner_payload.get("pipeline_health"), dict) else {},
+            "fallback_reason": scanner_payload.get("fallback_reason"),
+            "final_count_source": scanner_payload.get("final_count_source") or "unavailable",
+            "dashboard_status_message": scanner_payload.get("dashboard_status_message"),
             "repeated_data_signature": bool(scanner_payload.get("repeated_data_signature")),
             "repeated_data_warning": scanner_payload.get("repeated_data_warning"),
         }
@@ -2159,7 +2194,7 @@ def get_scanner_runtime_status():
         "momentum_passed": int(first_number(payload.get("momentum_passed"), default=0)),
         "structure_passed": int(first_number(payload.get("structure_passed"), default=0)),
         "entry_passed": int(first_number(payload.get("entry_passed"), default=0)),
-        "final_passed": int(first_number(payload.get("final_passed"), default=0)),
+        "final_passed": optional_int_number(payload.get("final_passed")),
         "alerts_sent": int(first_number(payload.get("alerts_sent"), default=0)),
     }
 
@@ -3004,11 +3039,16 @@ scanner_refresh_proof = (
 if scanner_cycle_suffix_text:
     scanner_refresh_proof = f"{scanner_refresh_proof} | Cycle: ...{scanner_cycle_suffix_text}"
 final_passed_subtitle = (
-    "Full setup engine final count unavailable."
-    if latest_final_passed is None
-    else "Final quality filter not run in scanner-only mode."
-    if scan_breakdown.get("scan_only") and latest_final_passed == 0
-    else "Quality filter passed"
+    scan_breakdown.get("dashboard_status_message")
+    or (
+        "Final count unavailable from current runtime output"
+        if latest_final_passed is None
+        else "Final quality filter not run in scanner-only mode."
+        if scan_breakdown.get("scan_only") and latest_final_passed == 0
+        else "No setups found"
+        if latest_final_passed == 0
+        else "Quality filter passed"
+    )
 )
 breakout_ready_subtitle = (
     "Alias of breakout-ready scanner gate"

@@ -64,6 +64,15 @@ def get_nested_number(payload, keys, default=0):
     return current if isinstance(current, (int, float)) and not isinstance(current, bool) else default
 
 
+def optional_int_number(value):
+    if value is None or value == "":
+        return None
+    try:
+        return int(float(value))
+    except Exception:
+        return None
+
+
 def latest_timestamp(*payloads):
     timestamps = [
         payload.get("timestamp_ist")
@@ -250,6 +259,31 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
                 daemon_health,
                 heartbeat,
                 runtime_status,
+            ),
+            "scanner_pipeline_health": (
+                scanner_status.get("pipeline_health")
+                if isinstance(scanner_status, dict) and isinstance(scanner_status.get("pipeline_health"), dict)
+                else {}
+            ),
+            "scanner_fallback_reason": (
+                scanner_status.get("fallback_reason") if isinstance(scanner_status, dict) else None
+            ),
+            "scanner_partial_stale_tolerated": bool(
+                scanner_status.get("partial_stale_tolerated")
+            ) if isinstance(scanner_status, dict) else False,
+            "scanner_stale_symbol_ratio": (
+                scanner_status.get("stale_symbol_ratio") if isinstance(scanner_status, dict) else None
+            ),
+            "scanner_final_passed": (
+                optional_int_number(scanner_status.get("final_passed"))
+                if isinstance(scanner_status, dict)
+                else None
+            ),
+            "scanner_final_count_source": (
+                scanner_status.get("final_count_source") if isinstance(scanner_status, dict) else None
+            ),
+            "scanner_dashboard_status_message": (
+                scanner_status.get("dashboard_status_message") if isinstance(scanner_status, dict) else None
             ),
         }
     }
