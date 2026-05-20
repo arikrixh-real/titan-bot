@@ -3,6 +3,7 @@ import time
 from .chunker import chunk_text
 from .deduplicator import merge_lessons
 from .file_scanner import scan_source_files
+from .lesson_extractor import extract_lessons, extract_structured_import_lessons
 from .memory import (
     load_imported_memory,
     load_processed_index,
@@ -44,6 +45,47 @@ def run_experience_vault_runner(state=None, state_path=None, intelligence_state=
             continue
 
         stats["changed_files"] += 1
+        if file_info["category"] == "imported_trade_logs" and file_info["suffix"] in {".csv", ".jsonl"}:
+            try:
+                lessons = extract_structured_import_lessons(
+                    file_info["path"],
+                    source_path,
+                    file_info["category"],
+                )
+            except Exception as exc:
+                warnings.append(
+                    {
+                        "source_file": source_path,
+                        "status": "error",
+                        "reason": f"structured import extraction failed: {exc}",
+                    }
+                )
+                lessons = []
+
+            structured_hash = f"{file_info['file_hash']}:structured"
+            chunks_index[structured_hash] = {
+                "source_file": source_path,
+                "chunk_id": structured_hash[:24],
+                "chunk_index": 0,
+                "chunk_hash": structured_hash,
+                "processed_at": time.time(),
+                "lesson_count": len(lessons),
+                "source_type": "EXTERNAL_EXPERIENCE",
+                "structured_import": True,
+            }
+            stats["processed_chunks"] += 1
+            new_lessons.extend(lessons)
+            files_index[source_path] = {
+                **file_info,
+                "path": source_path,
+                "last_status": "ok",
+                "chunk_count": 1,
+                "last_processed_at": time.time(),
+                "source_type": "EXTERNAL_EXPERIENCE",
+                "structured_import": True,
+            }
+            continue
+
         text, status, error = extract_text(file_info["path"])
         if status != "ok" or len(text.strip()) < 40:
             warnings.append(
@@ -120,4 +162,3 @@ def run_experience_vault_runner(state=None, state_path=None, intelligence_state=
 
 if __name__ == "__main__":
     print(run_experience_vault_runner())
-

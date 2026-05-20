@@ -4,7 +4,7 @@ from pathlib import Path
 from .vault_paths import source_paths
 
 
-SUPPORTED_SUFFIXES = {".txt", ".md", ".csv", ".json", ".pdf"}
+SUPPORTED_SUFFIXES = {".txt", ".md", ".csv", ".json", ".jsonl", ".pdf"}
 
 
 def hash_file(path):
@@ -40,4 +40,3 @@ def scan_source_files():
                 }
             )
     return files
-
