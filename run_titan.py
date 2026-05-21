@@ -1,3 +1,10 @@
+"""
+LEGACY/DEPRECATED ENTRYPOINT.
+
+Official runtime path: titan_daemon.py.
+Kept for compatibility only; Telegram behavior is intentionally unchanged.
+"""
+
 from intelligence.confluence_engine import apply_news_confluence
 from notifications.telegram_alerts import send_telegram_message
 from utils.market_hours import is_trade_window, trade_window_text

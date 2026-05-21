@@ -15,6 +15,25 @@ logs/
 
 # Local data-provider cache
 data/yfinance_cache/
+data/cache/
+data/runtime/
+data/report_vault/
+data/consciousness_core/
+data/experience_vault/
+data/knowledge_vault/
+data/execution_safety/
+data/debug/
+data/journals/
+data/paper_trading/
+data/learning/
+data/research/
+data/*/latest_*.json
+data/*/*_status.json
+state/
+journal/*.json
+journal/*.csv
+active_trades.csv
+*.jsonl
 
 # Secrets
 .env

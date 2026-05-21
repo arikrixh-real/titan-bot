@@ -1,3 +1,10 @@
+"""
+LEGACY/DEPRECATED ENTRYPOINT.
+
+Official runtime path: titan_daemon.py.
+Kept for compatibility only; behavior is intentionally unchanged.
+"""
+
 import time
 from main import run_once
 

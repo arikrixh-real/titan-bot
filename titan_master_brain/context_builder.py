@@ -37,11 +37,30 @@ def _append_advisory_context(context, advisory):
     report_vault = _summary_payload(_source_summary(advisory, "report_vault"))
     experience_vault = _summary_payload(_source_summary(advisory, "experience_vault"))
     knowledge_vault = _summary_payload(_source_summary(advisory, "knowledge_vault"))
+    safety_council = advisory.get("safety_council") if isinstance(advisory, dict) else {}
+    safety_council = safety_council if isinstance(safety_council, dict) else {}
+    strategy_workflow = advisory.get("strategy_improvement_workflow") if isinstance(advisory, dict) else {}
+    strategy_workflow = strategy_workflow if isinstance(strategy_workflow, dict) else {}
 
     stale_or_missing = []
+    neural_schema = {}
     for name, source in sources.items():
         status = str(source.get("status") or "UNKNOWN").upper() if isinstance(source, dict) else "UNKNOWN"
         warning = source.get("warning") if isinstance(source, dict) else None
+        neural = source.get("neural_schema") if isinstance(source, dict) else None
+        if isinstance(neural, dict):
+            neural_schema[name] = {
+                "source": neural.get("source"),
+                "freshness": neural.get("freshness"),
+                "confidence": neural.get("confidence"),
+                "risk": neural.get("risk"),
+                "warnings": neural.get("warnings") or [],
+                "memory_type": neural.get("memory_type"),
+                "trust_level": neural.get("trust_level"),
+                "validation_status": neural.get("validation_status"),
+                "action_permission": neural.get("action_permission"),
+                "live_apply_allowed": bool(neural.get("live_apply_allowed", False)),
+            }
         if status in {"STALE", "MISSING", "CORRUPT"}:
             stale_or_missing.append(
                 {
@@ -60,6 +79,10 @@ def _append_advisory_context(context, advisory):
         safety_warnings.append("One or more advisory intelligence packets are stale, missing, or corrupt.")
     if no_trade_warnings:
         safety_warnings.append("Consciousness no-trade warnings are present.")
+    if safety_council.get("stale_data", {}).get("scanner_stale_data_warning"):
+        safety_warnings.append("Scanner reports stale data.")
+    if safety_council.get("broker_safety", {}).get("execution_allowed") is True:
+        safety_warnings.append("Broker safety unexpectedly reports execution allowed; keep advisory context read-only.")
 
     context["advisory_intelligence"] = {
         "mode": "READ_ONLY_ADVISORY",
@@ -69,6 +92,10 @@ def _append_advisory_context(context, advisory):
         "alert_changes": False,
         "execution_changes": False,
         "journal_writes": False,
+        "strategy_weight_mutation": False,
+        "strategy_replacement": False,
+        "live_apply_allowed": False,
+        "neural_schema_v1": neural_schema,
         "consciousness_warnings": {
             "top_weaknesses": consciousness.get("top_weaknesses") or [],
             "active_regime_warnings": consciousness.get("active_regime_warnings") or [],
@@ -79,10 +106,31 @@ def _append_advisory_context(context, advisory):
         "report_vault_conflicts": report_vault.get("conflicts") or [],
         "report_vault_missing_data": report_vault.get("missing_data") or [],
         "experience_vault_lesson_count": experience_vault.get("lesson_count", 0),
+        "experience_vault_lessons": experience_vault.get("sample_lessons") or [],
         "experience_vault_trust_level": experience_vault.get("trust_level"),
         "knowledge_vault_observation_count": knowledge_vault.get("observation_count", 0),
+        "knowledge_vault_observations": knowledge_vault.get("sample_observations") or [],
         "knowledge_vault_belief_count": knowledge_vault.get("belief_count", 0),
         "stale_or_missing_packet_warnings": stale_or_missing,
+        "strategy_improvement_workflow": {
+            "mode": strategy_workflow.get("mode", "SHADOW_PROPOSAL_ONLY"),
+            "shadow_recommendation_path": strategy_workflow.get("shadow_recommendation_path"),
+            "proposal_queue_path": strategy_workflow.get("proposal_queue_path"),
+            "direct_live_mutation": False,
+            "direct_scoring_change": False,
+            "direct_strategy_replacement": False,
+            "recommendations": (strategy_workflow.get("recommendations") or [])[:10],
+        },
+        "safety_council": {
+            "broker_safety": safety_council.get("broker_safety") or {},
+            "promotion_gate": safety_council.get("promotion_gate") or {},
+            "stale_data": safety_council.get("stale_data") or {},
+            "no_trade_risk": safety_council.get("no_trade_risk") or {},
+            "market_hour_status": safety_council.get("market_hour_status") or {},
+            "duplicate_risk": safety_council.get("duplicate_risk") or {},
+            "warnings": safety_council.get("warnings") or [],
+            "live_apply_allowed": False,
+        },
         "safety_warnings": safety_warnings,
     }
 
@@ -97,6 +145,21 @@ def _append_advisory_context(context, advisory):
     if no_trade_warnings:
         context["recommended_stance"].append(
             "Advisory no-trade warnings are present; keep them advisory until hard gates consume them."
+        )
+    promotion = safety_council.get("promotion_gate") if isinstance(safety_council, dict) else {}
+    if isinstance(promotion, dict):
+        context["why"].append(
+            "Promotion gate visible: "
+            f"status={promotion.get('status')} "
+            f"live_influence={promotion.get('any_live_influence')} "
+            f"live_weight={promotion.get('recommended_live_weight')}."
+        )
+    broker = safety_council.get("broker_safety") if isinstance(safety_council, dict) else {}
+    if isinstance(broker, dict):
+        context["why"].append(
+            "Broker safety visible: "
+            f"mode={broker.get('broker_execution_mode')} "
+            f"execution_allowed={broker.get('execution_allowed')}."
         )
 
 

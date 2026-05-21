@@ -1,3 +1,10 @@
+"""
+LEGACY/DEPRECATED ENTRYPOINT.
+
+Official runtime path: titan_daemon.py.
+Kept for compatibility only; do not use for the stabilized pyramid workflow.
+"""
+
 from titan_brain.news_memory_engine import run_news_memory_engine
 from titan_brain.market_condition_engine import store_market_condition
 from titan_brain.outcome_tracker import run_outcome_tracker

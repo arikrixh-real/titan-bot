@@ -1,3 +1,10 @@
+"""
+LEGACY/DEPRECATED ENTRYPOINT.
+
+Official runtime path: titan_daemon.py.
+Kept for compatibility only; Telegram behavior is intentionally unchanged.
+"""
+
 import json
 import os
 import hashlib
