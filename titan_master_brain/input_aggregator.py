@@ -13,6 +13,7 @@ from titan_master_brain.setup_normalizer import normalize_setups
 
 ADVISORY_STATUS_PATH = Path("data") / "runtime" / "advisory_intelligence_status.json"
 PYRAMID_CHAIN_STATUS_PATH = Path("data") / "runtime" / "pyramid_chain_status.json"
+LOAD_CONTROL_STATUS_PATH = Path("data") / "runtime" / "intelligence_load_control_status.json"
 SHADOW_RECOMMENDATIONS_PATH = Path("data") / "consciousness_core" / "master_brain_shadow_recommendations.json"
 ADVISORY_FRESH_SECONDS = 24 * 60 * 60
 ADVISORY_SOURCES = {
@@ -31,6 +32,7 @@ PYRAMID_STATUS_PATHS = {
     "master_brain": Path("data") / "runtime" / "master_brain_status.json",
     "safety_gates": Path("data") / "execution_safety" / "latest_execution_safety_report.json",
     "advisory_bridge": ADVISORY_STATUS_PATH,
+    "load_control": LOAD_CONTROL_STATUS_PATH,
 }
 
 
@@ -280,6 +282,32 @@ def _compact_knowledge_vault(payload):
     }
 
 
+def _compact_load_control(payload):
+    if not isinstance(payload, dict):
+        return {}
+    tasks = payload.get("tasks") if isinstance(payload.get("tasks"), dict) else {}
+    compact_tasks = {}
+    for name, item in tasks.items():
+        if not isinstance(item, dict):
+            continue
+        compact_tasks[name] = {
+            "last_decision": item.get("last_decision"),
+            "last_skip_reason": item.get("last_skip_reason"),
+            "last_result_status": item.get("last_result_status"),
+            "last_checked_at": item.get("last_checked_at"),
+            "last_finished_at": item.get("last_finished_at"),
+            "min_interval_seconds": item.get("min_interval_seconds"),
+            "skip_if_unchanged": item.get("skip_if_unchanged"),
+            "input_file_count": item.get("input_file_count"),
+        }
+    return {
+        "updated_at": payload.get("updated_at"),
+        "mode": payload.get("mode"),
+        "tasks": compact_tasks,
+        "safety": payload.get("safety") if isinstance(payload.get("safety"), dict) else {},
+    }
+
+
 def _compact_payload(name, payload):
     if name == "consciousness":
         return _compact_consciousness(payload)
@@ -289,6 +317,8 @@ def _compact_payload(name, payload):
         return _compact_experience_vault(payload)
     if name == "knowledge_vault":
         return _compact_knowledge_vault(payload)
+    if name == "load_control":
+        return _compact_load_control(payload)
     return {}
 
 
@@ -602,6 +632,15 @@ def _safe_advisory_intelligence():
         advisory["status"] = "STALE"
 
     advisory["strategy_improvement_workflow"] = _build_shadow_improvement_workflow(advisory)
+    load_control_payload, load_control_error = _read_json_file(LOAD_CONTROL_STATUS_PATH)
+    advisory["load_control"] = {
+        "path": str(LOAD_CONTROL_STATUS_PATH).replace("\\", "/"),
+        "status": "OK" if isinstance(load_control_payload, dict) else "MISSING",
+        "warning": load_control_error,
+        "summary": _compact_payload("load_control", load_control_payload),
+    }
+    if load_control_error:
+        advisory["warnings"].append(load_control_error)
     advisory["safety_council"] = _safe_safety_council_status(advisory)
     _write_advisory_status(advisory)
     _build_pyramid_chain_status(advisory, advisory["safety_council"])

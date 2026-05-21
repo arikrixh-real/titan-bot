@@ -92,6 +92,39 @@ def _write_health(payload):
     atomic_write_json(HEALTH_PATH, payload)
 
 
+def mark_consciousness_degraded(reason, state=None):
+    context = {}
+    if CONTEXT_PATH.exists():
+        try:
+            import json
+
+            with CONTEXT_PATH.open("r", encoding="utf-8") as context_file:
+                loaded = json.load(context_file)
+            context = loaded if isinstance(loaded, dict) else {}
+        except Exception:
+            context = {}
+
+    degraded_context = dict(context)
+    degraded_context["status"] = "DEGRADED"
+    degraded_context["degraded_reason"] = str(reason)
+    degraded_context["degraded_at"] = now_ist()
+    degraded_context["last_good_context_preserved"] = bool(context)
+    degraded_context["safety_scope"] = "advisory_only_no_live_mutation"
+    atomic_write_json(CONTEXT_PATH, degraded_context)
+
+    health = {
+        "status": "DEGRADED",
+        "last_run_at": now_ist(),
+        "run_count": (state or {}).get("run_count", 0) if isinstance(state, dict) else 0,
+        "context_path": str(CONTEXT_PATH),
+        "last_good_context_preserved": bool(context),
+        "last_error": str(reason),
+        "live_apply_allowed": False,
+    }
+    _write_health(health)
+    return health
+
+
 def _load_report_vault_packet():
     try:
         import json
@@ -542,22 +575,14 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
         }
     except Exception as exc:
         if core_state is not None:
-            core_state["last_status"] = "ERROR"
+            core_state["last_status"] = "DEGRADED"
             core_state["last_error"] = str(exc)
             save_state(core_state)
-        _write_health(
-            {
-                "status": "ERROR",
-                "last_run_at": now_ist(),
-                "run_count": (core_state or {}).get("run_count", 0),
-                "observations_processed": 0,
-                "beliefs_count": 0,
-                "goals_count": 0,
-                "weaknesses_count": 0,
-                "proposals_count": 0,
-                "approved_for_test_count": 0,
-                "rejected_count": 0,
-                "last_error": str(exc),
-            }
-        )
-        return {"status": "error", "error": str(exc)}
+        health = mark_consciousness_degraded(exc, state=core_state)
+        return {
+            "status": "degraded",
+            "error": str(exc),
+            "health_path": str(HEALTH_PATH),
+            "context_path": str(CONTEXT_PATH),
+            "last_good_context_preserved": health.get("last_good_context_preserved"),
+        }

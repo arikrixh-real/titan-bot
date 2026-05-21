@@ -6,6 +6,7 @@ from report_vault.intelligence_packet import build_intelligence_packet, packet_t
 from report_vault.report_schema import normalize_report, now_ist, stable_hash
 from report_vault.vault_reader import read_recent_reports
 from report_vault.vault_writer import VAULT_DIR, write_report, _atomic_write_json, ensure_vault
+from runtime_load_control import input_signature, record_task_result
 
 
 PACKET_PATH = VAULT_DIR / "latest_aggregated_packet.json"
@@ -192,9 +193,46 @@ def ingest_existing_reports(patterns=DEFAULT_SOURCE_PATTERNS):
 
 def run_report_aggregator(state=None, state_path=None, intelligence_state=None, hours=24):
     ensure_vault()
+    source_signature = input_signature(DEFAULT_SOURCE_PATTERNS)
+    previous_packet = _read_json(PACKET_PATH) if PACKET_PATH.exists() else {}
+    if (
+        isinstance(previous_packet, dict)
+        and previous_packet.get("source_input_hash") == source_signature.get("hash")
+    ):
+        result = {
+            "status": "skipped_unchanged",
+            "reason": "source_input_hash_unchanged",
+            "ingested_reports": 0,
+            "reports_reviewed": previous_packet.get("report_count", 0),
+            "packet_path": str(PACKET_PATH).replace("\\", "/"),
+            "summary_path": str(SUMMARY_PATH).replace("\\", "/"),
+            "packet_hash": previous_packet.get("packet_hash"),
+            "source_input_hash": source_signature.get("hash"),
+            "source_file_count": source_signature.get("file_count"),
+        }
+        record_task_result("report_aggregator", "SKIPPED_UNCHANGED", result=result)
+        if isinstance(state, dict):
+            state["report_vault_packet_path"] = result["packet_path"]
+            state["report_vault_summary_path"] = result["summary_path"]
+            state["report_vault_packet_hash"] = result["packet_hash"]
+            state["report_vault_skipped_unchanged"] = True
+        if isinstance(intelligence_state, dict) and intelligence_state is not state:
+            intelligence_state.update(
+                {
+                    "report_vault_packet_path": result["packet_path"],
+                    "report_vault_summary_path": result["summary_path"],
+                    "report_vault_packet_hash": result["packet_hash"],
+                    "report_vault_skipped_unchanged": True,
+                }
+            )
+        return result
+
     ingested = ingest_existing_reports()
     reports = read_recent_reports(hours=hours, limit=500)
     packet = build_intelligence_packet(reports, source_window_hours=hours)
+    packet["source_input_hash"] = source_signature.get("hash")
+    packet["source_file_count"] = source_signature.get("file_count")
+    packet["unchanged_skip_enabled"] = True
     _atomic_write_json(PACKET_PATH, packet)
     SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
     SUMMARY_PATH.write_text(packet_to_text(packet), encoding="utf-8")
@@ -205,7 +243,10 @@ def run_report_aggregator(state=None, state_path=None, intelligence_state=None, 
         "packet_path": str(PACKET_PATH).replace("\\", "/"),
         "summary_path": str(SUMMARY_PATH).replace("\\", "/"),
         "packet_hash": packet.get("packet_hash"),
+        "source_input_hash": source_signature.get("hash"),
+        "source_file_count": source_signature.get("file_count"),
     }
+    record_task_result("report_aggregator", "OK", result=result)
     if isinstance(state, dict):
         state["report_vault_packet_path"] = result["packet_path"]
         state["report_vault_summary_path"] = result["summary_path"]

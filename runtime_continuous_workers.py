@@ -17,6 +17,7 @@ from runtime_intelligence_state import (
     state_path_for_task,
 )
 from runtime_lock import acquire_lock, release_lock
+from runtime_load_control import HEAVY_TASK_RULES, record_task_result, should_skip_task
 from runtime_mode_router import runtime_mode_snapshot, should_run_task
 from runtime_timeout import run_with_timeout
 
@@ -47,6 +48,11 @@ TASK_LOCK_STALE_SECONDS = {
     "scanner": 420,
 }
 
+HEAVY_WORKER_INTERVAL_SECONDS = {
+    task: int(rule.get("min_interval_seconds") or 0)
+    for task, rule in HEAVY_TASK_RULES.items()
+}
+
 WORKER_TASKS = {
     "heartbeat": 1,
     "runtime_status": 1,
@@ -66,18 +72,18 @@ WORKER_TASKS = {
     "market_regime_update": 30,
     "sector_strength": 30,
     "learning_engine": 60,
-    "report_aggregator": 60,
-    "knowledge_vault_runner": 300,
-    "experience_vault_runner": 300,
-    "consciousness_core": 60,
-    "scenario_simulation": 90,
+    "report_aggregator": HEAVY_WORKER_INTERVAL_SECONDS.get("report_aggregator", 900),
+    "knowledge_vault_runner": HEAVY_WORKER_INTERVAL_SECONDS.get("knowledge_vault_runner", 3600),
+    "experience_vault_runner": HEAVY_WORKER_INTERVAL_SECONDS.get("experience_vault_runner", 3600),
+    "consciousness_core": HEAVY_WORKER_INTERVAL_SECONDS.get("consciousness_core", 1800),
+    "scenario_simulation": HEAVY_WORKER_INTERVAL_SECONDS.get("scenario_simulation", 1800),
     "next_day_preparation": 120,
     "replay_batch": 180,
     "memory_compression": 180,
     "synthetic_simulation": 180,
     "historical_replay": 180,
-    "backtesting": 300,
-    "evolution_engine": 300,
+    "backtesting": HEAVY_WORKER_INTERVAL_SECONDS.get("backtesting", 7200),
+    "evolution_engine": HEAVY_WORKER_INTERVAL_SECONDS.get("evolution_engine", 3600),
     "scanner": 180,
     "setup_engine": 240,
     "master_brain": 240,
@@ -284,6 +290,45 @@ def _run_worker(task, sleep_seconds, intent):
                 time.sleep(sleep_seconds)
                 continue
 
+            skip_task, load_decision = should_skip_task(task)
+            if skip_task:
+                status = (
+                    "SKIPPED_UNCHANGED"
+                    if load_decision.get("reason") == "input_signature_unchanged"
+                    else "SKIPPED_RECENT"
+                )
+                if is_intelligence_task:
+                    intelligence_state, intelligence_state_path = ensure_intelligence_state(task)
+                    intelligence_state["last_status"] = status
+                    intelligence_state["last_load_control_skip"] = load_decision
+                    intelligence_state["last_input_hash"] = load_decision.get("input_hash")
+                    intelligence_state, intelligence_state_path = save_intelligence_state(
+                        task,
+                        intelligence_state,
+                        status,
+                        0,
+                    )
+                _write_worker_health(
+                    task,
+                    status=status,
+                    last_finished_at=_now_ist(),
+                    last_error=None,
+                    runtime_mode=current_runtime_mode,
+                    mode_allowed=True,
+                    load_control=load_decision,
+                    intelligence_state_path=(
+                        str(intelligence_state_path) if intelligence_state_path else None
+                    ),
+                    intelligence_run_count=(
+                        intelligence_state.get("run_count")
+                        if intelligence_state is not None
+                        else None
+                    ),
+                    last_status=status,
+                )
+                time.sleep(sleep_seconds)
+                continue
+
             _write_worker_health(
                 task,
                 status="RUNNING",
@@ -405,17 +450,38 @@ def _run_worker(task, sleep_seconds, intent):
             runtime_seconds = time.monotonic() - run_started_monotonic
 
             if result.get("status") == "timeout":
+                if task == "consciousness_core":
+                    try:
+                        from consciousness_core.meta_orchestrator import mark_consciousness_degraded
+
+                        mark_consciousness_degraded(
+                            f"timeout after {result.get('timeout_seconds')} seconds",
+                            state=intelligence_state,
+                        )
+                    except Exception as degraded_exc:
+                        _log_runtime_error(
+                            source="continuous_worker_consciousness_core_degraded_fallback",
+                            error=degraded_exc,
+                            mode=mode,
+                        )
+                record_task_result(
+                    task,
+                    "DEGRADED" if task == "consciousness_core" else "TIMEOUT",
+                    result=result,
+                    runtime_seconds=runtime_seconds,
+                    error=f"timeout after {result.get('timeout_seconds')} seconds",
+                )
                 if intelligence_state is not None:
                     intelligence_state, intelligence_state_path = save_intelligence_state(
                         task,
                         intelligence_state,
-                        "TIMEOUT",
+                        "DEGRADED" if task == "consciousness_core" else "TIMEOUT",
                         runtime_seconds,
                         error=f"timeout after {result.get('timeout_seconds')} seconds",
                     )
                 _write_worker_health(
                     task,
-                    status="TIMEOUT",
+                    status="DEGRADED" if task == "consciousness_core" else "TIMEOUT",
                     last_finished_at=_now_ist(),
                     run_count=run_count,
                     last_duration_seconds=round(runtime_seconds, 3),
@@ -442,6 +508,12 @@ def _run_worker(task, sleep_seconds, intent):
                     ),
                 )
             elif result.get("status") == "ok":
+                record_task_result(
+                    task,
+                    "OK",
+                    result=result.get("result") if isinstance(result.get("result"), dict) else result,
+                    runtime_seconds=runtime_seconds,
+                )
                 if intelligence_state is not None:
                     intelligence_state, intelligence_state_path = save_intelligence_state(
                         task,
@@ -475,6 +547,13 @@ def _run_worker(task, sleep_seconds, intent):
                 )
             else:
                 error = RuntimeError(result.get("error") or f"{task} returned {result}")
+                record_task_result(
+                    task,
+                    "ERROR",
+                    result=result,
+                    runtime_seconds=runtime_seconds,
+                    error=error,
+                )
                 if intelligence_state is not None:
                     intelligence_state, intelligence_state_path = save_intelligence_state(
                         task,
