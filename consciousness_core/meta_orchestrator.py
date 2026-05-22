@@ -322,6 +322,12 @@ def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=
             "safety_scope": "paper_sandbox_only_no_live_execution_no_master_brain_live_mutation",
         },
     }
+    context["status"] = "OK"
+    context.pop("degraded_reason", None)
+    context.pop("degraded_at", None)
+    context["last_error"] = None
+    context["live_apply_allowed"] = False
+    context["safety_scope"] = "advisory_only_no_live_mutation"
     atomic_write_json(CONTEXT_PATH, context)
     return context
 
