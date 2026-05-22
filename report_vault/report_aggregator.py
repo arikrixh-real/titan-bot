@@ -36,6 +36,19 @@ DEFAULT_SOURCE_PATTERNS = (
     "data/liquidity_map/*.json",
     "reports/*.txt",
 )
+WORKER_RESULT_KEYS = {
+    "status",
+    "reason",
+    "error",
+    "ingested_reports",
+    "reports_reviewed",
+    "packet_path",
+    "summary_path",
+    "packet_hash",
+    "source_input_hash",
+    "source_file_count",
+    "memory_pressure_guard",
+}
 
 
 def _file_size(path):
@@ -105,6 +118,12 @@ def _mark_report_aggregator_worker_success(result, status_text):
         }
     )
     _atomic_write_json(WORKER_HEALTH_PATH, worker_health)
+
+
+def _compact_worker_result(result):
+    if not isinstance(result, dict):
+        return {"status": "ok"}
+    return {key: result.get(key) for key in WORKER_RESULT_KEYS if key in result}
 
 
 def _read_text(path):
@@ -307,7 +326,7 @@ def run_report_aggregator(state=None, state_path=None, intelligence_state=None, 
                     "report_vault_skipped_unchanged": True,
                 }
             )
-        return result
+        return _compact_worker_result(result)
 
     try:
         ingested = ingest_existing_reports()
@@ -371,7 +390,7 @@ def run_report_aggregator(state=None, state_path=None, intelligence_state=None, 
                 "report_vault_packet_hash": result["packet_hash"],
             }
         )
-    return result
+    return _compact_worker_result(result)
 
 
 if __name__ == "__main__":

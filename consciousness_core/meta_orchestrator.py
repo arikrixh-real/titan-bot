@@ -36,7 +36,7 @@ from consciousness_core.promotion_gate import run_promotion_gate
 from consciousness_core.real_scenario_simulation import run_real_scenario_simulation
 from consciousness_core.real_experience_memory import run_real_experience_memory
 from consciousness_core.reflection_engine import reflect
-from consciousness_core.report import write_report
+from consciousness_core.report import REPORT_JSON_PATH, REPORT_TXT_PATH, write_report
 from consciousness_core.research_lab import run_research_lab
 from consciousness_core.autonomous_research_scientist import run_autonomous_research_scientist
 from consciousness_core.adaptive_attention_allocator import run_adaptive_attention_allocator
@@ -582,7 +582,17 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             "state_path": str(core_state_path),
             "health_path": str(HEALTH_PATH),
             "context_path": str(CONTEXT_PATH),
-            "report": report,
+            "report_path": str(REPORT_JSON_PATH),
+            "report_text_path": str(REPORT_TXT_PATH),
+            "summary": summary,
+            "run_count": core_state.get("run_count"),
+            "consciousness_cycle": core_state.get("consciousness_cycle"),
+            "observations_processed": observation_packet.get("observation_count", 0),
+            "weaknesses_count": len(weaknesses),
+            "proposals_count": len(proposals),
+            "approved_for_test_count": approved_count,
+            "rejected_count": rejected_count,
+            "report_generated_at": report.get("generated_at") if isinstance(report, dict) else None,
         }
     except Exception as exc:
         if core_state is not None:

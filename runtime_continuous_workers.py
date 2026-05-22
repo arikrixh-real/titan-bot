@@ -34,14 +34,16 @@ TASK_TIMEOUT_SECONDS = {
     "light_news_pulse": 45,
     "outcome_tracker": 45,
     "evolution_engine": 60,
-    "consciousness_core": 60,
-    "report_aggregator": 60,
+    "consciousness_core": 900,
+    "report_aggregator": 300,
     "knowledge_vault_runner": 120,
     "experience_vault_runner": 120,
 }
 TASK_TERMINATE_GRACE_SECONDS = {
     "master_brain": 60,
     "scanner": 45,
+    "consciousness_core": 90,
+    "report_aggregator": 45,
 }
 TASK_LOCK_STALE_SECONDS = {
     "master_brain": 720,
@@ -141,6 +143,13 @@ IMPORTANT_INTELLIGENCE_TASKS = {
     "knowledge_vault_runner",
     "experience_vault_runner",
     "consciousness_core",
+}
+NON_DEGRADED_PRESERVE_STATUSES = {
+    "OK",
+    "SKIPPED_UNCHANGED",
+    "SKIPPED_RECENT",
+    "SKIPPED_LOCKED",
+    "WAITING_FOR_MODE",
 }
 
 _health_lock = threading.Lock()
@@ -279,6 +288,15 @@ def _record_error(task, error, mode):
     )
 
 
+def _preserved_status_from_last_good(previous_health):
+    previous_health = previous_health if isinstance(previous_health, dict) else {}
+    for key in ("last_status", "status"):
+        status = str(previous_health.get(key) or "").upper()
+        if status in NON_DEGRADED_PRESERVE_STATUSES:
+            return status
+    return "OK"
+
+
 def _intelligence_handler(handler, state, state_path):
     try:
         signature = inspect.signature(handler)
@@ -383,6 +401,7 @@ def _run_worker(task, sleep_seconds, intent):
                 time.sleep(sleep_seconds)
                 continue
 
+            previous_health = dict(_health.get(task, {}))
             _write_worker_health(
                 task,
                 status="RUNNING",
@@ -614,6 +633,54 @@ def _run_worker(task, sleep_seconds, intent):
                 )
             else:
                 error = RuntimeError(result.get("error") or f"{task} returned {result}")
+                last_good_output_path = _health.get(task, {}).get("last_good_output_path") or _last_good_output_path(task)
+                exitcode = result.get("exitcode")
+                preserved_nonzero = False
+                if exitcode not in (None, 0) and last_good_output_path:
+                    preserved_status = _preserved_status_from_last_good(previous_health)
+                    record_task_result(
+                        task,
+                        preserved_status,
+                        result=result,
+                        runtime_seconds=runtime_seconds,
+                        error=error,
+                    )
+                    if intelligence_state is not None:
+                        intelligence_state, intelligence_state_path = save_intelligence_state(
+                            task,
+                            intelligence_state,
+                            preserved_status,
+                            runtime_seconds,
+                            error=f"nonzero exitcode={exitcode}; preserved last good output",
+                        )
+                    _write_worker_health(
+                        task,
+                        status=preserved_status,
+                        last_finished_at=_now_ist(),
+                        run_count=run_count,
+                        last_duration_seconds=round(runtime_seconds, 3),
+                        last_timeout_seconds=None,
+                        last_timeout_reason=result.get("termination_reason"),
+                        last_exitcode=exitcode,
+                        last_error=f"nonzero exitcode={exitcode}; preserved last good output",
+                        last_good_output_path=last_good_output_path,
+                        last_good_output_used=True,
+                        recovery_action="preserved_last_good_output_after_nonzero_exit",
+                        consecutive_failure_count=0,
+                        retry_backoff_seconds=0,
+                        intelligence_state_path=(
+                            str(intelligence_state_path) if intelligence_state_path else None
+                        ),
+                        intelligence_run_count=(
+                            intelligence_state.get("run_count")
+                            if intelligence_state is not None
+                            else None
+                        ),
+                        last_status=preserved_status,
+                    )
+                    preserved_nonzero = True
+                if preserved_nonzero:
+                    continue
                 record_task_result(
                     task,
                     "DEGRADED",
