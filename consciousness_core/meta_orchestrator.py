@@ -183,6 +183,10 @@ def _write_context(state, weaknesses, beliefs, missions, approved_queue, phase2=
     ]
     report_vault_intelligence = _compact_report_vault_packet(report_vault_packet)
     context = {
+        "status": "OK",
+        "last_error": None,
+        "live_apply_allowed": False,
+        "safety_scope": "advisory_only_no_live_mutation",
         "current_focus": state.get("current_focus"),
         "active_regime_warnings": no_trade_warnings[:10],
         "top_weaknesses": weaknesses[:10],
@@ -554,6 +558,7 @@ def run_consciousness_core(state=None, state_path=None, intelligence_state=None)
             "rejected_count": rejected_count,
             "context_path": str(CONTEXT_PATH),
             "last_error": None,
+            "live_apply_allowed": False,
         }
         _write_health(health)
 
