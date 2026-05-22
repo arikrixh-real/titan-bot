@@ -6,6 +6,8 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from runtime_resilience_status import OFFICIAL_RUNTIME_PATH, read_json_safe
+
 
 IST = timezone(timedelta(hours=5, minutes=30))
 LOAD_CONTROL_STATUS_PATH = Path("data") / "runtime" / "intelligence_load_control_status.json"
@@ -117,6 +119,7 @@ def _read_status():
 def _write_status(status):
     status["updated_at"] = now_ist()
     status["mode"] = "LOAD_CONTROL_ONLY"
+    status["official_runtime_path"] = OFFICIAL_RUNTIME_PATH
     status["safety"] = {
         "advisory_only": True,
         "live_mutation": False,
@@ -124,6 +127,15 @@ def _write_status(status):
         "broker_orders": False,
         "alert_changes": False,
     }
+    resilience_status = read_json_safe(Path("data") / "runtime" / "runtime_resilience_status.json")
+    if isinstance(resilience_status, dict):
+        status["runtime_resilience_status"] = {
+            "status": resilience_status.get("status"),
+            "degraded_components": resilience_status.get("degraded_components", []),
+            "stale_packet_count": resilience_status.get("stale_packet_summary", {}).get("stale_count"),
+            "worker_degraded_count": resilience_status.get("worker_health_summary", {}).get("degraded_count"),
+            "last_good_outputs_used": resilience_status.get("last_good_outputs_used", []),
+        }
     _atomic_write_json(LOAD_CONTROL_STATUS_PATH, status)
 
 
@@ -245,6 +257,8 @@ def load_control_summary():
     return {
         "path": str(LOAD_CONTROL_STATUS_PATH).replace("\\", "/"),
         "updated_at": status.get("updated_at"),
+        "official_runtime_path": status.get("official_runtime_path") or OFFICIAL_RUNTIME_PATH,
+        "runtime_resilience_status": status.get("runtime_resilience_status", {}),
         "tasks": status.get("tasks", {}),
         "safety": status.get("safety", {}),
     }

@@ -47,6 +47,7 @@ TASK_LOCK_STALE_SECONDS = {
     "master_brain": 720,
     "scanner": 420,
 }
+MAX_RETRY_BACKOFF_SECONDS = 300
 
 HEAVY_WORKER_INTERVAL_SECONDS = {
     task: int(rule.get("min_interval_seconds") or 0)
@@ -243,13 +244,33 @@ def _log_runtime_error(source, error, mode):
         pass
 
 
+def _last_good_output_path(task):
+    path = Path("data") / "runtime" / f"{task}_status.json"
+    return str(path).replace("\\", "/") if path.exists() else None
+
+
+def _retry_backoff_seconds(task):
+    current = _health.get(task, {})
+    consecutive_failures = int(current.get("consecutive_failure_count") or 0)
+    if consecutive_failures <= 0:
+        return 0
+    return min(MAX_RETRY_BACKOFF_SECONDS, 2 ** min(consecutive_failures, 8))
+
+
 def _record_error(task, error, mode):
+    last_good_output_path = _health.get(task, {}).get("last_good_output_path") or _last_good_output_path(task)
+    consecutive_failures = int(_health.get(task, {}).get("consecutive_failure_count") or 0) + 1
     _write_worker_health(
         task,
-        status="ERROR",
+        status="DEGRADED",
         last_finished_at=_now_ist(),
         error_count=_health.get(task, {}).get("error_count", 0) + 1,
+        consecutive_failure_count=consecutive_failures,
+        retry_backoff_seconds=min(MAX_RETRY_BACKOFF_SECONDS, 2 ** min(consecutive_failures, 8)),
         last_error=str(error),
+        last_good_output_path=last_good_output_path,
+        last_good_output_used=bool(last_good_output_path),
+        recovery_action="marked_degraded_preserved_last_good_output",
     )
     _log_runtime_error(
         source=f"continuous_worker_{task}",
@@ -357,6 +378,7 @@ def _run_worker(task, sleep_seconds, intent):
                         else None
                     ),
                     last_status=status,
+                    retry_backoff_seconds=0,
                 )
                 time.sleep(sleep_seconds)
                 continue
@@ -385,6 +407,7 @@ def _run_worker(task, sleep_seconds, intent):
                     intelligence_run_count=intelligence_state.get("run_count", 0),
                     intelligence_last_status=intelligence_state.get("last_status"),
                     last_status="RUNNING",
+                    retry_backoff_seconds=0,
                 )
 
             if not handler:
@@ -498,7 +521,7 @@ def _run_worker(task, sleep_seconds, intent):
                         )
                 record_task_result(
                     task,
-                    "DEGRADED" if task == "consciousness_core" else "TIMEOUT",
+                    "DEGRADED",
                     result=result,
                     runtime_seconds=runtime_seconds,
                     error=f"timeout after {result.get('timeout_seconds')} seconds",
@@ -507,13 +530,15 @@ def _run_worker(task, sleep_seconds, intent):
                     intelligence_state, intelligence_state_path = save_intelligence_state(
                         task,
                         intelligence_state,
-                        "DEGRADED" if task == "consciousness_core" else "TIMEOUT",
+                        "DEGRADED",
                         runtime_seconds,
                         error=f"timeout after {result.get('timeout_seconds')} seconds",
                     )
+                last_good_output_path = _health.get(task, {}).get("last_good_output_path") or _last_good_output_path(task)
+                consecutive_failures = int(_health.get(task, {}).get("consecutive_failure_count") or 0) + 1
                 _write_worker_health(
                     task,
-                    status="DEGRADED" if task == "consciousness_core" else "TIMEOUT",
+                    status="DEGRADED",
                     last_finished_at=_now_ist(),
                     run_count=run_count,
                     last_duration_seconds=round(runtime_seconds, 3),
@@ -521,10 +546,15 @@ def _run_worker(task, sleep_seconds, intent):
                     last_timeout_reason=result.get("termination_reason"),
                     last_exitcode=result.get("exitcode"),
                     timeout_count=_health.get(task, {}).get("timeout_count", 0) + 1,
+                    consecutive_failure_count=consecutive_failures,
+                    retry_backoff_seconds=min(MAX_RETRY_BACKOFF_SECONDS, 2 ** min(consecutive_failures, 8)),
                     last_error=(
                         f"timeout after {result.get('timeout_seconds')} seconds "
                         f"reason={result.get('termination_reason')}"
                     ),
+                    last_good_output_path=last_good_output_path,
+                    last_good_output_used=bool(last_good_output_path),
+                    recovery_action="marked_degraded_timeout_preserved_last_good_output",
                     intelligence_state_path=(
                         str(intelligence_state_path) if intelligence_state_path else None
                     ),
@@ -536,7 +566,7 @@ def _run_worker(task, sleep_seconds, intent):
                     last_status=(
                         intelligence_state.get("last_status")
                         if intelligence_state is not None
-                        else "TIMEOUT"
+                        else "DEGRADED"
                     ),
                 )
             elif result.get("status") == "ok":
@@ -563,6 +593,11 @@ def _run_worker(task, sleep_seconds, intent):
                     last_timeout_reason=None,
                     last_exitcode=result.get("exitcode"),
                     last_error=None,
+                    consecutive_failure_count=0,
+                    retry_backoff_seconds=0,
+                    last_good_output_path=_last_good_output_path(task),
+                    last_good_output_used=False,
+                    recovery_action=None,
                     intelligence_state_path=(
                         str(intelligence_state_path) if intelligence_state_path else None
                     ),
@@ -581,7 +616,7 @@ def _run_worker(task, sleep_seconds, intent):
                 error = RuntimeError(result.get("error") or f"{task} returned {result}")
                 record_task_result(
                     task,
-                    "ERROR",
+                    "DEGRADED",
                     result=result,
                     runtime_seconds=runtime_seconds,
                     error=error,
@@ -590,7 +625,7 @@ def _run_worker(task, sleep_seconds, intent):
                     intelligence_state, intelligence_state_path = save_intelligence_state(
                         task,
                         intelligence_state,
-                        "ERROR",
+                        "DEGRADED",
                         runtime_seconds,
                         error=error,
                     )
@@ -623,7 +658,7 @@ def _run_worker(task, sleep_seconds, intent):
                     intelligence_state, intelligence_state_path = save_intelligence_state(
                         task,
                         intelligence_state,
-                        "ERROR",
+                        "DEGRADED",
                         runtime_seconds,
                         error=exc,
                     )
@@ -651,7 +686,14 @@ def _run_worker(task, sleep_seconds, intent):
                         mode=mode,
                     )
 
-        time.sleep(sleep_seconds)
+        backoff_seconds = _retry_backoff_seconds(task)
+        if backoff_seconds:
+            _write_worker_health(
+                task,
+                retry_backoff_seconds=backoff_seconds,
+                recovery_action="retry_backoff_scheduled",
+            )
+        time.sleep(sleep_seconds + backoff_seconds)
 
 
 def start_continuous_workers(intent=None):

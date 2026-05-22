@@ -4,6 +4,8 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from runtime_resilience_status import OFFICIAL_RUNTIME_PATH, write_runtime_resilience_status
+
 
 GOVERNANCE_STATUS_PATH = Path("data") / "runtime" / "pyramid_governance_status.json"
 DEFAULT_FRESH_SECONDS = 24 * 60 * 60
@@ -262,8 +264,27 @@ def generate_pyramid_governance_status(advisory=None, safety_council=None, outpu
         "generated_at": utc_now_iso(),
         "status": status,
         "components": components,
+        "official_runtime_path": OFFICIAL_RUNTIME_PATH,
         "safety_scope": "governance_status_only_no_live_execution_no_alert_or_strategy_mutation",
     }
     payload["governance"] = evaluate_safety_governance(advisory, safety_council, payload)
+    try:
+        resilience_status = write_runtime_resilience_status()
+        payload["runtime_resilience_status"] = {
+            "status": resilience_status.get("status"),
+            "degraded_components": resilience_status.get("degraded_components", []),
+            "stale_packet_count": resilience_status.get("stale_packet_summary", {}).get("stale_count"),
+            "worker_degraded_count": resilience_status.get("worker_health_summary", {}).get("degraded_count"),
+            "last_good_outputs_used": resilience_status.get("last_good_outputs_used", []),
+        }
+        if resilience_status.get("status") == "DEGRADED":
+            payload["governance"]["caution_reasons"].append("runtime_resilience_degraded")
+            payload["governance"]["warnings"].append("runtime_resilience_degraded")
+            payload["governance"]["governance_warnings"].append("runtime_resilience_degraded")
+            if payload["governance"].get("decision") == "ALLOW":
+                payload["governance"]["decision"] = "CAUTION"
+                payload["governance"]["governance_decision"] = "CAUTION"
+    except Exception as exc:
+        payload["runtime_resilience_status"] = {"status": "ERROR", "error": str(exc)}
     _atomic_write_json(output_path, payload)
     return payload

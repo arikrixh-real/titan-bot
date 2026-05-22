@@ -1,6 +1,7 @@
 import json
 import os
 import time
+import uuid
 from pathlib import Path
 
 from runtime_lock import acquire_lock, refresh_lock, release_lock
@@ -8,6 +9,11 @@ from runtime_dispatcher import preview_dispatch
 from runtime_scheduler_map import get_scheduler_map
 from runtime_health import write_daemon_health
 from runtime_error_log import log_runtime_error
+from runtime_resilience_status import (
+    OFFICIAL_RUNTIME_PATH,
+    update_existing_status_outputs,
+    write_runtime_resilience_status,
+)
 
 
 LOCK_NAME = "titan_daemon"
@@ -66,6 +72,11 @@ def _write_daemon_health(
     ticks_completed,
     dispatch_count,
     status="RUNNING",
+    run_id=None,
+    started_at_ist=None,
+    shutdown_marker=None,
+    restart_marker=None,
+    duplicate_marker=None,
 ):
     payload = write_daemon_health(
         mode=mode,
@@ -74,22 +85,62 @@ def _write_daemon_health(
         status=status,
     )
     payload.update(_runtime_intent())
+    payload.update(
+        {
+            "official_runtime_path": OFFICIAL_RUNTIME_PATH,
+            "duplicate_prevention": f"runtime_lock:{LOCK_NAME}",
+            "run_id": run_id,
+            "started_at_ist": started_at_ist,
+            "shutdown_marker": shutdown_marker,
+            "restart_marker": restart_marker,
+            "duplicate_marker": duplicate_marker,
+        }
+    )
     DAEMON_HEALTH_PATH.write_text(
         json.dumps(payload, indent=2, sort_keys=True),
         encoding="utf-8",
     )
+    try:
+        resilience_status = write_runtime_resilience_status()
+        update_existing_status_outputs(resilience_status)
+    except Exception as exc:
+        log_runtime_error(
+            source="titan_daemon_resilience_status",
+            error=exc,
+            mode=mode,
+        )
     return payload
 
 
 def main():
+    run_id = uuid.uuid4().hex
+    started_at_ist = None
     if not acquire_lock(LOCK_NAME):
+        try:
+            resilience_status = write_runtime_resilience_status()
+            update_existing_status_outputs(resilience_status)
+        except Exception as exc:
+            log_runtime_error(
+                source="titan_daemon_duplicate_resilience_status",
+                error=exc,
+                mode="DUPLICATE_BLOCKED",
+            )
         print("TITAN daemon already running. Exiting.")
         return
 
     intent = _runtime_intent()
     continuous_workers_enabled = os.getenv(CONTINUOUS_WORKERS_ENV) == "1"
+    started_at_ist = _write_daemon_health(
+        mode="STARTING",
+        ticks_completed=0,
+        dispatch_count=0,
+        status="STARTING",
+        run_id=run_id,
+        restart_marker="daemon_start_marker_written",
+    ).get("timestamp_ist")
     print(
         "TITAN daemon starting "
+        f"official_runtime_path={OFFICIAL_RUNTIME_PATH} "
         f"runtime_mode={intent['runtime_mode']} "
         f"execution_owner={intent['execution_owner']} "
         f"live_execution_enabled={intent['live_execution_enabled']} "
@@ -109,6 +160,7 @@ def main():
     ticks_completed = 0
     last_dispatch_count = 0
     latest_mode = "CONTINUOUS_WORKERS" if continuous_workers_enabled else "UNKNOWN"
+    shutdown_written = False
 
     try:
         if continuous_workers_enabled:
@@ -132,6 +184,8 @@ def main():
                     ticks_completed=ticks_completed,
                     dispatch_count=last_dispatch_count,
                     status="RUNNING",
+                    run_id=run_id,
+                    started_at_ist=started_at_ist,
                 )
                 refresh_lock(LOCK_NAME)
 
@@ -163,8 +217,22 @@ def main():
             ticks_completed=ticks_completed,
             dispatch_count=last_dispatch_count,
             status="STOPPED",
+            run_id=run_id,
+            started_at_ist=started_at_ist,
+            shutdown_marker="keyboard_interrupt_graceful_stop",
         )
+        shutdown_written = True
     finally:
+        if started_at_ist and not shutdown_written:
+            _write_daemon_health(
+                mode=latest_mode,
+                ticks_completed=ticks_completed,
+                dispatch_count=last_dispatch_count,
+                status="STOPPING",
+                run_id=run_id,
+                started_at_ist=started_at_ist,
+                shutdown_marker="daemon_lock_release_pending",
+            )
         release_lock(LOCK_NAME)
 
 
