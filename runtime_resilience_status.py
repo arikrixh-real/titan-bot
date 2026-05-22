@@ -1,7 +1,7 @@
 import json
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -11,8 +11,10 @@ OFFICIAL_RUNTIME_PATH = "titan_daemon.py"
 STALE_PACKET_SECONDS = 24 * 60 * 60
 WORKER_STUCK_GRACE_SECONDS = 60
 WORKER_RECENT_FINISH_GRACE_SECONDS = 180
+IST = timezone(timedelta(hours=5, minutes=30))
 NON_DEGRADED_WORKER_STATUSES = {
     "OK",
+    "OK_RECENT_FINISH",
     "SKIPPED_UNCHANGED",
     "SKIPPED_RECENT",
     "SKIPPED_LOCKED",
@@ -92,16 +94,27 @@ def _file_age(path):
     return max(0.0, (datetime.now(timezone.utc) - modified_at).total_seconds()), modified_at.isoformat()
 
 
-def _parse_iso(value):
-    if not value:
+def parse_runtime_timestamp(value, naive_tz=IST):
+    if value is None or value == "":
         return None
     try:
+        if isinstance(value, (int, float)):
+            return datetime.fromtimestamp(float(value), tz=timezone.utc)
         text = str(value).strip()
+        if not text:
+            return None
+        try:
+            numeric_value = float(text)
+            if numeric_value > 10_000_000_000:
+                numeric_value = numeric_value / 1000.0
+            return datetime.fromtimestamp(numeric_value, tz=timezone.utc)
+        except ValueError:
+            pass
         if text.endswith("Z"):
             text = f"{text[:-1]}+00:00"
         parsed = datetime.fromisoformat(text)
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
+            parsed = parsed.replace(tzinfo=naive_tz)
         return parsed.astimezone(timezone.utc)
     except Exception:
         return None
@@ -125,13 +138,14 @@ def build_worker_health_summary(worker_health=None):
         if not isinstance(item, dict):
             continue
         status = str(item.get("status") or "UNKNOWN").upper()
-        active_started_at = _parse_iso(item.get("active_run_started_at") or item.get("last_started_at"))
-        last_finished_at = _parse_iso(item.get("last_finished_at"))
+        active_started_at = parse_runtime_timestamp(item.get("active_run_started_at") or item.get("last_started_at"))
+        last_finished_at = parse_runtime_timestamp(item.get("last_finished_at"))
         timeout_seconds = int(item.get("active_timeout_seconds") or item.get("last_timeout_seconds") or 0)
         stuck = False
         active_age_seconds = None
         recent_finish_age_seconds = None
         recent_finish_grace_active = False
+        stale_active_marker_ignored = False
         last_status = str(item.get("last_status") or "").upper()
         last_error = item.get("last_error")
         if last_finished_at is not None:
@@ -143,6 +157,17 @@ def build_worker_health_summary(worker_health=None):
 
         effective_status = "DEGRADED" if stuck else status
         false_degraded_grace = False
+        if (
+            status == "RUNNING"
+            and stuck
+            and recent_finish_grace_active
+            and last_finished_at is not None
+            and active_started_at is not None
+            and last_finished_at >= active_started_at
+        ):
+            effective_status = "OK_RECENT_FINISH"
+            stuck = False
+            stale_active_marker_ignored = True
         if (
             status == "DEGRADED"
             and recent_finish_grace_active
@@ -167,6 +192,7 @@ def build_worker_health_summary(worker_health=None):
                 None if recent_finish_age_seconds is None else round(recent_finish_age_seconds, 3)
             ),
             "recent_finish_grace_active": recent_finish_grace_active,
+            "stale_active_marker_ignored": stale_active_marker_ignored,
             "false_degraded_grace_applied": false_degraded_grace,
             "stuck_threshold_seconds": (
                 timeout_seconds + WORKER_STUCK_GRACE_SECONDS

@@ -310,3 +310,7 @@ def generate_pyramid_governance_status(advisory=None, safety_council=None, outpu
             payload["governance"]["governance_decision"] = "CAUTION"
     _atomic_write_json(output_path, payload)
     return payload
+
+
+if __name__ == "__main__":
+    print(json.dumps(generate_pyramid_governance_status(), indent=2, sort_keys=True))

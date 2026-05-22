@@ -12,6 +12,7 @@ from runtime_load_control import input_signature, record_task_result
 
 PACKET_PATH = VAULT_DIR / "latest_aggregated_packet.json"
 SUMMARY_PATH = VAULT_DIR / "latest_aggregated_summary.txt"
+WORKER_HEALTH_PATH = Path("data") / "runtime" / "worker_health.json"
 MAX_SOURCE_FILE_BYTES = 2 * 1024 * 1024
 MAX_TEXT_REPORT_CHARS = 8000
 MAX_REPORTS_REVIEWED = 200
@@ -73,6 +74,37 @@ def _read_previous_packet_safely():
         return payload if isinstance(payload, dict) else {}
     except Exception:
         return {}
+
+
+def _read_worker_health_safely():
+    if not WORKER_HEALTH_PATH.exists():
+        return {}
+    try:
+        with WORKER_HEALTH_PATH.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _mark_report_aggregator_worker_success(result, status_text):
+    worker_health = _read_worker_health_safely()
+    item = worker_health.setdefault("report_aggregator", {"task": "report_aggregator"})
+    item.update(
+        {
+            "status": status_text,
+            "last_status": status_text,
+            "last_finished_at": now_ist(),
+            "last_error": None,
+            "last_exitcode": 0,
+            "consecutive_failure_count": 0,
+            "retry_backoff_seconds": 0,
+            "last_good_output_path": result.get("packet_path"),
+            "last_good_output_used": False,
+            "recovery_action": None,
+        }
+    )
+    _atomic_write_json(WORKER_HEALTH_PATH, worker_health)
 
 
 def _read_text(path):
@@ -260,6 +292,7 @@ def run_report_aggregator(state=None, state_path=None, intelligence_state=None, 
             "source_file_count": source_signature.get("file_count"),
         }
         record_task_result("report_aggregator", "SKIPPED_UNCHANGED", result=result)
+        _mark_report_aggregator_worker_success(result, "SKIPPED_UNCHANGED")
         if isinstance(state, dict):
             state["report_vault_packet_path"] = result["packet_path"]
             state["report_vault_summary_path"] = result["summary_path"]
@@ -307,6 +340,7 @@ def run_report_aggregator(state=None, state_path=None, intelligence_state=None, 
             "memory_pressure_guard": packet["memory_pressure_guard"],
         }
         record_task_result("report_aggregator", "OK", result=result)
+        _mark_report_aggregator_worker_success(result, "OK")
     except BaseException as exc:
         if isinstance(exc, (KeyboardInterrupt, SystemExit)):
             raise
