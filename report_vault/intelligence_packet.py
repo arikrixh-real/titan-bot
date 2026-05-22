@@ -72,6 +72,51 @@ def detect_conflicts(reports):
     return conflicts
 
 
+def _conflict_explanations(conflict):
+    subject = str(conflict.get("subject") or "").lower()
+    statuses = {str(item).upper() for item in conflict.get("statuses") or []}
+    severities = {str(item).upper() for item in conflict.get("severities") or []}
+    factors = []
+    if "volatility" in subject or "pressure" in subject:
+        factors.append("volatility difference")
+    if "regime" in subject or "market" in subject:
+        factors.append("regime mismatch")
+    if "liquidity" in subject or "trap" in subject or "manipulation" in subject:
+        factors.append("liquidity/trap condition")
+    if "news" in subject:
+        factors.append("news anomaly")
+    if "breadth" in subject or "sector" in subject:
+        factors.append("conflicting breadth")
+    if {"LOW", "HIGH", "CRITICAL"} & severities:
+        factors.append("exhaustion condition")
+    if {"STALE", "WARNING", "ERROR"} & statuses:
+        factors.append("freshness or degraded-source mismatch")
+    if not factors:
+        factors.append("different source windows or confidence thresholds")
+    return factors[:5]
+
+
+def explain_conflicts(conflicts):
+    summaries = []
+    for conflict in conflicts or []:
+        factors = _conflict_explanations(conflict)
+        summaries.append(
+            {
+                "subject": conflict.get("subject"),
+                "sources": conflict.get("sources") or [],
+                "statuses": conflict.get("statuses") or [],
+                "severities": conflict.get("severities") or [],
+                "probable_contextual_explanations": factors,
+                "summary": (
+                    f"{conflict.get('subject')} conflict may reflect "
+                    f"{', '.join(factors)}; keep as advisory until confirmed."
+                ),
+                "live_mutation": False,
+            }
+        )
+    return summaries
+
+
 def identify_missing_data(reports):
     missing = []
     if not reports:
@@ -95,6 +140,7 @@ def build_intelligence_packet(reports, source_window_hours=24):
     ranked_reports = sorted(reports, key=report_sort_key, reverse=True)
     merged_findings = merge_duplicate_findings(ranked_reports)
     conflicts = detect_conflicts(ranked_reports)
+    contradiction_resolution_summaries = explain_conflicts(conflicts)
     missing_data = identify_missing_data(ranked_reports)
     top_reports = ranked_reports[:20]
     summary = summarize_packet(top_reports, merged_findings, conflicts, missing_data)
@@ -121,6 +167,7 @@ def build_intelligence_packet(reports, source_window_hours=24):
         ],
         "merged_findings": merged_findings[:50],
         "conflicts": conflicts[:20],
+        "contradiction_resolution_summaries": contradiction_resolution_summaries[:20],
         "missing_data": missing_data,
         "trusted_summarized_input": True,
         "safety_scope": "summarized_context_only_no_live_execution_no_strategy_or_risk_mutation",
@@ -182,6 +229,14 @@ def packet_to_text(packet):
             f"- {item.get('subject')}: statuses={item.get('statuses')} severities={item.get('severities')}"
             for item in conflicts[:10]
         )
+        summaries = packet.get("contradiction_resolution_summaries") or []
+        if summaries:
+            lines.append("")
+            lines.append("Conflict explanations:")
+            lines.extend(
+                f"- {item.get('subject')}: {item.get('summary')}"
+                for item in summaries[:10]
+            )
     else:
         lines.append("- None detected.")
     lines.append("")

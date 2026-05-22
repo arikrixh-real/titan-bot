@@ -9,6 +9,7 @@ from .memory import (
     load_processed_index,
     save_imported_memory,
     save_processed_index,
+    write_experience_intelligence_summary,
     write_derived_memories,
 )
 from .packet import build_external_experience_packet
@@ -145,8 +146,21 @@ def run_experience_vault_runner(state=None, state_path=None, intelligence_state=
     save_processed_index(index)
     save_imported_memory(memory)
     write_derived_memories(memory)
+    intelligence_summary = write_experience_intelligence_summary(memory, stats, warnings)
 
     packet = build_external_experience_packet(memory, stats, warnings)
+    packet["experience_intelligence_summary"] = {
+        "path": "data/experience_vault/reports/experience_intelligence_summary.json",
+        "lesson_count": intelligence_summary.get("lesson_count"),
+        "setup_summary_count": len(intelligence_summary.get("setup_reliability") or []),
+        "regime_summary_count": len(intelligence_summary.get("regime_reliability") or []),
+        "symbol_summary_count": len(intelligence_summary.get("symbol_behavior_summaries") or []),
+        "confidence_bucket_count": len(intelligence_summary.get("confidence_bucket_summaries") or []),
+        "no_trade_cluster_count": len(intelligence_summary.get("no_trade_clusters") or []),
+        "failure_cluster_count": len(intelligence_summary.get("failure_clusters") or []),
+        "trust_level": "IMPORTED_UNVALIDATED",
+        "live_apply_allowed": False,
+    }
     atomic_write_json(PACKET_PATH, packet)
     REPORT_PATH.write_text(build_report(packet), encoding="utf-8")
 
@@ -157,6 +171,7 @@ def run_experience_vault_runner(state=None, state_path=None, intelligence_state=
         "warnings": len(warnings),
         "packet_path": str(PACKET_PATH),
         "report_path": str(REPORT_PATH),
+        "experience_intelligence_summary_path": "data/experience_vault/reports/experience_intelligence_summary.json",
     }
 
 

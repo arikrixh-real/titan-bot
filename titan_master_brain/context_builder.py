@@ -39,8 +39,13 @@ def _append_advisory_context(context, advisory):
     knowledge_vault = _summary_payload(_source_summary(advisory, "knowledge_vault"))
     safety_council = advisory.get("safety_council") if isinstance(advisory, dict) else {}
     safety_council = safety_council if isinstance(safety_council, dict) else {}
+    pyramid_governance = advisory.get("pyramid_governance") if isinstance(advisory, dict) else {}
+    pyramid_governance = pyramid_governance if isinstance(pyramid_governance, dict) else {}
+    governance = pyramid_governance.get("governance") if isinstance(pyramid_governance.get("governance"), dict) else {}
     strategy_workflow = advisory.get("strategy_improvement_workflow") if isinstance(advisory, dict) else {}
     strategy_workflow = strategy_workflow if isinstance(strategy_workflow, dict) else {}
+    contradiction_summaries = report_vault.get("contradiction_resolution_summaries") or []
+    experience_reliability = experience_vault.get("experience_intelligence_summary") or {}
 
     stale_or_missing = []
     neural_schema = {}
@@ -108,6 +113,7 @@ def _append_advisory_context(context, advisory):
         "experience_vault_lesson_count": experience_vault.get("lesson_count", 0),
         "experience_vault_lessons": experience_vault.get("sample_lessons") or [],
         "experience_vault_trust_level": experience_vault.get("trust_level"),
+        "experience_reliability_summaries": experience_reliability,
         "knowledge_vault_observation_count": knowledge_vault.get("observation_count", 0),
         "knowledge_vault_observations": knowledge_vault.get("sample_observations") or [],
         "knowledge_vault_belief_count": knowledge_vault.get("belief_count", 0),
@@ -131,9 +137,26 @@ def _append_advisory_context(context, advisory):
             "warnings": safety_council.get("warnings") or [],
             "live_apply_allowed": False,
         },
+        "governance_decision": governance.get("decision") or advisory.get("governance_decision"),
+        "governance_warnings": governance.get("warnings") or advisory.get("governance_warnings") or [],
+        "stale_intelligence_warnings": governance.get("stale_intelligence_warnings") or stale_or_missing,
+        "degraded_intelligence_warnings": governance.get("degraded_intelligence_warnings") or [],
+        "contradiction_risk_summaries": contradiction_summaries,
+        "pyramid_governance_status_path": "data/runtime/pyramid_governance_status.json",
+        "pyramid_governance_status": pyramid_governance.get("status"),
         "safety_warnings": safety_warnings,
     }
 
+    if governance.get("decision"):
+        context["governance_decision"] = governance.get("decision")
+        context["governance_warnings"] = governance.get("warnings") or []
+        context["stale_intelligence_warnings"] = governance.get("stale_intelligence_warnings") or []
+        context["degraded_intelligence_warnings"] = governance.get("degraded_intelligence_warnings") or []
+        context["contradiction_risk_summaries"] = contradiction_summaries
+        context["experience_reliability_summaries"] = experience_reliability
+        context["why"].append(
+            f"Safety Council governance decision: {governance.get('decision')}."
+        )
     if stale_or_missing:
         context["why"].append(
             f"Advisory intelligence has {len(stale_or_missing)} stale/missing/corrupt packet warning(s)."

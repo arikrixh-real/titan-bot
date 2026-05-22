@@ -13,6 +13,7 @@ from titan_master_brain.setup_normalizer import normalize_setups
 
 ADVISORY_STATUS_PATH = Path("data") / "runtime" / "advisory_intelligence_status.json"
 PYRAMID_CHAIN_STATUS_PATH = Path("data") / "runtime" / "pyramid_chain_status.json"
+PYRAMID_GOVERNANCE_STATUS_PATH = Path("data") / "runtime" / "pyramid_governance_status.json"
 LOAD_CONTROL_STATUS_PATH = Path("data") / "runtime" / "intelligence_load_control_status.json"
 SHADOW_RECOMMENDATIONS_PATH = Path("data") / "consciousness_core" / "master_brain_shadow_recommendations.json"
 ADVISORY_FRESH_SECONDS = 24 * 60 * 60
@@ -236,6 +237,9 @@ def _compact_report_vault(payload):
         "report_count": payload.get("report_count"),
         "source_workers": (payload.get("source_workers") or [])[:30],
         "conflicts": (payload.get("conflicts") or [])[:10],
+        "contradiction_resolution_summaries": (
+            payload.get("contradiction_resolution_summaries") or []
+        )[:10],
         "missing_data": (payload.get("missing_data") or [])[:10],
         "merged_findings_count": _safe_len(payload.get("merged_findings")),
         "safety_scope": payload.get("safety_scope"),
@@ -258,6 +262,9 @@ def _compact_experience_vault(payload):
         "core_validation_required": safety.get("core_validation_required"),
         "live_mutation": safety.get("live_mutation"),
         "packet_hash": payload.get("packet_hash"),
+        "experience_intelligence_summary": payload.get("experience_intelligence_summary")
+        if isinstance(payload.get("experience_intelligence_summary"), dict)
+        else {},
         "sample_lessons": (payload.get("lessons") or [])[:5],
         "sample_observations": (payload.get("observations") or [])[:5],
     }
@@ -406,6 +413,42 @@ def _safe_safety_council_status(advisory=None):
         "warnings": warnings[:20],
         "live_apply_allowed": False,
     }
+
+
+def _safe_pyramid_governance_status(advisory, safety_council):
+    try:
+        from runtime_pyramid_governance import generate_pyramid_governance_status
+
+        return generate_pyramid_governance_status(
+            advisory=advisory,
+            safety_council=safety_council,
+            output_path=PYRAMID_GOVERNANCE_STATUS_PATH,
+        )
+    except Exception as exc:
+        fallback = {
+            "generated_at": utc_now_iso(),
+            "status": "DEGRADED",
+            "components": {},
+            "governance": {
+                "decision": "CAUTION",
+                "governance_decision": "CAUTION",
+                "warnings": [f"pyramid_governance_generation_failed:{exc}"],
+                "governance_warnings": [f"pyramid_governance_generation_failed:{exc}"],
+                "stale_intelligence_warnings": [],
+                "degraded_intelligence_warnings": [
+                    {"source": "pyramid_governance", "status": "DEGRADED", "warning": str(exc)}
+                ],
+                "advisory_only": True,
+                "live_apply_allowed": False,
+                "broker_orders": False,
+                "telegram_changes": False,
+                "strategy_weight_mutation": False,
+                "scoring_mutation": False,
+            },
+            "safety_scope": "governance_status_only_no_live_execution_no_alert_or_strategy_mutation",
+        }
+        _write_json_safely(PYRAMID_GOVERNANCE_STATUS_PATH, fallback)
+        return fallback
 
 
 def _build_shadow_improvement_workflow(advisory):
@@ -642,6 +685,12 @@ def _safe_advisory_intelligence():
     if load_control_error:
         advisory["warnings"].append(load_control_error)
     advisory["safety_council"] = _safe_safety_council_status(advisory)
+    advisory["pyramid_governance"] = _safe_pyramid_governance_status(
+        advisory,
+        advisory["safety_council"],
+    )
+    advisory["governance_decision"] = advisory["pyramid_governance"].get("governance", {}).get("decision")
+    advisory["governance_warnings"] = advisory["pyramid_governance"].get("governance", {}).get("warnings", [])
     _write_advisory_status(advisory)
     _build_pyramid_chain_status(advisory, advisory["safety_council"])
     return advisory

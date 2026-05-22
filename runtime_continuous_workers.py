@@ -53,39 +53,70 @@ HEAVY_WORKER_INTERVAL_SECONDS = {
     for task, rule in HEAVY_TASK_RULES.items()
 }
 
+WORKER_CADENCE_TIERS = {
+    "fast_5_min": [
+        "scanner",
+        "live_price_monitor",
+        "market_regime_update",
+        "market_pressure_check",
+        "setup_engine",
+        "outcome_tracker",
+    ],
+    "medium_10_30_min": [
+        "report_aggregator",
+        "consciousness_core",
+        "daily_review",
+        "learning_engine",
+        "experience_memory",
+        "knowledge_vault_runner",
+        "experience_vault_runner",
+        "memory_compression",
+    ],
+    "heavy_hourly_off_market": [
+        "backtesting",
+        "evolution_engine",
+        "scenario_simulation",
+        "synthetic_simulation",
+        "historical_replay",
+        "replay_batch",
+        "next_day_preparation",
+        "weekly_report",
+    ],
+}
+
 WORKER_TASKS = {
     "heartbeat": 1,
     "runtime_status": 1,
-    "dashboard_sync": 3,
-    "live_price_monitor": 3,
-    "risk_watchdog": 3,
-    "pnl_refresh": 5,
-    "outcome_tracker": 10,
+    "dashboard_sync": 60,
+    "risk_watchdog": 60,
+    "pnl_refresh": 60,
     "broker_health_check": 10,
     "volatility_check": 10,
-    "market_pressure_check": 10,
     "news_pulse": 15,
     "news_intelligence": 15,
-    "experience_memory": 20,
-    "daily_review": 30,
+    "experience_memory": 1800,
+    "daily_review": 1800,
     "runtime_snapshot_logger": 30,
-    "market_regime_update": 30,
-    "sector_strength": 30,
-    "learning_engine": 60,
+    "sector_strength": 300,
+    "learning_engine": 1800,
     "report_aggregator": HEAVY_WORKER_INTERVAL_SECONDS.get("report_aggregator", 900),
-    "knowledge_vault_runner": HEAVY_WORKER_INTERVAL_SECONDS.get("knowledge_vault_runner", 3600),
-    "experience_vault_runner": HEAVY_WORKER_INTERVAL_SECONDS.get("experience_vault_runner", 3600),
+    "knowledge_vault_runner": 1800,
+    "experience_vault_runner": 1800,
     "consciousness_core": HEAVY_WORKER_INTERVAL_SECONDS.get("consciousness_core", 1800),
-    "scenario_simulation": HEAVY_WORKER_INTERVAL_SECONDS.get("scenario_simulation", 1800),
-    "next_day_preparation": 120,
-    "replay_batch": 180,
-    "memory_compression": 180,
-    "synthetic_simulation": 180,
-    "historical_replay": 180,
+    "scenario_simulation": 3600,
+    "next_day_preparation": 3600,
+    "replay_batch": 3600,
+    "memory_compression": 1800,
+    "synthetic_simulation": 3600,
+    "historical_replay": 3600,
     "backtesting": HEAVY_WORKER_INTERVAL_SECONDS.get("backtesting", 7200),
     "evolution_engine": HEAVY_WORKER_INTERVAL_SECONDS.get("evolution_engine", 3600),
-    "scanner": 180,
-    "setup_engine": 240,
+    "scanner": 300,
+    "live_price_monitor": 300,
+    "market_regime_update": 300,
+    "market_pressure_check": 300,
+    "setup_engine": 300,
+    "outcome_tracker": 300,
     "master_brain": 240,
     "ohlc_refresh": 300,
     "journal": 180,
@@ -182,6 +213,7 @@ def _write_worker_health(task, **updates):
                 ),
                 "intelligence_run_count": None,
                 "last_status": "STARTING",
+                "cadence_tier": _cadence_tier_for_task(task),
             },
         )
         current.update(updates)
@@ -645,3 +677,10 @@ def start_continuous_workers(intent=None):
         flush=True,
     )
     return True
+
+
+def _cadence_tier_for_task(task):
+    for tier, tasks in WORKER_CADENCE_TIERS.items():
+        if task in tasks:
+            return tier
+    return "runtime_support"

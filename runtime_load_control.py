@@ -48,22 +48,22 @@ HEAVY_TASK_RULES = {
         "skip_if_unchanged": True,
     },
     "experience_vault_runner": {
-        "min_interval_seconds": 60 * 60,
+        "min_interval_seconds": 30 * 60,
         "input_patterns": ["data/experience_vault/**/*"],
         "skip_if_unchanged": False,
     },
     "knowledge_vault_runner": {
-        "min_interval_seconds": 60 * 60,
+        "min_interval_seconds": 30 * 60,
         "input_patterns": ["data/knowledge_vault/**/*"],
         "skip_if_unchanged": False,
     },
     "scenario_simulation": {
-        "min_interval_seconds": 30 * 60,
+        "min_interval_seconds": 60 * 60,
         "input_patterns": ["data/runtime/master_brain_status.json", "data/research/*.json"],
         "skip_if_unchanged": True,
     },
     "backtesting": {
-        "min_interval_seconds": 2 * 60 * 60,
+        "min_interval_seconds": 60 * 60,
         "input_patterns": ["data/research/*.json", "data/trade_journal.csv", "data/journals/*"],
         "skip_if_unchanged": True,
     },

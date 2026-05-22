@@ -41,6 +41,7 @@ NO_TRADE_MEMORY_PATH = VAULT_ROOT / "memory" / "no_trade_memory.json"
 CONFIDENCE_LESSONS_PATH = VAULT_ROOT / "memory" / "confidence_lessons.json"
 PACKET_PATH = VAULT_ROOT / "reports" / "external_experience_packet.json"
 REPORT_PATH = VAULT_ROOT / "reports" / "latest_experience_report.txt"
+EXPERIENCE_INTELLIGENCE_SUMMARY_PATH = VAULT_ROOT / "reports" / "experience_intelligence_summary.json"
 
 
 def ensure_vault_dirs():
@@ -52,4 +53,3 @@ def ensure_vault_dirs():
 def source_paths():
     ensure_vault_dirs()
     return [VAULT_ROOT / folder for folder in SOURCE_FOLDERS]
-

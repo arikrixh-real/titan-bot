@@ -8,14 +8,82 @@ OUTPUT_PATH = Path("data") / "consciousness_core" / "contradiction_arbitration.j
 
 
 def _contradiction(kind, severity, evidence, adjustment, no_trade_bias, investigation):
+    explanations = _contextual_explanations(kind, evidence)
     return {
         "contradiction_id": "contradiction_" + stable_hash([kind, evidence])[:16],
         "type": kind,
         "severity": severity,
         "evidence_conflict": evidence,
+        "probable_contextual_explanations": explanations,
+        "resolution_summary": _resolution_summary(kind, severity, explanations),
         "recommended_confidence_adjustment": adjustment,
         "no_trade_bias": no_trade_bias,
         "investigation_needed": investigation,
+    }
+
+
+def _contextual_explanations(kind, evidence):
+    explanations = []
+    if "liquidity" in kind or any("liquidity" in str(item).lower() for item in evidence):
+        explanations.append(
+            {
+                "factor": "liquidity/trap condition",
+                "summary": "Setup strength may be occurring inside stressed liquidity, absorption, sweep, or trap conditions.",
+            }
+        )
+    if "breadth" in kind:
+        explanations.append(
+            {
+                "factor": "conflicting breadth",
+                "summary": "Signal strength is not confirmed by broad market participation.",
+            }
+        )
+    if "news" in kind:
+        explanations.append(
+            {
+                "factor": "news anomaly",
+                "summary": "Headline or catalyst strength may be isolated, delayed, or not yet reflected in breadth.",
+            }
+        )
+    if "confidence" in kind:
+        explanations.append(
+            {
+                "factor": "exhaustion condition",
+                "summary": "High confidence has weak realized evidence and may reflect overextension or poor sample depth.",
+            }
+        )
+    if "no_trade" in kind:
+        explanations.append(
+            {
+                "factor": "regime mismatch",
+                "summary": "A strong setup conflicts with a broader no-trade or unfavorable regime warning.",
+            }
+        )
+    if "manipulation" in kind:
+        explanations.append(
+            {
+                "factor": "liquidity/trap condition",
+                "summary": "Setup quality may be distorted by fakeout, sweep, manipulation, or stop-run evidence.",
+            }
+        )
+    if not explanations:
+        explanations.append(
+            {
+                "factor": "volatility difference",
+                "summary": "The conflicting evidence may be measured across different volatility conditions or time windows.",
+            }
+        )
+    return explanations[:5]
+
+
+def _resolution_summary(kind, severity, explanations):
+    factors = ", ".join(item["factor"] for item in explanations if item.get("factor"))
+    return {
+        "type": kind,
+        "severity": severity,
+        "probable_factors": factors,
+        "summary": f"{kind} likely reflects {factors}; keep response advisory and require confirmation before action.",
+        "live_mutation": False,
     }
 
 
@@ -93,6 +161,11 @@ def run_contradiction_arbitrator(output_path=OUTPUT_PATH, **_kwargs):
     payload = {
         "generated_at": now_ist(),
         "contradictions": contradictions,
+        "explanation_summaries": [
+            item.get("resolution_summary")
+            for item in contradictions
+            if isinstance(item.get("resolution_summary"), dict)
+        ],
         "contradiction_count": len(contradictions),
         "overall_severity": "HIGH" if any(item["severity"] == "HIGH" for item in contradictions) else "MEDIUM" if contradictions else "LOW",
         "aggregate_confidence_adjustment": sum(item["recommended_confidence_adjustment"] for item in contradictions),

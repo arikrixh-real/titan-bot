@@ -46,8 +46,6 @@ def get_scheduler_map(mode):
         scheduler_map["every_1_second"] = [
             "heartbeat",
             "runtime_status",
-            "live_price_monitor",
-            "risk_watchdog",
         ]
         scheduler_map["every_5_seconds"] = [
             "volatility_check",
@@ -55,17 +53,18 @@ def get_scheduler_map(mode):
         ]
         scheduler_map["every_10_seconds"] = [
             "pnl_refresh",
-            "market_pressure_check",
         ]
         scheduler_map["every_1_minute"] = [
             "dashboard_sync",
-            "market_regime_update",
             "news_pulse",
             "sector_strength",
-            "outcome_tracker",
             "runtime_snapshot_logger",
         ]
         scheduler_map["every_5_minutes"] = [
+            "live_price_monitor",
+            "market_regime_update",
+            "market_pressure_check",
+            "outcome_tracker",
             "ohlc_refresh",
             "scanner",
             "light_news_pulse",
@@ -73,6 +72,16 @@ def get_scheduler_map(mode):
             "master_brain",
             "journal",
             "paper_engine",
+        ]
+        scheduler_map["every_15_minutes"] = [
+            "report_aggregator",
+        ]
+        scheduler_map["every_30_minutes"] = [
+            "consciousness_core",
+            "learning_engine",
+            "experience_memory",
+            "knowledge_vault_runner",
+            "experience_vault_runner",
         ]
 
     elif mode == "INTELLIGENCE_MODE":
@@ -87,15 +96,22 @@ def get_scheduler_map(mode):
         ]
         scheduler_map["every_5_minutes"] = [
             "scanner",
-            "learning_engine",
-            "experience_memory",
             "runtime_snapshot_logger",
         ]
         scheduler_map["every_15_minutes"] = [
-            "scenario_simulation",
-            "next_day_preparation",
+            "report_aggregator",
         ]
         scheduler_map["every_30_minutes"] = [
+            "consciousness_core",
+            "learning_engine",
+            "experience_memory",
+            "memory_compression",
+            "knowledge_vault_runner",
+            "experience_vault_runner",
+        ]
+        scheduler_map["every_1_hour"] = [
+            "scenario_simulation",
+            "next_day_preparation",
             "evolution_engine",
             "replay_batch",
         ]
@@ -109,18 +125,22 @@ def get_scheduler_map(mode):
             "dashboard_sync",
         ]
         scheduler_map["every_5_minutes"] = [
-            "historical_replay",
-            "backtesting",
             "runtime_snapshot_logger",
         ]
         scheduler_map["every_15_minutes"] = [
-            "synthetic_simulation",
+            "report_aggregator",
         ]
         scheduler_map["every_30_minutes"] = [
-            "evolution_engine",
+            "consciousness_core",
             "memory_compression",
+            "knowledge_vault_runner",
+            "experience_vault_runner",
         ]
         scheduler_map["every_1_hour"] = [
+            "historical_replay",
+            "backtesting",
+            "synthetic_simulation",
+            "evolution_engine",
             "weekly_report",
         ]
 
