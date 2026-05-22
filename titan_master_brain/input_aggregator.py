@@ -16,6 +16,7 @@ PYRAMID_CHAIN_STATUS_PATH = Path("data") / "runtime" / "pyramid_chain_status.jso
 PYRAMID_GOVERNANCE_STATUS_PATH = Path("data") / "runtime" / "pyramid_governance_status.json"
 LOAD_CONTROL_STATUS_PATH = Path("data") / "runtime" / "intelligence_load_control_status.json"
 SHADOW_RECOMMENDATIONS_PATH = Path("data") / "consciousness_core" / "master_brain_shadow_recommendations.json"
+SELF_IMPROVEMENT_STATUS_PATH = Path("data") / "runtime" / "self_improvement_status.json"
 ADVISORY_FRESH_SECONDS = 24 * 60 * 60
 ADVISORY_SOURCES = {
     "consciousness": Path("data") / "consciousness_core" / "consciousness_context.json",
@@ -521,6 +522,45 @@ def _build_shadow_improvement_workflow(advisory):
     return payload
 
 
+def _safe_self_improvement_workflow():
+    try:
+        from consciousness_core.self_improvement_loop import generate_self_improvement_proposals
+
+        return generate_self_improvement_proposals()
+    except Exception as exc:
+        fallback = {
+            "generated_at": utc_now_iso(),
+            "status": "DEGRADED",
+            "proposal_count": 0,
+            "paper_test_count": 0,
+            "blocked_count": 0,
+            "promoted_count": 0,
+            "top_safe_improvement_ideas": [],
+            "warning": f"self_improvement_generation_failed:{exc}",
+            "proposals_path": "data/evolution/proposals/self_improvement_proposals.json",
+            "runtime_status_path": str(SELF_IMPROVEMENT_STATUS_PATH).replace("\\", "/"),
+            "live_apply_allowed": False,
+        }
+        _write_json_safely(SELF_IMPROVEMENT_STATUS_PATH, {
+            "generated_at": fallback["generated_at"],
+            "status": "DEGRADED",
+            "proposals_generated": 0,
+            "proposals_blocked": 0,
+            "proposals_awaiting_validation": 0,
+            "safety_status": {
+                "mode": "SHADOW_ONLY",
+                "warning": fallback["warning"],
+                "live_apply_allowed": False,
+                "broker_orders": False,
+                "telegram_changes": False,
+                "scoring_mutation": False,
+                "strategy_weight_mutation": False,
+            },
+            "live_apply_allowed": False,
+        })
+        return fallback
+
+
 def _build_pyramid_chain_status(advisory, safety_council):
     chain = {
         name: _path_probe(path)
@@ -675,6 +715,7 @@ def _safe_advisory_intelligence():
         advisory["status"] = "STALE"
 
     advisory["strategy_improvement_workflow"] = _build_shadow_improvement_workflow(advisory)
+    advisory["controlled_self_improvement"] = _safe_self_improvement_workflow()
     load_control_payload, load_control_error = _read_json_file(LOAD_CONTROL_STATUS_PATH)
     advisory["load_control"] = {
         "path": str(LOAD_CONTROL_STATUS_PATH).replace("\\", "/"),

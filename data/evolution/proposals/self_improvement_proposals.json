@@ -1,0 +1,1498 @@
+{
+  "allowed_statuses": [
+    "BLOCKED",
+    "PAPER_TEST",
+    "PROMOTED",
+    "PROPOSED",
+    "REJECTED",
+    "VALIDATED"
+  ],
+  "generated_at": "2026-05-22T09:23:07.283501+05:30",
+  "mode": "SHADOW_ONLY_CONTROLLED_SELF_IMPROVEMENT",
+  "promotion_requirements": {
+    "external_simulated_only_evidence_not_sufficient": true,
+    "live_apply_allowed": false,
+    "paper_test_passed_if_required": true,
+    "safety_gate_passed": true,
+    "validation_passed": true
+  },
+  "proposals": [
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "payload_hash": "1d8b876552d32b54b6bef084824e9fbe8ae46f51df11db4ecc10ef29d562599e",
+          "source_path": "data/runtime/advisory_intelligence_status.json"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_39a5bbc96cf0b231",
+      "proposed_change": "Create a paper/backtest validation task for: experience_vault advisory file is stale: data/experience_vault/reports/external_experience_packet.json",
+      "reason": "Report vault finding: experience_vault advisory file is stale: data/experience_vault/reports/external_experience_packet.json",
+      "risk_level": "HIGH",
+      "safety_gate_passed": false,
+      "safety_gate_status": "NEEDS_MORE_EVIDENCE",
+      "source": "report_vault",
+      "source_names": [
+        "data/runtime/advisory_intelligence_status.json",
+        "report_vault"
+      ],
+      "status": "PROPOSED",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_manual_review"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "payload_hash": "1d8b876552d32b54b6bef084824e9fbe8ae46f51df11db4ecc10ef29d562599e",
+          "source_path": "data/runtime/advisory_intelligence_status.json"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_ec1900d98b05779c",
+      "proposed_change": "Create a paper/backtest validation task for: knowledge_vault advisory file is stale: data/knowledge_vault/reports/knowledge_to_consciousness_packet.json",
+      "reason": "Report vault finding: knowledge_vault advisory file is stale: data/knowledge_vault/reports/knowledge_to_consciousness_packet.json",
+      "risk_level": "HIGH",
+      "safety_gate_passed": false,
+      "safety_gate_status": "NEEDS_MORE_EVIDENCE",
+      "source": "report_vault",
+      "source_names": [
+        "data/runtime/advisory_intelligence_status.json",
+        "report_vault"
+      ],
+      "status": "PROPOSED",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_manual_review"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "payload_hash": "8bab1f18182499e6230d06a9c853999d23ca72b3153bf40e0201b9a28e5fe9ab",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        },
+        {
+          "payload_hash": "cc3422ec55a508e5bf83fc31fdf7323a230231e5065c7996d9c72a572abf9070",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        },
+        {
+          "payload_hash": "fda7c9e068bec944bb85046025c1d6d15d34cdb383cdd88b740edfac338cf8ed",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_e09d2578bcb1480a",
+      "proposed_change": "Create a paper/backtest validation task for: feeds_cache:stale:data/runtime/ohlc_refresh_status.json",
+      "reason": "Report vault finding: feeds_cache:stale:data/runtime/ohlc_refresh_status.json",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "report_vault",
+      "source_names": [
+        "data/runtime/pyramid_chain_status.json",
+        "report_vault"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "payload_hash": "8bab1f18182499e6230d06a9c853999d23ca72b3153bf40e0201b9a28e5fe9ab",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_18d37b04ae1df54a",
+      "proposed_change": "Create a paper/backtest validation task for: scanner:stale:data/runtime/scanner_status.json",
+      "reason": "Report vault finding: scanner:stale:data/runtime/scanner_status.json",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "report_vault",
+      "source_names": [
+        "data/runtime/pyramid_chain_status.json",
+        "report_vault"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "payload_hash": "8bab1f18182499e6230d06a9c853999d23ca72b3153bf40e0201b9a28e5fe9ab",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_f3d40c51edeba2d1",
+      "proposed_change": "Create a paper/backtest validation task for: experience_vault:stale:data/experience_vault/reports/external_experience_packet.json",
+      "reason": "Report vault finding: experience_vault:stale:data/experience_vault/reports/external_experience_packet.json",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "report_vault",
+      "source_names": [
+        "data/runtime/pyramid_chain_status.json",
+        "report_vault"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "payload_hash": "8bab1f18182499e6230d06a9c853999d23ca72b3153bf40e0201b9a28e5fe9ab",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_a1bf322a92542a10",
+      "proposed_change": "Create a paper/backtest validation task for: knowledge_vault:stale:data/knowledge_vault/reports/knowledge_to_consciousness_packet.json",
+      "reason": "Report vault finding: knowledge_vault:stale:data/knowledge_vault/reports/knowledge_to_consciousness_packet.json",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "report_vault",
+      "source_names": [
+        "data/runtime/pyramid_chain_status.json",
+        "report_vault"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "payload_hash": "8bab1f18182499e6230d06a9c853999d23ca72b3153bf40e0201b9a28e5fe9ab",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        },
+        {
+          "payload_hash": "cc3422ec55a508e5bf83fc31fdf7323a230231e5065c7996d9c72a572abf9070",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        },
+        {
+          "payload_hash": "fda7c9e068bec944bb85046025c1d6d15d34cdb383cdd88b740edfac338cf8ed",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_541246d1a1794379",
+      "proposed_change": "Create a paper/backtest validation task for: master_brain:stale:data/runtime/master_brain_status.json",
+      "reason": "Report vault finding: master_brain:stale:data/runtime/master_brain_status.json",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "report_vault",
+      "source_names": [
+        "data/runtime/pyramid_chain_status.json",
+        "report_vault"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "payload_hash": "8bab1f18182499e6230d06a9c853999d23ca72b3153bf40e0201b9a28e5fe9ab",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        },
+        {
+          "payload_hash": "cc3422ec55a508e5bf83fc31fdf7323a230231e5065c7996d9c72a572abf9070",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        },
+        {
+          "payload_hash": "fda7c9e068bec944bb85046025c1d6d15d34cdb383cdd88b740edfac338cf8ed",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_3938dcda971aa2c8",
+      "proposed_change": "Create a paper/backtest validation task for: safety_gates:stale:data/execution_safety/latest_execution_safety_report.json",
+      "reason": "Report vault finding: safety_gates:stale:data/execution_safety/latest_execution_safety_report.json",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "report_vault",
+      "source_names": [
+        "data/runtime/pyramid_chain_status.json",
+        "report_vault"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "live_mutation": "False",
+          "probable_contextual_explanations": [
+            "exhaustion condition",
+            "freshness or degraded-source mismatch"
+          ],
+          "severities": [
+            "CRITICAL",
+            "HIGH",
+            "MEDIUM"
+          ],
+          "sources": [
+            "advisory_intelligence_status",
+            "intelligence_load_control_status",
+            "master_brain",
+            "pyramid_chain_status",
+            "pyramid_governance_status",
+            "runtime_mode_status",
+            "scanner_status",
+            "titan_runtime_status"
+          ],
+          "statuses": [
+            "NEW",
+            "OK",
+            "SCAN_ONLY_STALE_OHLC",
+            "STALE",
+            "WARNING"
+          ],
+          "subject": "existing_report_file",
+          "summary": "existing_report_file conflict may reflect exhaustion condition, freshness or degraded-source mismatch; keep as advisory until confirmed."
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": false,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_7381ca804302994e",
+      "proposed_change": "Route conflicting intelligence to manual review before any downstream strategy change.",
+      "reason": "existing_report_file conflict may reflect exhaustion condition, freshness or degraded-source mismatch; keep as advisory until confirmed.",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "contradiction_summary",
+      "source_names": [
+        "contradiction_summary"
+      ],
+      "status": "PROPOSED",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_backtest"
+    },
+    {
+      "affected_area": "backtesting",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "cause": "unknown",
+          "cause_type": "observation",
+          "confidence": "0.55",
+          "effect": "missing_optional_data",
+          "effect_type": "weakness",
+          "lesson": "Separate expected absent optional sources from broken pipelines.",
+          "link_id": "cause_99122f267f287ded",
+          "target_engine": "data_collector"
+        },
+        {
+          "cause": "data/runtime/worker_health.json",
+          "cause_type": "observation",
+          "confidence": "0.65",
+          "effect": "study missing source before drawing strategy conclusions",
+          "effect_type": "proposal",
+          "lesson": "proposal remains recommendation-only until sandbox and paper evidence improves",
+          "link_id": "cause_e405de15360a43d1",
+          "target_engine": "research_pipeline"
+        },
+        {
+          "cause": "unknown",
+          "cause_type": "observation",
+          "confidence": "0.65",
+          "effect": "study missing source before drawing strategy conclusions",
+          "effect_type": "proposal",
+          "lesson": "proposal remains recommendation-only until sandbox and paper evidence improves",
+          "link_id": "cause_a728fd0ca2c9f93e",
+          "target_engine": "research_pipeline"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_92e680cbdc21f8e4",
+      "proposed_change": "block strategy parameter promotion under insufficient validation",
+      "reason": "block strategy parameter promotion under insufficient validation",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "consciousness_core",
+      "source_names": [
+        "consciousness_core"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "confidence_calibration",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "cause": "unknown",
+          "cause_type": "observation",
+          "confidence": "0.55",
+          "effect": "missing_optional_data",
+          "effect_type": "weakness",
+          "lesson": "Separate expected absent optional sources from broken pipelines.",
+          "link_id": "cause_99122f267f287ded",
+          "target_engine": "data_collector"
+        },
+        {
+          "cause": "data/runtime/worker_health.json",
+          "cause_type": "observation",
+          "confidence": "0.65",
+          "effect": "study missing source before drawing strategy conclusions",
+          "effect_type": "proposal",
+          "lesson": "proposal remains recommendation-only until sandbox and paper evidence improves",
+          "link_id": "cause_e405de15360a43d1",
+          "target_engine": "research_pipeline"
+        },
+        {
+          "cause": "unknown",
+          "cause_type": "observation",
+          "confidence": "0.65",
+          "effect": "study missing source before drawing strategy conclusions",
+          "effect_type": "proposal",
+          "lesson": "proposal remains recommendation-only until sandbox and paper evidence improves",
+          "link_id": "cause_a728fd0ca2c9f93e",
+          "target_engine": "research_pipeline"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_2b4637f3bccbe413",
+      "proposed_change": "reduce confidence contribution when calibration evidence is weak",
+      "reason": "reduce confidence contribution when calibration evidence is weak",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "consciousness_core",
+      "source_names": [
+        "consciousness_core"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "no_trade",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "cause": "unknown",
+          "cause_type": "observation",
+          "confidence": "0.55",
+          "effect": "missing_optional_data",
+          "effect_type": "weakness",
+          "lesson": "Separate expected absent optional sources from broken pipelines.",
+          "link_id": "cause_99122f267f287ded",
+          "target_engine": "data_collector"
+        },
+        {
+          "cause": "data/runtime/worker_health.json",
+          "cause_type": "observation",
+          "confidence": "0.65",
+          "effect": "study missing source before drawing strategy conclusions",
+          "effect_type": "proposal",
+          "lesson": "proposal remains recommendation-only until sandbox and paper evidence improves",
+          "link_id": "cause_e405de15360a43d1",
+          "target_engine": "research_pipeline"
+        },
+        {
+          "cause": "unknown",
+          "cause_type": "observation",
+          "confidence": "0.65",
+          "effect": "study missing source before drawing strategy conclusions",
+          "effect_type": "proposal",
+          "lesson": "proposal remains recommendation-only until sandbox and paper evidence improves",
+          "link_id": "cause_a728fd0ca2c9f93e",
+          "target_engine": "research_pipeline"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_f5dfe1130a76d316",
+      "proposed_change": "tighten choppy or caution regime filter in sandbox tests",
+      "reason": "tighten choppy or caution regime filter in sandbox tests",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "consciousness_core",
+      "source_names": [
+        "consciousness_core"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "setup_engine",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "count": "1",
+          "pattern": "TATASTEEL|SHORT|SHORT stop loss hit"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_6ae979db4ce3b318",
+      "proposed_change": "require sector confirmation for setups resembling repeated failure patterns",
+      "reason": "require sector confirmation for setups resembling repeated failure patterns",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "consciousness_core",
+      "source_names": [
+        "consciousness_core"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "confidence_calibration",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        "confidence sample size 0 below target 20",
+        "calibration warning is REVIEW",
+        "confidence calibration is proxy-based",
+        "1 high-score losses found in outcomes"
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_d99c257541056caa",
+      "proposed_change": "reduce confidence trust when calibration sample size or bucket evidence is weak",
+      "reason": "confidence calibration is weak or proxy-based",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "consciousness_core",
+      "source_names": [
+        "consciousness_core"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "no_trade_intelligence",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        "repeat of recent losing setup without fresh validation"
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_16ee673fdf9b99a3",
+      "proposed_change": "increase no-trade caution during repeated review warning",
+      "reason": "daily review produced avoidance warnings",
+      "risk_level": "LOW",
+      "safety_gate_passed": false,
+      "safety_gate_status": "NEEDS_MORE_EVIDENCE",
+      "source": "consciousness_core",
+      "source_names": [
+        "consciousness_core"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "promotion_gate",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        "worker health report is unavailable",
+        "backtesting validation has insufficient samples",
+        "real confidence calibration sample size"
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_94b0e59710d0331c",
+      "proposed_change": "require more validation samples before strategy promotion",
+      "reason": "backtesting validation evidence is insufficient",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": false,
+      "safety_gate_status": "NEEDS_MORE_EVIDENCE",
+      "source": "consciousness_core",
+      "source_names": [
+        "consciousness_core"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "runtime_engine_registry",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "engine": "backtesting",
+          "evidence": "insufficient/proxy/error signals present",
+          "reliability": "WEAK"
+        },
+        {
+          "engine": "confidence_calibration",
+          "evidence": "insufficient/proxy/error signals present",
+          "reliability": "WEAK"
+        },
+        {
+          "engine": "no_trade_intelligence",
+          "evidence": "insufficient/proxy/error signals present",
+          "reliability": "WEAK"
+        },
+        {
+          "engine": "news_intelligence",
+          "evidence": "insufficient/proxy/error signals present",
+          "reliability": "WEAK"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_825d62eb22d4d768",
+      "proposed_change": "treat placeholder workers as unavailable",
+      "reason": "engine evidence indicates placeholder or unavailable behavior",
+      "risk_level": "LOW",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "consciousness_core",
+      "source_names": [
+        "consciousness_core"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "backtesting_validation",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        "strategies with no historical or out-of-sample validation"
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_a29566b932d466b0",
+      "proposed_change": "prioritize backtesting coverage improvement and paper-only validation",
+      "reason": "paper testing is needed before live learning",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": false,
+      "safety_gate_status": "NEEDS_MORE_EVIDENCE",
+      "source": "consciousness_core",
+      "source_names": [
+        "consciousness_core"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "lesson_type": "failure_success_reason",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "SIDEWAYS",
+          "setup_type": "relative_strength_breakout",
+          "symbol": "SUNPHARMA",
+          "text": "reason for failure/success: Stop loss touched at 2019-01-03T12:50:00+00:00; relative_strength_breakout failed due to weak follow-through, possible trap behavior, or volatility reversal in SIDEWAYS regime.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "causal_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "SIDEWAYS",
+          "setup_type": "relative_strength_breakout",
+          "symbol": "SUNPHARMA",
+          "text": "causal lesson: relative_strength_breakout simulated external historical experience for SUNPHARMA: trend=MIXED, regime=SIDEWAYS, side=LONG, volume_score=1.23, strength_score=-0.22, compression_score=4.23, score=70.2. Setup was evaluated using trend alignment, momentum quality, structure, volatility state, and 1:2 r -> Stop loss touched at 2019-01-03T12:50:00+00:00; relative_strength_breakout failed due to weak follow-through, possible trap behavior, or volatility reversal in SIDEWAYS regime. -> r",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "no_trade_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "SIDEWAYS",
+          "setup_type": "relative_strength_breakout",
+          "symbol": "SUNPHARMA",
+          "text": "no-trade lesson: relative_strength_breakout on SUNPHARMA failed for LONG trades in SIDEWAYS conditions. TITAN should watch for trap risk, poor confirmation, volatility reversal, or weak continuation before trusting this setup again. Score=70.2, confidence=62.9. Preserve as simulated weakness evidence until validated",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "stock_behavior",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "SIDEWAYS",
+          "setup_type": "relative_strength_breakout",
+          "symbol": "SUNPHARMA",
+          "text": "stock behavior: SUNPHARMA LONG relative_strength_breakout in SIDEWAYS resolved as LOSS.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "confidence_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "SIDEWAYS",
+          "setup_type": "relative_strength_breakout",
+          "symbol": "SUNPHARMA",
+          "text": "confidence calibration lesson: confidence=62.9; score=70.2; outcome=LOSS; basis=relative_strength_breakout simulated external historical experience for SUNPHARMA: trend=MIXED, regime=SIDEWAYS, side=LONG, volume_score=1.23, strength_score=-0.22, compression_score=4.23, score=70.2. Setup was evaluated using trend alignment, momentum quality, structure, volatility state, and 1:2 r",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        }
+      ],
+      "external_simulated_only_evidence": true,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_be141c9d1fcd8619",
+      "proposed_change": "Backtest and paper-test whether this imported failure pattern is present in native TITAN data: Stop loss touched at 2019-01-03T12:50:00+00:00; relative_strength_breakout failed due to weak follow-through, possible t",
+      "reason": "Imported experience failure cluster observed: Stop loss touched at 2019-01-03T12:50:00+00:00; relative_strength_breakout failed due to weak follow-through, possible t",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "experience_intelligence",
+      "source_names": [
+        "experience_intelligence"
+      ],
+      "status": "PROPOSED",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_backtest"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "lesson_type": "failure_success_reason",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "SIDEWAYS",
+          "setup_type": "compression_breakout_attempt",
+          "symbol": "TATAMOTORS",
+          "text": "reason for failure/success: Stop loss touched at 2019-01-07T14:20:00+00:00; compression_breakout_attempt failed due to weak follow-through, possible trap behavior, or volatility reversal in SIDEWAYS regime.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "causal_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "SIDEWAYS",
+          "setup_type": "compression_breakout_attempt",
+          "symbol": "TATAMOTORS",
+          "text": "causal lesson: compression_breakout_attempt simulated external historical experience for TATAMOTORS: trend=SIDEWAYS, regime=SIDEWAYS, side=SHORT, volume_score=1.49, strength_score=-0.22, compression_score=9.91, score=76.74. Setup was evaluated using trend alignment, momentum quality, structure, volatility state, a -> Stop loss touched at 2019-01-07T14:20:00+00:00; compression_breakout_attempt failed due to weak follow-through, possible trap behavior, or volatility reversal in SIDEWAYS regime. ->",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "no_trade_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "SIDEWAYS",
+          "setup_type": "compression_breakout_attempt",
+          "symbol": "TATAMOTORS",
+          "text": "no-trade lesson: compression_breakout_attempt on TATAMOTORS failed for SHORT trades in SIDEWAYS conditions. TITAN should watch for trap risk, poor confirmation, volatility reversal, or weak continuation before trusting this setup again. Score=76.74, confidence=79.69. Preserve as simulated weakness evidence until val",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "stock_behavior",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "SIDEWAYS",
+          "setup_type": "compression_breakout_attempt",
+          "symbol": "TATAMOTORS",
+          "text": "stock behavior: TATAMOTORS SHORT compression_breakout_attempt in SIDEWAYS resolved as LOSS.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "confidence_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "SIDEWAYS",
+          "setup_type": "compression_breakout_attempt",
+          "symbol": "TATAMOTORS",
+          "text": "confidence calibration lesson: confidence=79.69; score=76.74; outcome=LOSS; basis=compression_breakout_attempt simulated external historical experience for TATAMOTORS: trend=SIDEWAYS, regime=SIDEWAYS, side=SHORT, volume_score=1.49, strength_score=-0.22, compression_score=9.91, score=76.74. Setup was evaluated using trend alignment, momentum quality, structure, volatility state, a",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        }
+      ],
+      "external_simulated_only_evidence": true,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_664343dcf54e9801",
+      "proposed_change": "Backtest and paper-test whether this imported failure pattern is present in native TITAN data: Stop loss touched at 2019-01-07T14:20:00+00:00; compression_breakout_attempt failed due to weak follow-through, possible",
+      "reason": "Imported experience failure cluster observed: Stop loss touched at 2019-01-07T14:20:00+00:00; compression_breakout_attempt failed due to weak follow-through, possible",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "experience_intelligence",
+      "source_names": [
+        "experience_intelligence"
+      ],
+      "status": "PROPOSED",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_backtest"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "lesson_type": "failure_success_reason",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "LOW_VOLATILITY_COMPRESSION",
+          "setup_type": "relative_strength_breakout",
+          "symbol": "LT",
+          "text": "reason for failure/success: Stop loss touched at 2019-01-07T14:20:00+00:00; relative_strength_breakout failed due to weak follow-through, possible trap behavior, or volatility reversal in LOW_VOLATILITY_COMPRESSION regime.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "causal_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "LOW_VOLATILITY_COMPRESSION",
+          "setup_type": "relative_strength_breakout",
+          "symbol": "LT",
+          "text": "causal lesson: relative_strength_breakout simulated external historical experience for LT: trend=BEARISH, regime=LOW_VOLATILITY_COMPRESSION, side=SHORT, volume_score=1.38, strength_score=0.46, compression_score=7.8, score=86.61. Setup was evaluated using trend alignment, momentum quality, structure, volatility sta -> Stop loss touched at 2019-01-07T14:20:00+00:00; relative_strength_breakout failed due to weak follow-through, possible trap behavior, or volatility reversal in LOW_VOLATILITY_COMPRE",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "no_trade_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "LOW_VOLATILITY_COMPRESSION",
+          "setup_type": "relative_strength_breakout",
+          "symbol": "LT",
+          "text": "no-trade lesson: relative_strength_breakout on LT failed for SHORT trades in LOW_VOLATILITY_COMPRESSION conditions. TITAN should watch for trap risk, poor confirmation, volatility reversal, or weak continuation before trusting this setup again. Score=86.61, confidence=81.17. Preserve as simulated weakness evidence u",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "stock_behavior",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "LOW_VOLATILITY_COMPRESSION",
+          "setup_type": "relative_strength_breakout",
+          "symbol": "LT",
+          "text": "stock behavior: LT SHORT relative_strength_breakout in LOW_VOLATILITY_COMPRESSION resolved as LOSS.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "confidence_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "LOW_VOLATILITY_COMPRESSION",
+          "setup_type": "relative_strength_breakout",
+          "symbol": "LT",
+          "text": "confidence calibration lesson: confidence=81.17; score=86.61; outcome=LOSS; basis=relative_strength_breakout simulated external historical experience for LT: trend=BEARISH, regime=LOW_VOLATILITY_COMPRESSION, side=SHORT, volume_score=1.38, strength_score=0.46, compression_score=7.8, score=86.61. Setup was evaluated using trend alignment, momentum quality, structure, volatility sta",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        }
+      ],
+      "external_simulated_only_evidence": true,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_14260072eccf1fd4",
+      "proposed_change": "Backtest and paper-test whether this imported failure pattern is present in native TITAN data: Stop loss touched at 2019-01-07T14:20:00+00:00; relative_strength_breakout failed due to weak follow-through, possible t",
+      "reason": "Imported experience failure cluster observed: Stop loss touched at 2019-01-07T14:20:00+00:00; relative_strength_breakout failed due to weak follow-through, possible t",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "experience_intelligence",
+      "source_names": [
+        "experience_intelligence"
+      ],
+      "status": "PROPOSED",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_backtest"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "lesson_type": "failure_success_reason",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "BULLISH",
+          "setup_type": "relative_strength_breakout",
+          "symbol": "MARUTI",
+          "text": "reason for failure/success: Stop loss touched at 2019-01-09T13:50:00+00:00; relative_strength_breakout failed due to weak follow-through, possible trap behavior, or volatility reversal in BULLISH regime.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "causal_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "BULLISH",
+          "setup_type": "relative_strength_breakout",
+          "symbol": "MARUTI",
+          "text": "causal lesson: relative_strength_breakout simulated external historical experience for MARUTI: trend=BULLISH, regime=BULLISH, side=LONG, volume_score=0.85, strength_score=1.82, compression_score=7.14, score=75.97. Setup was evaluated using trend alignment, momentum quality, structure, volatility state, and 1:2 ris -> Stop loss touched at 2019-01-09T13:50:00+00:00; relative_strength_breakout failed due to weak follow-through, possible trap behavior, or volatility reversal in BULLISH regime. -> re",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "no_trade_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "BULLISH",
+          "setup_type": "relative_strength_breakout",
+          "symbol": "MARUTI",
+          "text": "no-trade lesson: relative_strength_breakout on MARUTI failed for LONG trades in BULLISH conditions. TITAN should watch for trap risk, poor confirmation, volatility reversal, or weak continuation before trusting this setup again. Score=75.97, confidence=78.23. Preserve as simulated weakness evidence until validated.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "stock_behavior",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "BULLISH",
+          "setup_type": "relative_strength_breakout",
+          "symbol": "MARUTI",
+          "text": "stock behavior: MARUTI LONG relative_strength_breakout in BULLISH resolved as LOSS.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "confidence_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "BULLISH",
+          "setup_type": "relative_strength_breakout",
+          "symbol": "MARUTI",
+          "text": "confidence calibration lesson: confidence=78.23; score=75.97; outcome=LOSS; basis=relative_strength_breakout simulated external historical experience for MARUTI: trend=BULLISH, regime=BULLISH, side=LONG, volume_score=0.85, strength_score=1.82, compression_score=7.14, score=75.97. Setup was evaluated using trend alignment, momentum quality, structure, volatility state, and 1:2 ris",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        }
+      ],
+      "external_simulated_only_evidence": true,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_a07a565e0ce397fa",
+      "proposed_change": "Backtest and paper-test whether this imported failure pattern is present in native TITAN data: Stop loss touched at 2019-01-09T13:50:00+00:00; relative_strength_breakout failed due to weak follow-through, possible t",
+      "reason": "Imported experience failure cluster observed: Stop loss touched at 2019-01-09T13:50:00+00:00; relative_strength_breakout failed due to weak follow-through, possible t",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "experience_intelligence",
+      "source_names": [
+        "experience_intelligence"
+      ],
+      "status": "PROPOSED",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_backtest"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "lesson_type": "failure_success_reason",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "LOW_VOLATILITY_COMPRESSION",
+          "setup_type": "compression_breakout_attempt",
+          "symbol": "ULTRACEMCO",
+          "text": "reason for failure/success: Stop loss touched at 2019-01-15T14:50:00+00:00; compression_breakout_attempt failed due to weak follow-through, possible trap behavior, or volatility reversal in LOW_VOLATILITY_COMPRESSION regime.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "causal_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "LOW_VOLATILITY_COMPRESSION",
+          "setup_type": "compression_breakout_attempt",
+          "symbol": "ULTRACEMCO",
+          "text": "causal lesson: compression_breakout_attempt simulated external historical experience for ULTRACEMCO: trend=BULLISH, regime=LOW_VOLATILITY_COMPRESSION, side=LONG, volume_score=2.51, strength_score=-1.93, compression_score=6.93, score=69.34. Setup was evaluated using trend alignment, momentum quality, structure, vol -> Stop loss touched at 2019-01-15T14:50:00+00:00; compression_breakout_attempt failed due to weak follow-through, possible trap behavior, or volatility reversal in LOW_VOLATILITY_COMP",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "no_trade_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "LOW_VOLATILITY_COMPRESSION",
+          "setup_type": "compression_breakout_attempt",
+          "symbol": "ULTRACEMCO",
+          "text": "no-trade lesson: compression_breakout_attempt on ULTRACEMCO failed for LONG trades in LOW_VOLATILITY_COMPRESSION conditions. TITAN should watch for trap risk, poor confirmation, volatility reversal, or weak continuation before trusting this setup again. Score=69.34, confidence=75.16. Preserve as simulated weakness e",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "stock_behavior",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "LOW_VOLATILITY_COMPRESSION",
+          "setup_type": "compression_breakout_attempt",
+          "symbol": "ULTRACEMCO",
+          "text": "stock behavior: ULTRACEMCO LONG compression_breakout_attempt in LOW_VOLATILITY_COMPRESSION resolved as LOSS.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "confidence_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "LOW_VOLATILITY_COMPRESSION",
+          "setup_type": "compression_breakout_attempt",
+          "symbol": "ULTRACEMCO",
+          "text": "confidence calibration lesson: confidence=75.16; score=69.34; outcome=LOSS; basis=compression_breakout_attempt simulated external historical experience for ULTRACEMCO: trend=BULLISH, regime=LOW_VOLATILITY_COMPRESSION, side=LONG, volume_score=2.51, strength_score=-1.93, compression_score=6.93, score=69.34. Setup was evaluated using trend alignment, momentum quality, structure, vol",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        }
+      ],
+      "external_simulated_only_evidence": true,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_6989388ebf50e19e",
+      "proposed_change": "Backtest and paper-test whether this imported failure pattern is present in native TITAN data: Stop loss touched at 2019-01-15T14:50:00+00:00; compression_breakout_attempt failed due to weak follow-through, possible",
+      "reason": "Imported experience failure cluster observed: Stop loss touched at 2019-01-15T14:50:00+00:00; compression_breakout_attempt failed due to weak follow-through, possible",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "experience_intelligence",
+      "source_names": [
+        "experience_intelligence"
+      ],
+      "status": "PROPOSED",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_backtest"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "lesson_type": "failure_success_reason",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "BEARISH",
+          "setup_type": "reversal_trap",
+          "symbol": "ITC",
+          "text": "reason for failure/success: Stop loss touched at 2019-01-22T11:20:00+00:00; reversal_trap failed due to weak follow-through, possible trap behavior, or volatility reversal in BEARISH regime.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "causal_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "BEARISH",
+          "setup_type": "reversal_trap",
+          "symbol": "ITC",
+          "text": "causal lesson: reversal_trap simulated external historical experience for ITC: trend=BEARISH, regime=BEARISH, side=SHORT, volume_score=1.1, strength_score=0.25, compression_score=9.99, score=91.3. Setup was evaluated using trend alignment, momentum quality, structure, volatility state, and 1:2 risk-reward behavior -> Stop loss touched at 2019-01-22T11:20:00+00:00; reversal_trap failed due to weak follow-through, possible trap behavior, or volatility reversal in BEARISH regime. -> reversal_trap o",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "no_trade_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "BEARISH",
+          "setup_type": "reversal_trap",
+          "symbol": "ITC",
+          "text": "no-trade lesson: reversal_trap on ITC failed for SHORT trades in BEARISH conditions. TITAN should watch for trap risk, poor confirmation, volatility reversal, or weak continuation before trusting this setup again. Score=91.3, confidence=86.71. Preserve as simulated weakness evidence until validated.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "stock_behavior",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "BEARISH",
+          "setup_type": "reversal_trap",
+          "symbol": "ITC",
+          "text": "stock behavior: ITC SHORT reversal_trap in BEARISH resolved as LOSS.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "confidence_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "BEARISH",
+          "setup_type": "reversal_trap",
+          "symbol": "ITC",
+          "text": "confidence calibration lesson: confidence=86.71; score=91.3; outcome=LOSS; basis=reversal_trap simulated external historical experience for ITC: trend=BEARISH, regime=BEARISH, side=SHORT, volume_score=1.1, strength_score=0.25, compression_score=9.99, score=91.3. Setup was evaluated using trend alignment, momentum quality, structure, volatility state, and 1:2 risk-reward behavior",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        }
+      ],
+      "external_simulated_only_evidence": true,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_8a75054ed19cf47b",
+      "proposed_change": "Backtest and paper-test whether this imported failure pattern is present in native TITAN data: Stop loss touched at 2019-01-22T11:20:00+00:00; reversal_trap failed due to weak follow-through, possible trap behavior,",
+      "reason": "Imported experience failure cluster observed: Stop loss touched at 2019-01-22T11:20:00+00:00; reversal_trap failed due to weak follow-through, possible trap behavior,",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "experience_intelligence",
+      "source_names": [
+        "experience_intelligence"
+      ],
+      "status": "PROPOSED",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_backtest"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "lesson_type": "failure_success_reason",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "BEARISH",
+          "setup_type": "compression_breakout_attempt",
+          "symbol": "ADANIPORTS",
+          "text": "reason for failure/success: Stop loss touched at 2019-01-29T09:50:00+00:00; compression_breakout_attempt failed due to weak follow-through, possible trap behavior, or volatility reversal in BEARISH regime.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "causal_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "BEARISH",
+          "setup_type": "compression_breakout_attempt",
+          "symbol": "ADANIPORTS",
+          "text": "causal lesson: compression_breakout_attempt simulated external historical experience for ADANIPORTS: trend=BULLISH, regime=BEARISH, side=LONG, volume_score=4.71, strength_score=2.31, compression_score=8.78, score=84.19. Setup was evaluated using trend alignment, momentum quality, structure, volatility state, and 1 -> Stop loss touched at 2019-01-29T09:50:00+00:00; compression_breakout_attempt failed due to weak follow-through, possible trap behavior, or volatility reversal in BEARISH regime. -> ",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "no_trade_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "BEARISH",
+          "setup_type": "compression_breakout_attempt",
+          "symbol": "ADANIPORTS",
+          "text": "no-trade lesson: compression_breakout_attempt on ADANIPORTS failed for LONG trades in BEARISH conditions. TITAN should watch for trap risk, poor confirmation, volatility reversal, or weak continuation before trusting this setup again. Score=84.19, confidence=88.79. Preserve as simulated weakness evidence until valid",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "stock_behavior",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "BEARISH",
+          "setup_type": "compression_breakout_attempt",
+          "symbol": "ADANIPORTS",
+          "text": "stock behavior: ADANIPORTS LONG compression_breakout_attempt in BEARISH resolved as LOSS.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "confidence_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "BEARISH",
+          "setup_type": "compression_breakout_attempt",
+          "symbol": "ADANIPORTS",
+          "text": "confidence calibration lesson: confidence=88.79; score=84.19; outcome=LOSS; basis=compression_breakout_attempt simulated external historical experience for ADANIPORTS: trend=BULLISH, regime=BEARISH, side=LONG, volume_score=4.71, strength_score=2.31, compression_score=8.78, score=84.19. Setup was evaluated using trend alignment, momentum quality, structure, volatility state, and 1",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        }
+      ],
+      "external_simulated_only_evidence": true,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_641b2921df5f7aa9",
+      "proposed_change": "Backtest and paper-test whether this imported failure pattern is present in native TITAN data: Stop loss touched at 2019-01-29T09:50:00+00:00; compression_breakout_attempt failed due to weak follow-through, possible",
+      "reason": "Imported experience failure cluster observed: Stop loss touched at 2019-01-29T09:50:00+00:00; compression_breakout_attempt failed due to weak follow-through, possible",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "experience_intelligence",
+      "source_names": [
+        "experience_intelligence"
+      ],
+      "status": "PROPOSED",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_backtest"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "lesson_type": "failure_success_reason",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "HIGH_VOLATILITY",
+          "setup_type": "trend_momentum_breakout",
+          "symbol": "BHARTIARTL",
+          "text": "reason for failure/success: Stop loss touched at 2019-01-30T13:50:00+00:00; trend_momentum_breakout failed due to weak follow-through, possible trap behavior, or volatility reversal in HIGH_VOLATILITY regime.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "causal_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "HIGH_VOLATILITY",
+          "setup_type": "trend_momentum_breakout",
+          "symbol": "BHARTIARTL",
+          "text": "causal lesson: trend_momentum_breakout simulated external historical experience for BHARTIARTL: trend=BULLISH, regime=HIGH_VOLATILITY, side=LONG, volume_score=0.9, strength_score=-1.34, compression_score=3.95, score=80.2. Setup was evaluated using trend alignment, momentum quality, structure, volatility state, and -> Stop loss touched at 2019-01-30T13:50:00+00:00; trend_momentum_breakout failed due to weak follow-through, possible trap behavior, or volatility reversal in HIGH_VOLATILITY regime. ",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "no_trade_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "HIGH_VOLATILITY",
+          "setup_type": "trend_momentum_breakout",
+          "symbol": "BHARTIARTL",
+          "text": "no-trade lesson: trend_momentum_breakout on BHARTIARTL failed for LONG trades in HIGH_VOLATILITY conditions. TITAN should watch for trap risk, poor confirmation, volatility reversal, or weak continuation before trusting this setup again. Score=80.2, confidence=76.67. Preserve as simulated weakness evidence until val",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "stock_behavior",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "HIGH_VOLATILITY",
+          "setup_type": "trend_momentum_breakout",
+          "symbol": "BHARTIARTL",
+          "text": "stock behavior: BHARTIARTL LONG trend_momentum_breakout in HIGH_VOLATILITY resolved as LOSS.",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        },
+        {
+          "lesson_type": "confidence_lesson",
+          "outcome": "LOSS",
+          "polarity": "NEGATIVE",
+          "regime": "HIGH_VOLATILITY",
+          "setup_type": "trend_momentum_breakout",
+          "symbol": "BHARTIARTL",
+          "text": "confidence calibration lesson: confidence=76.67; score=80.2; outcome=LOSS; basis=trend_momentum_breakout simulated external historical experience for BHARTIARTL: trend=BULLISH, regime=HIGH_VOLATILITY, side=LONG, volume_score=0.9, strength_score=-1.34, compression_score=3.95, score=80.2. Setup was evaluated using trend alignment, momentum quality, structure, volatility state, and",
+          "trust_level": "IMPORTED_UNVALIDATED",
+          "validation_status": "UNVALIDATED"
+        }
+      ],
+      "external_simulated_only_evidence": true,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_5d9943f638e33048",
+      "proposed_change": "Backtest and paper-test whether this imported failure pattern is present in native TITAN data: Stop loss touched at 2019-01-30T13:50:00+00:00; trend_momentum_breakout failed due to weak follow-through, possible trap",
+      "reason": "Imported experience failure cluster observed: Stop loss touched at 2019-01-30T13:50:00+00:00; trend_momentum_breakout failed due to weak follow-through, possible trap",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "experience_intelligence",
+      "source_names": [
+        "experience_intelligence"
+      ],
+      "status": "PROPOSED",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_backtest"
+    },
+    {
+      "affected_area": "confidence_calibration",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "accuracy": "0.0",
+          "calibration_error": "0.0",
+          "mean_actual": "0.0",
+          "mean_confidence": "0.0",
+          "sample_size": "0"
+        },
+        {
+          "base_confidence": "50.0",
+          "corrected_confidence": "31.5",
+          "decay_points": "0.0",
+          "low_sample_shrinkage_points": "20.0",
+          "overconfidence_penalty_points": "0.0",
+          "reliability_adjustment": "0.0"
+        },
+        "REVIEW"
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_67cd934967193542",
+      "proposed_change": "Keep confidence reductions in paper validation until calibrated native outcome samples are populated.",
+      "reason": "Confidence calibration evidence is weak, proxy-based, or under-sampled.",
+      "risk_level": "MEDIUM",
+      "safety_gate_passed": true,
+      "safety_gate_status": "APPROVED_FOR_TEST",
+      "source": "confidence_calibration",
+      "source_names": [
+        "confidence_calibration"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_paper_test"
+    },
+    {
+      "affected_area": "backtesting",
+      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "evidence": [
+        {
+          "available": "False",
+          "avg_rr": "0.0",
+          "avg_score": "0.0",
+          "expectancy": "0.0",
+          "losses": "0",
+          "profit_factor": "0.0",
+          "quality_score": "0.0",
+          "sample_size": "0",
+          "status": "NO_DATA",
+          "strategy": "Test: SHORT setup quality should be tested separately",
+          "total_pnl": "0",
+          "win_rate": "0.0",
+          "wins": "0"
+        },
+        {
+          "available": "False",
+          "degradation": "0.0",
+          "status": "NO_TEST_DATA",
+          "test": {
+            "avg_rr": "0.0",
+            "avg_score": "0.0",
+            "expectancy": "0.0",
+            "losses": "0",
+            "profit_factor": "0.0",
+            "quality_score": "0.0",
+            "sample_size": "0",
+            "total_pnl": "0",
+            "win_rate": "0.0",
+            "wins": "0"
+          },
+          "train": {
+            "avg_rr": "0.0",
+            "avg_score": "0.0",
+            "expectancy": "0.0",
+            "losses": "0",
+            "profit_factor": "0.0",
+            "quality_score": "0.0",
+            "sample_size": "0",
+            "total_pnl": "0",
+            "win_rate": "0.0",
+            "wins": "0"
+          },
+          "validation_score": "0.0"
+        },
+        {
+          "sample_size": "0",
+          "significance_score": "60.0",
+          "significant": "False",
+          "win_rate": "0.0"
+        },
+        [
+          "Validation score is 29.0 with status FAIL.",
+          "Statistical significance is not strong enough for deployment.",
+          "Validation only; live deployment is explicitly disabled."
+        ]
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": false,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_626c271c1b4c6003",
+      "proposed_change": "Block promotion and prioritize populated backtest, walk-forward, out-of-sample, and paper validation coverage.",
+      "reason": "Backtesting validation is not deployment-ready: status=FAIL, score=29.0.",
+      "risk_level": "HIGH",
+      "safety_gate_passed": false,
+      "safety_gate_status": "NEEDS_MORE_EVIDENCE",
+      "source": "backtesting_validation",
+      "source_names": [
+        "backtesting_validation"
+      ],
+      "status": "PROPOSED",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_manual_review"
+    }
+  ],
+  "safety": {
+    "broker_orders": false,
+    "direct_scoring_mutation": false,
+    "external_simulated_memory_mixed_with_native_live_memory": false,
+    "live_apply_allowed": false,
+    "strategy_weight_mutation": false,
+    "telegram_changes": false
+  },
+  "schema_version": 1,
+  "validation_routes": {
+    "blocked_safety_risk": [],
+    "needs_backtest": [
+      "sip_7381ca804302994e",
+      "sip_be141c9d1fcd8619",
+      "sip_664343dcf54e9801",
+      "sip_14260072eccf1fd4",
+      "sip_a07a565e0ce397fa",
+      "sip_6989388ebf50e19e",
+      "sip_8a75054ed19cf47b",
+      "sip_641b2921df5f7aa9",
+      "sip_5d9943f638e33048"
+    ],
+    "needs_manual_review": [
+      "sip_39a5bbc96cf0b231",
+      "sip_ec1900d98b05779c",
+      "sip_626c271c1b4c6003"
+    ],
+    "needs_paper_test": [
+      "sip_e09d2578bcb1480a",
+      "sip_18d37b04ae1df54a",
+      "sip_f3d40c51edeba2d1",
+      "sip_a1bf322a92542a10",
+      "sip_541246d1a1794379",
+      "sip_3938dcda971aa2c8",
+      "sip_92e680cbdc21f8e4",
+      "sip_2b4637f3bccbe413",
+      "sip_f5dfe1130a76d316",
+      "sip_6ae979db4ce3b318",
+      "sip_d99c257541056caa",
+      "sip_16ee673fdf9b99a3",
+      "sip_94b0e59710d0331c",
+      "sip_825d62eb22d4d768",
+      "sip_a29566b932d466b0",
+      "sip_67cd934967193542"
+    ],
+    "rejected_low_evidence": []
+  }
+}
