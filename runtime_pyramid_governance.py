@@ -144,6 +144,8 @@ def _duplicate_risk_active(duplicate_risk):
     )
     for key, value in duplicate_risk.items():
         normalized = str(key).lower()
+        if normalized.startswith(("no_", "not_")):
+            continue
         if any(token in normalized for token in positive_keys) and bool(value):
             return True
     return str(duplicate_risk.get("status") or "").upper() in {"DUPLICATE", "BLOCK", "BLOCKED", "REJECTED"}
@@ -244,6 +246,18 @@ def evaluate_safety_governance(advisory=None, safety_council=None, pyramid_statu
         "telegram_changes": False,
         "strategy_weight_mutation": False,
         "scoring_mutation": False,
+        "governance_inputs": {
+            "market_hours": market_hour_status,
+            "stale_data": safety_council.get("stale_data") if isinstance(safety_council.get("stale_data"), dict) else {},
+            "safety_council_warning_count": len(safety_council.get("warnings") or []),
+            "duplicate_risk_active": _duplicate_risk_active(safety_council.get("duplicate_risk")),
+            "advisory_status": advisory_status,
+            "resilience_status": (
+                pyramid_status.get("runtime_resilience_status", {}).get("status")
+                if isinstance(pyramid_status.get("runtime_resilience_status"), dict)
+                else None
+            ),
+        },
     }
 
 
@@ -284,7 +298,15 @@ def generate_pyramid_governance_status(advisory=None, safety_council=None, outpu
             if payload["governance"].get("decision") == "ALLOW":
                 payload["governance"]["decision"] = "CAUTION"
                 payload["governance"]["governance_decision"] = "CAUTION"
+        payload["governance"]["governance_inputs"]["resilience_status"] = resilience_status.get("status")
     except Exception as exc:
         payload["runtime_resilience_status"] = {"status": "ERROR", "error": str(exc)}
+        payload["governance"]["caution_reasons"].append("runtime_resilience_error")
+        payload["governance"]["warnings"].append("runtime_resilience_error")
+        payload["governance"]["governance_warnings"].append("runtime_resilience_error")
+        payload["governance"]["governance_inputs"]["resilience_status"] = "ERROR"
+        if payload["governance"].get("decision") == "ALLOW":
+            payload["governance"]["decision"] = "CAUTION"
+            payload["governance"]["governance_decision"] = "CAUTION"
     _atomic_write_json(output_path, payload)
     return payload

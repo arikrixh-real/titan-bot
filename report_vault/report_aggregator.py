@@ -1,5 +1,6 @@
 import glob
 import json
+from json import JSONDecodeError
 from pathlib import Path
 
 from report_vault.intelligence_packet import build_intelligence_packet, packet_to_text
@@ -62,6 +63,16 @@ def _read_json(path):
     with path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
     return payload
+
+
+def _read_previous_packet_safely():
+    if not PACKET_PATH.exists():
+        return {}
+    try:
+        payload = _read_json(PACKET_PATH)
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
 
 
 def _read_text(path):
@@ -186,6 +197,8 @@ def report_from_file(path):
         return None
     try:
         payload = _read_json(path) if path.suffix.lower() == ".json" else _read_text(path)
+    except JSONDecodeError:
+        return None
     except Exception as exc:
         payload = {"status": "ERROR", "error": str(exc), "path": str(path)}
     severity = _severity_from_payload(payload)
@@ -226,7 +239,7 @@ def ingest_existing_reports(patterns=DEFAULT_SOURCE_PATTERNS):
 
 def run_report_aggregator(state=None, state_path=None, intelligence_state=None, hours=24):
     ensure_vault()
-    previous_packet = _read_json(PACKET_PATH) if PACKET_PATH.exists() else {}
+    previous_packet = _read_previous_packet_safely()
     try:
         source_signature = input_signature(DEFAULT_SOURCE_PATTERNS)
     except Exception as exc:

@@ -147,7 +147,7 @@ def build_worker_health_summary(worker_health=None):
             status == "DEGRADED"
             and recent_finish_grace_active
             and last_status in NON_DEGRADED_WORKER_STATUSES
-            and not last_error
+            and (active_started_at is None or last_finished_at is None or last_finished_at >= active_started_at)
         ):
             effective_status = last_status or "RECENT_FINISH_GRACE"
             false_degraded_grace = True

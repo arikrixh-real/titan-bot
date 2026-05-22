@@ -28,6 +28,7 @@ SETUP_ENGINE_STATUS_PATH = Path("data") / "runtime" / "setup_engine_status.json"
 WORKER_HEALTH_PATH = Path("data") / "runtime" / "worker_health.json"
 FINAL_REJECTION_DEBUG_PATH = Path("data") / "debug" / "final_rejection_breakdown.json"
 LIVE_PRICE_CACHE_PATH = Path("data") / "live_price_cache.json"
+OHLC_REFRESH_STATUS_PATH = Path("data") / "runtime" / "ohlc_refresh_status.json"
 RUNTIME_FRESH_SECONDS = 15 * 60
 MARKET_CANDLE_STALE_MINUTES = 45
 PARTIAL_STALE_TOLERANCE_RATIO = 0.15
@@ -510,6 +511,101 @@ def _stale_policy(stale_symbol_count, stocks_checked, latest_candle_age_minutes,
     }
 
 
+def _load_cached_symbols_with_debug():
+    cached_symbols = load_cached_stock_data() or {}
+    return cached_symbols, (get_last_load_debug() or {})
+
+
+def _market_mode_stale_symbols(cached_symbols, now_ist):
+    today_ist = now_ist.date()
+    stale = []
+    latest_candle_dt = None
+    for symbol, data in (cached_symbols or {}).items():
+        candle_dt = _last_candle_timestamp(data)
+        latest_candle_dt = _latest_timestamp(latest_candle_dt, candle_dt)
+        if candle_dt is None or candle_dt.date() < today_ist:
+            stale.append(str(symbol))
+    latest_candle_age_minutes = _candle_age_minutes(latest_candle_dt, now_ist)
+    return stale, latest_candle_dt, latest_candle_age_minutes
+
+
+def _refresh_ohlc_for_market_scan(cached_symbols, load_debug, market_mode):
+    diagnostics = {
+        "attempted": False,
+        "reason": None,
+        "status": "NOT_REQUIRED",
+        "refresh_status_path": str(OHLC_REFRESH_STATUS_PATH).replace("\\", "/"),
+        "before_stale_cache_count": int((load_debug or {}).get("stale_cache_count") or 0),
+        "before_market_stale_symbol_count": 0,
+        "before_latest_candle_timestamp": None,
+        "before_latest_candle_age_minutes": None,
+        "after_stale_cache_count": None,
+        "after_market_stale_symbol_count": None,
+        "after_latest_candle_timestamp": None,
+        "after_latest_candle_age_minutes": None,
+        "refresh_result_status": None,
+        "refreshed_count": None,
+        "failed_count": None,
+        "skipped_count": None,
+        "error": None,
+        "fake_trend_forced": False,
+    }
+    if not market_mode:
+        diagnostics["status"] = "SKIPPED_NOT_MARKET_MODE"
+        return cached_symbols, load_debug, diagnostics
+
+    before_stale, before_latest_dt, before_age = _market_mode_stale_symbols(
+        cached_symbols,
+        datetime.now(IST),
+    )
+    diagnostics.update(
+        {
+            "before_market_stale_symbol_count": len(before_stale),
+            "before_latest_candle_timestamp": before_latest_dt.isoformat() if before_latest_dt else None,
+            "before_latest_candle_age_minutes": before_age,
+        }
+    )
+
+    refresh_required = bool(
+        diagnostics["before_stale_cache_count"] > 0
+        or before_stale
+        or before_latest_dt is None
+        or (before_age is not None and before_age > MARKET_CANDLE_STALE_MINUTES)
+    )
+    if not refresh_required:
+        diagnostics["status"] = "FRESH"
+        return cached_symbols, load_debug, diagnostics
+
+    diagnostics["attempted"] = True
+    diagnostics["reason"] = "MARKET_MODE_STALE_OHLC_REFRESH_REQUIRED"
+    try:
+        from runtime_ohlc_refresh import run_ohlc_refresh
+
+        refresh_result = run_ohlc_refresh()
+        diagnostics["refresh_result_status"] = refresh_result.get("status") if isinstance(refresh_result, dict) else None
+        diagnostics["refreshed_count"] = refresh_result.get("refreshed_count") if isinstance(refresh_result, dict) else None
+        diagnostics["failed_count"] = refresh_result.get("failed_count") if isinstance(refresh_result, dict) else None
+        diagnostics["skipped_count"] = refresh_result.get("skipped_count") if isinstance(refresh_result, dict) else None
+        cached_symbols, load_debug = _load_cached_symbols_with_debug()
+        after_stale, after_latest_dt, after_age = _market_mode_stale_symbols(
+            cached_symbols,
+            datetime.now(IST),
+        )
+        diagnostics.update(
+            {
+                "after_stale_cache_count": int((load_debug or {}).get("stale_cache_count") or 0),
+                "after_market_stale_symbol_count": len(after_stale),
+                "after_latest_candle_timestamp": after_latest_dt.isoformat() if after_latest_dt else None,
+                "after_latest_candle_age_minutes": after_age,
+                "status": "REFRESHED_RELOADED" if not after_stale else "REFRESH_ATTEMPTED_STALE_REMAINS",
+            }
+        )
+    except Exception as exc:
+        diagnostics["status"] = "REFRESH_FAILED_USING_EXISTING_CACHE"
+        diagnostics["error"] = f"{type(exc).__name__}:{exc}"
+    return cached_symbols, load_debug, diagnostics
+
+
 def _status_payload(
     *,
     mode,
@@ -548,6 +644,7 @@ def _status_payload(
     fallback_reason,
     pipeline_health,
     final_count_source,
+    ohlc_refresh_diagnostics,
     run_count=None,
 ):
     status = "FULL_RUNTIME_PIPELINE_COMPLETE"
@@ -587,6 +684,7 @@ def _status_payload(
         "scan_only": scan_only,
         "fallback_reason": fallback_reason,
         "pipeline_health": pipeline_health,
+        "ohlc_refresh_diagnostics": ohlc_refresh_diagnostics,
         "partial_stale_tolerated": partial_stale_tolerated,
         "stale_symbol_ratio": stale_symbol_ratio,
         "stale_policy": stale_policy,
@@ -791,6 +889,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     stale_symbols = []
     signature_rows = []
     load_debug = {}
+    ohlc_refresh_diagnostics = {}
     trend_reasons = Counter()
     structure_reasons = Counter()
     momentum_reasons = Counter()
@@ -804,11 +903,20 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     live_price_cache = _read_json(LIVE_PRICE_CACHE_PATH)
 
     try:
-        cached_symbols = load_cached_stock_data() or {}
-        load_debug = get_last_load_debug() or {}
+        cached_symbols, load_debug = _load_cached_symbols_with_debug()
+        cached_symbols, load_debug, ohlc_refresh_diagnostics = _refresh_ohlc_for_market_scan(
+            cached_symbols,
+            load_debug,
+            market_mode,
+        )
     except Exception:
         cached_symbols = {}
         errors += 1
+        ohlc_refresh_diagnostics = {
+            "status": "LOAD_OR_REFRESH_EXCEPTION",
+            "attempted": False,
+            "fake_trend_forced": False,
+        }
 
     for symbol, data in cached_symbols.items():
         stocks_checked += 1
@@ -976,6 +1084,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         fallback_reason=pipeline["fallback_reason"],
         pipeline_health=pipeline["pipeline_health"],
         final_count_source=pipeline["final_count_source"],
+        ohlc_refresh_diagnostics=ohlc_refresh_diagnostics,
         run_count=run_count,
     )
 

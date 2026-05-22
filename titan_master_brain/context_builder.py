@@ -1,6 +1,10 @@
 # TITAN MASTER BRAIN - CONTEXT BUILDER
 # STEP 3: Converts raw data into meaning.
 # This is where TITAN starts interpreting, not just reading.
+from pathlib import Path
+
+
+SELF_IMPROVEMENT_STATUS_PATH = Path("data") / "runtime" / "self_improvement_status.json"
 
 def _extract_market_ok(market_data):
     if isinstance(market_data, dict):
@@ -29,6 +33,47 @@ def _summary_payload(source):
     return payload if isinstance(payload, dict) else {}
 
 
+def _safe_self_improvement_summary(self_improvement):
+    safe_default = {
+        "mode": "SHADOW_ONLY_CONTROLLED_SELF_IMPROVEMENT",
+        "status": "SHADOW_INACTIVE",
+        "proposal_count": 0,
+        "paper_test_count": 0,
+        "blocked_count": 0,
+        "promoted_count": 0,
+        "top_safe_improvement_ideas": [],
+        "proposals_path": None,
+        "runtime_status_path": str(SELF_IMPROVEMENT_STATUS_PATH).replace("\\", "/"),
+        "live_apply_allowed": False,
+        "direct_scoring_change": False,
+        "strategy_weight_mutation": False,
+        "broker_orders": False,
+        "telegram_changes": False,
+    }
+    if not isinstance(self_improvement, dict) or not self_improvement:
+        if SELF_IMPROVEMENT_STATUS_PATH.exists():
+            return safe_default
+        unavailable = dict(safe_default)
+        unavailable["status"] = "UNAVAILABLE"
+        return unavailable
+
+    summary = dict(safe_default)
+    summary.update(
+        {
+            "status": self_improvement.get("status") or safe_default["status"],
+            "proposal_count": int(self_improvement.get("proposal_count") or 0),
+            "paper_test_count": int(self_improvement.get("paper_test_count") or 0),
+            "blocked_count": int(self_improvement.get("blocked_count") or 0),
+            "promoted_count": int(self_improvement.get("promoted_count") or 0),
+            "top_safe_improvement_ideas": (self_improvement.get("top_safe_improvement_ideas") or [])[:5],
+            "proposals_path": self_improvement.get("proposals_path"),
+            "runtime_status_path": self_improvement.get("runtime_status_path") or safe_default["runtime_status_path"],
+            "live_apply_allowed": False,
+        }
+    )
+    return summary
+
+
 def _append_advisory_context(context, advisory):
     sources = advisory.get("sources") if isinstance(advisory, dict) else {}
     sources = sources if isinstance(sources, dict) else {}
@@ -46,22 +91,7 @@ def _append_advisory_context(context, advisory):
     strategy_workflow = strategy_workflow if isinstance(strategy_workflow, dict) else {}
     self_improvement = advisory.get("controlled_self_improvement") if isinstance(advisory, dict) else {}
     self_improvement = self_improvement if isinstance(self_improvement, dict) else {}
-    self_improvement_summary = {
-        "mode": "SHADOW_ONLY_CONTROLLED_SELF_IMPROVEMENT",
-        "status": self_improvement.get("status", "UNAVAILABLE"),
-        "proposal_count": int(self_improvement.get("proposal_count") or 0),
-        "paper_test_count": int(self_improvement.get("paper_test_count") or 0),
-        "blocked_count": int(self_improvement.get("blocked_count") or 0),
-        "promoted_count": int(self_improvement.get("promoted_count") or 0),
-        "top_safe_improvement_ideas": (self_improvement.get("top_safe_improvement_ideas") or [])[:5],
-        "proposals_path": self_improvement.get("proposals_path"),
-        "runtime_status_path": self_improvement.get("runtime_status_path"),
-        "live_apply_allowed": False,
-        "direct_scoring_change": False,
-        "strategy_weight_mutation": False,
-        "broker_orders": False,
-        "telegram_changes": False,
-    }
+    self_improvement_summary = _safe_self_improvement_summary(self_improvement)
     contradiction_summaries = report_vault.get("contradiction_resolution_summaries") or []
     experience_reliability = experience_vault.get("experience_intelligence_summary") or {}
 
