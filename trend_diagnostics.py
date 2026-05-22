@@ -8,9 +8,12 @@ import pandas as pd
 
 IST = timezone(timedelta(hours=5, minutes=30))
 TREND_DIAGNOSTICS_PATH = Path("data") / "runtime" / "trend_diagnostics.json"
+TREND_PIPELINE_DIAGNOSTICS_PATH = Path("data") / "runtime" / "trend_pipeline_diagnostics.json"
 SIDEWAYS_ANALYSIS_PATH = Path("data") / "runtime" / "sideways_analysis.json"
 ADAPTIVE_TREND_REPORT_PATH = Path("data") / "runtime" / "adaptive_trend_report.json"
 ADAPTIVE_TREND_MIN_SCORE = 65.0
+STRICT_TREND_REQUIRED_SCORE = 5
+STRICT_TREND_CONDITION_COUNT = 6
 
 
 def _timestamp_ist():
@@ -397,6 +400,162 @@ def _primary_sideways_reason(item):
     return failed[0]
 
 
+def _dominant_failure_reason(symbol_items):
+    reasons = Counter()
+    for item in symbol_items or []:
+        reason = item.get("primary_rejection_reason") or _primary_sideways_reason(item)
+        reasons[str(reason or "unknown")] += 1
+    return reasons.most_common(1)[0][0] if reasons else "none"
+
+
+def _trend_confidence_summary(symbol_items):
+    scores = [
+        _safe_float(item.get("adaptive_trend_score"))
+        for item in symbol_items or []
+        if _safe_float(item.get("adaptive_trend_score")) is not None
+    ]
+    strict_passed = [item for item in symbol_items or [] if item.get("original_trend_pass")]
+    adaptive_accepted = [item for item in symbol_items or [] if item.get("adaptive_accepted")]
+    rejected = [
+        item for item in symbol_items or []
+        if not item.get("original_trend_pass") and not item.get("adaptive_accepted")
+    ]
+    return {
+        "strict_passed": len(strict_passed),
+        "adaptive_accepted": len(adaptive_accepted),
+        "rejected": len(rejected),
+        "average_adaptive_score": _avg(scores),
+        "max_adaptive_score": max(scores) if scores else None,
+        "near_pass_count": sum(
+            1
+            for item in rejected
+            if int((item.get("diagnostic_scores") or {}).get("best") or 0) == 4
+        ),
+    }
+
+
+def _build_rejection_reason(item):
+    if item.get("original_trend_pass") or item.get("adaptive_accepted"):
+        return "TREND_ACCEPTED"
+    failed = item.get("failed_conditions") or []
+    if item.get("data_stale"):
+        return "STALE_OHLC"
+    if "missing OHLC data" in failed:
+        return "MISSING_OHLC"
+    if "less than 60 candles" in failed:
+        return "INSUFFICIENT_CANDLES"
+    if item.get("adaptive_trend_reason"):
+        return str(item.get("adaptive_trend_reason"))
+    return _primary_sideways_reason(item)
+
+
+def _compact_pipeline_symbol(item):
+    diagnostic_scores = item.get("diagnostic_scores") or {}
+    live_price = item.get("live_price_check") if isinstance(item.get("live_price_check"), dict) else {}
+    return {
+        "symbol": item.get("symbol"),
+        "accepted": bool(item.get("original_trend_pass") or item.get("adaptive_accepted")),
+        "trend_result": item.get("trend_result"),
+        "primary_rejection_reason": item.get("primary_rejection_reason"),
+        "exact_rejection_reasons": item.get("exact_rejection_reasons") or [],
+        "adaptive_trend_reason": item.get("adaptive_trend_reason"),
+        "failed_conditions": item.get("failed_conditions") or [],
+        "threshold_values_used": {
+            "strict_required_score": STRICT_TREND_REQUIRED_SCORE,
+            "strict_condition_count": STRICT_TREND_CONDITION_COUNT,
+            "adaptive_min_score": ADAPTIVE_TREND_MIN_SCORE,
+            "min_candles": 60,
+            "strong_opposite_ema_distance_pct": 0.5,
+            "volatility_panic_atr_pct": 5.0,
+        },
+        "stale_data_indicators": {
+            "data_stale": bool(item.get("data_stale")),
+            "latest_candle_timestamp": item.get("latest_candle_timestamp"),
+            "latest_candle_age_minutes": item.get("latest_candle_age_minutes"),
+            "stale_reason": item.get("stale_reason"),
+            "repeated_data_signature": bool(item.get("repeated_data_signature")),
+        },
+        "regime_blockers": item.get("regime_blockers") or [],
+        "ema_state": {
+            "ema20": item.get("ema20"),
+            "ema50": item.get("ema50"),
+            "ema_distance_pct": item.get("ema_distance_pct"),
+            "price_vs_ema20": item.get("price_vs_ema20"),
+            "price_vs_ema50": item.get("price_vs_ema50"),
+            "slope_ema20": item.get("slope_ema20"),
+            "slope_ema50": item.get("slope_ema50"),
+            "diagnostic_scores": diagnostic_scores,
+            "conditions": item.get("conditions") or {},
+        },
+        "timeframe_structure": {
+            "recent_high_break": (item.get("conditions") or {}).get("recent_high_break"),
+            "recent_low_break": (item.get("conditions") or {}).get("recent_low_break"),
+        },
+        "normalization": {
+            "trend_result_label": item.get("trend_result"),
+            "adaptive_side": item.get("adaptive_side"),
+        },
+        "live_price_mismatch": live_price,
+    }
+
+
+def _build_pipeline_diagnostics(scan_cycle_id, symbol_items, regime_diagnostics):
+    enriched = []
+    for item in symbol_items or []:
+        cloned = dict(item)
+        exact_reasons = list(cloned.get("failed_conditions") or [])
+        primary = _build_rejection_reason(cloned)
+        if primary and primary != "TREND_ACCEPTED" and primary not in exact_reasons:
+            exact_reasons.insert(0, primary)
+        cloned["primary_rejection_reason"] = primary
+        cloned["exact_rejection_reasons"] = exact_reasons
+        dangerous, dangerous_reason = _dangerous_regime(regime_diagnostics or {})
+        blockers = []
+        if dangerous:
+            blockers.append(dangerous_reason)
+        if _liquidity_or_manipulation_warning_high(regime_diagnostics or {}):
+            blockers.append("liquidity/manipulation warning high")
+        cloned["regime_blockers"] = blockers
+        enriched.append(cloned)
+
+    reason_counts = Counter(
+        item.get("primary_rejection_reason") or "unknown"
+        for item in enriched
+        if not (item.get("original_trend_pass") or item.get("adaptive_accepted"))
+    )
+    return {
+        "updated_at_ist": _timestamp_ist(),
+        "scan_cycle_id": scan_cycle_id,
+        "symbols_checked": len(enriched),
+        "threshold_values_used": {
+            "strict_required_score": STRICT_TREND_REQUIRED_SCORE,
+            "strict_condition_count": STRICT_TREND_CONDITION_COUNT,
+            "adaptive_min_score": ADAPTIVE_TREND_MIN_SCORE,
+            "min_candles": 60,
+            "stale_data_is_diagnostic_only": True,
+        },
+        "rejection_reason_counts": dict(reason_counts.most_common()),
+        "dominant_failure_reason": _dominant_failure_reason(
+            [item for item in enriched if not (item.get("original_trend_pass") or item.get("adaptive_accepted"))]
+        ),
+        "trend_confidence_summary": _trend_confidence_summary(enriched),
+        "regime_blockers": {
+            "current_regime": (regime_diagnostics or {}).get("current_regime"),
+            "rejected_regimes": (regime_diagnostics or {}).get("rejected_regimes") or [],
+            "market_status": (regime_diagnostics or {}).get("market_status") or {},
+        },
+        "symbols": [_compact_pipeline_symbol(item) for item in enriched],
+        "safety_scope": {
+            "diagnostics_only": True,
+            "filters_loosened": False,
+            "forced_trades": False,
+            "broker_orders": False,
+            "telegram_changes": False,
+            "strategy_weight_mutation": False,
+        },
+    }
+
+
 def _avg(values):
     nums = [_safe_float(value) for value in values]
     nums = [value for value in nums if value is not None]
@@ -500,9 +659,15 @@ def save_trend_diagnostics(scan_cycle_id, symbols, regime_diagnostics=None):
         ],
         "regime_diagnostics": regime_diagnostics or {},
     }
+    pipeline_diagnostics = _build_pipeline_diagnostics(
+        scan_cycle_id,
+        symbol_items,
+        regime_diagnostics or {},
+    )
 
     for path, payload in (
         (TREND_DIAGNOSTICS_PATH, trend_payload),
+        (TREND_PIPELINE_DIAGNOSTICS_PATH, pipeline_diagnostics),
         (SIDEWAYS_ANALYSIS_PATH, sideways_payload),
         (ADAPTIVE_TREND_REPORT_PATH, adaptive_report),
     ):
@@ -514,4 +679,4 @@ def save_trend_diagnostics(scan_cycle_id, symbols, regime_diagnostics=None):
         except Exception:
             pass
 
-    return trend_payload, sideways_payload, adaptive_report
+    return trend_payload, sideways_payload, adaptive_report, pipeline_diagnostics

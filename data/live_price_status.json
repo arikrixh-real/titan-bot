@@ -1,9 +1,9 @@
 {
-  "symbol": "RELIANCE",
+  "symbol": "NIFTYBEES",
   "status": "NETWORK_BLOCKED",
-  "last_price": 1334.1,
-  "source": "CACHE",
+  "last_price": null,
+  "source": "NONE",
   "token_type_used": "ACCESS_TOKEN",
-  "timestamp": "2026-05-19T11:59:38.392855",
+  "timestamp": "2026-05-22T11:29:18.013445",
   "reason": "Socket blocked while calling Upstox; using cache if available"
 }

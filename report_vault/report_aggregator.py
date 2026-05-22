@@ -11,6 +11,10 @@ from runtime_load_control import input_signature, record_task_result
 
 PACKET_PATH = VAULT_DIR / "latest_aggregated_packet.json"
 SUMMARY_PATH = VAULT_DIR / "latest_aggregated_summary.txt"
+MAX_SOURCE_FILE_BYTES = 2 * 1024 * 1024
+MAX_TEXT_REPORT_CHARS = 8000
+MAX_REPORTS_REVIEWED = 200
+INGEST_CHUNK_SIZE = 50
 DEFAULT_SOURCE_PATTERNS = (
     "data/runtime/worker_health.json",
     "data/runtime/intelligence_state/*.json",
@@ -32,15 +36,40 @@ DEFAULT_SOURCE_PATTERNS = (
 )
 
 
+def _file_size(path):
+    try:
+        return Path(path).stat().st_size
+    except OSError:
+        return None
+
+
+def _oversized_payload(path):
+    size = _file_size(path)
+    return {
+        "status": "SKIPPED_OVERSIZED",
+        "path": str(path).replace("\\", "/"),
+        "size_bytes": size,
+        "max_source_file_bytes": MAX_SOURCE_FILE_BYTES,
+        "summary": "Source payload skipped by report aggregator memory-pressure guard.",
+        "live_mutation": False,
+    }
+
+
 def _read_json(path):
+    size = _file_size(path)
+    if size is not None and size > MAX_SOURCE_FILE_BYTES:
+        return _oversized_payload(path)
     with path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
     return payload
 
 
 def _read_text(path):
+    size = _file_size(path)
+    if size is not None and size > MAX_SOURCE_FILE_BYTES:
+        return json.dumps(_oversized_payload(path), sort_keys=True)
     with path.open("r", encoding="utf-8", errors="replace") as handle:
-        return handle.read()[-8000:]
+        return handle.read()[-MAX_TEXT_REPORT_CHARS:]
 
 
 def _severity_from_payload(payload):
@@ -179,6 +208,7 @@ def report_from_file(path):
 def ingest_existing_reports(patterns=DEFAULT_SOURCE_PATTERNS):
     results = []
     seen = set()
+    processed_in_chunk = 0
     for pattern in patterns:
         for match in sorted(glob.glob(pattern)):
             path = Path(match)
@@ -188,13 +218,19 @@ def ingest_existing_reports(patterns=DEFAULT_SOURCE_PATTERNS):
             report = report_from_file(path)
             if report:
                 results.append(write_report(report))
+            processed_in_chunk += 1
+            if processed_in_chunk >= INGEST_CHUNK_SIZE:
+                processed_in_chunk = 0
     return results
 
 
 def run_report_aggregator(state=None, state_path=None, intelligence_state=None, hours=24):
     ensure_vault()
-    source_signature = input_signature(DEFAULT_SOURCE_PATTERNS)
     previous_packet = _read_json(PACKET_PATH) if PACKET_PATH.exists() else {}
+    try:
+        source_signature = input_signature(DEFAULT_SOURCE_PATTERNS)
+    except Exception as exc:
+        source_signature = {"hash": None, "file_count": None, "error": f"input_signature_failed:{exc}"}
     if (
         isinstance(previous_packet, dict)
         and previous_packet.get("source_input_hash") == source_signature.get("hash")
@@ -227,26 +263,55 @@ def run_report_aggregator(state=None, state_path=None, intelligence_state=None, 
             )
         return result
 
-    ingested = ingest_existing_reports()
-    reports = read_recent_reports(hours=hours, limit=500)
-    packet = build_intelligence_packet(reports, source_window_hours=hours)
-    packet["source_input_hash"] = source_signature.get("hash")
-    packet["source_file_count"] = source_signature.get("file_count")
-    packet["unchanged_skip_enabled"] = True
-    _atomic_write_json(PACKET_PATH, packet)
-    SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SUMMARY_PATH.write_text(packet_to_text(packet), encoding="utf-8")
-    result = {
-        "status": "ok",
-        "ingested_reports": len(ingested),
-        "reports_reviewed": len(reports),
-        "packet_path": str(PACKET_PATH).replace("\\", "/"),
-        "summary_path": str(SUMMARY_PATH).replace("\\", "/"),
-        "packet_hash": packet.get("packet_hash"),
-        "source_input_hash": source_signature.get("hash"),
-        "source_file_count": source_signature.get("file_count"),
-    }
-    record_task_result("report_aggregator", "OK", result=result)
+    try:
+        ingested = ingest_existing_reports()
+        reports = read_recent_reports(hours=hours, limit=MAX_REPORTS_REVIEWED)
+        packet = build_intelligence_packet(reports, source_window_hours=hours)
+        packet["source_input_hash"] = source_signature.get("hash")
+        packet["source_file_count"] = source_signature.get("file_count")
+        packet["source_signature_error"] = source_signature.get("error")
+        packet["unchanged_skip_enabled"] = True
+        packet["memory_pressure_guard"] = {
+            "max_source_file_bytes": MAX_SOURCE_FILE_BYTES,
+            "max_reports_reviewed": MAX_REPORTS_REVIEWED,
+            "max_text_report_chars": MAX_TEXT_REPORT_CHARS,
+            "ingest_chunk_size": INGEST_CHUNK_SIZE,
+            "oversized_payloads_skipped_gracefully": True,
+            "latest_good_packet_preserved_on_failure": True,
+        }
+        _atomic_write_json(PACKET_PATH, packet)
+        SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        SUMMARY_PATH.write_text(packet_to_text(packet), encoding="utf-8")
+        result = {
+            "status": "ok",
+            "ingested_reports": len(ingested),
+            "reports_reviewed": len(reports),
+            "packet_path": str(PACKET_PATH).replace("\\", "/"),
+            "summary_path": str(SUMMARY_PATH).replace("\\", "/"),
+            "packet_hash": packet.get("packet_hash"),
+            "source_input_hash": source_signature.get("hash"),
+            "source_file_count": source_signature.get("file_count"),
+            "memory_pressure_guard": packet["memory_pressure_guard"],
+        }
+        record_task_result("report_aggregator", "OK", result=result)
+    except BaseException as exc:
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        result = {
+            "status": "degraded_preserved_latest_good_packet",
+            "error": str(exc),
+            "packet_path": str(PACKET_PATH).replace("\\", "/") if PACKET_PATH.exists() else None,
+            "summary_path": str(SUMMARY_PATH).replace("\\", "/") if SUMMARY_PATH.exists() else None,
+            "packet_hash": previous_packet.get("packet_hash") if isinstance(previous_packet, dict) else None,
+            "source_input_hash": source_signature.get("hash"),
+            "source_file_count": source_signature.get("file_count"),
+            "memory_pressure_guard": {
+                "max_source_file_bytes": MAX_SOURCE_FILE_BYTES,
+                "max_reports_reviewed": MAX_REPORTS_REVIEWED,
+                "latest_good_packet_preserved": bool(previous_packet),
+            },
+        }
+        record_task_result("report_aggregator", "DEGRADED", result=result, error=exc)
     if isinstance(state, dict):
         state["report_vault_packet_path"] = result["packet_path"]
         state["report_vault_summary_path"] = result["summary_path"]

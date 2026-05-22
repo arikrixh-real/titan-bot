@@ -7,7 +7,7 @@
     "REJECTED",
     "VALIDATED"
   ],
-  "generated_at": "2026-05-22T09:23:07.283501+05:30",
+  "generated_at": "2026-05-22T11:29:53.691875+05:30",
   "mode": "SHADOW_ONLY_CONTROLLED_SELF_IMPROVEMENT",
   "promotion_requirements": {
     "external_simulated_only_evidence_not_sufficient": true,
@@ -19,7 +19,41 @@
   "proposals": [
     {
       "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.689871+05:30",
+      "evidence": [
+        {
+          "payload_hash": "cda5ae8bb1cf13d1fa94e1832eb6ce4274658f52810d9d448b5d1ca358aee6fe",
+          "source_path": "data/runtime/advisory_intelligence_status.json"
+        },
+        {
+          "payload_hash": "1d8b876552d32b54b6bef084824e9fbe8ae46f51df11db4ecc10ef29d562599e",
+          "source_path": "data/runtime/advisory_intelligence_status.json"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_ec1900d98b05779c",
+      "proposed_change": "Create a paper/backtest validation task for: knowledge_vault advisory file is stale: data/knowledge_vault/reports/knowledge_to_consciousness_packet.json",
+      "reason": "Report vault finding: knowledge_vault advisory file is stale: data/knowledge_vault/reports/knowledge_to_consciousness_packet.json",
+      "risk_level": "HIGH",
+      "safety_gate_passed": false,
+      "safety_gate_status": "NEEDS_MORE_EVIDENCE",
+      "source": "report_vault",
+      "source_names": [
+        "data/runtime/advisory_intelligence_status.json",
+        "report_vault"
+      ],
+      "status": "PROPOSED",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_manual_review"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T11:29:53.689871+05:30",
       "evidence": [
         {
           "payload_hash": "1d8b876552d32b54b6bef084824e9fbe8ae46f51df11db4ecc10ef29d562599e",
@@ -49,38 +83,12 @@
     },
     {
       "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.689871+05:30",
       "evidence": [
         {
-          "payload_hash": "1d8b876552d32b54b6bef084824e9fbe8ae46f51df11db4ecc10ef29d562599e",
-          "source_path": "data/runtime/advisory_intelligence_status.json"
-        }
-      ],
-      "external_simulated_only_evidence": false,
-      "live_apply_allowed": false,
-      "paper_test_passed": false,
-      "paper_test_required": true,
-      "promotion_gate_passed": false,
-      "proposal_id": "sip_ec1900d98b05779c",
-      "proposed_change": "Create a paper/backtest validation task for: knowledge_vault advisory file is stale: data/knowledge_vault/reports/knowledge_to_consciousness_packet.json",
-      "reason": "Report vault finding: knowledge_vault advisory file is stale: data/knowledge_vault/reports/knowledge_to_consciousness_packet.json",
-      "risk_level": "HIGH",
-      "safety_gate_passed": false,
-      "safety_gate_status": "NEEDS_MORE_EVIDENCE",
-      "source": "report_vault",
-      "source_names": [
-        "data/runtime/advisory_intelligence_status.json",
-        "report_vault"
-      ],
-      "status": "PROPOSED",
-      "validation_passed": false,
-      "validation_required": true,
-      "validation_route": "needs_manual_review"
-    },
-    {
-      "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
-      "evidence": [
+          "payload_hash": "87267bdae6e98b8fba734d6d97c40631ccfd335f88f4d077f83eb3601903c7fd",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        },
         {
           "payload_hash": "8bab1f18182499e6230d06a9c853999d23ca72b3153bf40e0201b9a28e5fe9ab",
           "source_path": "data/runtime/pyramid_chain_status.json"
@@ -102,9 +110,9 @@
       "proposal_id": "sip_e09d2578bcb1480a",
       "proposed_change": "Create a paper/backtest validation task for: feeds_cache:stale:data/runtime/ohlc_refresh_status.json",
       "reason": "Report vault finding: feeds_cache:stale:data/runtime/ohlc_refresh_status.json",
-      "risk_level": "MEDIUM",
-      "safety_gate_passed": true,
-      "safety_gate_status": "APPROVED_FOR_TEST",
+      "risk_level": "HIGH",
+      "safety_gate_passed": false,
+      "safety_gate_status": "NEEDS_MORE_EVIDENCE",
       "source": "report_vault",
       "source_names": [
         "data/runtime/pyramid_chain_status.json",
@@ -113,12 +121,16 @@
       "status": "PAPER_TEST",
       "validation_passed": false,
       "validation_required": true,
-      "validation_route": "needs_paper_test"
+      "validation_route": "needs_manual_review"
     },
     {
       "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
+        {
+          "payload_hash": "87267bdae6e98b8fba734d6d97c40631ccfd335f88f4d077f83eb3601903c7fd",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        },
         {
           "payload_hash": "8bab1f18182499e6230d06a9c853999d23ca72b3153bf40e0201b9a28e5fe9ab",
           "source_path": "data/runtime/pyramid_chain_status.json"
@@ -132,9 +144,9 @@
       "proposal_id": "sip_18d37b04ae1df54a",
       "proposed_change": "Create a paper/backtest validation task for: scanner:stale:data/runtime/scanner_status.json",
       "reason": "Report vault finding: scanner:stale:data/runtime/scanner_status.json",
-      "risk_level": "MEDIUM",
-      "safety_gate_passed": true,
-      "safety_gate_status": "APPROVED_FOR_TEST",
+      "risk_level": "HIGH",
+      "safety_gate_passed": false,
+      "safety_gate_status": "NEEDS_MORE_EVIDENCE",
       "source": "report_vault",
       "source_names": [
         "data/runtime/pyramid_chain_status.json",
@@ -143,11 +155,87 @@
       "status": "PAPER_TEST",
       "validation_passed": false,
       "validation_required": true,
-      "validation_route": "needs_paper_test"
+      "validation_route": "needs_manual_review"
     },
     {
       "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
+      "evidence": [
+        {
+          "payload_hash": "87267bdae6e98b8fba734d6d97c40631ccfd335f88f4d077f83eb3601903c7fd",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        },
+        {
+          "payload_hash": "8bab1f18182499e6230d06a9c853999d23ca72b3153bf40e0201b9a28e5fe9ab",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_a1bf322a92542a10",
+      "proposed_change": "Create a paper/backtest validation task for: knowledge_vault:stale:data/knowledge_vault/reports/knowledge_to_consciousness_packet.json",
+      "reason": "Report vault finding: knowledge_vault:stale:data/knowledge_vault/reports/knowledge_to_consciousness_packet.json",
+      "risk_level": "HIGH",
+      "safety_gate_passed": false,
+      "safety_gate_status": "NEEDS_MORE_EVIDENCE",
+      "source": "report_vault",
+      "source_names": [
+        "data/runtime/pyramid_chain_status.json",
+        "report_vault"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_manual_review"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
+      "evidence": [
+        {
+          "payload_hash": "87267bdae6e98b8fba734d6d97c40631ccfd335f88f4d077f83eb3601903c7fd",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        },
+        {
+          "payload_hash": "8bab1f18182499e6230d06a9c853999d23ca72b3153bf40e0201b9a28e5fe9ab",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        },
+        {
+          "payload_hash": "cc3422ec55a508e5bf83fc31fdf7323a230231e5065c7996d9c72a572abf9070",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        },
+        {
+          "payload_hash": "fda7c9e068bec944bb85046025c1d6d15d34cdb383cdd88b740edfac338cf8ed",
+          "source_path": "data/runtime/pyramid_chain_status.json"
+        }
+      ],
+      "external_simulated_only_evidence": false,
+      "live_apply_allowed": false,
+      "paper_test_passed": false,
+      "paper_test_required": true,
+      "promotion_gate_passed": false,
+      "proposal_id": "sip_3938dcda971aa2c8",
+      "proposed_change": "Create a paper/backtest validation task for: safety_gates:stale:data/execution_safety/latest_execution_safety_report.json",
+      "reason": "Report vault finding: safety_gates:stale:data/execution_safety/latest_execution_safety_report.json",
+      "risk_level": "HIGH",
+      "safety_gate_passed": false,
+      "safety_gate_status": "NEEDS_MORE_EVIDENCE",
+      "source": "report_vault",
+      "source_names": [
+        "data/runtime/pyramid_chain_status.json",
+        "report_vault"
+      ],
+      "status": "PAPER_TEST",
+      "validation_passed": false,
+      "validation_required": true,
+      "validation_route": "needs_manual_review"
+    },
+    {
+      "affected_area": "research_pipeline",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "payload_hash": "8bab1f18182499e6230d06a9c853999d23ca72b3153bf40e0201b9a28e5fe9ab",
@@ -177,37 +265,7 @@
     },
     {
       "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
-      "evidence": [
-        {
-          "payload_hash": "8bab1f18182499e6230d06a9c853999d23ca72b3153bf40e0201b9a28e5fe9ab",
-          "source_path": "data/runtime/pyramid_chain_status.json"
-        }
-      ],
-      "external_simulated_only_evidence": false,
-      "live_apply_allowed": false,
-      "paper_test_passed": false,
-      "paper_test_required": true,
-      "promotion_gate_passed": false,
-      "proposal_id": "sip_a1bf322a92542a10",
-      "proposed_change": "Create a paper/backtest validation task for: knowledge_vault:stale:data/knowledge_vault/reports/knowledge_to_consciousness_packet.json",
-      "reason": "Report vault finding: knowledge_vault:stale:data/knowledge_vault/reports/knowledge_to_consciousness_packet.json",
-      "risk_level": "MEDIUM",
-      "safety_gate_passed": true,
-      "safety_gate_status": "APPROVED_FOR_TEST",
-      "source": "report_vault",
-      "source_names": [
-        "data/runtime/pyramid_chain_status.json",
-        "report_vault"
-      ],
-      "status": "PAPER_TEST",
-      "validation_passed": false,
-      "validation_required": true,
-      "validation_route": "needs_paper_test"
-    },
-    {
-      "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "payload_hash": "8bab1f18182499e6230d06a9c853999d23ca72b3153bf40e0201b9a28e5fe9ab",
@@ -245,45 +303,7 @@
     },
     {
       "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
-      "evidence": [
-        {
-          "payload_hash": "8bab1f18182499e6230d06a9c853999d23ca72b3153bf40e0201b9a28e5fe9ab",
-          "source_path": "data/runtime/pyramid_chain_status.json"
-        },
-        {
-          "payload_hash": "cc3422ec55a508e5bf83fc31fdf7323a230231e5065c7996d9c72a572abf9070",
-          "source_path": "data/runtime/pyramid_chain_status.json"
-        },
-        {
-          "payload_hash": "fda7c9e068bec944bb85046025c1d6d15d34cdb383cdd88b740edfac338cf8ed",
-          "source_path": "data/runtime/pyramid_chain_status.json"
-        }
-      ],
-      "external_simulated_only_evidence": false,
-      "live_apply_allowed": false,
-      "paper_test_passed": false,
-      "paper_test_required": true,
-      "promotion_gate_passed": false,
-      "proposal_id": "sip_3938dcda971aa2c8",
-      "proposed_change": "Create a paper/backtest validation task for: safety_gates:stale:data/execution_safety/latest_execution_safety_report.json",
-      "reason": "Report vault finding: safety_gates:stale:data/execution_safety/latest_execution_safety_report.json",
-      "risk_level": "MEDIUM",
-      "safety_gate_passed": true,
-      "safety_gate_status": "APPROVED_FOR_TEST",
-      "source": "report_vault",
-      "source_names": [
-        "data/runtime/pyramid_chain_status.json",
-        "report_vault"
-      ],
-      "status": "PAPER_TEST",
-      "validation_passed": false,
-      "validation_required": true,
-      "validation_route": "needs_paper_test"
-    },
-    {
-      "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "live_mutation": "False",
@@ -300,16 +320,19 @@
             "advisory_intelligence_status",
             "intelligence_load_control_status",
             "master_brain",
+            "master_brain_status",
             "pyramid_chain_status",
             "pyramid_governance_status",
             "runtime_mode_status",
-            "scanner_status",
-            "titan_runtime_status"
+            "runtime_resilience_status"
           ],
           "statuses": [
+            "DEGRADED",
+            "MASTER_BRAIN_READ_ONLY_COMPLETE",
             "NEW",
             "OK",
             "SCAN_ONLY_STALE_OHLC",
+            "SHADOW_ACTIVE",
             "STALE",
             "WARNING"
           ],
@@ -339,7 +362,7 @@
     },
     {
       "affected_area": "backtesting",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "cause": "unknown",
@@ -394,7 +417,7 @@
     },
     {
       "affected_area": "confidence_calibration",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "cause": "unknown",
@@ -449,7 +472,7 @@
     },
     {
       "affected_area": "no_trade",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "cause": "unknown",
@@ -504,7 +527,7 @@
     },
     {
       "affected_area": "setup_engine",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "count": "1",
@@ -533,7 +556,7 @@
     },
     {
       "affected_area": "confidence_calibration",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         "confidence sample size 0 below target 20",
         "calibration warning is REVIEW",
@@ -562,7 +585,7 @@
     },
     {
       "affected_area": "no_trade_intelligence",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         "repeat of recent losing setup without fresh validation"
       ],
@@ -588,7 +611,7 @@
     },
     {
       "affected_area": "promotion_gate",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         "worker health report is unavailable",
         "backtesting validation has insufficient samples",
@@ -616,7 +639,7 @@
     },
     {
       "affected_area": "runtime_engine_registry",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "engine": "backtesting",
@@ -661,7 +684,7 @@
     },
     {
       "affected_area": "backtesting_validation",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         "strategies with no historical or out-of-sample validation"
       ],
@@ -687,7 +710,7 @@
     },
     {
       "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "lesson_type": "failure_success_reason",
@@ -767,7 +790,7 @@
     },
     {
       "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "lesson_type": "failure_success_reason",
@@ -847,7 +870,7 @@
     },
     {
       "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "lesson_type": "failure_success_reason",
@@ -927,7 +950,7 @@
     },
     {
       "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "lesson_type": "failure_success_reason",
@@ -1007,7 +1030,7 @@
     },
     {
       "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "lesson_type": "failure_success_reason",
@@ -1087,7 +1110,7 @@
     },
     {
       "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "lesson_type": "failure_success_reason",
@@ -1167,7 +1190,7 @@
     },
     {
       "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "lesson_type": "failure_success_reason",
@@ -1247,7 +1270,7 @@
     },
     {
       "affected_area": "research_pipeline",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "lesson_type": "failure_success_reason",
@@ -1327,7 +1350,7 @@
     },
     {
       "affected_area": "confidence_calibration",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "accuracy": "0.0",
@@ -1368,7 +1391,7 @@
     },
     {
       "affected_area": "backtesting",
-      "created_at": "2026-05-22T09:23:07.282498+05:30",
+      "created_at": "2026-05-22T11:29:53.690874+05:30",
       "evidence": [
         {
           "available": "False",
@@ -1471,17 +1494,17 @@
       "sip_5d9943f638e33048"
     ],
     "needs_manual_review": [
-      "sip_39a5bbc96cf0b231",
       "sip_ec1900d98b05779c",
+      "sip_39a5bbc96cf0b231",
+      "sip_e09d2578bcb1480a",
+      "sip_18d37b04ae1df54a",
+      "sip_a1bf322a92542a10",
+      "sip_3938dcda971aa2c8",
       "sip_626c271c1b4c6003"
     ],
     "needs_paper_test": [
-      "sip_e09d2578bcb1480a",
-      "sip_18d37b04ae1df54a",
       "sip_f3d40c51edeba2d1",
-      "sip_a1bf322a92542a10",
       "sip_541246d1a1794379",
-      "sip_3938dcda971aa2c8",
       "sip_92e680cbdc21f8e4",
       "sip_2b4637f3bccbe413",
       "sip_f5dfe1130a76d316",

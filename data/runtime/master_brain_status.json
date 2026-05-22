@@ -4,60 +4,68 @@
   "evaluated_count": 5,
   "evaluated_trade_setups": [
     {
-      "entry": 261.2,
+      "entry": 88.84,
       "rr": 2.0,
       "side": "SHORT",
-      "sl": 261.85,
-      "symbol": "BANKBARODA",
-      "target": 259.9
+      "sl": 89.26,
+      "symbol": "NMDC",
+      "target": 88.0
     },
     {
-      "entry": 397.8,
+      "entry": 296.4,
       "rr": 2.0,
       "side": "SHORT",
-      "sl": 398.95,
-      "symbol": "BHEL",
-      "target": 395.5
+      "sl": 296.8,
+      "symbol": "ONGC",
+      "target": 295.6
     },
     {
-      "entry": 98.57,
+      "entry": 96.95,
       "rr": 2.0,
       "side": "SHORT",
-      "sl": 98.87,
+      "sl": 97.42,
       "symbol": "IRFC",
-      "target": 97.97
+      "target": 96.01
     },
     {
-      "entry": 126.65,
+      "entry": 270.8,
       "rr": 2.0,
       "side": "SHORT",
-      "sl": 127.19,
-      "symbol": "IREDA",
-      "target": 125.57
+      "sl": 272.0,
+      "symbol": "RVNL",
+      "target": 268.4
     },
     {
-      "entry": 93.79,
+      "entry": 92.95,
       "rr": 2.0,
       "side": "SHORT",
-      "sl": 94.07,
+      "sl": 93.25,
       "symbol": "NBCC",
-      "target": 93.23
+      "target": 92.35
     }
   ],
+  "execution_contract": "Marker/observation mode only; no live execution, no Telegram, no journaling, no outcomes.",
+  "execution_owner": "NONE",
   "input_candidates": 5,
   "journal_writes": false,
+  "journal_writes_enabled": false,
+  "lifecycle_mutation_enabled": false,
+  "live_execution_enabled": false,
   "mode": "SCAN_ONLY_CACHED_50",
   "observe_only": true,
+  "outcome_tracking_enabled": false,
+  "runtime_mode": "READ_ONLY",
   "scan_only": true,
   "status": "MASTER_BRAIN_READ_ONLY_COMPLETE",
   "supabase_writes": false,
   "telegram_alerts": false,
-  "timestamp_ist": "2026-05-17T11:30:48.667610+05:30",
+  "telegram_enabled": false,
+  "timestamp_ist": "2026-05-22T09:13:42.195676+05:30",
   "top_symbols": [
-    "BANKBARODA",
-    "BHEL",
+    "NMDC",
+    "ONGC",
     "IRFC",
-    "IREDA",
+    "RVNL",
     "NBCC"
   ],
   "trade_creation": false,

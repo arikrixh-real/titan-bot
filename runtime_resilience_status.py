@@ -10,12 +10,25 @@ RUNTIME_RESILIENCE_STATUS_PATH = RUNTIME_DIR / "runtime_resilience_status.json"
 OFFICIAL_RUNTIME_PATH = "titan_daemon.py"
 STALE_PACKET_SECONDS = 24 * 60 * 60
 WORKER_STUCK_GRACE_SECONDS = 60
+WORKER_RECENT_FINISH_GRACE_SECONDS = 180
+NON_DEGRADED_WORKER_STATUSES = {
+    "OK",
+    "SKIPPED_UNCHANGED",
+    "SKIPPED_RECENT",
+    "SKIPPED_LOCKED",
+    "WAITING_FOR_MODE",
+    "SKIPPED_PLACEHOLDER",
+    "MISSING_HANDLER",
+    "STARTING",
+}
 
 DAEMON_HEALTH_PATH = RUNTIME_DIR / "daemon_health.json"
 WORKER_HEALTH_PATH = RUNTIME_DIR / "worker_health.json"
 PYRAMID_CHAIN_STATUS_PATH = RUNTIME_DIR / "pyramid_chain_status.json"
 PYRAMID_GOVERNANCE_STATUS_PATH = RUNTIME_DIR / "pyramid_governance_status.json"
 LOAD_CONTROL_STATUS_PATH = RUNTIME_DIR / "intelligence_load_control_status.json"
+SELF_IMPROVEMENT_STATUS_PATH = RUNTIME_DIR / "self_improvement_status.json"
+TREND_PIPELINE_DIAGNOSTICS_PATH = RUNTIME_DIR / "trend_pipeline_diagnostics.json"
 
 CRITICAL_PACKET_PATHS = {
     RUNTIME_DIR / "daemon_health.json",
@@ -113,14 +126,33 @@ def build_worker_health_summary(worker_health=None):
             continue
         status = str(item.get("status") or "UNKNOWN").upper()
         active_started_at = _parse_iso(item.get("active_run_started_at") or item.get("last_started_at"))
+        last_finished_at = _parse_iso(item.get("last_finished_at"))
         timeout_seconds = int(item.get("active_timeout_seconds") or item.get("last_timeout_seconds") or 0)
         stuck = False
         active_age_seconds = None
+        recent_finish_age_seconds = None
+        recent_finish_grace_active = False
+        last_status = str(item.get("last_status") or "").upper()
+        last_error = item.get("last_error")
+        if last_finished_at is not None:
+            recent_finish_age_seconds = max(0.0, (now - last_finished_at).total_seconds())
+            recent_finish_grace_active = recent_finish_age_seconds <= WORKER_RECENT_FINISH_GRACE_SECONDS
         if status == "RUNNING" and active_started_at is not None and timeout_seconds > 0:
             active_age_seconds = max(0.0, (now - active_started_at).total_seconds())
             stuck = active_age_seconds > timeout_seconds + WORKER_STUCK_GRACE_SECONDS
 
         effective_status = "DEGRADED" if stuck else status
+        false_degraded_grace = False
+        if (
+            status == "DEGRADED"
+            and recent_finish_grace_active
+            and last_status in NON_DEGRADED_WORKER_STATUSES
+            and not last_error
+        ):
+            effective_status = last_status or "RECENT_FINISH_GRACE"
+            false_degraded_grace = True
+        elif status in NON_DEGRADED_WORKER_STATUSES and not stuck:
+            effective_status = status
         last_good_output_path = item.get("last_good_output_path") or _last_good_output_path(task)
         last_good_output_used = bool(item.get("last_good_output_used")) or (
             effective_status in {"DEGRADED", "TIMEOUT", "ERROR"} and bool(last_good_output_path)
@@ -131,8 +163,18 @@ def build_worker_health_summary(worker_health=None):
             "raw_status": status,
             "stuck": stuck,
             "active_age_seconds": None if active_age_seconds is None else round(active_age_seconds, 3),
+            "recent_finish_age_seconds": (
+                None if recent_finish_age_seconds is None else round(recent_finish_age_seconds, 3)
+            ),
+            "recent_finish_grace_active": recent_finish_grace_active,
+            "false_degraded_grace_applied": false_degraded_grace,
+            "stuck_threshold_seconds": (
+                timeout_seconds + WORKER_STUCK_GRACE_SECONDS
+                if timeout_seconds
+                else None
+            ),
             "last_finished_at": item.get("last_finished_at"),
-            "last_error": item.get("last_error"),
+            "last_error": last_error,
             "retry_backoff_seconds": item.get("retry_backoff_seconds", 0),
             "last_good_output_path": last_good_output_path,
             "last_good_output_used": last_good_output_used,
@@ -233,6 +275,41 @@ def build_runtime_resilience_status():
         for packet in stale_summary["stale_packets"]
     )
 
+    governance_status = read_json_safe(PYRAMID_GOVERNANCE_STATUS_PATH)
+    self_improvement_status = read_json_safe(SELF_IMPROVEMENT_STATUS_PATH)
+    trend_diagnostics = read_json_safe(TREND_PIPELINE_DIAGNOSTICS_PATH)
+
+    dashboard_ready_status = {
+        "governance_decision": (
+            (governance_status or {}).get("governance", {}).get("decision")
+            if isinstance((governance_status or {}).get("governance"), dict)
+            else (governance_status or {}).get("governance_decision")
+        ),
+        "resilience_health": {
+            "status": "DEGRADED" if degraded_components else "OK",
+            "official_runtime_path": OFFICIAL_RUNTIME_PATH,
+            "degraded_component_count": len(degraded_components),
+        },
+        "proposal_counts": {
+            "proposal_count": (self_improvement_status or {}).get("proposal_count"),
+            "paper_test_count": (self_improvement_status or {}).get("paper_test_count"),
+            "blocked_count": (self_improvement_status or {}).get("blocked_count"),
+            "promoted_count": (self_improvement_status or {}).get("promoted_count"),
+            "live_apply_allowed": False,
+        },
+        "degraded_workers": worker_summary["degraded_components"],
+        "stale_packets": [
+            packet.get("path")
+            for packet in stale_summary["stale_packets"]
+        ],
+        "trend_diagnostics_summary": {
+            "symbols_checked": (trend_diagnostics or {}).get("symbols_checked"),
+            "dominant_failure_reason": (trend_diagnostics or {}).get("dominant_failure_reason"),
+            "trend_confidence_summary": (trend_diagnostics or {}).get("trend_confidence_summary"),
+            "updated_at_ist": (trend_diagnostics or {}).get("updated_at_ist"),
+        },
+    }
+
     payload = {
         "generated_at": utc_now_iso(),
         "status": "DEGRADED" if degraded_components else "OK",
@@ -240,6 +317,7 @@ def build_runtime_resilience_status():
         "daemon": daemon_status,
         "worker_health_summary": worker_summary,
         "stale_packet_summary": stale_summary,
+        "dashboard_ready_status": dashboard_ready_status,
         "recovery_actions_taken": recovery_actions,
         "degraded_components": degraded_components,
         "last_good_outputs_used": worker_summary["last_good_outputs_used"],
@@ -263,6 +341,7 @@ def write_runtime_resilience_status(path=RUNTIME_RESILIENCE_STATUS_PATH):
 
 def update_existing_status_outputs(resilience_status=None):
     resilience_status = resilience_status if isinstance(resilience_status, dict) else write_runtime_resilience_status()
+    dashboard_ready_status = resilience_status.get("dashboard_ready_status") or {}
     marker = {
         "official_runtime_path": OFFICIAL_RUNTIME_PATH,
         "runtime_resilience_status": {
@@ -272,6 +351,7 @@ def update_existing_status_outputs(resilience_status=None):
             "worker_degraded_count": resilience_status.get("worker_health_summary", {}).get("degraded_count"),
             "last_good_outputs_used": resilience_status.get("last_good_outputs_used", []),
         },
+        "dashboard_ready_status": dashboard_ready_status,
     }
     for path in (
         PYRAMID_CHAIN_STATUS_PATH,

@@ -25,6 +25,7 @@ import os
 import pandas as pd
 from supabase import create_client
 
+from signal_path_diagnostics import add_example, build_scan_report, save_scan_report
 from config.universe import NSE_STOCKS
 from data.loader import load_cached_stock_data
 from data.live_price import get_live_price
@@ -653,6 +654,16 @@ def scan_for_setups():
     rejected_by_evolution = 0
     scanned_count = 0
     error_count = 0
+    trend_rejection_breakdown = {}
+    structure_rejection_breakdown = {}
+    momentum_rejection_breakdown = {}
+    entry_rejection_breakdown = {}
+    setup_rejection_breakdown = {}
+    trend_rejection_symbols = {}
+    structure_rejection_symbols = {}
+    momentum_rejection_symbols = {}
+    entry_rejection_symbols = {}
+    setup_rejection_symbols = {}
 
     # ✅ REAL DASHBOARD STAGE COUNTERS
     trend_passed_count = 0
@@ -678,34 +689,48 @@ def scan_for_setups():
                 live_price = safe_float(df["Close"].iloc[-1])
 
             if live_price is None or live_price <= 0:
+                setup_rejection_breakdown["NO_LIVE_PRICE"] = setup_rejection_breakdown.get("NO_LIVE_PRICE", 0) + 1
+                add_example(setup_rejection_symbols, "NO_LIVE_PRICE", symbol)
                 continue
 
             trend = trend_direction(df)
             side = trade_side_from_trend(trend)
 
             if side not in ["LONG", "SHORT"]:
+                trend_rejection_breakdown["NO_VALID_TREND"] = trend_rejection_breakdown.get("NO_VALID_TREND", 0) + 1
+                add_example(trend_rejection_symbols, "NO_VALID_TREND", symbol)
                 continue
 
             # ✅ Trend passed means a valid trade side was identified
             trend_passed_count += 1
 
             if not structure_ok(df, side):
+                structure_rejection_breakdown["STRUCTURE_FAIL"] = structure_rejection_breakdown.get("STRUCTURE_FAIL", 0) + 1
+                add_example(structure_rejection_symbols, "STRUCTURE_FAIL", symbol)
                 continue
 
             structure_passed_count += 1
 
             if not strong_momentum(df, side):
+                momentum_rejection_breakdown["MOMENTUM_FAIL"] = momentum_rejection_breakdown.get("MOMENTUM_FAIL", 0) + 1
+                add_example(momentum_rejection_symbols, "MOMENTUM_FAIL", symbol)
                 continue
 
             momentum_passed_count += 1
 
             if not avoid_fake_breakout(df, side):
+                entry_rejection_breakdown["FAKE_BREAKOUT"] = entry_rejection_breakdown.get("FAKE_BREAKOUT", 0) + 1
+                add_example(entry_rejection_symbols, "FAKE_BREAKOUT", symbol)
                 continue
 
             if not relative_strength_ok(symbol):
+                entry_rejection_breakdown["RELATIVE_WEAK"] = entry_rejection_breakdown.get("RELATIVE_WEAK", 0) + 1
+                add_example(entry_rejection_symbols, "RELATIVE_WEAK", symbol)
                 continue
 
             if not breakout_ready(df, side):
+                entry_rejection_breakdown["NOT_READY"] = entry_rejection_breakdown.get("NOT_READY", 0) + 1
+                add_example(entry_rejection_symbols, "NOT_READY", symbol)
                 continue
 
             entry_passed_count += 1
@@ -736,6 +761,8 @@ def scan_for_setups():
             target = safe_float(target)
 
             if entry is None or sl is None or target is None:
+                setup_rejection_breakdown["LEVELS_FAIL"] = setup_rejection_breakdown.get("LEVELS_FAIL", 0) + 1
+                add_example(setup_rejection_symbols, "LEVELS_FAIL", symbol)
                 continue
 
             rr = safe_float(
@@ -749,6 +776,8 @@ def scan_for_setups():
             )
 
             if rr <= 0:
+                setup_rejection_breakdown["RR_FAIL"] = setup_rejection_breakdown.get("RR_FAIL", 0) + 1
+                add_example(setup_rejection_symbols, "RR_FAIL", symbol)
                 continue
 
             if not passes_quality_filters(
@@ -757,6 +786,8 @@ def scan_for_setups():
                 side=side,
                 market_status=market_status,
             ):
+                setup_rejection_breakdown["QUALITY_FAIL"] = setup_rejection_breakdown.get("QUALITY_FAIL", 0) + 1
+                add_example(setup_rejection_symbols, "QUALITY_FAIL", symbol)
                 continue
 
             reason = build_reason(
@@ -796,6 +827,8 @@ def scan_for_setups():
             if closed_trades >= MIN_CLOSED_TRADES_FOR_EVOLUTION_FILTER:
                 if not passes_evolution_filter(setup, BASE_EVOLUTION_THRESHOLD):
                     rejected_by_evolution += 1
+                    setup_rejection_breakdown["EVOLUTION_FILTER"] = setup_rejection_breakdown.get("EVOLUTION_FILTER", 0) + 1
+                    add_example(setup_rejection_symbols, "EVOLUTION_FILTER", symbol)
                     continue
 
             setup["evolution_threshold"] = adaptive_threshold
@@ -925,6 +958,37 @@ def scan_for_setups():
         entry_passed=entry_passed_count,
         final_passed=len(eligible_setups),
         alerts_sent=len(selected_alerts),
+    )
+    save_scan_report(
+        build_scan_report(
+            scan_cycle_id=scan_id,
+            stocks_checked=scanned_count,
+            trend_passed=trend_passed_count,
+            momentum_passed=momentum_passed_count,
+            structure_passed=structure_passed_count,
+            entry_passed=entry_passed_count,
+            final_passed=len(eligible_setups),
+            alerts_sent=len(selected_alerts),
+            trend_reasons=trend_rejection_breakdown,
+            trend_examples=trend_rejection_symbols,
+            momentum_reasons=momentum_rejection_breakdown,
+            momentum_examples=momentum_rejection_symbols,
+            structure_reasons=structure_rejection_breakdown,
+            structure_examples=structure_rejection_symbols,
+            entry_reasons=entry_rejection_breakdown,
+            entry_examples=entry_rejection_symbols,
+            setup_reasons=setup_rejection_breakdown,
+            setup_examples=setup_rejection_symbols,
+            setup_received=entry_passed_count,
+            setup_rejected=sum(setup_rejection_breakdown.values()),
+            market_filters={
+                "market_regime": market_status,
+                "volatility_filter": None,
+                "news_filter": None,
+                "risk_filter": None,
+            },
+            breakout_ready=entry_passed_count,
+        )
     )
 
     return eligible_setups

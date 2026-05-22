@@ -27,6 +27,7 @@ MASTER_BRAIN_STATUS_PATH = Path("data") / "runtime" / "master_brain_status.json"
 SETUP_ENGINE_STATUS_PATH = Path("data") / "runtime" / "setup_engine_status.json"
 WORKER_HEALTH_PATH = Path("data") / "runtime" / "worker_health.json"
 FINAL_REJECTION_DEBUG_PATH = Path("data") / "debug" / "final_rejection_breakdown.json"
+LIVE_PRICE_CACHE_PATH = Path("data") / "live_price_cache.json"
 RUNTIME_FRESH_SECONDS = 15 * 60
 MARKET_CANDLE_STALE_MINUTES = 45
 PARTIAL_STALE_TOLERANCE_RATIO = 0.15
@@ -347,6 +348,58 @@ def _last_close(data):
         return float(data["Close"].iloc[-1])
     except Exception:
         return None
+
+
+def _live_price_for_symbol(live_price_cache, symbol):
+    if not isinstance(live_price_cache, dict):
+        return None
+    candidates = [
+        live_price_cache.get(symbol),
+        live_price_cache.get(str(symbol).upper()),
+        live_price_cache.get(str(symbol).lower()),
+    ]
+    for candidate in candidates:
+        if isinstance(candidate, dict):
+            for key in ("ltp", "last_price", "price", "close"):
+                value = _optional_float(candidate.get(key))
+                if value is not None:
+                    return value
+        value = _optional_float(candidate)
+        if value is not None:
+            return value
+    nested = live_price_cache.get("prices")
+    if isinstance(nested, dict):
+        return _live_price_for_symbol(nested, symbol)
+    return None
+
+
+def _optional_float(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _live_price_check(live_price_cache, symbol, close):
+    live_price = _live_price_for_symbol(live_price_cache, symbol)
+    if live_price is None or close in (None, 0):
+        return {
+            "available": live_price is not None,
+            "live_price": live_price,
+            "cached_close": close,
+            "mismatch_pct": None,
+            "mismatch_warning": False,
+        }
+    mismatch_pct = round(abs(live_price - close) / abs(close) * 100.0, 4)
+    return {
+        "available": True,
+        "live_price": live_price,
+        "cached_close": close,
+        "mismatch_pct": mismatch_pct,
+        "mismatch_warning": mismatch_pct >= 1.0,
+    }
 
 
 def _parse_candle_timestamp(value):
@@ -748,6 +801,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     entry_examples = {}
     trend_diagnostic_symbols = []
     regime_diagnostics = _regime_diagnostics()
+    live_price_cache = _read_json(LIVE_PRICE_CACHE_PATH)
 
     try:
         cached_symbols = load_cached_stock_data() or {}
@@ -775,6 +829,26 @@ def run_scanner(path=SCANNER_STATUS_PATH):
             trend_diagnostic = apply_adaptive_trend(
                 explain_trend(symbol, data, trend),
                 regime_diagnostics,
+            )
+            close = _last_close(data)
+            candle_age = _candle_age_minutes(candle_dt, datetime.now(IST))
+            data_stale = bool(market_mode and (candle_dt is None or candle_dt.date() < today_ist))
+            trend_diagnostic.update(
+                {
+                    "latest_candle_timestamp": candle_dt.isoformat() if candle_dt else None,
+                    "latest_candle_age_minutes": candle_age,
+                    "data_stale": data_stale,
+                    "stale_reason": (
+                        "missing_latest_candle_timestamp"
+                        if market_mode and candle_dt is None
+                        else (
+                            "latest_candle_before_today"
+                            if data_stale
+                            else None
+                        )
+                    ),
+                    "live_price_check": _live_price_check(live_price_cache, symbol, close),
+                }
             )
             trend_diagnostic_symbols.append(trend_diagnostic)
             strict_side = _side_from_trend(trend)
@@ -861,6 +935,10 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         if repeated_data_signature
         else None
     )
+    for item in trend_diagnostic_symbols:
+        item["repeated_data_signature"] = repeated_data_signature
+        if repeated_data_warning:
+            item["stale_reason"] = item.get("stale_reason") or repeated_data_warning
     payload = _status_payload(
         mode=mode,
         stocks_checked=stocks_checked,

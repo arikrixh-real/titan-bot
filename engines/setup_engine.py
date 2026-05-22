@@ -8,6 +8,7 @@ from pathlib import Path
 
 from supabase import create_client
 
+from signal_path_diagnostics import add_example, build_scan_report, save_scan_report
 from data.loader import get_last_load_debug, load_cached_stock_data
 from data.live_price import get_live_price_debug
 
@@ -879,6 +880,14 @@ def scan_for_setups():
     phase1_block_count = 0
     final_rejection_breakdown = Counter()
     final_rejection_symbols = {}
+    trend_rejection_breakdown = Counter()
+    structure_rejection_breakdown = Counter()
+    momentum_rejection_breakdown = Counter()
+    entry_rejection_breakdown = Counter()
+    trend_rejection_symbols = {}
+    structure_rejection_symbols = {}
+    momentum_rejection_symbols = {}
+    entry_rejection_symbols = {}
     upstox_count = 0
     live_cache_count = 0
     csv_close_count = 0
@@ -1000,6 +1009,8 @@ def scan_for_setups():
 
             if side is None:
                 no_valid_trend_count += 1
+                trend_rejection_breakdown["NO_VALID_TREND"] += 1
+                add_example(trend_rejection_symbols, "NO_VALID_TREND", symbol)
                 titan_log(f"FILTER RESULT → {symbol} | NO_VALID_TREND")
                 insert_scan_symbol(scan_id, {
                     "symbol": symbol,
@@ -1093,30 +1104,44 @@ def scan_for_setups():
             if not structure_result:
                 structure_fail_count += 1
                 fail_reason = "STRUCTURE_FAIL"
+                structure_rejection_breakdown[fail_reason] += 1
+                add_example(structure_rejection_symbols, fail_reason, symbol)
 
             elif not momentum_result:
                 momentum_fail_count += 1
                 fail_reason = "MOMENTUM_FAIL"
+                momentum_rejection_breakdown[fail_reason] += 1
+                add_example(momentum_rejection_symbols, fail_reason, symbol)
 
             elif not fake_breakout_ok:
                 fake_breakout_count += 1
                 fail_reason = "FAKE_BREAKOUT"
+                entry_rejection_breakdown[fail_reason] += 1
+                add_example(entry_rejection_symbols, fail_reason, symbol)
 
             elif not relative_strength_result:
                 relative_weak_count += 1
                 fail_reason = "RELATIVE_WEAK"
+                entry_rejection_breakdown[fail_reason] += 1
+                add_example(entry_rejection_symbols, fail_reason, symbol)
 
             elif not entry_result:
                 not_ready_count += 1
                 fail_reason = "NOT_READY"
+                entry_rejection_breakdown[fail_reason] += 1
+                add_example(entry_rejection_symbols, fail_reason, symbol)
 
             elif not quality_ok:
                 quality_fail_count += 1
                 fail_reason = "QUALITY_FAIL"
+                entry_rejection_breakdown[fail_reason] += 1
+                add_example(entry_rejection_symbols, fail_reason, symbol)
 
             elif confirmations < 3:
                 confluence_fail_count += 1
                 fail_reason = "CONFLUENCE_FAIL"
+                entry_rejection_breakdown[fail_reason] += 1
+                add_example(entry_rejection_symbols, fail_reason, symbol)
 
             else:
                 levels = safe_trade_levels(
@@ -1465,6 +1490,39 @@ def scan_for_setups():
         final_rejection_symbols,
         entry_passed,
         final_passed,
+    )
+    save_scan_report(
+        build_scan_report(
+            scan_cycle_id=str(scan_id),
+            stocks_checked=stocks_checked,
+            trend_passed=trend_passed,
+            momentum_passed=momentum_passed,
+            structure_passed=structure_passed,
+            entry_passed=entry_passed,
+            final_passed=final_passed,
+            alerts_sent=alerts_sent,
+            trend_reasons=trend_rejection_breakdown,
+            trend_examples=trend_rejection_symbols,
+            momentum_reasons=momentum_rejection_breakdown,
+            momentum_examples=momentum_rejection_symbols,
+            structure_reasons=structure_rejection_breakdown,
+            structure_examples=structure_rejection_symbols,
+            entry_reasons=entry_rejection_breakdown,
+            entry_examples=entry_rejection_symbols,
+            setup_reasons=final_rejection_breakdown,
+            setup_examples=final_rejection_symbols,
+            setup_received=entry_passed,
+            setup_rejected=sum(final_rejection_breakdown.values()),
+            market_filters={
+                "market_regime": market_status,
+                "volatility_filter": None,
+                "news_filter": None,
+                "risk_filter": {
+                    "phase1_blocks": phase1_block_count,
+                },
+            },
+            breakout_ready=entry_passed,
+        )
     )
 
     log_scan(

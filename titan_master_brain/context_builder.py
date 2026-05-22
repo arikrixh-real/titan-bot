@@ -46,6 +46,22 @@ def _append_advisory_context(context, advisory):
     strategy_workflow = strategy_workflow if isinstance(strategy_workflow, dict) else {}
     self_improvement = advisory.get("controlled_self_improvement") if isinstance(advisory, dict) else {}
     self_improvement = self_improvement if isinstance(self_improvement, dict) else {}
+    self_improvement_summary = {
+        "mode": "SHADOW_ONLY_CONTROLLED_SELF_IMPROVEMENT",
+        "status": self_improvement.get("status", "UNAVAILABLE"),
+        "proposal_count": int(self_improvement.get("proposal_count") or 0),
+        "paper_test_count": int(self_improvement.get("paper_test_count") or 0),
+        "blocked_count": int(self_improvement.get("blocked_count") or 0),
+        "promoted_count": int(self_improvement.get("promoted_count") or 0),
+        "top_safe_improvement_ideas": (self_improvement.get("top_safe_improvement_ideas") or [])[:5],
+        "proposals_path": self_improvement.get("proposals_path"),
+        "runtime_status_path": self_improvement.get("runtime_status_path"),
+        "live_apply_allowed": False,
+        "direct_scoring_change": False,
+        "strategy_weight_mutation": False,
+        "broker_orders": False,
+        "telegram_changes": False,
+    }
     contradiction_summaries = report_vault.get("contradiction_resolution_summaries") or []
     experience_reliability = experience_vault.get("experience_intelligence_summary") or {}
 
@@ -129,22 +145,7 @@ def _append_advisory_context(context, advisory):
             "direct_strategy_replacement": False,
             "recommendations": (strategy_workflow.get("recommendations") or [])[:10],
         },
-        "controlled_self_improvement": {
-            "mode": "SHADOW_ONLY_CONTROLLED_SELF_IMPROVEMENT",
-            "status": self_improvement.get("status", "UNAVAILABLE"),
-            "proposal_count": int(self_improvement.get("proposal_count") or 0),
-            "paper_test_count": int(self_improvement.get("paper_test_count") or 0),
-            "blocked_count": int(self_improvement.get("blocked_count") or 0),
-            "promoted_count": int(self_improvement.get("promoted_count") or 0),
-            "top_safe_improvement_ideas": (self_improvement.get("top_safe_improvement_ideas") or [])[:5],
-            "proposals_path": self_improvement.get("proposals_path"),
-            "runtime_status_path": self_improvement.get("runtime_status_path"),
-            "live_apply_allowed": False,
-            "direct_scoring_change": False,
-            "strategy_weight_mutation": False,
-            "broker_orders": False,
-            "telegram_changes": False,
-        },
+        "controlled_self_improvement": self_improvement_summary,
         "safety_council": {
             "broker_safety": safety_council.get("broker_safety") or {},
             "promotion_gate": safety_council.get("promotion_gate") or {},
@@ -164,6 +165,7 @@ def _append_advisory_context(context, advisory):
         "pyramid_governance_status": pyramid_governance.get("status"),
         "safety_warnings": safety_warnings,
     }
+    context["self_improvement"] = self_improvement_summary
 
     if governance.get("decision"):
         context["governance_decision"] = governance.get("decision")
