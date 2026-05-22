@@ -52,6 +52,15 @@ def utc_now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
+def refresh_execution_safety_status():
+    try:
+        from engines.broker_execution_safety_system import write_latest_execution_safety_report
+
+        return write_latest_execution_safety_report()
+    except Exception as exc:
+        return {"status": "ERROR", "error": str(exc)}
+
+
 def _atomic_write_json(path, payload):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -283,6 +292,7 @@ def build_daemon_status(daemon_health=None):
 
 
 def build_runtime_resilience_status():
+    refresh_execution_safety_status()
     daemon_status = build_daemon_status()
     worker_summary = build_worker_health_summary()
     stale_summary = build_stale_packet_summary()

@@ -20,6 +20,7 @@ from typing import Any, Dict, List
 SAFETY_DIR = Path("data/execution_safety")
 STATE_PATH = SAFETY_DIR / "execution_safety_state.json"
 AUDIT_LOG_PATH = SAFETY_DIR / "execution_safety_audit_log.json"
+LATEST_REPORT_PATH = SAFETY_DIR / "latest_execution_safety_report.json"
 
 
 DEFAULT_STATE = {
@@ -367,7 +368,14 @@ def build_execution_safety_report(state: Any = None, account_snapshot: Any = Non
     execution_allowed = False
     if all(item.get("passed") for item in checks) and state.get("live_trading_enabled") and state.get("broker_execution_mode") == "LIVE_READY":
         execution_allowed = False  # Intentionally disabled until future explicit promotion.
-    risk_status = "BLOCKED" if not kill.get("passed") or daily.get("passed") is False or not broker.get("passed") else "CAUTION" if safety_score < 85 else "SAFE"
+    if not kill.get("passed") or daily.get("passed") is False:
+        risk_status = "BLOCKED"
+    elif not state.get("live_trading_enabled") or state.get("broker_execution_mode") in {"DRY_RUN", "LIVE_DISABLED"}:
+        risk_status = "READ_ONLY_SAFE"
+    elif not broker.get("passed"):
+        risk_status = "BLOCKED"
+    else:
+        risk_status = "CAUTION" if safety_score < 85 else "SAFE"
     explanations = ["Execution is fail-closed by default; no broker orders are allowed."]
     if not state.get("live_trading_enabled"):
         explanations.append("Live trading is disabled.")
@@ -375,7 +383,16 @@ def build_execution_safety_report(state: Any = None, account_snapshot: Any = Non
         explanations.append("Broker execution mode is DRY_RUN.")
     if not broker.get("passed"):
         explanations.append("Broker connection is not confirmed healthy.")
+    safety_gate_status = "HEALTHY" if risk_status in {"READ_ONLY_SAFE", "SAFE", "CAUTION"} else "BLOCKED"
     return {
+        "status": "HEALTHY" if safety_gate_status == "HEALTHY" else "BLOCKED",
+        "generated_at": _now(),
+        "broker_orders": False,
+        "telegram_changes": False,
+        "live_apply_allowed": False,
+        "scoring_mutation": False,
+        "strategy_weight_mutation": False,
+        "safety_gate_status": safety_gate_status,
         "broker_execution_mode": state.get("broker_execution_mode"),
         "live_trading_enabled": bool(state.get("live_trading_enabled")),
         "kill_switch_active": bool(state.get("kill_switch_active")),
@@ -395,6 +412,32 @@ def build_execution_safety_report(state: Any = None, account_snapshot: Any = Non
     }
 
 
+def write_latest_execution_safety_report(
+    state: Any = None,
+    account_snapshot: Any = None,
+    order_history: Any = None,
+    broker_status: Any = None,
+    extra_fields: Any = None,
+    path: Path = LATEST_REPORT_PATH,
+) -> Dict[str, Any]:
+    """
+    Refresh the read-only execution safety status packet.
+
+    This writer never places broker orders, never enables live execution, and
+    never mutates scoring, strategy weights, Telegram, journals, or TP/SL data.
+    """
+    report = build_execution_safety_report(
+        state=state,
+        account_snapshot=account_snapshot or {"balance": 100000, "daily_loss_pct": 0.0},
+        order_history=order_history or [],
+        broker_status=broker_status or {"connected": False, "status": "DISCONNECTED"},
+    )
+    if isinstance(extra_fields, dict):
+        report.update(extra_fields)
+    _write_json(path, report)
+    return report
+
+
 if __name__ == "__main__":
     state = initialize_execution_safety_state()
     sample_order = {"symbol": "TCS", "side": "LONG", "entry": 3900, "quantity": 10, "status": "PENDING"}
@@ -405,7 +448,7 @@ if __name__ == "__main__":
         order_history=[],
         broker_status={"connected": False, "status": "DISCONNECTED"},
     )
-    report = build_execution_safety_report(
+    report = write_latest_execution_safety_report(
         state=state,
         account_snapshot={"balance": 100000, "daily_loss_pct": 0.0},
         order_history=[sample_order],

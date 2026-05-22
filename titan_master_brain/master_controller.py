@@ -124,11 +124,13 @@ try:
     from engines.broker_execution_safety_system import (
         build_execution_safety_report,
         run_pre_order_safety_checks,
+        write_latest_execution_safety_report,
     )
     print("PHASE 24 BROKER EXECUTION SAFETY ACTIVE")
 except Exception:
     build_execution_safety_report = None
     run_pre_order_safety_checks = None
+    write_latest_execution_safety_report = None
 
 try:
     from engines.smart_execution_engine import build_smart_execution_report
@@ -1016,7 +1018,11 @@ def refresh_phase24_execution_safety_safely(final_decisions=None, context=None):
     Builds and saves a fail-closed broker safety report. It does not place
     orders, enable live mode, call execution, or alter alert behavior.
     """
-    if build_execution_safety_report is None or run_pre_order_safety_checks is None:
+    if (
+        build_execution_safety_report is None
+        or run_pre_order_safety_checks is None
+        or write_latest_execution_safety_report is None
+    ):
         print("[Phase24] Broker execution safety not connected.")
         return None
 
@@ -1039,15 +1045,12 @@ def refresh_phase24_execution_safety_safely(final_decisions=None, context=None):
             order_history=order_history,
             broker_status=broker_status,
         )
-        report = build_execution_safety_report(
+        report = write_latest_execution_safety_report(
             account_snapshot=account_snapshot,
             order_history=order_history,
             broker_status=broker_status,
+            extra_fields={"pre_order_safety_checks": pre_order},
         )
-        report["pre_order_safety_checks"] = pre_order
-        EXECUTION_SAFETY_DIR.mkdir(parents=True, exist_ok=True)
-        with open(LATEST_EXECUTION_SAFETY_REPORT_PATH, "w", encoding="utf-8") as f:
-            json.dump(report, f, indent=2, ensure_ascii=False)
         print(
             "[Phase24] Execution safety report saved: "
             f"{LATEST_EXECUTION_SAFETY_REPORT_PATH} | "

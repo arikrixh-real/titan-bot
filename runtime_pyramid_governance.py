@@ -4,7 +4,11 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from runtime_resilience_status import OFFICIAL_RUNTIME_PATH, write_runtime_resilience_status
+from runtime_resilience_status import (
+    OFFICIAL_RUNTIME_PATH,
+    refresh_execution_safety_status,
+    write_runtime_resilience_status,
+)
 
 
 GOVERNANCE_STATUS_PATH = Path("data") / "runtime" / "pyramid_governance_status.json"
@@ -262,6 +266,7 @@ def evaluate_safety_governance(advisory=None, safety_council=None, pyramid_statu
 
 
 def generate_pyramid_governance_status(advisory=None, safety_council=None, output_path=GOVERNANCE_STATUS_PATH):
+    refresh_execution_safety_status()
     components = {
         name: _component_status(name, paths)
         for name, paths in COMPONENT_PATHS.items()
