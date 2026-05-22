@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from consciousness_core.experience_utils import load_json
+from consciousness_core.experience_utils import load_json, safe_float
 from consciousness_core.institutional_utils import CORE_DIR, clamp, text_blob
 from consciousness_core.state import atomic_write_json, now_ist
 
@@ -16,8 +16,8 @@ def run_institutional_infrastructure_awareness(output_path=OUTPUT_PATH, **_kwarg
     validation = load_json(CORE_DIR / "validation_depth.json", {})
     confidence = load_json(CORE_DIR / "confidence_recalibration.json", {})
 
-    data_score = float(data_quality.get("data_quality_score") or 0)
-    validation_score = float(validation.get("validation_depth_score") or 0)
+    data_score = safe_float(data_quality.get("data_quality_score"), 0.0)
+    validation_score = safe_float(validation.get("validation_depth_score"), 0.0)
     proxy_seen = "proxy" in text_blob(data_quality, liquidity, runtime_health, worker_health)
     worker_blob = text_blob(worker_health)
     worker_unreliable = any(term in worker_blob for term in ("error", "failed", "stale", "not_implemented"))

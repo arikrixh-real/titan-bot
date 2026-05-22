@@ -37,13 +37,21 @@ def load_trade_rows(limit=4000):
     return rows
 
 
-def parse_float(value, default=0.0):
+def safe_float(value, default=None):
     try:
-        if value in (None, ""):
+        if value is None:
             return default
+        if isinstance(value, str):
+            cleaned = value.strip().upper()
+            if cleaned in {"TP", "SL", "WIN", "LOSS", "OPEN", "CLOSED", "NONE", ""}:
+                return default
         return float(value)
-    except (TypeError, ValueError):
+    except Exception:
         return default
+
+
+def parse_float(value, default=0.0):
+    return safe_float(value, default)
 
 
 def parse_market_status(row):

@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from consciousness_core.experience_utils import safe_float
 from consciousness_core.state import atomic_write_json, now_ist
 
 
@@ -27,9 +28,9 @@ def _evidence_quality(evidence):
         return "LOW", ["no direct evidence attached"]
     sources = {item.get("source") for item in evidence if item.get("source")}
     actionability = [
-        float(item.get("actionability_score") or 0.0)
+        safe_float(item.get("actionability_score"), 0.0)
         for item in evidence
-        if isinstance(item.get("actionability_score"), (int, float))
+        if safe_float(item.get("actionability_score")) is not None
     ]
     avg_actionability = sum(actionability) / len(actionability) if actionability else 0.35
     if len(evidence) >= 2 and len(sources) >= 2 and avg_actionability >= 0.55:

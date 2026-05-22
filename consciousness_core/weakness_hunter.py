@@ -1,4 +1,5 @@
 from consciousness_core.deduplication import SEVERITY_RANK, append_evidence, stronger_label
+from consciousness_core.experience_utils import safe_float
 from consciousness_core.state import stable_hash
 
 
@@ -71,6 +72,7 @@ def hunt_weaknesses(observation_packet, reflection=None):
         obs_type = observation.get("type")
         metric = observation.get("metric")
         value = observation.get("value")
+        numeric_value = safe_float(value)
         entity = observation.get("entity") or observation.get("source")
         severity = str(observation.get("severity") or "LOW").upper()
         evidence = [observation]
@@ -130,7 +132,7 @@ def hunt_weaknesses(observation_packet, reflection=None):
                     "restore report generation or explicitly mark the source unavailable in consuming workers",
                 )
             )
-        if metric in {"calibrated_confidence_score", "reliability_score"} and value is not None and float(value) < 40:
+        if metric in {"calibrated_confidence_score", "reliability_score"} and numeric_value is not None and numeric_value < 40:
             weaknesses.append(
                 _weakness(
                     "weak_confidence_calibration",
@@ -163,7 +165,7 @@ def hunt_weaknesses(observation_packet, reflection=None):
                     "block promotion of strategy changes until backtest or paper validation is populated",
                 )
             )
-        if obs_type == "backtest_validation" and metric in {"sample_size", "quality_score", "validation_score"} and float(value or 0) <= 0:
+        if obs_type == "backtest_validation" and metric in {"sample_size", "quality_score", "validation_score"} and safe_float(value, 0.0) <= 0:
             weaknesses.append(
                 _weakness(
                     "poor_backtesting_validation",
@@ -186,7 +188,7 @@ def hunt_weaknesses(observation_packet, reflection=None):
                 )
             )
         if "auto_repair" in observation.get("source", "") and metric in {"severity_score", "auto_repair_score"}:
-            if (metric == "severity_score" and float(value or 0) >= 20) or (metric == "auto_repair_score" and float(value or 100) < 70):
+            if (metric == "severity_score" and safe_float(value, 0.0) >= 20) or (metric == "auto_repair_score" and safe_float(value, 100.0) < 70):
                 weaknesses.append(
                     _weakness(
                         "auto_repair_issue",
@@ -208,7 +210,7 @@ def hunt_weaknesses(observation_packet, reflection=None):
                     "keep strategy changes in study/test queue until enough closed trades accumulate",
                 )
             )
-        if metric == "win_rate" and value is not None and float(value) < 0.5:
+        if metric == "win_rate" and numeric_value is not None and numeric_value < 0.5:
             weaknesses.append(
                 _weakness(
                     "strategy_underperformance",

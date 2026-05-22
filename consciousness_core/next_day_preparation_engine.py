@@ -1,4 +1,4 @@
-from consciousness_core.experience_utils import load_json
+from consciousness_core.experience_utils import load_json, safe_float
 from consciousness_core.institutional_utils import CORE_DIR
 from consciousness_core.state import atomic_write_json, now_ist
 
@@ -17,7 +17,7 @@ def _extract_symbols(stock_personality):
     if isinstance(symbols, dict):
         ranked = sorted(
             symbols.items(),
-            key=lambda item: float(item[1].get("sample_size") or item[1].get("trade_count") or 0) if isinstance(item[1], dict) else 0,
+            key=lambda item: safe_float(item[1].get("sample_size") or item[1].get("trade_count"), 0.0) if isinstance(item[1], dict) else 0,
             reverse=True,
         )
         return [symbol for symbol, _ in ranked[:12]]

@@ -4,6 +4,7 @@ import json
 import time
 from pathlib import Path
 
+from consciousness_core.experience_utils import safe_float
 from consciousness_core.state import atomic_write_json, stable_hash
 
 
@@ -83,12 +84,7 @@ def _read_csv(path):
 
 
 def _to_float(value):
-    try:
-        if value in (None, ""):
-            return None
-        return float(value)
-    except (TypeError, ValueError):
-        return None
+    return safe_float(value)
 
 
 def _severity_from_text(text):
@@ -104,8 +100,9 @@ def _actionability(metric, value, severity):
     score = {"LOW": 0.25, "MEDIUM": 0.55, "HIGH": 0.85}.get(severity, 0.35)
     if metric in {"worker_status", "timeout_count", "validation_status", "trade_loss", "no_trade_warning"}:
         score += 0.1
-    if isinstance(value, (int, float)) and value:
-        score += min(abs(float(value)) / 100.0, 0.2)
+    numeric_value = safe_float(value)
+    if numeric_value:
+        score += min(abs(numeric_value) / 100.0, 0.2)
     return round(min(score, 1.0), 3)
 
 

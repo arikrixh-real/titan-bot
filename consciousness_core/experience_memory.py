@@ -3,6 +3,7 @@ import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from consciousness_core.experience_utils import safe_float
 from consciousness_core.state import atomic_write_json, now_ist
 
 
@@ -55,7 +56,7 @@ def _trade_patterns(rows):
         side = row.get("side") or row.get("direction") or "UNKNOWN"
         setup = row.get("setup") or row.get("result_reason") or row.get("outcome") or "UNKNOWN"
         outcome = (row.get("outcome") or row.get("result") or "").upper()
-        pnl = float(row.get("realized_pnl") or row.get("pnl_points") or 0.0)
+        pnl = safe_float(row.get("realized_pnl") or row.get("pnl_points"), 0.0)
         regime = _market_regime(row)
         won = outcome in {"TARGET", "TP", "WIN", "PROFIT"} or pnl > 0
         lost = outcome in {"SL", "LOSS", "STOP_LOSS"} or pnl < 0

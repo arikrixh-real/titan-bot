@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
+from consciousness_core.experience_utils import safe_float
 from consciousness_core.safety_gate import evaluate_proposal
 from consciousness_core.state import atomic_write_json, now_ist, stable_hash
 
@@ -187,6 +188,7 @@ def _from_consciousness(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     for directive in (engine_memory.get("learning_directives") or [])[:15]:
         if not isinstance(directive, dict):
             continue
+        confidence = safe_float(directive.get("confidence"))
         proposals.append(
             _proposal(
                 source="consciousness_core",
@@ -194,7 +196,7 @@ def _from_consciousness(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
                 evidence=directive.get("evidence") or [directive],
                 affected_area=directive.get("target_engine") or "research_pipeline",
                 proposed_change=directive.get("suggested_adjustment") or directive.get("learning_type") or "Validate learning directive.",
-                risk_level="LOW" if directive.get("confidence", 0) and float(directive.get("confidence") or 0) < 0.75 else "MEDIUM",
+                risk_level="LOW" if confidence is not None and confidence < 0.75 else "MEDIUM",
                 validation_required=True,
                 paper_test_required=True,
             )
@@ -224,9 +226,9 @@ def _from_experience_summary(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def _from_calibration(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
-    sample_size = ((payload.get("predicted_vs_actual") or {}).get("sample_size") or 0)
+    sample_size = safe_float((payload.get("predicted_vs_actual") or {}).get("sample_size"), 0)
     warning = str(payload.get("calibration_warning") or payload.get("calibration_bias") or "").upper()
-    if sample_size and int(float(sample_size)) >= 20 and warning not in {"REVIEW", "WARNING"}:
+    if sample_size and int(sample_size) >= 20 and warning not in {"REVIEW", "WARNING"}:
         return []
     return [
         _proposal(
@@ -241,7 +243,7 @@ def _from_calibration(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def _from_no_trade(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
-    score = float(payload.get("no_trade_score") or 0.0)
+    score = safe_float(payload.get("no_trade_score"), 0.0)
     warning = str(payload.get("no_trade_warning") or "").upper()
     wait_mode = payload.get("wait_mode") if isinstance(payload.get("wait_mode"), dict) else {}
     if score < 40 and warning in {"", "NONE"} and not wait_mode.get("wait_recommended"):
@@ -260,7 +262,7 @@ def _from_no_trade(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def _from_backtesting(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     status = str(payload.get("validation_status") or "").upper()
-    score = float(payload.get("validation_score") or 0.0)
+    score = safe_float(payload.get("validation_score"), 0.0)
     allowed = bool(payload.get("live_deployment_allowed", False))
     if status in {"PASS", "OK"} and score >= 70 and allowed:
         return []
@@ -338,7 +340,7 @@ def _promotion_gate_passed(promotion_memory: Dict[str, Any]) -> bool:
     return (
         bool(safety.get("no_forbidden_imports_detected", True))
         and not bool(summary.get("any_live_influence", False))
-        and float(summary.get("max_promotion_score") or 0.0) >= SAFE_PROMOTION_SCORE
+        and safe_float(summary.get("max_promotion_score"), 0.0) >= SAFE_PROMOTION_SCORE
     )
 
 
