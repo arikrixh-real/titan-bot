@@ -91,6 +91,7 @@ def get_scheduler_map(mode):
         ]
         scheduler_map["every_1_minute"] = [
             "dashboard_sync",
+            "news_pulse",
             "news_intelligence",
             "daily_review",
         ]
@@ -123,8 +124,11 @@ def get_scheduler_map(mode):
         ]
         scheduler_map["every_1_minute"] = [
             "dashboard_sync",
+            "news_pulse",
+            "news_intelligence",
         ]
         scheduler_map["every_5_minutes"] = [
+            "light_news_pulse",
             "runtime_snapshot_logger",
         ]
         scheduler_map["every_15_minutes"] = [

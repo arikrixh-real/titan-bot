@@ -8,6 +8,7 @@ import pandas as pd
 import requests
 import streamlit as st
 from supabase import create_client, Client
+from engines.time_filter import current_bot_mode
 from utils.market_hours import IST, is_trade_window
 
 
@@ -574,13 +575,18 @@ def is_market_open_now(now=None):
 
 
 def market_mode_label():
-    return "MARKET OPEN" if is_market_open_now() else "MARKET CLOSED / RESEARCH MODE"
+    if is_market_open_now():
+        return "MARKET OPEN"
+    mode = current_bot_mode()
+    return "WEEKEND MODE" if mode == "WEEKEND_MODE" else "RESEARCH MODE"
 
 
 def normalize_runtime_mode(mode):
     text = str(mode or "").strip().upper()
     if text in {"", "UNKNOWN", "NONE", "NULL"}:
         text = ""
+    if text in {"INTELLIGENCE_MODE", "CONTINUOUS_WORKERS", "HEALTH_ONLY"}:
+        text = "RESEARCH_MODE" if not is_market_open_now() else "MARKET_MODE"
     return text or ("MARKET_MODE" if is_market_open_now() else "RESEARCH_MODE")
 
 
@@ -593,7 +599,12 @@ def runtime_mode_from_payloads(*payloads):
     for payload in payloads:
         if not isinstance(payload, dict):
             continue
-        mode = payload.get("mode") or payload.get("runtime_mode")
+        nested_runtime_mode = payload.get("runtime_mode")
+        mode = payload.get("mode") or (
+            nested_runtime_mode.get("current_mode")
+            if isinstance(nested_runtime_mode, dict)
+            else nested_runtime_mode
+        )
         if mode:
             return normalize_runtime_mode(mode)
     return normalize_runtime_mode(None)
@@ -1443,6 +1454,10 @@ def get_news_memory_status():
 
     row = latest_row("news_memory")
     latest_time = row_time(row)
+    local_news_status = safe_read_json("/".join(["data", "runtime", "news_pulse_status.json"]), {})
+    local_news_time = parse_dt(local_news_status.get("latest_news_timestamp_ist") or local_news_status.get("timestamp_ist"))
+    if local_news_time and (latest_time is None or local_news_time > latest_time):
+        latest_time = local_news_time
 
     info["latest_time"] = latest_time
     info["age"] = age_text_from_dt(latest_time)
@@ -1455,7 +1470,7 @@ def get_news_memory_status():
             info["status"] = "DELAYED"
         else:
             info["status"] = "STALE"
-    elif info["count"] > 0:
+    elif info["count"] > 0 or local_news_status:
         info["status"] = "ACTIVE"
 
     return info
@@ -1531,13 +1546,13 @@ def get_master_brain_status(github_time=None, scan_time=None, outcome_time=None)
         if age_seconds <= 900:
             master_status = "ACTIVE"
         elif not is_market_open_now() and age_seconds <= scanner_fresh_seconds_for_mode(runtime_mode):
-            master_status = "RESEARCH MODE"
+            master_status = market_mode_label()
         elif age_seconds <= 3600:
             master_status = "DELAYED"
         else:
-            master_status = "WAITING"
+            master_status = "STANDBY" if not is_market_open_now() else "WAITING"
     else:
-        master_status = "WAITING"
+        master_status = "STANDBY" if not is_market_open_now() else "WAITING"
 
     if active_trades > 0 or local_stats["open_total"] > 0:
         evolution_status_value = "OBSERVING"
@@ -2140,6 +2155,7 @@ def get_dashboard_runtime_status():
         or "UNKNOWN"
     )
     normalized_runtime_mode = runtime_mode_from_payloads(runtime_status, daemon_health, heartbeat)
+    market_workers_allowed_idle = normalized_runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"}
     scanner_fresh = runtime_payload_is_fresh(
         scanner_status,
         scanner_fresh_seconds_for_mode(normalized_runtime_mode),
@@ -2150,12 +2166,26 @@ def get_dashboard_runtime_status():
     ticks_completed = daemon_health.get("ticks_completed")
     ticks_text = f"{int(ticks_completed):,}" if isinstance(ticks_completed, (int, float)) else str(ticks_completed or "0")
 
+    open_paper_positions = int(first_number(paper_engine_status.get("open_positions_count"), default=0)) if isinstance(paper_engine_status, dict) else 0
     runtime_checks = {
         "daemon_not_alive": daemon_alive,
-        "scanner_stale": scanner_fresh and runtime_payload_active(scanner_status),
-        "master_brain_stale": runtime_payload_is_fresh(master_brain_status) and runtime_payload_active(master_brain_status),
-        "paper_engine_stale": runtime_payload_is_fresh(paper_engine_status) and runtime_payload_active(paper_engine_status),
-        "live_price_monitor_stale": runtime_payload_is_fresh(live_price_monitor_status) and runtime_payload_active(live_price_monitor_status),
+        "runtime_status_stale": runtime_fresh,
+        "scanner_stale": True if market_workers_allowed_idle else scanner_fresh and runtime_payload_active(scanner_status),
+        "master_brain_stale": (
+            True
+            if market_workers_allowed_idle
+            else runtime_payload_is_fresh(master_brain_status) and runtime_payload_active(master_brain_status)
+        ),
+        "paper_engine_stale": (
+            True
+            if market_workers_allowed_idle and open_paper_positions == 0 and daemon_alive
+            else runtime_payload_is_fresh(paper_engine_status) and runtime_payload_active(paper_engine_status)
+        ),
+        "live_price_monitor_stale": (
+            True
+            if market_workers_allowed_idle
+            else runtime_payload_is_fresh(live_price_monitor_status) and runtime_payload_active(live_price_monitor_status)
+        ),
     }
     attention_reasons = [reason for reason, ok in runtime_checks.items() if not ok]
     autonomous_status = "NEEDS ATTENTION" if attention_reasons else "OK"
@@ -2163,7 +2193,8 @@ def get_dashboard_runtime_status():
 
     return {
         "daemon_status": daemon_status,
-        "runtime_mode": runtime_mode,
+        "runtime_mode": normalized_runtime_mode,
+        "normalized_runtime_mode": normalized_runtime_mode,
         "heartbeat_age": heartbeat_age,
         "heartbeat_timestamp": format_runtime_timestamp(heartbeat_timestamp),
         "ticks_completed": ticks_text,
@@ -2186,7 +2217,9 @@ def get_scanner_runtime_status():
         active_status="ACTIVE",
         waiting_status="WAITING",
     )
-    if isinstance(data, dict) and data and not scanner_fresh:
+    if runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"}:
+        status = "MARKET CLOSED / STANDBY"
+    elif isinstance(data, dict) and data and not scanner_fresh:
         status = "STALE"
     elif scanner_fresh and runtime_payload_active(data):
         status = "ACTIVE"
@@ -2213,8 +2246,8 @@ def get_live_price_monitor_runtime_status():
     data, source = get_runtime_payload("live_price_monitor_status", LIVE_PRICE_MONITOR_STATUS_PATH)
     timestamp = runtime_payload_dt(data)
     status = runtime_status_with_freshness(data, active_status="ACTIVE")
-    if not market_open and status not in {"STALE", "WAITING"}:
-        status = "MARKET CLOSED"
+    if not market_open:
+        status = "MARKET CLOSED / STANDBY"
     return {
         "payload": data if isinstance(data, dict) else {},
         "source": source,
@@ -2244,10 +2277,15 @@ def get_paper_engine_runtime_status():
     equity = first_number(account_summary.get("equity"), account_summary.get("current_balance"), default=0.0)
     realized_pnl = first_number(account_summary.get("realized_pnl"), default=0.0)
 
+    runtime_mode = runtime_mode_from_payloads(
+        safe_read_json("/".join(["data", "runtime", "titan_runtime_status.json"]), {}),
+        safe_read_json("/".join(["data", "runtime", "daemon_health.json"]), {}),
+        safe_read_json("/".join(["data", "runtime", "titan_heartbeat.json"]), {}),
+    )
     if not isinstance(summary, dict):
         return {
-            "status": "WAITING",
-            "message": "No paper engine runtime summary yet",
+            "status": "STANDBY" if runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"} else "WAITING",
+            "message": "Paper engine idle outside market window" if runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"} else "No paper engine runtime summary yet",
             "open_positions_count": 0,
             "closed_positions_count": 0,
             "equity": equity,
@@ -2262,8 +2300,16 @@ def get_paper_engine_runtime_status():
         }
 
     return {
-        "status": "ACTIVE",
-        "message": "Source: data/runtime/paper_engine_status.json",
+        "status": (
+            "STANDBY"
+            if runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"} and int(first_number(summary.get("open_positions_count"), default=0)) == 0
+            else "ACTIVE"
+        ),
+        "message": (
+            "Idle outside market window; no open paper trades require monitoring"
+            if runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"} and int(first_number(summary.get("open_positions_count"), default=0)) == 0
+            else "Source: data/runtime/paper_engine_status.json"
+        ),
         "open_positions_count": int(first_number(summary.get("open_positions_count"), default=0)),
         "closed_positions_count": int(first_number(summary.get("closed_positions_count"), default=0)),
         "equity": equity,
@@ -2282,7 +2328,7 @@ def scan_status_from_dt(dt, market_open=None):
     market_open = is_market_open_now() if market_open is None else market_open
 
     if not market_open:
-        return "MARKET CLOSED"
+        return "MARKET CLOSED / STANDBY"
 
     if not dt:
         return "UNKNOWN"
@@ -2312,12 +2358,12 @@ def derive_titan_status(master_activity_time=None, github_data=None, supabase_st
     if master_activity_time:
         age_seconds = (datetime.now(IST) - master_activity_time).total_seconds()
         if age_seconds <= 6 * 3600:
-            return "ONLINE" if market_open else "RESEARCH MODE"
+            return "ONLINE" if market_open else market_mode_label()
         if age_seconds <= 24 * 3600 and supabase_healthy:
-            return "DELAYED"
+            return "DELAYED" if market_open else market_mode_label()
 
     if not market_open and supabase_healthy:
-        return "RESEARCH MODE"
+        return market_mode_label()
     if supabase_healthy:
         return "DELAYED"
     return "OFFLINE"
@@ -2326,7 +2372,7 @@ def derive_titan_status(master_activity_time=None, github_data=None, supabase_st
 def derive_scan_status(scan_time=None, master_activity_time=None, market_open=None):
     market_open = is_market_open_now() if market_open is None else market_open
     if not market_open:
-        return "MARKET CLOSED"
+        return "MARKET CLOSED / STANDBY"
     if scan_time:
         age_seconds = (datetime.now(IST) - scan_time).total_seconds()
         if age_seconds <= 420:
@@ -2340,7 +2386,7 @@ def derive_scan_status(scan_time=None, master_activity_time=None, market_open=No
 def derive_activity_status(activity_time=None, market_open=None, active_seconds=900, delayed_seconds=3600):
     market_open = is_market_open_now() if market_open is None else market_open
     if not market_open:
-        return "RESEARCH MODE"
+        return market_mode_label()
     if not activity_time:
         return "WAITING"
     age_seconds = (datetime.now(IST) - activity_time).total_seconds()
@@ -2354,7 +2400,7 @@ def derive_activity_status(activity_time=None, market_open=None, active_seconds=
 def derive_upstox_status(scan_health_time=None, stocks_checked=0, market_open=None):
     market_open = is_market_open_now() if market_open is None else market_open
     if not market_open:
-        return "MARKET CLOSED"
+        return "MARKET CLOSED / STANDBY"
     if scan_health_time and stocks_checked > 0:
         age_seconds = (datetime.now(IST) - scan_health_time).total_seconds()
         if age_seconds <= 900:
@@ -2368,6 +2414,7 @@ def market_aware_status(status, market_open=None, closed_status="RESEARCH MODE")
     text = str(status or "WAITING").upper()
     if market_open:
         return text
+    closed_status = market_mode_label() if closed_status == "RESEARCH MODE" else closed_status
     if text in {"OFFLINE", "ERROR", "FAILED", "INACTIVE", "UNKNOWN", "STALE", "DELAYED"}:
         return closed_status
     return text
@@ -2378,7 +2425,7 @@ def status_html(status):
 
     if status in ["ONLINE", "CONNECTED", "SUCCESS", "RUNNING", "ACTIVE", "LEARNING", "OBSERVING", "OK"]:
         css = "pill-green"
-    elif status in ["DELAYED", "UNKNOWN", "WAITING", "NOT CONFIGURED", "BUILDING", "STALE", "RESEARCH MODE", "MARKET CLOSED", "MARKET CLOSED / RESEARCH MODE", "REVIEW"]:
+    elif status in ["DELAYED", "UNKNOWN", "WAITING", "STANDBY", "IDLE_RESEARCH_MODE", "NOT CONFIGURED", "BUILDING", "STALE", "RESEARCH MODE", "WEEKEND MODE", "WEEKEND_MODE", "RESEARCH_MODE", "MARKET CLOSED", "MARKET CLOSED / RESEARCH MODE", "MARKET CLOSED / STANDBY", "REVIEW"]:
         css = "pill-yellow"
     else:
         css = "pill-red"

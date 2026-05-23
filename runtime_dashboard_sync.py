@@ -5,6 +5,7 @@ from pathlib import Path
 
 from supabase import create_client
 from dotenv import load_dotenv
+from engines.time_filter import current_bot_mode
 
 
 DASHBOARD_SYNC_STATUS_PATH = Path("data") / "runtime" / "dashboard_sync_status.json"
@@ -14,6 +15,9 @@ SCANNER_STATUS_PATH = Path("data") / "runtime" / "scanner_status.json"
 MASTER_BRAIN_STATUS_PATH = Path("data") / "runtime" / "master_brain_status.json"
 PAPER_ENGINE_STATUS_PATH = Path("data") / "runtime" / "paper_engine_status.json"
 LIVE_PRICE_MONITOR_STATUS_PATH = Path("data") / "runtime" / "live_price_monitor_status.json"
+NEWS_PULSE_STATUS_PATH = Path("data") / "runtime" / "news_pulse_status.json"
+LIGHT_NEWS_PULSE_STATUS_PATH = Path("data") / "runtime" / "light_news_pulse_status.json"
+NEWS_INTELLIGENCE_STATUS_PATH = Path("data") / "runtime" / "news_intelligence_status.json"
 DAEMON_HEALTH_PATH = Path("data") / "runtime" / "daemon_health.json"
 RUNTIME_STATUS_TABLE = "runtime_status"
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -30,6 +34,9 @@ RUNTIME_STATUS_SOURCES = {
     "live_price_monitor_status": LIVE_PRICE_MONITOR_STATUS_PATH,
     "master_brain_status": MASTER_BRAIN_STATUS_PATH,
     "paper_engine_status": PAPER_ENGINE_STATUS_PATH,
+    "news_pulse_status": NEWS_PULSE_STATUS_PATH,
+    "light_news_pulse_status": LIGHT_NEWS_PULSE_STATUS_PATH,
+    "news_intelligence_status": NEWS_INTELLIGENCE_STATUS_PATH,
 }
 
 
@@ -53,6 +60,11 @@ def is_active_status(payload):
         return False
     inactive_markers = ("STOPPED", "FAILED", "ERROR", "INACTIVE")
     return not any(marker in status for marker in inactive_markers)
+
+
+def normalized_runtime_mode():
+    mode = current_bot_mode()
+    return "RESEARCH_MODE" if mode == "INTELLIGENCE_MODE" else mode
 
 
 def get_nested_number(payload, keys, default=0):
@@ -80,6 +92,30 @@ def latest_timestamp(*payloads):
         if isinstance(payload, dict) and payload.get("timestamp_ist")
     ]
     return max(timestamps) if timestamps else datetime.now(IST).isoformat()
+
+
+def parse_timestamp(value):
+    if not value:
+        return None
+    try:
+        text = str(value).strip()
+        if text.endswith("Z"):
+            text = f"{text[:-1]}+00:00"
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=IST)
+        return parsed.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def payload_fresh(payload, fresh_seconds=15 * 60):
+    if not isinstance(payload, dict):
+        return False
+    timestamp = parse_timestamp(payload.get("timestamp_ist") or payload.get("timestamp") or payload.get("updated_at"))
+    if timestamp is None:
+        return False
+    return (datetime.now(timezone.utc) - timestamp).total_seconds() <= fresh_seconds
 
 
 def get_supabase_client():
@@ -174,15 +210,19 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
     scanner_status = runtime_payloads["scanner_status"]
     master_brain_status = runtime_payloads["master_brain_status"]
     paper_engine_status = runtime_payloads["paper_engine_status"]
+    news_pulse_status = runtime_payloads["news_pulse_status"]
+    news_intelligence_status = runtime_payloads["news_intelligence_status"]
     live_price_monitor_status = runtime_payloads["live_price_monitor_status"]
     daemon_health = runtime_payloads["daemon_health"]
 
     daemon_alive = (
         isinstance(daemon_health, dict)
         and str(daemon_health.get("status") or "").upper() == "RUNNING"
+        and payload_fresh(daemon_health)
     ) or (
         isinstance(heartbeat, dict)
         and str(heartbeat.get("status") or "").upper() == "ALIVE"
+        and payload_fresh(heartbeat)
     )
     open_paper_positions = get_nested_number(paper_engine_status, ("open_positions_count",))
     paper_equity = get_nested_number(paper_engine_status, ("paper_account_summary", "equity"), 0.0)
@@ -193,15 +233,33 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
         runtime_mode = runtime_status.get("mode") or runtime_mode
     if runtime_mode == "UNKNOWN" and isinstance(heartbeat, dict):
         runtime_mode = heartbeat.get("mode") or runtime_mode
+    if runtime_mode in {"UNKNOWN", "INTELLIGENCE_MODE", "CONTINUOUS_WORKERS", "HEALTH_ONLY"}:
+        runtime_mode = normalized_runtime_mode()
+    market_workers_allowed_idle = runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"}
+    no_open_paper_positions = open_paper_positions == 0
 
     runtime_health_checks = {
         "daemon_alive": (daemon_alive, "daemon_not_alive"),
-        "scanner_active": (is_active_status(scanner_status), "scanner_inactive"),
-        "master_brain_active": (is_active_status(master_brain_status), "master_brain_inactive"),
-        "paper_engine_active": (is_active_status(paper_engine_status), "paper_engine_inactive"),
+        "runtime_status_fresh": (payload_fresh(runtime_status), "runtime_status_stale"),
+        "scanner_active": (
+            True if market_workers_allowed_idle else is_active_status(scanner_status),
+            "scanner_inactive",
+        ),
+        "master_brain_active": (
+            True if market_workers_allowed_idle else is_active_status(master_brain_status),
+            "master_brain_inactive",
+        ),
+        "paper_engine_active": (
+            True if market_workers_allowed_idle and no_open_paper_positions else is_active_status(paper_engine_status),
+            "paper_engine_inactive",
+        ),
         "live_price_monitor_active": (
-            is_active_status(live_price_monitor_status),
+            True if market_workers_allowed_idle else is_active_status(live_price_monitor_status),
             "live_price_monitor_inactive",
+        ),
+        "news_engine_active": (
+            is_active_status(news_pulse_status) or is_active_status(news_intelligence_status),
+            "news_engine_inactive",
         ),
     }
     attention_reasons = [
@@ -209,10 +267,12 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
     ]
     recovery_suggestion_map = {
         "daemon_not_alive": "Start titan_daemon.py",
+        "runtime_status_stale": "Check titan_runtime_status heartbeat writer",
         "scanner_inactive": "Check runtime_scanner.py",
         "master_brain_inactive": "Check runtime_master_brain.py",
         "paper_engine_inactive": "Check runtime_paper_engine.py",
         "live_price_monitor_inactive": "Check runtime_live_price_monitor.py",
+        "news_engine_inactive": "Check runtime_news_pulse.py",
     }
     recovery_suggestions = list(
         dict.fromkeys(
@@ -239,23 +299,33 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
         "live_price_monitor_status": live_price_monitor_status or {},
         "master_brain_status": master_brain_status or {},
         "paper_engine_status": paper_engine_status or {},
+        "news_pulse_status": news_pulse_status or {},
+        "news_intelligence_status": news_intelligence_status or {},
         "autonomous_runtime_summary": {
             "daemon_alive": runtime_health_checks["daemon_alive"][0],
+            "runtime_status_fresh": runtime_health_checks["runtime_status_fresh"][0],
             "scanner_active": runtime_health_checks["scanner_active"][0],
             "master_brain_active": runtime_health_checks["master_brain_active"][0],
             "paper_engine_active": runtime_health_checks["paper_engine_active"][0],
             "live_price_monitor_active": runtime_health_checks["live_price_monitor_active"][0],
+            "news_engine_active": runtime_health_checks["news_engine_active"][0],
             "needs_attention": bool(attention_reasons),
             "attention_reasons": attention_reasons,
             "recovery_suggestions": recovery_suggestions,
             "open_paper_positions": open_paper_positions,
             "paper_equity": paper_equity,
             "runtime_mode": runtime_mode,
+            "market_workers_allowed_idle": market_workers_allowed_idle,
+            "paper_engine_status_recommendation": (
+                "IDLE_RESEARCH_MODE" if market_workers_allowed_idle and no_open_paper_positions else "ACTIVE"
+            ),
             "last_runtime_update": latest_timestamp(
                 scanner_status,
                 master_brain_status,
                 paper_engine_status,
                 live_price_monitor_status,
+                news_pulse_status,
+                news_intelligence_status,
                 daemon_health,
                 heartbeat,
                 runtime_status,

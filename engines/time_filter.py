@@ -81,6 +81,8 @@ def get_mode_permissions(value=None):
                 "dashboard_sync",
             ],
             "research_allowed_engines": [
+                "news_pulse",
+                "light_news_pulse",
                 "news_intelligence",
                 "daily_review",
                 "learning_engine",
@@ -100,6 +102,9 @@ def get_mode_permissions(value=None):
                 "dashboard_sync",
             ],
             "research_allowed_engines": [
+                "news_pulse",
+                "light_news_pulse",
+                "news_intelligence",
                 "historical_replay",
                 "backtesting",
                 "synthetic_simulation",

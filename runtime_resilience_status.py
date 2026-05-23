@@ -4,9 +4,12 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from engines.time_filter import current_bot_mode
+
 
 RUNTIME_DIR = Path("data") / "runtime"
 RUNTIME_RESILIENCE_STATUS_PATH = RUNTIME_DIR / "runtime_resilience_status.json"
+WEEKEND_RESEARCH_MODE_STATUS_PATH = RUNTIME_DIR / "weekend_research_mode_status.json"
 OFFICIAL_RUNTIME_PATH = "titan_daemon.py"
 STALE_PACKET_SECONDS = 24 * 60 * 60
 WORKER_STUCK_GRACE_SECONDS = 60
@@ -46,6 +49,55 @@ CRITICAL_PACKET_PATHS = {
     Path("data") / "report_vault" / "latest_aggregated_packet.json",
     Path("data") / "consciousness_core" / "consciousness_context.json",
 }
+ALWAYS_CRITICAL_PACKET_PATHS = {
+    RUNTIME_DIR / "daemon_health.json",
+    RUNTIME_DIR / "worker_health.json",
+    RUNTIME_DIR / "titan_heartbeat.json",
+    RUNTIME_DIR / "titan_runtime_status.json",
+    Path("data") / "runtime" / "pyramid_governance_status.json",
+    Path("data") / "execution_safety" / "latest_execution_safety_report.json",
+}
+RESEARCH_CRITICAL_PACKET_PATHS = {
+    RUNTIME_DIR / "news_pulse_status.json",
+    RUNTIME_DIR / "light_news_pulse_status.json",
+    RUNTIME_DIR / "news_intelligence_status.json",
+    Path("data") / "news_intelligence" / "latest_news_intelligence_2_report.json",
+    Path("data") / "report_vault" / "latest_aggregated_packet.json",
+    Path("data") / "consciousness_core" / "consciousness_context.json",
+}
+MARKET_ONLY_PACKET_PATHS = {
+    RUNTIME_DIR / "scanner_status.json",
+    RUNTIME_DIR / "master_brain_status.json",
+    RUNTIME_DIR / "ohlc_refresh_status.json",
+}
+MARKET_ONLY_WORKERS = {
+    "broker_health_check",
+    "journal",
+    "live_price_monitor",
+    "market_pressure_check",
+    "market_regime_update",
+    "master_brain",
+    "ohlc_refresh",
+    "outcome_tracker",
+    "paper_engine",
+    "pnl_refresh",
+    "scanner",
+    "sector_strength",
+    "setup_engine",
+    "volatility_check",
+}
+RESEARCH_NEWS_WORKERS = {"news_pulse", "light_news_pulse", "news_intelligence"}
+
+
+def _runtime_mode():
+    mode = current_bot_mode()
+    return "RESEARCH_MODE" if mode == "INTELLIGENCE_MODE" else mode
+
+
+def _critical_packet_paths_for_mode(mode):
+    if mode == "MARKET_MODE":
+        return sorted(CRITICAL_PACKET_PATHS | RESEARCH_CRITICAL_PACKET_PATHS, key=lambda item: str(item))
+    return sorted(ALWAYS_CRITICAL_PACKET_PATHS | RESEARCH_CRITICAL_PACKET_PATHS, key=lambda item: str(item))
 
 
 def utc_now_iso():
@@ -134,9 +186,11 @@ def _last_good_output_path(task):
     return str(path).replace("\\", "/") if path.exists() else None
 
 
-def build_worker_health_summary(worker_health=None):
+def build_worker_health_summary(worker_health=None, runtime_mode=None):
     worker_health = worker_health if isinstance(worker_health, dict) else read_json_safe(WORKER_HEALTH_PATH)
     worker_health = worker_health if isinstance(worker_health, dict) else {}
+    runtime_mode = runtime_mode or _runtime_mode()
+    outside_market = runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"}
     now = datetime.now(timezone.utc)
     workers = {}
     degraded_components = []
@@ -165,8 +219,13 @@ def build_worker_health_summary(worker_health=None):
             stuck = active_age_seconds > timeout_seconds + WORKER_STUCK_GRACE_SECONDS
 
         effective_status = "DEGRADED" if stuck else status
+        allowed_idle_market_worker = outside_market and task in MARKET_ONLY_WORKERS
         false_degraded_grace = False
-        if (
+        if allowed_idle_market_worker and status in {"DEGRADED", "TIMEOUT", "ERROR", "WAITING_FOR_MODE", "STALE"}:
+            effective_status = "STANDBY_ALLOWED_IDLE"
+            stuck = False
+            stale_active_marker_ignored = True
+        elif (
             status == "RUNNING"
             and stuck
             and recent_finish_grace_active
@@ -195,6 +254,8 @@ def build_worker_health_summary(worker_health=None):
         workers[task] = {
             "status": effective_status,
             "raw_status": status,
+            "runtime_mode": runtime_mode,
+            "market_worker_allowed_idle": allowed_idle_market_worker,
             "stuck": stuck,
             "active_age_seconds": None if active_age_seconds is None else round(active_age_seconds, 3),
             "recent_finish_age_seconds": (
@@ -293,12 +354,22 @@ def build_daemon_status(daemon_health=None):
 
 def build_runtime_resilience_status():
     refresh_execution_safety_status()
+    runtime_mode = _runtime_mode()
     daemon_status = build_daemon_status()
-    worker_summary = build_worker_health_summary()
-    stale_summary = build_stale_packet_summary()
+    worker_summary = build_worker_health_summary(runtime_mode=runtime_mode)
+    stale_summary = build_stale_packet_summary(_critical_packet_paths_for_mode(runtime_mode))
+    always_fresh_failures = []
+    for path in (
+        RUNTIME_DIR / "daemon_health.json",
+        RUNTIME_DIR / "titan_heartbeat.json",
+        RUNTIME_DIR / "titan_runtime_status.json",
+    ):
+        if not _fresh_packet(path, 15 * 60):
+            always_fresh_failures.append(str(path).replace("\\", "/"))
     degraded_components = sorted(
         set(worker_summary["degraded_components"])
         | set(stale_summary["degraded_components"])
+        | set(always_fresh_failures)
     )
     recovery_actions = []
     recovery_actions.extend(worker_summary["recovery_actions"])
@@ -309,6 +380,14 @@ def build_runtime_resilience_status():
             "status": packet["status"],
         }
         for packet in stale_summary["stale_packets"]
+    )
+    recovery_actions.extend(
+        {
+            "component": path,
+            "action": "marked_degraded_always_fresh_packet_stale",
+            "status": "STALE",
+        }
+        for path in always_fresh_failures
     )
 
     governance_status = read_json_safe(PYRAMID_GOVERNANCE_STATUS_PATH)
@@ -348,11 +427,13 @@ def build_runtime_resilience_status():
 
     payload = {
         "generated_at": utc_now_iso(),
+        "runtime_mode": runtime_mode,
         "status": "DEGRADED" if degraded_components else "OK",
         "official_runtime_path": OFFICIAL_RUNTIME_PATH,
         "daemon": daemon_status,
         "worker_health_summary": worker_summary,
         "stale_packet_summary": stale_summary,
+        "always_fresh_failures": always_fresh_failures,
         "dashboard_ready_status": dashboard_ready_status,
         "recovery_actions_taken": recovery_actions,
         "degraded_components": degraded_components,
@@ -366,6 +447,53 @@ def build_runtime_resilience_status():
             "live_memory_mixed_with_external_simulated_memory": False,
         },
     }
+    write_weekend_research_mode_status(payload)
+    return payload
+
+
+def _fresh_packet(path, seconds=STALE_PACKET_SECONDS):
+    age_seconds, _modified_at = _file_age(path)
+    return age_seconds is not None and age_seconds <= seconds
+
+
+def _open_paper_positions_count():
+    registry = read_json_safe(RUNTIME_DIR / "paper_trade_registry.json")
+    positions = registry.get("open_positions") if isinstance(registry, dict) else []
+    return len(positions) if isinstance(positions, list) else 0
+
+
+def write_weekend_research_mode_status(resilience_status=None, path=WEEKEND_RESEARCH_MODE_STATUS_PATH):
+    resilience_status = resilience_status if isinstance(resilience_status, dict) else {}
+    runtime_mode = resilience_status.get("runtime_mode") or _runtime_mode()
+    governance_status = read_json_safe(PYRAMID_GOVERNANCE_STATUS_PATH) or {}
+    governance = governance_status.get("governance") if isinstance(governance_status.get("governance"), dict) else {}
+    governance_decision = governance.get("decision") or governance_status.get("governance_decision")
+    open_paper_positions = _open_paper_positions_count()
+    market_workers_allowed_idle = runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"}
+    paper_engine_status = "ACTIVE"
+    if market_workers_allowed_idle and open_paper_positions == 0:
+        paper_engine_status = "IDLE_RESEARCH_MODE" if runtime_mode == "RESEARCH_MODE" else "STANDBY"
+
+    errors_remaining = list(resilience_status.get("degraded_components") or [])
+    payload = {
+        "generated_at": utc_now_iso(),
+        "runtime_mode": runtime_mode,
+        "daemon_heartbeat_fresh": _fresh_packet(RUNTIME_DIR / "daemon_health.json", 15 * 60)
+        or _fresh_packet(RUNTIME_DIR / "titan_heartbeat.json", 15 * 60),
+        "news_engine_fresh": _fresh_packet(RUNTIME_DIR / "news_pulse_status.json")
+        or _fresh_packet(RUNTIME_DIR / "news_intelligence_status.json"),
+        "market_workers_allowed_idle": market_workers_allowed_idle,
+        "paper_engine_status": paper_engine_status,
+        "dashboard_status_recommendation": (
+            "WEEKEND_MODE" if runtime_mode == "WEEKEND_MODE" else (
+                "RESEARCH_MODE" if runtime_mode == "RESEARCH_MODE" else "MARKET_MODE"
+            )
+        ),
+        "telegram_status_reason": "Outside alert window; WAITING is normal and no Telegram alert is sent.",
+        "governance_decision": governance_decision,
+        "errors_remaining": errors_remaining,
+    }
+    _atomic_write_json(path, payload)
     return payload
 
 

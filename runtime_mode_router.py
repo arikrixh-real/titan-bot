@@ -5,6 +5,8 @@ from datetime import datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from engines.time_filter import current_bot_mode
+
 
 IST = ZoneInfo("Asia/Kolkata")
 RUNTIME_MODE_STATUS_PATH = Path("data") / "runtime" / "runtime_mode_status.json"
@@ -44,7 +46,16 @@ MARKET_MODE_TASKS = {
     "pnl_refresh",
 }
 
+NEWS_RESEARCH_TASKS = {
+    "news_pulse",
+    "light_news_pulse",
+    "news_intelligence",
+}
+
 RESEARCH_MODE_TASKS = {
+    "news_pulse",
+    "light_news_pulse",
+    "news_intelligence",
     "knowledge_vault_runner",
     "experience_vault_runner",
     "sandbox_evolution",
@@ -152,9 +163,10 @@ def is_research_mode_now():
 
 
 def get_runtime_mode():
-    if is_market_open_now():
-        return "MARKET_MODE"
-    return "RESEARCH_MODE"
+    mode = current_bot_mode()
+    if mode == "INTELLIGENCE_MODE":
+        return "RESEARCH_MODE"
+    return mode
 
 
 def should_run_task(task_name):
@@ -165,6 +177,11 @@ def should_run_task(task_name):
         return True
 
     current_mode = get_runtime_mode()
+    if task in NEWS_RESEARCH_TASKS:
+        allowed = current_mode in {"MARKET_MODE", "RESEARCH_MODE", "WEEKEND_MODE"}
+        runtime_mode_snapshot()
+        return allowed
+
     if task in MARKET_MODE_TASKS:
         allowed = current_mode == "MARKET_MODE"
         if task == "master_brain" and not allowed:
@@ -184,7 +201,7 @@ def should_run_task(task_name):
 def runtime_mode_snapshot():
     now = _now_ist()
     is_market_open = is_market_open_now()
-    current_mode = "MARKET_MODE" if is_market_open else "RESEARCH_MODE"
+    current_mode = get_runtime_mode()
 
     if is_market_open:
         current_open, current_close = _market_window_for(now)
@@ -198,6 +215,7 @@ def runtime_mode_snapshot():
         "current_mode": current_mode,
         "is_market_open": is_market_open,
         "is_research_mode": not is_market_open,
+        "is_weekend_mode": current_mode == "WEEKEND_MODE",
         "next_market_open": next_market_open.isoformat(),
         "next_market_close": next_market_close.isoformat(),
         "market_window": "Monday-Friday 09:20-15:20 IST",

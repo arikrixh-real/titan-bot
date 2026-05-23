@@ -4,6 +4,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from engines.time_filter import current_bot_mode
 from runtime_resilience_status import (
     OFFICIAL_RUNTIME_PATH,
     refresh_execution_safety_status,
@@ -27,6 +28,7 @@ COMPONENT_PATHS = {
     "safety_council": [Path("data") / "execution_safety" / "latest_execution_safety_report.json"],
 }
 CRITICAL_COMPONENTS = {"feeds", "report_vault", "consciousness", "master_brain", "safety_council"}
+MARKET_ONLY_COMPONENTS = {"feeds", "master_brain"}
 
 
 def utc_now_iso():
@@ -79,7 +81,14 @@ def _payload_status(payload):
     return "HEALTHY"
 
 
-def _component_status(name, paths, fresh_seconds=DEFAULT_FRESH_SECONDS):
+def _runtime_mode():
+    mode = current_bot_mode()
+    return "RESEARCH_MODE" if mode == "INTELLIGENCE_MODE" else mode
+
+
+def _component_status(name, paths, fresh_seconds=DEFAULT_FRESH_SECONDS, runtime_mode=None):
+    runtime_mode = runtime_mode or _runtime_mode()
+    market_workers_allowed_idle = runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"}
     probes = []
     available = []
     for path in paths:
@@ -113,7 +122,9 @@ def _component_status(name, paths, fresh_seconds=DEFAULT_FRESH_SECONDS):
             probe["warning"] = f"missing:{probe['path']}"
         probes.append(probe)
 
-    if not available:
+    if market_workers_allowed_idle and name in MARKET_ONLY_COMPONENTS:
+        status = "STANDBY"
+    elif not available:
         status = "BLOCKED" if name in CRITICAL_COMPONENTS else "SHADOW_ONLY"
     elif any(item["status"] in {"BLOCKED", "CORRUPT"} for item in available):
         status = "BLOCKED"
@@ -129,6 +140,8 @@ def _component_status(name, paths, fresh_seconds=DEFAULT_FRESH_SECONDS):
     return {
         "component": name,
         "status": status,
+        "runtime_mode": runtime_mode,
+        "market_workers_allowed_idle": market_workers_allowed_idle and name in MARKET_ONLY_COMPONENTS,
         "paths": probes,
         "critical": name in CRITICAL_COMPONENTS,
     }
@@ -179,6 +192,8 @@ def evaluate_safety_governance(advisory=None, safety_council=None, pyramid_statu
     degraded_warnings = []
     block_reasons = []
     caution_reasons = []
+    runtime_mode = pyramid_status.get("runtime_mode") or _runtime_mode()
+    market_workers_allowed_idle = runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"}
 
     sources = advisory.get("sources") if isinstance(advisory.get("sources"), dict) else {}
     for name, source in sources.items():
@@ -200,12 +215,16 @@ def evaluate_safety_governance(advisory=None, safety_council=None, pyramid_statu
                 stale_warnings.append(warning)
             else:
                 degraded_warnings.append(warning)
-        if name in CRITICAL_COMPONENTS and status in {"STALE", "DEGRADED", "BLOCKED"}:
+        if (
+            name in CRITICAL_COMPONENTS
+            and status in {"STALE", "DEGRADED", "BLOCKED"}
+            and not (market_workers_allowed_idle and name in MARKET_ONLY_COMPONENTS)
+        ):
             block_reasons.append(f"critical_{name}_{status.lower()}")
 
     market_hour_status = safety_council.get("market_hour_status") if isinstance(safety_council.get("market_hour_status"), dict) else {}
     if market_hour_status.get("trade_window_open") is False:
-        block_reasons.append("market_closed")
+        caution_reasons.append("market_closed_research_standby")
 
     if _duplicate_risk_active(safety_council.get("duplicate_risk")):
         block_reasons.append("duplicate_alert_or_order_risk")
@@ -267,8 +286,9 @@ def evaluate_safety_governance(advisory=None, safety_council=None, pyramid_statu
 
 def generate_pyramid_governance_status(advisory=None, safety_council=None, output_path=GOVERNANCE_STATUS_PATH):
     refresh_execution_safety_status()
+    runtime_mode = _runtime_mode()
     components = {
-        name: _component_status(name, paths)
+        name: _component_status(name, paths, runtime_mode=runtime_mode)
         for name, paths in COMPONENT_PATHS.items()
     }
     status = "HEALTHY"
@@ -281,6 +301,7 @@ def generate_pyramid_governance_status(advisory=None, safety_council=None, outpu
 
     payload = {
         "generated_at": utc_now_iso(),
+        "runtime_mode": runtime_mode,
         "status": status,
         "components": components,
         "official_runtime_path": OFFICIAL_RUNTIME_PATH,

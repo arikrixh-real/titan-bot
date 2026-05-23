@@ -1,5 +1,5 @@
 from runtime_heartbeat import write_heartbeat
-from runtime_news_pulse import run_news_pulse
+from runtime_news_pulse import run_light_news_pulse, run_news_intelligence, run_news_pulse
 from runtime_outcome_tracker import run_outcome_tracker
 from runtime_live_price_monitor import run_live_price_monitor
 from runtime_risk_watchdog import run_risk_watchdog
@@ -139,7 +139,6 @@ PLACEHOLDER_TASKS = (
     "experience_memory",
     "global_market_check",
     "learning_engine",
-    "news_intelligence",
     "next_day_preparation",
     "premarket_bias_builder",
     "premarket_price_context",
@@ -167,7 +166,8 @@ def get_engine_registry():
     registry = {
         "heartbeat": write_heartbeat,
         "news_pulse": run_news_pulse,
-        "light_news_pulse": run_news_pulse,
+        "light_news_pulse": run_light_news_pulse,
+        "news_intelligence": run_news_intelligence,
         "outcome_tracker": run_outcome_tracker,
         "live_price_monitor": run_live_price_monitor,
         "risk_watchdog": run_risk_watchdog,
