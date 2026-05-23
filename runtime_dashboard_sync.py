@@ -21,8 +21,14 @@ NEWS_INTELLIGENCE_STATUS_PATH = Path("data") / "runtime" / "news_intelligence_st
 DAEMON_HEALTH_PATH = Path("data") / "runtime" / "daemon_health.json"
 RUNTIME_RESILIENCE_STATUS_PATH = Path("data") / "runtime" / "runtime_resilience_status.json"
 PYRAMID_GOVERNANCE_STATUS_PATH = Path("data") / "runtime" / "pyramid_governance_status.json"
+WEEKEND_RESEARCH_MODE_STATUS_PATH = Path("data") / "runtime" / "weekend_research_mode_status.json"
 RUNTIME_STATUS_TABLE = "runtime_status"
 IST = timezone(timedelta(hours=5, minutes=30))
+RUNTIME_FRESH_SECONDS = 15 * 60
+RUNTIME_FRESH_SECONDS_BY_MODE = {
+    "RESEARCH_MODE": 24 * 3600,
+    "WEEKEND_MODE": 72 * 3600,
+}
 
 
 load_dotenv()
@@ -41,6 +47,7 @@ RUNTIME_STATUS_SOURCES = {
     "news_intelligence_status": NEWS_INTELLIGENCE_STATUS_PATH,
     "runtime_resilience_status": RUNTIME_RESILIENCE_STATUS_PATH,
     "pyramid_governance_status": PYRAMID_GOVERNANCE_STATUS_PATH,
+    "weekend_research_mode_status": WEEKEND_RESEARCH_MODE_STATUS_PATH,
 }
 
 
@@ -71,6 +78,10 @@ def normalized_runtime_mode():
     return "RESEARCH_MODE" if mode == "INTELLIGENCE_MODE" else mode
 
 
+def fresh_seconds_for_mode(mode):
+    return RUNTIME_FRESH_SECONDS_BY_MODE.get(str(mode or "").upper(), RUNTIME_FRESH_SECONDS)
+
+
 def get_nested_number(payload, keys, default=0):
     current = payload if isinstance(payload, dict) else {}
     for key in keys:
@@ -87,6 +98,29 @@ def optional_int_number(value):
         return int(float(value))
     except Exception:
         return None
+
+
+def governance_summary(governance_status, weekend_research_status):
+    governance = governance_status.get("governance") if isinstance(governance_status, dict) else {}
+    governance = governance if isinstance(governance, dict) else {}
+    block_reasons = governance.get("block_reasons")
+    if block_reasons is None and isinstance(governance_status, dict):
+        block_reasons = governance_status.get("block_reasons")
+    if block_reasons is None:
+        block_reasons = []
+    if not isinstance(block_reasons, list):
+        block_reasons = [block_reasons]
+    governance_decision = (
+        governance.get("decision")
+        or governance.get("governance_decision")
+        or (governance_status.get("governance_decision") if isinstance(governance_status, dict) else None)
+        or (
+            weekend_research_status.get("governance_decision")
+            if isinstance(weekend_research_status, dict)
+            else None
+        )
+    )
+    return str(governance_decision or "").upper(), block_reasons
 
 
 def latest_timestamp(*payloads):
@@ -220,18 +254,8 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
     daemon_health = runtime_payloads["daemon_health"]
     resilience_status = runtime_payloads["runtime_resilience_status"]
     governance_status = runtime_payloads["pyramid_governance_status"]
+    weekend_research_status = runtime_payloads["weekend_research_mode_status"]
 
-    daemon_alive = (
-        isinstance(daemon_health, dict)
-        and str(daemon_health.get("status") or "").upper() == "RUNNING"
-        and payload_fresh(daemon_health)
-    ) or (
-        isinstance(heartbeat, dict)
-        and str(heartbeat.get("status") or "").upper() == "ALIVE"
-        and payload_fresh(heartbeat)
-    )
-    open_paper_positions = get_nested_number(paper_engine_status, ("open_positions_count",))
-    paper_equity = get_nested_number(paper_engine_status, ("paper_account_summary", "equity"), 0.0)
     runtime_mode = "UNKNOWN"
     if isinstance(daemon_health, dict):
         runtime_mode = daemon_health.get("mode") or runtime_mode
@@ -241,12 +265,25 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
         runtime_mode = heartbeat.get("mode") or runtime_mode
     if runtime_mode in {"UNKNOWN", "INTELLIGENCE_MODE", "CONTINUOUS_WORKERS", "HEALTH_ONLY"}:
         runtime_mode = normalized_runtime_mode()
+    runtime_fresh_seconds = fresh_seconds_for_mode(runtime_mode)
+    daemon_alive = (
+        isinstance(daemon_health, dict)
+        and str(daemon_health.get("status") or "").upper() == "RUNNING"
+        and payload_fresh(daemon_health, runtime_fresh_seconds)
+    ) or (
+        isinstance(heartbeat, dict)
+        and str(heartbeat.get("status") or "").upper() == "ALIVE"
+        and payload_fresh(heartbeat, runtime_fresh_seconds)
+    )
+    open_paper_positions = get_nested_number(paper_engine_status, ("open_positions_count",))
+    paper_equity = get_nested_number(paper_engine_status, ("paper_account_summary", "equity"), 0.0)
     market_workers_allowed_idle = runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"}
     no_open_paper_positions = open_paper_positions == 0
 
+    paper_engine_required = not market_workers_allowed_idle or open_paper_positions > 0
     runtime_health_checks = {
         "daemon_alive": (daemon_alive, "daemon_not_alive"),
-        "runtime_status_fresh": (payload_fresh(runtime_status), "runtime_status_stale"),
+        "runtime_status_fresh": (payload_fresh(runtime_status, runtime_fresh_seconds), "runtime_status_stale"),
         "scanner_active": (
             True if market_workers_allowed_idle else is_active_status(scanner_status),
             "scanner_inactive",
@@ -256,7 +293,7 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
             "master_brain_inactive",
         ),
         "paper_engine_active": (
-            True if market_workers_allowed_idle and no_open_paper_positions else is_active_status(paper_engine_status),
+            True if not paper_engine_required else is_active_status(paper_engine_status),
             "paper_engine_inactive",
         ),
         "live_price_monitor_active": (
@@ -271,9 +308,7 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
     attention_reasons = [
         reason for is_active, reason in runtime_health_checks.values() if not is_active
     ]
-    governance = governance_status.get("governance") if isinstance(governance_status, dict) else {}
-    block_reasons = governance.get("block_reasons") if isinstance(governance, dict) else []
-    governance_decision = governance.get("decision") if isinstance(governance, dict) else None
+    governance_decision, block_reasons = governance_summary(governance_status, weekend_research_status)
     worker_degraded_count = (
         resilience_status.get("worker_health_summary", {}).get("degraded_count")
         if isinstance(resilience_status, dict)
@@ -285,7 +320,17 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
         else None
     )
     no_block_reasons = not block_reasons
-    if no_block_reasons and market_workers_allowed_idle:
+    standby_runtime_healthy = (
+        market_workers_allowed_idle
+        and no_block_reasons
+        and worker_degraded_count == 0
+        and daemon_alive
+        and no_open_paper_positions
+    )
+    defensive_runtime_healthy = governance_decision == "ALLOW" and worker_degraded_count == 0
+    if standby_runtime_healthy or defensive_runtime_healthy:
+        attention_reasons = []
+    elif no_block_reasons and market_workers_allowed_idle:
         attention_reasons = [
             reason
             for reason in attention_reasons
@@ -329,6 +374,7 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
         "news_intelligence_status": news_intelligence_status or {},
         "runtime_resilience_status": resilience_status or {},
         "pyramid_governance_status": governance_status or {},
+        "weekend_research_mode_status": weekend_research_status or {},
         "autonomous_runtime_summary": {
             "daemon_alive": runtime_health_checks["daemon_alive"][0],
             "runtime_status_fresh": runtime_health_checks["runtime_status_fresh"][0],
@@ -337,8 +383,13 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
             "paper_engine_active": runtime_health_checks["paper_engine_active"][0],
             "live_price_monitor_active": runtime_health_checks["live_price_monitor_active"][0],
             "news_engine_active": runtime_health_checks["news_engine_active"][0],
-            "needs_attention": bool(attention_reasons) and not (no_block_reasons and worker_degraded_count == 0),
+            "needs_attention": bool(attention_reasons) and not defensive_runtime_healthy,
             "attention_reasons": attention_reasons,
+            "reason": (
+                "Weekend / research standby"
+                if standby_runtime_healthy
+                else (", ".join(attention_reasons) if attention_reasons else "Runtime attention checks clear")
+            ),
             "recovery_suggestions": recovery_suggestions,
             "open_paper_positions": open_paper_positions,
             "paper_equity": paper_equity,
@@ -350,9 +401,13 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
                 )
             ),
             "dashboard_status_recommendation": (
-                "HEALTHY"
-                if no_block_reasons and worker_degraded_count == 0 and stale_packet_count == 0
-                else ("WEEKEND_MODE" if runtime_mode == "WEEKEND_MODE" else runtime_mode)
+                runtime_mode
+                if market_workers_allowed_idle
+                else (
+                    "HEALTHY"
+                    if no_block_reasons and worker_degraded_count == 0 and stale_packet_count == 0
+                    else runtime_mode
+                )
             ),
             "governance_decision": governance_decision,
             "block_reasons": block_reasons or [],

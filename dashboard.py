@@ -41,6 +41,10 @@ SCANNER_STATUS_PATH = "/".join(["data", "runtime", "scanner_status.json"])
 REJECTION_HEATMAP_PATH = "/".join(["data", "runtime", "rejection_heatmap.json"])
 SIDEWAYS_ANALYSIS_PATH = "/".join(["data", "runtime", "sideways_analysis.json"])
 LIVE_PRICE_MONITOR_STATUS_PATH = "/".join(["data", "runtime", "live_price_monitor_status.json"])
+RUNTIME_RESILIENCE_STATUS_PATH = "/".join(["data", "runtime", "runtime_resilience_status.json"])
+PYRAMID_GOVERNANCE_STATUS_PATH = "/".join(["data", "runtime", "pyramid_governance_status.json"])
+WEEKEND_RESEARCH_MODE_STATUS_PATH = "/".join(["data", "runtime", "weekend_research_mode_status.json"])
+TITAN_RUNTIME_STATUS_PATH = "/".join(["data", "runtime", "titan_runtime_status.json"])
 RUNTIME_STATUS_TABLE = "runtime_status"
 RUNTIME_FRESH_SECONDS = 15 * 60
 SCANNER_FRESH_SECONDS_BY_MODE = {
@@ -54,6 +58,9 @@ RUNTIME_STATUS_KEYS = [
     "titan_heartbeat",
     "daemon_health",
     "titan_runtime_status",
+    "runtime_resilience_status",
+    "pyramid_governance_status",
+    "weekend_research_mode_status",
     "scanner_status",
     "live_price_monitor_status",
     "master_brain_status",
@@ -423,6 +430,9 @@ def build_runtime_status_from_supabase():
         "heartbeat": payloads.get("titan_heartbeat"),
         "daemon_health": payloads.get("daemon_health"),
         "runtime_status": payloads.get("titan_runtime_status"),
+        "runtime_resilience_status": payloads.get("runtime_resilience_status"),
+        "pyramid_governance_status": payloads.get("pyramid_governance_status"),
+        "weekend_research_mode_status": payloads.get("weekend_research_mode_status"),
         "scanner_status": payloads.get("scanner_status"),
         "live_price_monitor_status": payloads.get("live_price_monitor_status"),
         "master_brain_status": payloads.get("master_brain_status"),
@@ -2057,13 +2067,39 @@ def format_runtime_timestamp(value):
 
 
 def get_runtime_payload(runtime_key, local_path=None):
-    data = build_runtime_status_from_supabase()
-    if isinstance(data, dict) and isinstance(data.get(runtime_key), dict):
-        return data.get(runtime_key), "SUPABASE_RUNTIME_STATUS"
+    supabase_data = build_runtime_status_from_supabase()
+    supabase_payload = (
+        supabase_data.get(runtime_key)
+        if isinstance(supabase_data, dict) and isinstance(supabase_data.get(runtime_key), dict)
+        else None
+    )
+    local_payload = None
     if local_path:
         data = safe_read_json(local_path, {})
         if isinstance(data, dict):
-            return data, "LOCAL_RUNTIME_JSON"
+            local_payload = data
+    if isinstance(supabase_payload, dict) and isinstance(local_payload, dict):
+        supabase_dt = parse_dt(
+            supabase_payload.get("timestamp_ist")
+            or supabase_payload.get("generated_at")
+            or supabase_payload.get("last_runtime_update")
+            or supabase_payload.get("updated_at")
+            or supabase_payload.get("timestamp")
+        )
+        local_dt = parse_dt(
+            local_payload.get("timestamp_ist")
+            or local_payload.get("generated_at")
+            or local_payload.get("last_runtime_update")
+            or local_payload.get("updated_at")
+            or local_payload.get("timestamp")
+        )
+        if local_dt and (not supabase_dt or local_dt >= supabase_dt):
+            return local_payload, "LOCAL_RUNTIME_JSON_NEWEST"
+        return supabase_payload, "SUPABASE_RUNTIME_STATUS_NEWEST"
+    if isinstance(supabase_payload, dict):
+        return supabase_payload, "SUPABASE_RUNTIME_STATUS"
+    if isinstance(local_payload, dict):
+        return local_payload, "LOCAL_RUNTIME_JSON"
     return {}, "UNAVAILABLE"
 
 
@@ -2072,6 +2108,7 @@ def runtime_payload_dt(payload):
         return None
     return parse_dt(
         payload.get("timestamp_ist")
+        or payload.get("generated_at")
         or payload.get("last_runtime_update")
         or payload.get("updated_at")
         or payload.get("created_at")
@@ -2124,15 +2161,20 @@ def runtime_status_with_freshness(payload, active_status="ACTIVE", waiting_statu
 def get_dashboard_runtime_status():
     daemon_health, _ = get_runtime_payload("daemon_health", "/".join(["data", "runtime", "daemon_health.json"]))
     heartbeat, _ = get_runtime_payload("heartbeat", "/".join(["data", "runtime", "titan_heartbeat.json"]))
-    runtime_status, _ = get_runtime_payload("runtime_status", "/".join(["data", "runtime", "titan_runtime_status.json"]))
+    runtime_status, _ = get_runtime_payload("runtime_status", TITAN_RUNTIME_STATUS_PATH)
+    resilience_status, _ = get_runtime_payload("runtime_resilience_status", RUNTIME_RESILIENCE_STATUS_PATH)
+    governance_status, _ = get_runtime_payload("pyramid_governance_status", PYRAMID_GOVERNANCE_STATUS_PATH)
+    weekend_research_status, _ = get_runtime_payload("weekend_research_mode_status", WEEKEND_RESEARCH_MODE_STATUS_PATH)
     scanner_status, _ = get_runtime_payload("scanner_status", SCANNER_STATUS_PATH)
     master_brain_status, _ = get_runtime_payload("master_brain_status", "/".join(["data", "runtime", "master_brain_status.json"]))
     paper_engine_status, _ = get_runtime_payload("paper_engine_status", PAPER_ENGINE_STATUS_PATH)
     live_price_monitor_status, _ = get_runtime_payload("live_price_monitor_status", LIVE_PRICE_MONITOR_STATUS_PATH)
 
-    daemon_fresh = runtime_payload_is_fresh(daemon_health)
-    heartbeat_fresh = runtime_payload_is_fresh(heartbeat)
-    runtime_fresh = runtime_payload_is_fresh(runtime_status)
+    normalized_runtime_mode = runtime_mode_from_payloads(runtime_status, daemon_health, heartbeat)
+    runtime_fresh_seconds = scanner_fresh_seconds_for_mode(normalized_runtime_mode)
+    daemon_fresh = runtime_payload_is_fresh(daemon_health, runtime_fresh_seconds)
+    heartbeat_fresh = runtime_payload_is_fresh(heartbeat, runtime_fresh_seconds)
+    runtime_fresh = runtime_payload_is_fresh(runtime_status, runtime_fresh_seconds)
     daemon_alive = (
         daemon_fresh
         and runtime_payload_status(daemon_health) == "RUNNING"
@@ -2154,7 +2196,6 @@ def get_dashboard_runtime_status():
         or heartbeat.get("mode")
         or "UNKNOWN"
     )
-    normalized_runtime_mode = runtime_mode_from_payloads(runtime_status, daemon_health, heartbeat)
     market_workers_allowed_idle = normalized_runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"}
     scanner_fresh = runtime_payload_is_fresh(
         scanner_status,
@@ -2167,6 +2208,39 @@ def get_dashboard_runtime_status():
     ticks_text = f"{int(ticks_completed):,}" if isinstance(ticks_completed, (int, float)) else str(ticks_completed or "0")
 
     open_paper_positions = int(first_number(paper_engine_status.get("open_positions_count"), default=0)) if isinstance(paper_engine_status, dict) else 0
+    governance = governance_status.get("governance") if isinstance(governance_status.get("governance"), dict) else {}
+    block_reasons = safe_list(governance.get("block_reasons") or governance_status.get("block_reasons"))
+    dashboard_ready_status = (
+        resilience_status.get("dashboard_ready_status")
+        if isinstance(resilience_status.get("dashboard_ready_status"), dict)
+        else {}
+    )
+    governance_decision = str(
+        governance.get("decision")
+        or governance.get("governance_decision")
+        or governance_status.get("governance_decision")
+        or weekend_research_status.get("governance_decision")
+        or dashboard_ready_status.get("governance_decision")
+        or ""
+    ).upper()
+    worker_degraded_count = int(first_number(
+        resilience_status.get("worker_health_summary", {}).get("degraded_count")
+        if isinstance(resilience_status.get("worker_health_summary"), dict)
+        else None,
+        governance_status.get("runtime_resilience_status", {}).get("worker_degraded_count")
+        if isinstance(governance_status.get("runtime_resilience_status"), dict)
+        else None,
+        default=0,
+    ))
+    standby_runtime_healthy = (
+        market_workers_allowed_idle
+        and not block_reasons
+        and worker_degraded_count == 0
+        and daemon_alive
+        and open_paper_positions == 0
+    )
+    defensive_runtime_healthy = governance_decision == "ALLOW" and worker_degraded_count == 0
+    paper_engine_required = is_market_open_now() or open_paper_positions > 0
     runtime_checks = {
         "daemon_not_alive": daemon_alive,
         "runtime_status_stale": runtime_fresh,
@@ -2178,7 +2252,7 @@ def get_dashboard_runtime_status():
         ),
         "paper_engine_stale": (
             True
-            if market_workers_allowed_idle and open_paper_positions == 0 and daemon_alive
+            if standby_runtime_healthy or not paper_engine_required
             else runtime_payload_is_fresh(paper_engine_status) and runtime_payload_active(paper_engine_status)
         ),
         "live_price_monitor_stale": (
@@ -2188,8 +2262,14 @@ def get_dashboard_runtime_status():
         ),
     }
     attention_reasons = [reason for reason, ok in runtime_checks.items() if not ok]
-    autonomous_status = "NEEDS ATTENTION" if attention_reasons else "OK"
-    autonomous_sub = ", ".join(attention_reasons) if attention_reasons else "Runtime attention checks clear"
+    if standby_runtime_healthy or defensive_runtime_healthy:
+        attention_reasons = []
+    if standby_runtime_healthy and not attention_reasons:
+        autonomous_status = "STANDBY" if normalized_runtime_mode == "WEEKEND_MODE" else "HEALTHY"
+        autonomous_sub = "Weekend / research standby"
+    else:
+        autonomous_status = "NEEDS ATTENTION" if attention_reasons else "HEALTHY"
+        autonomous_sub = ", ".join(attention_reasons) if attention_reasons else "Runtime attention checks clear"
 
     return {
         "daemon_status": daemon_status,
@@ -2200,6 +2280,11 @@ def get_dashboard_runtime_status():
         "ticks_completed": ticks_text,
         "autonomous_runtime_status": autonomous_status,
         "autonomous_runtime_sub": autonomous_sub,
+        "autonomous_runtime_needs_attention": bool(attention_reasons),
+        "autonomous_runtime_attention_reasons": attention_reasons,
+        "governance_decision": governance_decision,
+        "block_reasons": block_reasons,
+        "worker_degraded_count": worker_degraded_count,
     }
 
 
@@ -3034,6 +3119,12 @@ master_activity_time = latest_dt(
 last_scan_age = scanner_runtime_data["age"]
 scan_status = scanner_runtime_data["status"]
 titan_status = derive_titan_status(master_activity_time, github_data, supabase_status, market_open)
+if (
+    not market_open
+    and not runtime_status_data.get("autonomous_runtime_needs_attention")
+    and runtime_status_data.get("runtime_mode") in {"WEEKEND_MODE", "RESEARCH_MODE"}
+):
+    titan_status = market_mode_label()
 github_display_status = market_aware_status(github_status, market_open, "WAITING")
 master_brain_display_status = market_aware_status(master_brain_data["master_status"], market_open, "RESEARCH MODE")
 

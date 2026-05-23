@@ -12,6 +12,11 @@ RUNTIME_RESILIENCE_STATUS_PATH = RUNTIME_DIR / "runtime_resilience_status.json"
 WEEKEND_RESEARCH_MODE_STATUS_PATH = RUNTIME_DIR / "weekend_research_mode_status.json"
 OFFICIAL_RUNTIME_PATH = "titan_daemon.py"
 STALE_PACKET_SECONDS = 24 * 60 * 60
+RUNTIME_FRESH_SECONDS = 15 * 60
+RUNTIME_FRESH_SECONDS_BY_MODE = {
+    "RESEARCH_MODE": 24 * 60 * 60,
+    "WEEKEND_MODE": 72 * 60 * 60,
+}
 WORKER_STUCK_GRACE_SECONDS = 60
 WORKER_RECENT_FINISH_GRACE_SECONDS = 180
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -118,6 +123,10 @@ def _runtime_mode():
     return "RESEARCH_MODE" if mode == "INTELLIGENCE_MODE" else mode
 
 
+def _runtime_fresh_seconds_for_mode(mode):
+    return RUNTIME_FRESH_SECONDS_BY_MODE.get(str(mode or "").upper(), RUNTIME_FRESH_SECONDS)
+
+
 def _critical_packet_paths_for_mode(mode):
     if mode == "MARKET_MODE":
         return sorted(CRITICAL_PACKET_PATHS | RESEARCH_CRITICAL_PACKET_PATHS, key=lambda item: str(item))
@@ -210,10 +219,10 @@ def _last_good_output_path(task):
     return str(path).replace("\\", "/") if path.exists() else None
 
 
-def _worker_output_fresh(task, seconds=STALE_PACKET_SECONDS):
+def _worker_output_fresh(task, seconds=STALE_PACKET_SECONDS, runtime_mode=None):
     path = TASK_OUTPUT_PATHS.get(task) or RUNTIME_DIR / f"{task}_status.json"
     if task in SUPPORT_WORKERS:
-        seconds = min(seconds, 15 * 60)
+        seconds = min(seconds, _runtime_fresh_seconds_for_mode(runtime_mode))
     return _fresh_packet(path, seconds)
 
 
@@ -300,10 +309,11 @@ def build_worker_health_summary(worker_health=None, runtime_mode=None):
 
         effective_status = "DEGRADED" if stuck else status
         allowed_idle_market_worker = outside_market and task in MARKET_ONLY_WORKERS
-        output_fresh = _worker_output_fresh(task)
-        daemon_fresh = _fresh_packet(DAEMON_HEALTH_PATH, 15 * 60) or _fresh_packet(
+        runtime_fresh_seconds = _runtime_fresh_seconds_for_mode(runtime_mode)
+        output_fresh = _worker_output_fresh(task, runtime_mode=runtime_mode)
+        daemon_fresh = _fresh_packet(DAEMON_HEALTH_PATH, runtime_fresh_seconds) or _fresh_packet(
             RUNTIME_DIR / "titan_heartbeat.json",
-            15 * 60,
+            runtime_fresh_seconds,
         )
         active_pid_exists = _process_exists(active_pid)
         false_degraded_grace = False
@@ -502,9 +512,10 @@ def build_runtime_resilience_status():
     worker_summary = build_worker_health_summary(runtime_mode=runtime_mode)
     stale_summary = build_stale_packet_summary(_critical_packet_paths_for_mode(runtime_mode))
     always_fresh_failures = []
-    daemon_or_heartbeat_fresh = _fresh_packet(RUNTIME_DIR / "daemon_health.json", 15 * 60) or _fresh_packet(
+    runtime_fresh_seconds = _runtime_fresh_seconds_for_mode(runtime_mode)
+    daemon_or_heartbeat_fresh = _fresh_packet(RUNTIME_DIR / "daemon_health.json", runtime_fresh_seconds) or _fresh_packet(
         RUNTIME_DIR / "titan_heartbeat.json",
-        15 * 60,
+        runtime_fresh_seconds,
     )
     for path in (
         RUNTIME_DIR / "daemon_health.json",
@@ -513,7 +524,7 @@ def build_runtime_resilience_status():
     ):
         if path == RUNTIME_DIR / "daemon_health.json" and daemon_or_heartbeat_fresh:
             continue
-        if not _fresh_packet(path, 15 * 60):
+        if not _fresh_packet(path, runtime_fresh_seconds):
             always_fresh_failures.append(str(path).replace("\\", "/"))
     degraded_components = sorted(
         set(worker_summary["degraded_components"])
@@ -627,8 +638,14 @@ def write_weekend_research_mode_status(resilience_status=None, path=WEEKEND_RESE
     payload = {
         "generated_at": utc_now_iso(),
         "runtime_mode": runtime_mode,
-        "daemon_heartbeat_fresh": _fresh_packet(RUNTIME_DIR / "daemon_health.json", 15 * 60)
-        or _fresh_packet(RUNTIME_DIR / "titan_heartbeat.json", 15 * 60),
+        "daemon_heartbeat_fresh": _fresh_packet(
+            RUNTIME_DIR / "daemon_health.json",
+            _runtime_fresh_seconds_for_mode(runtime_mode),
+        )
+        or _fresh_packet(
+            RUNTIME_DIR / "titan_heartbeat.json",
+            _runtime_fresh_seconds_for_mode(runtime_mode),
+        ),
         "news_engine_fresh": _fresh_packet(RUNTIME_DIR / "news_pulse_status.json")
         or _fresh_packet(RUNTIME_DIR / "news_intelligence_status.json"),
         "market_workers_allowed_idle": market_workers_allowed_idle,
