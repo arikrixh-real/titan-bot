@@ -23,7 +23,7 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -38,6 +38,7 @@ from engines.trend_engine import trade_side_from_trend, trend_direction
 from scanners.compression_scanner import compression_score
 from scanners.strength_scanner import price_strength_score
 from scanners.volume_scanner import volume_anomaly_score
+from research.semantic_replay_enrichment import build_semantic_replay_labels
 
 
 CACHE_DIR = PROJECT_ROOT / "data" / "cache"
@@ -76,6 +77,20 @@ CSV_FIELDS = [
     "volume_score",
     "strength_score",
     "compression_score",
+    "semantic_labels",
+    "trap_label",
+    "fake_breakout_label",
+    "liquidity_sweep_label",
+    "regime_label",
+    "volatility_state_label",
+    "mtf_alignment_label",
+    "gap_behavior_label",
+    "panic_euphoria_label",
+    "sector_rotation_label",
+    "correlation_state_label",
+    "news_reaction_label",
+    "semantic_label_confidence",
+    "semantic_label_reasons",
     "reason",
     "lesson_learned",
     "source_type",
@@ -95,6 +110,26 @@ def stable_hash(value: Any) -> str:
 
 def normalize_symbol(symbol: str) -> str:
     return str(symbol or "").replace(".NS", "").upper().strip()
+
+
+def parse_year_focus(value: Optional[Union[str, Iterable[int]]]) -> List[int]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        parts = value.split(",")
+    else:
+        parts = list(value)
+    years: List[int] = []
+    seen = set()
+    for part in parts:
+        try:
+            year = int(str(part).strip())
+        except Exception:
+            continue
+        if 1900 <= year <= 2100 and year not in seen:
+            years.append(year)
+            seen.add(year)
+    return years
 
 
 def resolve_source_dir(source_dir: Optional[Path] = None) -> Path:
@@ -250,12 +285,27 @@ def build_lesson(record: Dict[str, Any]) -> str:
     )
 
 
+def build_experience_hash(record: Dict[str, Any]) -> str:
+    return stable_hash(
+        {
+            "symbol": record["symbol"],
+            "date": record["date"],
+            "signal_time": record["signal_time"],
+            "timeframe": record["timeframe"],
+            "setup_type": record["setup_type"],
+            "side": record["side"],
+            "outcome": record["outcome"],
+        }
+    )
+
+
 def simulate_symbol(
     symbol: str,
     limit: int,
     lookahead: int,
     min_history: int,
     source_dir: Optional[Path] = None,
+    year_focus: Optional[List[int]] = None,
 ) -> List[Dict[str, Any]]:
     df = read_candles(symbol, source_dir=source_dir)
     if df.empty or len(df) < min_history + lookahead + 1:
@@ -264,7 +314,11 @@ def simulate_symbol(
     timeframe = infer_timeframe(df)
     records: List[Dict[str, Any]] = []
     max_index = len(df) - lookahead
+    year_filter = set(year_focus or [])
     for index in range(min_history, max_index):
+        signal_timestamp = df.iloc[index]["Datetime"]
+        if year_filter and int(signal_timestamp.year) not in year_filter:
+            continue
         history = df.iloc[: index + 1].copy()
         future = df.iloc[index + 1 : index + 1 + lookahead].copy()
         trend = trend_direction(history)
@@ -286,7 +340,7 @@ def simulate_symbol(
         momentum_ok = strong_momentum(history, side=side)
         score = simulated_score(volume, strength, compression, momentum_ok)
         outcome, outcome_reason, pnl_points, rr = evaluate_outcome(future, side, entry, sl, target)
-        signal_time = history.iloc[-1]["Datetime"].to_pydatetime()
+        signal_time = signal_timestamp.to_pydatetime()
         record = {
             **SAFETY_TAGS,
             "symbol": normalize_symbol(symbol),
@@ -309,17 +363,9 @@ def simulate_symbol(
             "compression_score": compression,
             "reason": build_reason(trend, side, setup_type, volume, strength, compression, score),
         }
+        record.update(build_semantic_replay_labels(history, future, record))
         record["lesson_learned"] = build_lesson(record)
-        record["experience_hash"] = stable_hash(
-            {
-                "symbol": record["symbol"],
-                "date": record["date"],
-                "timeframe": record["timeframe"],
-                "setup_type": record["setup_type"],
-                "side": record["side"],
-                "outcome": record["outcome"],
-            }
-        )
+        record["experience_hash"] = build_experience_hash(record)
         records.append(record)
         if len(records) >= limit:
             break
@@ -336,6 +382,10 @@ def load_existing_hashes() -> set:
                 payload = json.loads(line)
                 if payload.get("experience_hash"):
                     hashes.add(payload["experience_hash"])
+                try:
+                    hashes.add(build_experience_hash(payload))
+                except Exception:
+                    pass
             except Exception:
                 continue
     return hashes
@@ -357,12 +407,191 @@ def write_csv(path: Path, records: List[Dict[str, Any]]) -> None:
             writer.writerow(record)
 
 
+def record_year(record: Dict[str, Any]) -> Optional[int]:
+    value = str(record.get("date") or record.get("signal_time") or "")
+    if len(value) < 4:
+        return None
+    try:
+        return int(value[:4])
+    except Exception:
+        return None
+
+
+def _can_accept_record(
+    record: Dict[str, Any],
+    emitted_hashes: Set[str],
+    symbol_counts: Dict[str, int],
+    year_counts: Dict[int, int],
+    year_focus: List[int],
+    max_per_symbol: Optional[int],
+    max_per_year: Optional[int],
+) -> bool:
+    if record.get("experience_hash") in emitted_hashes:
+        return False
+    symbol = str(record.get("symbol") or "")
+    year = record_year(record)
+    year_filter = set(year_focus)
+    if year_filter and year not in year_filter:
+        return False
+    if max_per_symbol is not None and symbol_counts.get(symbol, 0) >= max_per_symbol:
+        return False
+    if max_per_year is not None and year is not None and year_counts.get(year, 0) >= max_per_year:
+        return False
+    return True
+
+
+def _accept_record(
+    record: Dict[str, Any],
+    records: List[Dict[str, Any]],
+    emitted_hashes: Set[str],
+    symbol_counts: Dict[str, int],
+    year_counts: Dict[int, int],
+) -> None:
+    records.append(record)
+    emitted_hashes.add(str(record.get("experience_hash")))
+    symbol = str(record.get("symbol") or "")
+    symbol_counts[symbol] = symbol_counts.get(symbol, 0) + 1
+    year = record_year(record)
+    if year is not None:
+        year_counts[year] = year_counts.get(year, 0) + 1
+
+
+def _sequential_select_records(
+    selected_symbols: List[str],
+    limit: int,
+    lookahead: int,
+    min_history: int,
+    source_path: Path,
+    emitted_hashes: Set[str],
+    year_focus: List[int],
+    max_per_symbol: Optional[int],
+    max_per_year: Optional[int],
+) -> Tuple[List[Dict[str, Any]], int]:
+    records: List[Dict[str, Any]] = []
+    skipped_duplicates = 0
+    symbol_counts: Dict[str, int] = {}
+    year_counts: Dict[int, int] = {}
+    per_symbol_limit = max(1, max_per_symbol or limit)
+
+    for symbol in selected_symbols:
+        if len(records) >= limit:
+            break
+        candidates = simulate_symbol(
+            symbol,
+            per_symbol_limit,
+            lookahead,
+            min_history,
+            source_dir=source_path,
+            year_focus=year_focus,
+        )
+        for candidate in candidates:
+            if candidate["experience_hash"] in emitted_hashes:
+                skipped_duplicates += 1
+                continue
+            if not _can_accept_record(
+                candidate,
+                emitted_hashes,
+                symbol_counts,
+                year_counts,
+                year_focus,
+                max_per_symbol,
+                max_per_year,
+            ):
+                continue
+            _accept_record(candidate, records, emitted_hashes, symbol_counts, year_counts)
+            if len(records) >= limit:
+                break
+
+    return records, skipped_duplicates
+
+
+def _stratified_select_records(
+    selected_symbols: List[str],
+    limit: int,
+    lookahead: int,
+    min_history: int,
+    source_path: Path,
+    emitted_hashes: Set[str],
+    year_focus: List[int],
+    max_per_symbol: Optional[int],
+    max_per_year: Optional[int],
+) -> Tuple[List[Dict[str, Any]], int]:
+    records: List[Dict[str, Any]] = []
+    skipped_duplicates = 0
+    symbol_counts: Dict[str, int] = {}
+    year_counts: Dict[int, int] = {}
+    candidate_limit = max(1, limit)
+    buckets: Dict[Tuple[int, str, str], List[Dict[str, Any]]] = {}
+
+    for symbol in selected_symbols:
+        candidates = simulate_symbol(
+            symbol,
+            candidate_limit,
+            lookahead,
+            min_history,
+            source_dir=source_path,
+            year_focus=year_focus,
+        )
+        for candidate in candidates:
+            if candidate["experience_hash"] in emitted_hashes:
+                skipped_duplicates += 1
+                continue
+            year = record_year(candidate)
+            year_filter = set(year_focus)
+            if year_filter and year not in year_filter:
+                continue
+            bucket_key = (
+                year or 0,
+                str(candidate.get("setup_type") or "UNKNOWN"),
+                str(candidate.get("symbol") or symbol),
+            )
+            buckets.setdefault(bucket_key, []).append(candidate)
+
+    ordered_keys = sorted(buckets, key=lambda key: (key[0], key[1], key[2]))
+    while len(records) < limit and ordered_keys:
+        next_keys: List[Tuple[int, str, str]] = []
+        accepted_this_round = False
+        for key in ordered_keys:
+            bucket = buckets.get(key) or []
+            while bucket:
+                candidate = bucket.pop(0)
+                if candidate["experience_hash"] in emitted_hashes:
+                    skipped_duplicates += 1
+                    continue
+                if not _can_accept_record(
+                    candidate,
+                    emitted_hashes,
+                    symbol_counts,
+                    year_counts,
+                    year_focus,
+                    max_per_symbol,
+                    max_per_year,
+                ):
+                    continue
+                _accept_record(candidate, records, emitted_hashes, symbol_counts, year_counts)
+                accepted_this_round = True
+                break
+            if bucket:
+                next_keys.append(key)
+            if len(records) >= limit:
+                break
+        if not accepted_this_round:
+            break
+        ordered_keys = next_keys
+
+    return records, skipped_duplicates
+
+
 def build_report(
     records: List[Dict[str, Any]],
     skipped_duplicates: int,
     dry_run: bool,
     symbols: List[str],
     source_dir: Optional[Path] = None,
+    sampling_mode: str = "sequential",
+    year_focus: Optional[List[int]] = None,
+    max_per_symbol: Optional[int] = None,
+    max_per_year: Optional[int] = None,
 ) -> Dict[str, Any]:
     outcome_counts: Dict[str, int] = {}
     setup_counts: Dict[str, int] = {}
@@ -378,6 +607,10 @@ def build_report(
         "source_dir": str(resolve_source_dir(source_dir)),
         "output_jsonl": str(JSONL_PATH),
         "output_csv": str(CSV_PATH),
+        "sampling_mode": sampling_mode,
+        "year_focus": year_focus or [],
+        "max_per_symbol": max_per_symbol,
+        "max_per_year": max_per_year,
         "safety": SAFETY_TAGS,
         "outcome_counts": outcome_counts,
         "setup_counts": setup_counts,
@@ -392,29 +625,56 @@ def run_feeder(
     min_history: int = 80,
     dry_run: bool = False,
     source_dir: Optional[Path] = None,
+    sampling_mode: str = "sequential",
+    year_focus: Optional[Union[str, Iterable[int]]] = None,
+    max_per_symbol: Optional[int] = None,
+    max_per_year: Optional[int] = None,
 ) -> Dict[str, Any]:
     source_path = resolve_source_dir(source_dir)
     selected_symbols = discover_symbols(symbols, source_dir=source_path)
     existing_hashes = load_existing_hashes()
     emitted_hashes = set(existing_hashes)
-    records: List[Dict[str, Any]] = []
-    skipped_duplicates = 0
+    clean_sampling_mode = sampling_mode if sampling_mode in {"sequential", "stratified"} else "sequential"
+    clean_year_focus = parse_year_focus(year_focus)
+    clean_max_per_symbol = max(1, int(max_per_symbol)) if max_per_symbol is not None else None
+    clean_max_per_year = max(1, int(max_per_year)) if max_per_year is not None else None
 
-    per_symbol_limit = max(1, limit)
-    for symbol in selected_symbols:
-        if len(records) >= limit:
-            break
-        candidates = simulate_symbol(symbol, per_symbol_limit, lookahead, min_history, source_dir=source_path)
-        for candidate in candidates:
-            if candidate["experience_hash"] in emitted_hashes:
-                skipped_duplicates += 1
-                continue
-            emitted_hashes.add(candidate["experience_hash"])
-            records.append(candidate)
-            if len(records) >= limit:
-                break
+    if clean_sampling_mode == "stratified":
+        records, skipped_duplicates = _stratified_select_records(
+            selected_symbols,
+            limit,
+            lookahead,
+            min_history,
+            source_path,
+            emitted_hashes,
+            clean_year_focus,
+            clean_max_per_symbol,
+            clean_max_per_year,
+        )
+    else:
+        records, skipped_duplicates = _sequential_select_records(
+            selected_symbols,
+            limit,
+            lookahead,
+            min_history,
+            source_path,
+            emitted_hashes,
+            clean_year_focus,
+            clean_max_per_symbol,
+            clean_max_per_year,
+        )
 
-    report = build_report(records, skipped_duplicates, dry_run, selected_symbols, source_dir=source_path)
+    report = build_report(
+        records,
+        skipped_duplicates,
+        dry_run,
+        selected_symbols,
+        source_dir=source_path,
+        sampling_mode=clean_sampling_mode,
+        year_focus=clean_year_focus,
+        max_per_symbol=clean_max_per_symbol,
+        max_per_year=clean_max_per_year,
+    )
     if not dry_run:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         write_jsonl(JSONL_PATH, records)
@@ -434,6 +694,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-history", type=int, default=80, help="Minimum candles before a signal can be simulated")
     parser.add_argument("--dry-run", action="store_true", help="Generate summary without writing output files")
     parser.add_argument("--source-dir", type=Path, default=CACHE_DIR, help="Folder containing source candle CSV files")
+    parser.add_argument(
+        "--sampling-mode",
+        choices=("sequential", "stratified"),
+        default="sequential",
+        help="Record selection mode; sequential preserves existing behavior.",
+    )
+    parser.add_argument("--year-focus", help="Comma-separated years to prefer/include, e.g. 2008,2020,2022,2024")
+    parser.add_argument("--max-per-symbol", type=int, help="Maximum accepted records per symbol")
+    parser.add_argument("--max-per-year", type=int, help="Maximum accepted records per year")
     return parser.parse_args()
 
 
@@ -446,6 +715,10 @@ def main() -> None:
         min_history=max(60, args.min_history),
         dry_run=args.dry_run,
         source_dir=args.source_dir,
+        sampling_mode=args.sampling_mode,
+        year_focus=args.year_focus,
+        max_per_symbol=args.max_per_symbol,
+        max_per_year=args.max_per_year,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
 
