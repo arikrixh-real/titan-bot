@@ -6,7 +6,8 @@ Safety contract:
 - Does not modify existing engines
 - Does not touch live runtime, Telegram, broker, or Supabase
 - Feeds synthetic closed trade rows into the existing adaptive/evolution engines
-- Writes only to data/memory/ and reports/
+- Writes only historical replay outputs under data/memory/ and reports/
+- Does not overwrite live evolution/adaptive state or reports
 
 Safe test command:
 python research/build_historical_adaptive_memory.py --dry-run --limit 100
@@ -40,16 +41,57 @@ INPUT_PATH = (
 )
 MEMORY_DIR = PROJECT_ROOT / "data" / "memory"
 REPORTS_DIR = PROJECT_ROOT / "reports"
+HISTORICAL_EVOLUTION_STATE_PATH = MEMORY_DIR / "historical_evolution_state.json"
+HISTORICAL_EVOLUTION_REPORT_PATH = REPORTS_DIR / "historical_evolution_report.txt"
+HISTORICAL_ADAPTIVE_STATE_PATH = MEMORY_DIR / "historical_adaptive_intelligence_state.json"
+HISTORICAL_ADAPTIVE_REPORT_PATH = REPORTS_DIR / "historical_adaptive_intelligence_report.txt"
 RESEARCH_REPORT_PATH = REPORTS_DIR / "historical_adaptive_memory_report.txt"
 
 RESEARCH_CONTEXT = {
     "source_type": "HISTORICAL_REPLAY",
+    "advisory_only": True,
+    "affects_live_execution_directly": False,
     "trading_mode": "RESEARCH_ONLY",
     "live_mutation": False,
     "telegram_mutation": False,
     "broker_mutation": False,
     "supabase_mutation": False,
 }
+
+LIVE_OUTPUT_PATHS = {
+    adaptive_memory_builder.ADAPTIVE_STATE_PATH,
+    adaptive_memory_builder.ADAPTIVE_REPORT_PATH,
+    evolution_engine.EVOLUTION_STATE_PATH,
+    evolution_engine.EVOLUTION_REPORT_PATH,
+}
+
+
+def tag_historical_state(state: Dict[str, Any]) -> Dict[str, Any]:
+    state.update(
+        {
+            "source_type": "HISTORICAL_REPLAY",
+            "advisory_only": True,
+            "affects_live_execution_directly": False,
+        }
+    )
+    return state
+
+
+def append_replay_context(report_path: Path) -> None:
+    if report_path in LIVE_OUTPUT_PATHS:
+        raise RuntimeError(f"Refusing historical replay report append to live path: {report_path}")
+
+    section = [
+        "",
+        "HISTORICAL REPLAY SAFETY",
+        "-" * 60,
+        f"source_type: {RESEARCH_CONTEXT['source_type']}",
+        f"advisory_only: {str(RESEARCH_CONTEXT['advisory_only']).lower()}",
+        "affects_live_execution_directly: "
+        f"{str(RESEARCH_CONTEXT['affects_live_execution_directly']).lower()}",
+    ]
+    with report_path.open("a", encoding="utf-8") as handle:
+        handle.write("\n" + "\n".join(section))
 
 
 def safe_float(value: Any, default: float = 0.0) -> float:
@@ -175,6 +217,20 @@ def temporary_attr(module: Any, name: str, value: Any) -> Iterator[None]:
 
 
 @contextmanager
+def temporary_attrs(patches: List[Tuple[Any, str, Any]]) -> Iterator[None]:
+    exits: List[Callable[[], None]] = []
+    try:
+        for module, name, value in patches:
+            original = getattr(module, name)
+            setattr(module, name, value)
+            exits.append(lambda module=module, name=name, original=original: setattr(module, name, original))
+        yield
+    finally:
+        for restore in reversed(exits):
+            restore()
+
+
+@contextmanager
 def patched_adaptive_inputs(rows: List[Dict[str, Any]]) -> Iterator[None]:
     def read_csv(path: Path) -> List[Dict[str, Any]]:
         if path == adaptive_memory_builder.TRADE_JOURNAL_CSV:
@@ -197,9 +253,34 @@ def patched_adaptive_inputs(rows: List[Dict[str, Any]]) -> Iterator[None]:
 
 
 @contextmanager
+def patched_adaptive_outputs() -> Iterator[None]:
+    patches: List[Tuple[Any, str, Any]] = [
+        (adaptive_memory_builder, "ADAPTIVE_STATE_PATH", HISTORICAL_ADAPTIVE_STATE_PATH),
+        (adaptive_memory_builder, "ADAPTIVE_REPORT_PATH", HISTORICAL_ADAPTIVE_REPORT_PATH),
+    ]
+    with temporary_attrs(patches):
+        yield
+
+
+@contextmanager
 def patched_evolution_inputs(rows: List[Dict[str, Any]], dry_run: bool) -> Iterator[None]:
+    original_save_json = evolution_engine._save_json
+    original_write_report = evolution_engine._write_evolution_report
+
+    def save_historical_json(path: Path, data: Dict[str, Any]) -> None:
+        if path in LIVE_OUTPUT_PATHS:
+            raise RuntimeError(f"Refusing historical replay write to live path: {path}")
+        original_save_json(path, tag_historical_state(data))
+
+    def write_historical_evolution_report(state: Dict[str, Any], old_state: Dict[str, Any]) -> None:
+        tag_historical_state(state)
+        original_write_report(state, old_state)
+        append_replay_context(HISTORICAL_EVOLUTION_REPORT_PATH)
+
     patches: List[Tuple[Any, str, Any]] = [
         (evolution_engine, "_closed_trades_from_journal", lambda: list(rows)),
+        (evolution_engine, "EVOLUTION_STATE_PATH", HISTORICAL_EVOLUTION_STATE_PATH),
+        (evolution_engine, "EVOLUTION_REPORT_PATH", HISTORICAL_EVOLUTION_REPORT_PATH),
     ]
     if dry_run:
         patches.extend(
@@ -208,17 +289,16 @@ def patched_evolution_inputs(rows: List[Dict[str, Any]], dry_run: bool) -> Itera
                 (evolution_engine, "_write_evolution_report", lambda _state, _old_state: None),
             ]
         )
+    else:
+        patches.extend(
+            [
+                (evolution_engine, "_save_json", save_historical_json),
+                (evolution_engine, "_write_evolution_report", write_historical_evolution_report),
+            ]
+        )
 
-    exits: List[Callable[[], None]] = []
-    try:
-        for module, name, value in patches:
-            original = getattr(module, name)
-            setattr(module, name, value)
-            exits.append(lambda module=module, name=name, original=original: setattr(module, name, original))
+    with temporary_attrs(patches):
         yield
-    finally:
-        for restore in reversed(exits):
-            restore()
 
 
 def top_bucket_names(memory: Dict[str, Any], limit: int = 10) -> List[Tuple[str, Dict[str, Any]]]:
@@ -291,6 +371,20 @@ def write_research_report(
     RESEARCH_REPORT_PATH.write_text("\n".join(lines), encoding="utf-8")
 
 
+def write_historical_adaptive_outputs(adaptive_state: Dict[str, Any]) -> None:
+    if HISTORICAL_ADAPTIVE_STATE_PATH in LIVE_OUTPUT_PATHS or HISTORICAL_ADAPTIVE_REPORT_PATH in LIVE_OUTPUT_PATHS:
+        raise RuntimeError("Refusing historical adaptive replay write to a live output path")
+
+    MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    with HISTORICAL_ADAPTIVE_STATE_PATH.open("w", encoding="utf-8") as handle:
+        json.dump(adaptive_state, handle, indent=2, ensure_ascii=False)
+
+    with patched_adaptive_outputs():
+        adaptive_memory_builder._write_report(adaptive_state)
+    append_replay_context(HISTORICAL_ADAPTIVE_REPORT_PATH)
+
+
 def print_summary(
     records_loaded: int,
     skipped_records: int,
@@ -337,10 +431,10 @@ def print_summary(
         print("output_files_written: false")
     else:
         print("output_files_written: true")
-        print(f"adaptive_state_path: {adaptive_memory_builder.ADAPTIVE_STATE_PATH}")
-        print(f"adaptive_report_path: {adaptive_memory_builder.ADAPTIVE_REPORT_PATH}")
-        print(f"evolution_state_path: {evolution_engine.EVOLUTION_STATE_PATH}")
-        print(f"evolution_report_path: {evolution_engine.EVOLUTION_REPORT_PATH}")
+        print(f"adaptive_state_path: {HISTORICAL_ADAPTIVE_STATE_PATH}")
+        print(f"adaptive_report_path: {HISTORICAL_ADAPTIVE_REPORT_PATH}")
+        print(f"evolution_state_path: {HISTORICAL_EVOLUTION_STATE_PATH}")
+        print(f"evolution_report_path: {HISTORICAL_EVOLUTION_REPORT_PATH}")
         print(f"research_report_path: {RESEARCH_REPORT_PATH}")
 
 
@@ -364,14 +458,17 @@ def main() -> int:
     closed_rows = synthetic_closed_trade_rows(records)
 
     with patched_adaptive_inputs(closed_rows):
-        adaptive_state = adaptive_memory_builder.build_adaptive_memory(write_files=not args.dry_run)
+        adaptive_state = adaptive_memory_builder.build_adaptive_memory(write_files=False)
+    tag_historical_state(adaptive_state)
 
     with patched_evolution_inputs(closed_rows, dry_run=args.dry_run):
         evolution_state = evolution_engine.run_evolution_engine()
+    tag_historical_state(evolution_state)
 
     if not args.dry_run:
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)
         REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+        write_historical_adaptive_outputs(adaptive_state)
         write_research_report(
             records_loaded=len(records),
             skipped_records=skipped,
