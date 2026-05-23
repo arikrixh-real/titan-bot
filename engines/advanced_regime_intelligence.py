@@ -37,6 +37,9 @@ LIFECYCLE_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "lifecycle_memory.jso
 STRATEGY_FAMILY_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "strategy_family_memory.json"
 PROMOTION_GATE_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "promotion_gate_memory.json"
 MASTER_SHADOW_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "master_shadow_memory.json"
+HISTORICAL_EVOLUTION_STATE_PATH = PROJECT_ROOT / "data" / "memory" / "historical_evolution_state.json"
+HISTORICAL_ADAPTIVE_INTELLIGENCE_STATE_PATH = PROJECT_ROOT / "data" / "memory" / "historical_adaptive_intelligence_state.json"
+HISTORICAL_REGIME_TRANSITION_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "historical_regime_transition_memory.json"
 
 OUTCOME_PATHS = [
     PROJECT_ROOT / "data" / "journals" / "trade_outcomes.jsonl",
@@ -162,6 +165,108 @@ def _read_json_limited(path: Path, name: str) -> tuple[Dict[str, Any], Dict[str,
         freshness["status"] = "READ_ERROR"
         warnings.append(f"{name}_read_error")
         return {}, freshness, warnings
+
+
+def _empty_historical_replay_context() -> Dict[str, Any]:
+    return {
+        "historical_win_rate": 0.0,
+        "historical_filter_strictness": 0.0,
+        "historical_score_boost": 0.0,
+        "top_historical_symbols": [],
+        "top_historical_setup_tags": [],
+        "advisory_only": True,
+    }
+
+
+def _bucket_samples(bucket: Dict[str, Any]) -> int:
+    samples = _safe_int(bucket.get("trades") or bucket.get("samples") or bucket.get("observations"))
+    if samples:
+        return samples
+    return _safe_int(bucket.get("wins")) + _safe_int(bucket.get("losses"))
+
+
+def _bucket_win_rate(bucket: Dict[str, Any]) -> float:
+    for key in ("posterior_win_rate", "win_rate"):
+        if key in bucket:
+            return round(_clamp01(_safe_float(bucket.get(key))), 4)
+    wins = _safe_int(bucket.get("wins"))
+    losses = _safe_int(bucket.get("losses"))
+    total = wins + losses
+    return round(wins / total, 4) if total else 0.0
+
+
+def _rank_historical_buckets(memories: Iterable[Dict[str, Any]], keys: Iterable[str], label: str) -> List[Dict[str, Any]]:
+    buckets: Dict[str, Dict[str, Any]] = {}
+    for memory in memories:
+        if not isinstance(memory, dict):
+            continue
+        for key in keys:
+            source = memory.get(key)
+            if not isinstance(source, dict):
+                continue
+            for name, raw_bucket in source.items():
+                if not isinstance(raw_bucket, dict):
+                    continue
+                clean_name = str(name or "").strip().upper() if label == "symbol" else str(name or "").strip()
+                if not clean_name:
+                    continue
+                current = buckets.setdefault(clean_name, {"samples": 0, "win_rate": 0.0})
+                samples = _bucket_samples(raw_bucket)
+                win_rate = _bucket_win_rate(raw_bucket)
+                if samples > current["samples"] or (samples == current["samples"] and win_rate > current["win_rate"]):
+                    current["samples"] = samples
+                    current["win_rate"] = win_rate
+
+    ranked = sorted(buckets.items(), key=lambda item: (item[1]["samples"], item[1]["win_rate"], item[0]), reverse=True)
+    return [
+        {
+            label: name,
+            "samples": stats["samples"],
+            "win_rate": stats["win_rate"],
+        }
+        for name, stats in ranked[:MAX_REPORT_ITEMS]
+    ]
+
+
+def _historical_replay_context(started_at: float, warnings: List[str]) -> Dict[str, Any]:
+    context = _empty_historical_replay_context()
+    historical_memories: Dict[str, Dict[str, Any]] = {}
+    paths = {
+        "historical_evolution": HISTORICAL_EVOLUTION_STATE_PATH,
+        "historical_adaptive_intelligence": HISTORICAL_ADAPTIVE_INTELLIGENCE_STATE_PATH,
+        "historical_regime_transition": HISTORICAL_REGIME_TRANSITION_MEMORY_PATH,
+    }
+
+    for name, path in paths.items():
+        if time.monotonic() - started_at > RUNTIME_BUDGET_SECONDS:
+            warnings.append("historical_replay_runtime_budget_reached")
+            break
+        data, info, layer_warnings = _read_json_limited(path, name)
+        historical_memories[name] = data
+        if info.get("status") != "MISSING":
+            warnings.extend(layer_warnings)
+
+    evolution = historical_memories.get("historical_evolution", {})
+    adaptive = historical_memories.get("historical_adaptive_intelligence", {})
+    global_confidence = adaptive.get("global_confidence") if isinstance(adaptive.get("global_confidence"), dict) else {}
+
+    context["historical_win_rate"] = round(
+        _clamp01(_safe_float(evolution.get("win_rate"), _safe_float(global_confidence.get("win_rate"), 0.0))),
+        4,
+    )
+    context["historical_filter_strictness"] = round(_safe_float(evolution.get("filter_strictness"), 0.0), 4)
+    context["historical_score_boost"] = round(_safe_float(evolution.get("score_boost"), 0.0), 4)
+    context["top_historical_symbols"] = _rank_historical_buckets(
+        historical_memories.values(),
+        ("symbol_memory", "symbols", "symbol_stats"),
+        "symbol",
+    )
+    context["top_historical_setup_tags"] = _rank_historical_buckets(
+        historical_memories.values(),
+        ("reason_memory", "feature_memory", "setup_tag_memory", "setup_tags", "tags"),
+        "setup_tag",
+    )
+    return context
 
 
 def _normalize_outcome(value: Any) -> str:
@@ -494,8 +599,11 @@ def _neutral_snapshot(error: str | None = None, started_at: float | None = None)
             "recommended_live_weight": 0.0,
             "promotion_eligible": False,
         },
+        "historical_replay_context": _empty_historical_replay_context(),
         "warnings": warnings[:MAX_REPORT_ITEMS],
         "safety": _safety_block(),
+        "rank_adjustment": 0.0,
+        "recommended_live_weight": 0.0,
     }
 
 
@@ -544,6 +652,7 @@ def build_advanced_regime_snapshot(
         active = _active_regime(scores, previous_memory)
         family_perf = _family_regime_performance(outcome_rows, active.get("primary", "CHOPPY_NO_EDGE"))
         promotion_features = _promotion_features(active, family_perf)
+        historical_context = _historical_replay_context(started_at, warnings)
 
         history = previous_memory.get("history") if isinstance(previous_memory.get("history"), list) else []
         history.append(
@@ -572,6 +681,7 @@ def build_advanced_regime_snapshot(
             "history": history,
             "layer_freshness": freshness,
             "promotion_gate_features": promotion_features,
+            "historical_replay_context": historical_context,
             "runtime_context": {
                 "observed_setups_count": len(setup_snapshot),
                 "selected_decisions_count": len(decision_snapshot.get("selected") or []),
@@ -591,6 +701,7 @@ def render_advanced_regime_report(snapshot: Dict[str, Any]) -> str:
     active = snapshot.get("active_regime") if isinstance(snapshot.get("active_regime"), dict) else {}
     scores = snapshot.get("regime_scores") if isinstance(snapshot.get("regime_scores"), dict) else {}
     promotion = snapshot.get("promotion_gate_features") if isinstance(snapshot.get("promotion_gate_features"), dict) else {}
+    historical = snapshot.get("historical_replay_context") if isinstance(snapshot.get("historical_replay_context"), dict) else {}
     safety = snapshot.get("safety") if isinstance(snapshot.get("safety"), dict) else {}
 
     ordered = sorted(scores.items(), key=lambda item: _safe_float(item[1]), reverse=True)
@@ -629,6 +740,30 @@ def render_advanced_regime_report(snapshot: Dict[str, Any]) -> str:
             f"- Family regime edge quality: {promotion.get('family_regime_edge_quality', 0.0)}",
             f"- Promotion eligible: {promotion.get('promotion_eligible', False)}",
             f"- Recommended live weight: {promotion.get('recommended_live_weight', 0.0)}",
+            "",
+            "Historical Replay Advisory Context:",
+            f"- Advisory only: {historical.get('advisory_only', True)}",
+            f"- Historical win rate: {historical.get('historical_win_rate', 0.0)}",
+            f"- Historical filter strictness: {historical.get('historical_filter_strictness', 0.0)}",
+            f"- Historical score boost: {historical.get('historical_score_boost', 0.0)}",
+            "- Top historical symbols:",
+        ]
+    )
+    for item in (historical.get("top_historical_symbols") or [])[:MAX_REPORT_ITEMS]:
+        if isinstance(item, dict):
+            lines.append(f"  - {item.get('symbol')}: samples={item.get('samples')}, win_rate={item.get('win_rate')}")
+    if not historical.get("top_historical_symbols"):
+        lines.append("  - None observed")
+
+    lines.append("- Top historical setup tags:")
+    for item in (historical.get("top_historical_setup_tags") or [])[:MAX_REPORT_ITEMS]:
+        if isinstance(item, dict):
+            lines.append(f"  - {item.get('setup_tag')}: samples={item.get('samples')}, win_rate={item.get('win_rate')}")
+    if not historical.get("top_historical_setup_tags"):
+        lines.append("  - None observed")
+
+    lines.extend(
+        [
             "",
             "Warnings:",
         ]
