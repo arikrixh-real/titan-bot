@@ -29,6 +29,7 @@ TASK_OUTPUT_PATHS = {
     "heartbeat": Path("data") / "runtime" / "titan_heartbeat.json",
     "runtime_status": Path("data") / "runtime" / "titan_runtime_status.json",
     "report_aggregator": Path("data") / "report_vault" / "latest_aggregated_packet.json",
+    "consciousness_core": Path("data") / "consciousness_core" / "consciousness_context.json",
 }
 DEFAULT_TASK_TIMEOUT_SECONDS = 60
 TASK_TIMEOUT_SECONDS = {
@@ -152,6 +153,8 @@ IMPORTANT_INTELLIGENCE_TASKS = {
 }
 NON_DEGRADED_PRESERVE_STATUSES = {
     "OK",
+    "OK_LAST_GOOD",
+    "OK_LAST_GOOD_OUTPUT",
     "SKIPPED_UNCHANGED",
     "SKIPPED_RECENT",
     "SKIPPED_LOCKED",
@@ -243,6 +246,43 @@ def _log_runtime_error(source, error, mode):
 def _last_good_output_path(task):
     path = TASK_OUTPUT_PATHS.get(task) or Path("data") / "runtime" / f"{task}_status.json"
     return str(path).replace("\\", "/") if path.exists() else None
+
+
+def _read_json_safe(path):
+    try:
+        path = Path(path)
+        if not path.exists():
+            return None
+        with path.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        return payload if isinstance(payload, dict) else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _fresh_file(path, seconds=24 * 60 * 60):
+    try:
+        path = Path(path)
+        if not path.exists():
+            return False
+        age_seconds = time.time() - path.stat().st_mtime
+        return 0 <= age_seconds <= seconds
+    except OSError:
+        return False
+
+
+def _daemon_or_heartbeat_fresh(seconds=15 * 60):
+    return _fresh_file(Path("data") / "runtime" / "daemon_health.json", seconds) or _fresh_file(
+        Path("data") / "runtime" / "titan_heartbeat.json",
+        seconds,
+    )
+
+
+def _fresh_ok_consciousness_context(seconds=24 * 60 * 60):
+    context_path = Path("data") / "consciousness_core" / "consciousness_context.json"
+    payload = _read_json_safe(context_path)
+    status = str((payload or {}).get("status") or "").upper()
+    return bool(payload) and _fresh_file(context_path, seconds) and status in {"OK", "HEALTHY"}
 
 
 def _clear_active_marker(task, started_at=None):
@@ -654,7 +694,60 @@ def _run_worker(task, sleep_seconds, intent):
                 last_good_output_path = _health.get(task, {}).get("last_good_output_path") or _last_good_output_path(task)
                 exitcode = result.get("exitcode")
                 preserved_nonzero = False
-                if exitcode not in (None, 0) and last_good_output_path:
+                consciousness_recovered_last_good = (
+                    task == "consciousness_core"
+                    and exitcode == -9
+                    and _fresh_ok_consciousness_context()
+                    and _daemon_or_heartbeat_fresh()
+                )
+                if consciousness_recovered_last_good:
+                    preserved_status = "OK_LAST_GOOD"
+                    last_good_output_path = last_good_output_path or _last_good_output_path(task)
+                    record_task_result(
+                        task,
+                        preserved_status,
+                        result={
+                            "status": preserved_status,
+                            "exitcode": exitcode,
+                            "last_good_output_path": last_good_output_path,
+                            "recovery_action": "fresh_consciousness_context_after_exitcode_minus_9",
+                        },
+                        runtime_seconds=runtime_seconds,
+                    )
+                    if intelligence_state is not None:
+                        intelligence_state, intelligence_state_path = save_intelligence_state(
+                            task,
+                            intelligence_state,
+                            preserved_status,
+                            runtime_seconds,
+                        )
+                    _write_worker_health(
+                        task,
+                        status=preserved_status,
+                        last_finished_at=_now_ist(),
+                        run_count=run_count,
+                        last_duration_seconds=round(runtime_seconds, 3),
+                        last_timeout_seconds=None,
+                        last_timeout_reason=result.get("termination_reason"),
+                        last_exitcode=exitcode,
+                        last_error=None,
+                        last_good_output_path=last_good_output_path,
+                        last_good_output_used=True,
+                        recovery_action="fresh_consciousness_context_after_exitcode_minus_9",
+                        consecutive_failure_count=0,
+                        retry_backoff_seconds=0,
+                        intelligence_state_path=(
+                            str(intelligence_state_path) if intelligence_state_path else None
+                        ),
+                        intelligence_run_count=(
+                            intelligence_state.get("run_count")
+                            if intelligence_state is not None
+                            else None
+                        ),
+                        last_status=preserved_status,
+                    )
+                    preserved_nonzero = True
+                elif exitcode not in (None, 0) and last_good_output_path:
                     preserved_status = _preserved_status_from_last_good(previous_health)
                     record_task_result(
                         task,

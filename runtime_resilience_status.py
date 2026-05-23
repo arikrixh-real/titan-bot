@@ -17,6 +17,8 @@ WORKER_RECENT_FINISH_GRACE_SECONDS = 180
 IST = timezone(timedelta(hours=5, minutes=30))
 NON_DEGRADED_WORKER_STATUSES = {
     "OK",
+    "OK_LAST_GOOD",
+    "OK_LAST_GOOD_OUTPUT",
     "OK_STALE_ACTIVE_MARKER",
     "OK_RECENT_FINISH",
     "SKIPPED_UNCHANGED",
@@ -96,6 +98,7 @@ TASK_OUTPUT_PATHS = {
     "heartbeat": RUNTIME_DIR / "titan_heartbeat.json",
     "runtime_status": RUNTIME_DIR / "titan_runtime_status.json",
     "report_aggregator": Path("data") / "report_vault" / "latest_aggregated_packet.json",
+    "consciousness_core": Path("data") / "consciousness_core" / "consciousness_context.json",
     "experience_memory": Path("data") / "consciousness_core" / "real_experience_memory.json",
     "historical_replay": RUNTIME_DIR / "historical_replay_status.json",
     "knowledge_vault_runner": Path("data") / "knowledge_vault" / "reports" / "knowledge_to_consciousness_packet.json",
@@ -214,6 +217,13 @@ def _worker_output_fresh(task, seconds=STALE_PACKET_SECONDS):
     return _fresh_packet(path, seconds)
 
 
+def _fresh_ok_consciousness_context(seconds=STALE_PACKET_SECONDS):
+    context_path = Path("data") / "consciousness_core" / "consciousness_context.json"
+    payload = read_json_safe(context_path)
+    status = str((payload or {}).get("status") or "").upper()
+    return bool(payload) and _fresh_packet(context_path, seconds) and status in {"OK", "HEALTHY"}
+
+
 def _process_exists(pid):
     try:
         pid = int(pid)
@@ -246,6 +256,13 @@ def _status_write_error_only(error_text):
         "status.json",
     )
     return any(marker in text for marker in markers)
+
+
+def _safe_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def build_worker_health_summary(worker_health=None, runtime_mode=None):
@@ -339,6 +356,20 @@ def build_worker_health_summary(worker_health=None, runtime_mode=None):
         last_good_output_used = bool(item.get("last_good_output_used")) or (
             effective_status in {"DEGRADED", "TIMEOUT", "ERROR"} and bool(last_good_output_path)
         )
+        consciousness_last_good_recovered = False
+        if (
+            task == "consciousness_core"
+            and status == "DEGRADED"
+            and _safe_int(item.get("last_exitcode")) == -9
+            and _fresh_ok_consciousness_context()
+            and daemon_fresh
+        ):
+            effective_status = "OK_LAST_GOOD_OUTPUT"
+            stuck = False
+            false_degraded_grace = True
+            last_error = None
+            last_good_output_used = True
+            consciousness_last_good_recovered = True
         if (
             auxiliary_research_worker
             and outside_market
@@ -379,11 +410,13 @@ def build_worker_health_summary(worker_health=None, runtime_mode=None):
             ),
             "last_finished_at": item.get("last_finished_at"),
             "last_error": last_error,
+            "raw_last_error": item.get("last_error") if consciousness_last_good_recovered else None,
             "retry_backoff_seconds": item.get("retry_backoff_seconds", 0),
             "last_good_output_path": last_good_output_path,
             "last_good_output_used": last_good_output_used,
             "last_good_output_fresh": last_good_output_fresh,
             "auxiliary_research_worker": auxiliary_research_worker,
+            "consciousness_last_good_recovered": consciousness_last_good_recovered,
         }
         if effective_status in {"DEGRADED", "TIMEOUT", "ERROR"}:
             degraded_components.append(task)

@@ -26,6 +26,9 @@ from runtime_paper_engine import run_paper_engine
 from runtime_snapshot_logger import log_runtime_snapshot
 
 
+CONSCIOUSNESS_CONTEXT_PATH = "data/consciousness_core/consciousness_context.json"
+
+
 def run_knowledge_vault_runner_handler(state=None, state_path=None, intelligence_state=None):
     try:
         from knowledge_vault_runner.runner import run_knowledge_vault_runner
@@ -79,9 +82,23 @@ def run_consciousness_core_handler(state=None, state_path=None, intelligence_sta
         state_path=state_path,
         intelligence_state=intelligence_state,
     )
-    if isinstance(result, dict) and result.get("status") == "ok":
-        return {"status": "ok"}
-    return result if isinstance(result, dict) else {"status": "ok"}
+    if not isinstance(result, dict):
+        return {"status": "ok", "output_path": CONSCIOUSNESS_CONTEXT_PATH}
+
+    status = str(result.get("status") or "ok").lower()
+    if status == "ok":
+        return {
+            "status": "ok",
+            "output_path": CONSCIOUSNESS_CONTEXT_PATH,
+            "belief_count": len(result.get("beliefs") or result.get("active_beliefs") or []),
+            "proposal_count": len(result.get("proposals") or result.get("improvement_proposals") or []),
+        }
+
+    return {
+        "status": status,
+        "output_path": CONSCIOUSNESS_CONTEXT_PATH,
+        "error": str(result.get("error") or "")[:500],
+    }
 
 
 def run_learning_engine_handler(state=None, state_path=None, intelligence_state=None):
