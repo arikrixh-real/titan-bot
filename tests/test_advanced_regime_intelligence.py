@@ -42,6 +42,8 @@ class AdvancedRegimeIntelligenceTests(unittest.TestCase):
             "STRATEGY_FAMILY_MEMORY_PATH": regime.STRATEGY_FAMILY_MEMORY_PATH,
             "PROMOTION_GATE_MEMORY_PATH": regime.PROMOTION_GATE_MEMORY_PATH,
             "MASTER_SHADOW_MEMORY_PATH": regime.MASTER_SHADOW_MEMORY_PATH,
+            "HISTORICAL_REGIME_TRANSITION_MEMORY_PATH": regime.HISTORICAL_REGIME_TRANSITION_MEMORY_PATH,
+            "HISTORICAL_REGIME_TRANSITION_REPORT_PATH": regime.HISTORICAL_REGIME_TRANSITION_REPORT_PATH,
             "MEMORY_PATH": regime.MEMORY_PATH,
             "REPORT_PATH": regime.REPORT_PATH,
             "OUTCOME_PATHS": regime.OUTCOME_PATHS,
@@ -61,6 +63,8 @@ class AdvancedRegimeIntelligenceTests(unittest.TestCase):
         regime.STRATEGY_FAMILY_MEMORY_PATH = tmp_path / "missing_strategy_family.json"
         regime.PROMOTION_GATE_MEMORY_PATH = tmp_path / "missing_promotion_gate.json"
         regime.MASTER_SHADOW_MEMORY_PATH = tmp_path / "missing_master_shadow.json"
+        regime.HISTORICAL_REGIME_TRANSITION_MEMORY_PATH = tmp_path / "memory" / "historical_regime_transition_memory.json"
+        regime.HISTORICAL_REGIME_TRANSITION_REPORT_PATH = tmp_path / "reports" / "historical_regime_transition_report.txt"
         regime.MEMORY_PATH = tmp_path / "memory" / "advanced_regime_intelligence_memory.json"
         regime.REPORT_PATH = tmp_path / "reports" / "advanced_regime_intelligence_report.txt"
         regime.OUTCOME_PATHS = [tmp_path / "missing_outcomes.jsonl"]
@@ -253,6 +257,8 @@ class AdvancedRegimeIntelligenceTests(unittest.TestCase):
             self.assertTrue(result["phase12_shadow_mode"])
             self.assertTrue(regime.MEMORY_PATH.exists())
             self.assertTrue(regime.REPORT_PATH.exists())
+            self.assertTrue(regime.HISTORICAL_REGIME_TRANSITION_MEMORY_PATH.exists())
+            self.assertTrue(regime.HISTORICAL_REGIME_TRANSITION_REPORT_PATH.exists())
             self.assertLess(regime.REPORT_PATH.stat().st_size, 10000)
 
     def test_forbidden_imports_absent(self):

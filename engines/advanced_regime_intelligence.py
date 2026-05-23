@@ -40,6 +40,7 @@ MASTER_SHADOW_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "master_shadow_me
 HISTORICAL_EVOLUTION_STATE_PATH = PROJECT_ROOT / "data" / "memory" / "historical_evolution_state.json"
 HISTORICAL_ADAPTIVE_INTELLIGENCE_STATE_PATH = PROJECT_ROOT / "data" / "memory" / "historical_adaptive_intelligence_state.json"
 HISTORICAL_REGIME_TRANSITION_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "historical_regime_transition_memory.json"
+HISTORICAL_REGIME_TRANSITION_REPORT_PATH = PROJECT_ROOT / "reports" / "historical_regime_transition_report.txt"
 
 OUTCOME_PATHS = [
     PROJECT_ROOT / "data" / "journals" / "trade_outcomes.jsonl",
@@ -68,6 +69,8 @@ PHASE12_SHADOW_MODE = True
 MAX_FILE_BYTES = 1_000_000
 MAX_OUTCOME_ROWS = 300
 MAX_HISTORY = 100
+MAX_TRANSITION_EVENTS = 100
+MAX_TRANSITION_BUCKETS = 50
 MAX_REPORT_ITEMS = 10
 REPORT_REFRESH_SECONDS = 3600
 RUNTIME_BUDGET_SECONDS = 0.25
@@ -468,6 +471,156 @@ def _active_regime(scores: Dict[str, float], previous_memory: Dict[str, Any]) ->
     }
 
 
+def _empty_transition_memory() -> Dict[str, Any]:
+    return {
+        "version": STATE_VERSION,
+        "source_type": "REGIME_TRANSITION_MEMORY",
+        "advisory_only": True,
+        "affects_live_execution_directly": False,
+        "generated_at": _now_text(),
+        "total_transition_events": 0,
+        "transition_buckets": {},
+        "recent_transitions": [],
+        "safety": {
+            "broker_api_changes": False,
+            "telegram_changes": False,
+            "supabase_changes": False,
+            "scanner_changes": False,
+            "ranking_changes": False,
+            "final_decision_changes": False,
+        },
+    }
+
+
+def _transition_key(from_regime: Any, to_regime: Any) -> str:
+    source = str(from_regime or "UNKNOWN").strip().upper() or "UNKNOWN"
+    target = str(to_regime or "UNKNOWN").strip().upper() or "UNKNOWN"
+    return f"{source}->{target}"
+
+
+def _load_transition_memory() -> Dict[str, Any]:
+    data, _, _ = _read_json_limited(HISTORICAL_REGIME_TRANSITION_MEMORY_PATH, "historical_regime_transition")
+    if not data:
+        return _empty_transition_memory()
+    base = _empty_transition_memory()
+    base.update(data)
+    if not isinstance(base.get("transition_buckets"), dict):
+        base["transition_buckets"] = {}
+    if not isinstance(base.get("recent_transitions"), list):
+        base["recent_transitions"] = []
+    base["source_type"] = "REGIME_TRANSITION_MEMORY"
+    base["advisory_only"] = True
+    base["affects_live_execution_directly"] = False
+    return base
+
+
+def build_regime_transition_memory(active: Dict[str, Any], previous_memory: Dict[str, Any]) -> Dict[str, Any]:
+    memory = _load_transition_memory()
+    generated_at = _now_text()
+    current = str(active.get("primary") or "CHOPPY_NO_EDGE").upper()
+    previous = str(active.get("previous_primary") or "").upper()
+    transition_detected = bool(active.get("transition_detected")) and bool(previous)
+
+    if transition_detected:
+        key = _transition_key(previous, current)
+        buckets = memory.setdefault("transition_buckets", {})
+        bucket = buckets.setdefault(
+            key,
+            {
+                "from_regime": previous,
+                "to_regime": current,
+                "observations": 0,
+                "confirmed_count": 0,
+                "avg_strength": 0.0,
+                "last_seen": None,
+            },
+        )
+        observations = _safe_int(bucket.get("observations")) + 1
+        strength = _safe_float(active.get("transition_strength"))
+        old_avg = _safe_float(bucket.get("avg_strength"))
+        bucket["observations"] = observations
+        bucket["confirmed_count"] = _safe_int(bucket.get("confirmed_count")) + (1 if active.get("transition_confirmed") else 0)
+        bucket["avg_strength"] = round(((old_avg * (observations - 1)) + strength) / max(1, observations), 4)
+        bucket["last_seen"] = generated_at
+
+        recent = memory.setdefault("recent_transitions", [])
+        recent.append(
+            {
+                "generated_at": generated_at,
+                "from_regime": previous,
+                "to_regime": current,
+                "transition_strength": round(strength, 4),
+                "confirmed": bool(active.get("transition_confirmed")),
+                "source_type": "REGIME_TRANSITION_MEMORY",
+                "advisory_only": True,
+            }
+        )
+        memory["recent_transitions"] = recent[-MAX_TRANSITION_EVENTS:]
+
+    buckets = memory.get("transition_buckets") if isinstance(memory.get("transition_buckets"), dict) else {}
+    ranked = sorted(
+        buckets.items(),
+        key=lambda item: (_safe_int(item[1].get("observations")), _safe_float(item[1].get("avg_strength")), item[0]),
+        reverse=True,
+    )
+    memory["transition_buckets"] = {key: value for key, value in ranked[:MAX_TRANSITION_BUCKETS]}
+    memory["total_transition_events"] = sum(_safe_int(item.get("observations")) for item in memory["transition_buckets"].values())
+    memory["generated_at"] = generated_at
+    memory["last_observed_regime"] = current
+    memory["last_transition_detected"] = transition_detected
+    memory["last_transition_confirmed"] = bool(active.get("transition_confirmed"))
+    memory["rank_adjustment"] = 0.0
+    memory["recommended_live_weight"] = 0.0
+    return memory
+
+
+def render_regime_transition_report(memory: Dict[str, Any]) -> str:
+    buckets = memory.get("transition_buckets") if isinstance(memory.get("transition_buckets"), dict) else {}
+    recent = memory.get("recent_transitions") if isinstance(memory.get("recent_transitions"), list) else []
+    lines = [
+        "TITAN Historical Regime Transition Memory Report",
+        "================================================",
+        "",
+        "Safety",
+        "- Advisory/research-only transition memory.",
+        "- No ranking, scanner, Telegram, broker/API, Supabase, or final-decision mutation.",
+        "",
+        f"Updated: {memory.get('generated_at')}",
+        f"Source Type: {memory.get('source_type')}",
+        f"Advisory Only: {memory.get('advisory_only')}",
+        f"Total Transition Events: {memory.get('total_transition_events', 0)}",
+        "",
+        "Top Transition Buckets:",
+    ]
+    for key, bucket in list(buckets.items())[:MAX_REPORT_ITEMS]:
+        lines.append(
+            f"- {key}: observations={bucket.get('observations', 0)}, "
+            f"confirmed={bucket.get('confirmed_count', 0)}, avg_strength={bucket.get('avg_strength', 0.0)}"
+        )
+    if not buckets:
+        lines.append("- None observed")
+
+    lines.extend(["", "Recent Transitions:"])
+    for item in recent[-MAX_REPORT_ITEMS:]:
+        if isinstance(item, dict):
+            lines.append(
+                f"- {item.get('generated_at')}: {item.get('from_regime')} -> {item.get('to_regime')} "
+                f"strength={item.get('transition_strength')} confirmed={item.get('confirmed')}"
+            )
+    if not recent:
+        lines.append("- None observed")
+    return "\n".join(lines) + "\n"
+
+
+def persist_regime_transition_memory(active: Dict[str, Any], previous_memory: Dict[str, Any]) -> Dict[str, Any]:
+    memory = build_regime_transition_memory(active, previous_memory)
+    HISTORICAL_REGIME_TRANSITION_MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    HISTORICAL_REGIME_TRANSITION_MEMORY_PATH.write_text(json.dumps(memory, indent=2, sort_keys=True), encoding="utf-8")
+    HISTORICAL_REGIME_TRANSITION_REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    HISTORICAL_REGIME_TRANSITION_REPORT_PATH.write_text(render_regime_transition_report(memory), encoding="utf-8")
+    return memory
+
+
 def _family_regime_performance(rows: List[Dict[str, Any]], active_primary: str) -> Dict[str, Any]:
     buckets: Dict[str, Dict[str, Dict[str, int]]] = {}
     for row in rows[-MAX_OUTCOME_ROWS:]:
@@ -650,6 +803,7 @@ def build_advanced_regime_snapshot(
 
         scores = _score_regimes(memories)
         active = _active_regime(scores, previous_memory)
+        transition_memory = build_regime_transition_memory(active, previous_memory)
         family_perf = _family_regime_performance(outcome_rows, active.get("primary", "CHOPPY_NO_EDGE"))
         promotion_features = _promotion_features(active, family_perf)
         historical_context = _historical_replay_context(started_at, warnings)
@@ -682,6 +836,13 @@ def build_advanced_regime_snapshot(
             "layer_freshness": freshness,
             "promotion_gate_features": promotion_features,
             "historical_replay_context": historical_context,
+            "regime_transition_memory": {
+                "source_type": transition_memory.get("source_type"),
+                "advisory_only": transition_memory.get("advisory_only"),
+                "total_transition_events": transition_memory.get("total_transition_events", 0),
+                "last_transition_detected": transition_memory.get("last_transition_detected", False),
+                "top_transition_buckets": list((transition_memory.get("transition_buckets") or {}).items())[:MAX_REPORT_ITEMS],
+            },
             "runtime_context": {
                 "observed_setups_count": len(setup_snapshot),
                 "selected_decisions_count": len(decision_snapshot.get("selected") or []),
@@ -802,6 +963,7 @@ def refresh_advanced_regime_intelligence(
 
         MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
         MEMORY_PATH.write_text(json.dumps(snapshot, indent=2, sort_keys=True), encoding="utf-8")
+        persist_regime_transition_memory(snapshot.get("active_regime", {}), snapshot)
 
         if _report_throttled(force=force):
             return {"skipped": "CACHE_FRESH", "snapshot": snapshot}
