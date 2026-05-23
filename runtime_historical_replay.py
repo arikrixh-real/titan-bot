@@ -180,10 +180,100 @@ def _summarize_advanced_regime(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _summarize_confidence_decay_memory(memory: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "source_type": memory.get("source_type"),
+        "advisory_only": memory.get("advisory_only"),
+        "replay_research_only": memory.get("replay_research_only"),
+        "affects_live_execution_directly": memory.get("affects_live_execution_directly"),
+        "rank_adjustment": memory.get("rank_adjustment"),
+        "recommended_live_weight": memory.get("recommended_live_weight"),
+        "record_count": memory.get("record_count"),
+        "age_bucket_count": len(memory.get("age_buckets") or {}),
+        "setup_age_bucket_count": len(memory.get("setup_age_buckets") or {}),
+        "top_age_buckets": _top_bucket_summaries(
+            memory.get("age_buckets"),
+            ["samples", "wins", "losses", "loss_rate", "avg_confidence", "avg_signal_age_minutes"],
+        ),
+        "top_setup_age_buckets": _top_bucket_summaries(
+            memory.get("setup_age_buckets"),
+            ["samples", "wins", "losses", "loss_rate", "avg_confidence", "avg_signal_age_minutes"],
+        ),
+    }
+
+
+def _summarize_transition_instability_memory(memory: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "source_type": memory.get("source_type"),
+        "advisory_only": memory.get("advisory_only"),
+        "replay_research_only": memory.get("replay_research_only"),
+        "affects_live_execution_directly": memory.get("affects_live_execution_directly"),
+        "rank_adjustment": memory.get("rank_adjustment"),
+        "recommended_live_weight": memory.get("recommended_live_weight"),
+        "record_count": memory.get("record_count"),
+        "instability_bucket_count": len(memory.get("instability_buckets") or {}),
+        "transition_instability_bucket_count": len(memory.get("transition_instability_buckets") or {}),
+        "recent_transition_events": len(memory.get("recent_transition_events") or []),
+        "top_instability_buckets": _top_bucket_summaries(
+            memory.get("instability_buckets"),
+            ["samples", "wins", "losses", "loss_rate", "avg_transition_strength"],
+        ),
+        "top_transition_instability_buckets": _top_bucket_summaries(
+            memory.get("transition_instability_buckets"),
+            ["samples", "wins", "losses", "loss_rate", "avg_transition_strength"],
+        ),
+    }
+
+
+def _summarize_multi_timeframe_conflict_memory(memory: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "source_type": memory.get("source_type"),
+        "advisory_only": memory.get("advisory_only"),
+        "replay_research_only": memory.get("replay_research_only"),
+        "affects_live_execution_directly": memory.get("affects_live_execution_directly"),
+        "rank_adjustment": memory.get("rank_adjustment"),
+        "recommended_live_weight": memory.get("recommended_live_weight"),
+        "record_count": memory.get("record_count"),
+        "conflict_bucket_count": len(memory.get("conflict_buckets") or {}),
+        "symbol_conflict_bucket_count": len(memory.get("symbol_conflict_buckets") or {}),
+        "top_conflict_buckets": _top_bucket_summaries(
+            memory.get("conflict_buckets"),
+            ["samples", "wins", "losses", "loss_rate", "avg_score"],
+        ),
+        "top_symbol_conflict_buckets": _top_bucket_summaries(
+            memory.get("symbol_conflict_buckets"),
+            ["samples", "wins", "losses", "loss_rate", "avg_score"],
+        ),
+    }
+
+
+def _summarize_no_trade_refinement_memory(memory: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "source_type": memory.get("source_type"),
+        "advisory_only": memory.get("advisory_only"),
+        "replay_research_only": memory.get("replay_research_only"),
+        "affects_live_execution_directly": memory.get("affects_live_execution_directly"),
+        "rank_adjustment": memory.get("rank_adjustment"),
+        "recommended_live_weight": memory.get("recommended_live_weight"),
+        "record_count": memory.get("record_count"),
+        "refinement_bucket_count": len(memory.get("refinement_buckets") or {}),
+        "symbol_refinement_bucket_count": len(memory.get("symbol_refinement_buckets") or {}),
+        "top_refinement_buckets": _top_bucket_summaries(
+            memory.get("refinement_buckets"),
+            ["samples", "wins", "losses", "win_rate", "avg_no_trade_score"],
+        ),
+        "top_symbol_refinement_buckets": _top_bucket_summaries(
+            memory.get("symbol_refinement_buckets"),
+            ["samples", "wins", "losses", "win_rate", "avg_no_trade_score"],
+        ),
+    }
+
+
 def _refresh_research_memory_engines(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     warnings: List[Dict[str, Any]] = []
     report: Dict[str, Any] = {
         "research_only": True,
+        "advisory_only": True,
         "records_loaded": len(records),
         "warnings": warnings,
     }
@@ -226,6 +316,62 @@ def _refresh_research_memory_engines(records: List[Dict[str, Any]]) -> Dict[str,
         warnings.append(
             {
                 "engine": "engines.advanced_regime_intelligence",
+                "error_type": exc.__class__.__name__,
+                "error": str(exc),
+            }
+        )
+
+    try:
+        from engines import confidence_decay_memory_engine
+
+        confidence_decay_memory = confidence_decay_memory_engine.refresh_confidence_decay_memory(records)
+        report["confidence_decay_memory"] = _summarize_confidence_decay_memory(confidence_decay_memory)
+    except Exception as exc:
+        warnings.append(
+            {
+                "engine": "engines.confidence_decay_memory_engine",
+                "error_type": exc.__class__.__name__,
+                "error": str(exc),
+            }
+        )
+
+    try:
+        from engines import transition_instability_memory_engine
+
+        transition_instability_memory = transition_instability_memory_engine.refresh_transition_instability_memory(records)
+        report["transition_instability_memory"] = _summarize_transition_instability_memory(transition_instability_memory)
+    except Exception as exc:
+        warnings.append(
+            {
+                "engine": "engines.transition_instability_memory_engine",
+                "error_type": exc.__class__.__name__,
+                "error": str(exc),
+            }
+        )
+
+    try:
+        from engines import multi_timeframe_conflict_memory_engine
+
+        multi_timeframe_conflict_memory = multi_timeframe_conflict_memory_engine.refresh_multi_timeframe_conflict_memory(records)
+        report["multi_timeframe_conflict_memory"] = _summarize_multi_timeframe_conflict_memory(multi_timeframe_conflict_memory)
+    except Exception as exc:
+        warnings.append(
+            {
+                "engine": "engines.multi_timeframe_conflict_memory_engine",
+                "error_type": exc.__class__.__name__,
+                "error": str(exc),
+            }
+        )
+
+    try:
+        from engines import no_trade_refinement_memory_engine
+
+        no_trade_refinement_memory = no_trade_refinement_memory_engine.refresh_no_trade_refinement_memory(records)
+        report["no_trade_refinement_memory"] = _summarize_no_trade_refinement_memory(no_trade_refinement_memory)
+    except Exception as exc:
+        warnings.append(
+            {
+                "engine": "engines.no_trade_refinement_memory_engine",
                 "error_type": exc.__class__.__name__,
                 "error": str(exc),
             }
@@ -312,6 +458,10 @@ def run_historical_replay(batch_size: int = DEFAULT_BATCH_SIZE):
                 "volatility_memory": (research_memory_report or {}).get("volatility_memory"),
                 "trap_memory": (research_memory_report or {}).get("trap_memory"),
                 "advanced_regime_intelligence": (research_memory_report or {}).get("advanced_regime_intelligence"),
+                "confidence_decay_memory": (research_memory_report or {}).get("confidence_decay_memory"),
+                "transition_instability_memory": (research_memory_report or {}).get("transition_instability_memory"),
+                "multi_timeframe_conflict_memory": (research_memory_report or {}).get("multi_timeframe_conflict_memory"),
+                "no_trade_refinement_memory": (research_memory_report or {}).get("no_trade_refinement_memory"),
                 "research_memory_refresh": research_memory_report,
             }
         )
