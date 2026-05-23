@@ -109,6 +109,131 @@ def _rebuild_historical_adaptive_memory(records: List[Dict[str, Any]]) -> Dict[s
     }
 
 
+def _top_bucket_summaries(buckets: Any, fields: List[str], limit: int = 5) -> List[Dict[str, Any]]:
+    if not isinstance(buckets, dict):
+        return []
+
+    summaries: List[Dict[str, Any]] = []
+    for name, bucket in buckets.items():
+        if not isinstance(bucket, dict):
+            continue
+        summary = {"name": name}
+        for field in fields:
+            summary[field] = bucket.get(field)
+        summaries.append(summary)
+
+    return sorted(
+        summaries,
+        key=lambda item: int(item.get("samples") or 0),
+        reverse=True,
+    )[:limit]
+
+
+def _summarize_volatility_memory(memory: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "source_type": memory.get("source_type"),
+        "advisory_only": memory.get("advisory_only"),
+        "affects_live_execution_directly": memory.get("affects_live_execution_directly"),
+        "record_count": memory.get("record_count"),
+        "phase_count": len(memory.get("phase_buckets") or {}),
+        "top_phase_buckets": _top_bucket_summaries(
+            memory.get("phase_buckets"),
+            ["samples", "wins", "losses", "win_rate", "avg_compression_score"],
+        ),
+    }
+
+
+def _summarize_trap_memory(memory: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "source_type": memory.get("source_type"),
+        "advisory_only": memory.get("advisory_only"),
+        "affects_live_execution_directly": memory.get("affects_live_execution_directly"),
+        "record_count": memory.get("record_count"),
+        "matched_trap_records": memory.get("matched_trap_records"),
+        "pattern_count": len(memory.get("pattern_buckets") or {}),
+        "top_pattern_buckets": _top_bucket_summaries(
+            memory.get("pattern_buckets"),
+            ["samples", "wins", "losses", "loss_rate"],
+        ),
+    }
+
+
+def _summarize_advanced_regime(snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    active = snapshot.get("active_regime") if isinstance(snapshot.get("active_regime"), dict) else {}
+    historical = (
+        snapshot.get("historical_replay_context")
+        if isinstance(snapshot.get("historical_replay_context"), dict)
+        else {}
+    )
+    return {
+        "phase12_shadow_mode": snapshot.get("phase12_shadow_mode"),
+        "runtime_bounded": snapshot.get("runtime_bounded"),
+        "primary_regime": active.get("primary"),
+        "regime_confidence": active.get("confidence"),
+        "transition_detected": active.get("transition_detected"),
+        "historical_replay_context": {
+            "advisory_only": historical.get("advisory_only", True),
+            "historical_win_rate": historical.get("historical_win_rate"),
+            "historical_filter_strictness": historical.get("historical_filter_strictness"),
+            "historical_score_boost": historical.get("historical_score_boost"),
+        },
+    }
+
+
+def _refresh_research_memory_engines(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    warnings: List[Dict[str, Any]] = []
+    report: Dict[str, Any] = {
+        "research_only": True,
+        "records_loaded": len(records),
+        "warnings": warnings,
+    }
+
+    try:
+        from engines import volatility_memory_engine
+
+        volatility_memory = volatility_memory_engine.refresh_volatility_memory(records)
+        report["volatility_memory"] = _summarize_volatility_memory(volatility_memory)
+    except Exception as exc:
+        warnings.append(
+            {
+                "engine": "engines.volatility_memory_engine",
+                "error_type": exc.__class__.__name__,
+                "error": str(exc),
+            }
+        )
+
+    try:
+        from engines import trap_memory_engine
+
+        trap_memory = trap_memory_engine.refresh_trap_memory(records)
+        report["trap_memory"] = _summarize_trap_memory(trap_memory)
+    except Exception as exc:
+        warnings.append(
+            {
+                "engine": "engines.trap_memory_engine",
+                "error_type": exc.__class__.__name__,
+                "error": str(exc),
+            }
+        )
+
+    try:
+        from engines import advanced_regime_intelligence
+
+        advanced_regime = advanced_regime_intelligence.refresh_advanced_regime_intelligence(force=True)
+        snapshot = advanced_regime.get("snapshot") if isinstance(advanced_regime.get("snapshot"), dict) else advanced_regime
+        report["advanced_regime_intelligence"] = _summarize_advanced_regime(snapshot)
+    except Exception as exc:
+        warnings.append(
+            {
+                "engine": "engines.advanced_regime_intelligence",
+                "error_type": exc.__class__.__name__,
+                "error": str(exc),
+            }
+        )
+
+    return report
+
+
 def run_historical_replay(batch_size: int = DEFAULT_BATCH_SIZE):
     now_ist = as_ist_datetime()
     mode = current_bot_mode(now_ist)
@@ -167,9 +292,11 @@ def run_historical_replay(batch_size: int = DEFAULT_BATCH_SIZE):
 
         consolidation_report: Optional[Dict[str, Any]] = None
         adaptive_report: Optional[Dict[str, Any]] = None
+        research_memory_report: Optional[Dict[str, Any]] = None
         if latest_records:
             consolidation_report = _consolidate_latest(latest_records)
             adaptive_report = _rebuild_historical_adaptive_memory(latest_records)
+            research_memory_report = _refresh_research_memory_engines(latest_records)
 
         previous_batches = int(progress.get("batches_completed") or 0)
         previous_records = int(progress.get("total_records_generated") or 0)
@@ -182,6 +309,10 @@ def run_historical_replay(batch_size: int = DEFAULT_BATCH_SIZE):
                 "feeder": feeder_report,
                 "consolidation": consolidation_report,
                 "adaptive_memory": adaptive_report,
+                "volatility_memory": (research_memory_report or {}).get("volatility_memory"),
+                "trap_memory": (research_memory_report or {}).get("trap_memory"),
+                "advanced_regime_intelligence": (research_memory_report or {}).get("advanced_regime_intelligence"),
+                "research_memory_refresh": research_memory_report,
             }
         )
         progress.update(
@@ -195,6 +326,7 @@ def run_historical_replay(batch_size: int = DEFAULT_BATCH_SIZE):
                 "total_records_generated": previous_records + generated,
                 "consolidation": consolidation_report,
                 "adaptive_memory": adaptive_report,
+                "research_memory_refresh": research_memory_report,
             }
         )
     except Exception as exc:
