@@ -7,6 +7,53 @@ from utils.market_hours import IST, as_ist_datetime
 
 
 STATUS_PATH = Path("data") / "runtime" / "titan_runtime_status.json"
+HISTORICAL_REPLAY_STATUS_PATH = Path("data") / "runtime" / "historical_replay_status.json"
+HISTORICAL_REPLAY_PROGRESS_PATH = Path("data") / "runtime" / "historical_replay_progress.json"
+
+
+def _read_json_safe(path):
+    try:
+        path = Path(path)
+        if not path.exists():
+            return {}
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _historical_replay_status_summary():
+    status = _read_json_safe(HISTORICAL_REPLAY_STATUS_PATH)
+    progress = _read_json_safe(HISTORICAL_REPLAY_PROGRESS_PATH)
+    if not status and not progress:
+        return {
+            "status": "WAITING",
+            "enabled_off_market": True,
+            "cadence_seconds": 3600,
+            "safety": {
+                "telegram": False,
+                "broker": False,
+                "live_trade_mutation": False,
+            },
+        }
+
+    return {
+        "status": status.get("status") or progress.get("status") or "UNKNOWN",
+        "last_run_at_ist": status.get("timestamp_ist"),
+        "last_completed_at_ist": progress.get("last_completed_at_ist"),
+        "last_skipped_at_ist": progress.get("last_skipped_at_ist"),
+        "last_skip_reason": progress.get("last_skip_reason"),
+        "last_records_generated": progress.get("last_records_generated"),
+        "total_records_generated": progress.get("total_records_generated"),
+        "batches_completed": progress.get("batches_completed"),
+        "enabled_off_market": True,
+        "cadence_seconds": 3600,
+        "safety": {
+            "telegram": False,
+            "broker": False,
+            "live_trade_mutation": False,
+        },
+    }
 
 
 def build_runtime_status(value=None):
@@ -20,6 +67,7 @@ def build_runtime_status(value=None):
         "research_allowed_engines": permissions["research_allowed_engines"],
         "blocked_engines": permissions["blocked_engines"],
         "reason": permissions["reason"],
+        "historical_replay": _historical_replay_status_summary(),
     }
 
 

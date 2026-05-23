@@ -80,6 +80,14 @@ HEAVY_TASK_RULES = {
         "input_patterns": ["data/trade_journal.csv", "data/journals/*", "data/consciousness_core/*.json"],
         "skip_if_unchanged": True,
     },
+    "historical_replay": {
+        "min_interval_seconds": 60 * 60,
+        "input_patterns": [
+            "data/historical_longterm/*.csv",
+            "data/runtime/historical_replay_progress.json",
+        ],
+        "skip_if_unchanged": False,
+    },
 }
 
 

@@ -97,7 +97,12 @@ def normalize_symbol(symbol: str) -> str:
     return str(symbol or "").replace(".NS", "").upper().strip()
 
 
-def discover_symbols(requested: Optional[Iterable[str]] = None) -> List[str]:
+def resolve_source_dir(source_dir: Optional[Path] = None) -> Path:
+    return Path(source_dir) if source_dir is not None else CACHE_DIR
+
+
+def discover_symbols(requested: Optional[Iterable[str]] = None, source_dir: Optional[Path] = None) -> List[str]:
+    source_path = resolve_source_dir(source_dir)
     if requested:
         return sorted({normalize_symbol(symbol) for symbol in requested if normalize_symbol(symbol)})
 
@@ -109,15 +114,16 @@ def discover_symbols(requested: Optional[Iterable[str]] = None) -> List[str]:
     except Exception:
         configured = []
 
-    cached = {path.stem.upper() for path in CACHE_DIR.glob("*.csv") if path.is_file()}
+    cached = {path.stem.upper() for path in source_path.glob("*.csv") if path.is_file()}
     if configured:
         symbols = [symbol for symbol in configured if symbol in cached]
         return symbols or sorted(cached)
     return sorted(cached)
 
 
-def read_candles(symbol: str) -> pd.DataFrame:
-    path = CACHE_DIR / f"{normalize_symbol(symbol)}.csv"
+def read_candles(symbol: str, source_dir: Optional[Path] = None) -> pd.DataFrame:
+    source_path = resolve_source_dir(source_dir)
+    path = source_path / f"{normalize_symbol(symbol)}.csv"
     if not path.exists():
         return pd.DataFrame()
     df = pd.read_csv(path)
@@ -244,8 +250,14 @@ def build_lesson(record: Dict[str, Any]) -> str:
     )
 
 
-def simulate_symbol(symbol: str, limit: int, lookahead: int, min_history: int) -> List[Dict[str, Any]]:
-    df = read_candles(symbol)
+def simulate_symbol(
+    symbol: str,
+    limit: int,
+    lookahead: int,
+    min_history: int,
+    source_dir: Optional[Path] = None,
+) -> List[Dict[str, Any]]:
+    df = read_candles(symbol, source_dir=source_dir)
     if df.empty or len(df) < min_history + lookahead + 1:
         return []
 
@@ -345,7 +357,13 @@ def write_csv(path: Path, records: List[Dict[str, Any]]) -> None:
             writer.writerow(record)
 
 
-def build_report(records: List[Dict[str, Any]], skipped_duplicates: int, dry_run: bool, symbols: List[str]) -> Dict[str, Any]:
+def build_report(
+    records: List[Dict[str, Any]],
+    skipped_duplicates: int,
+    dry_run: bool,
+    symbols: List[str],
+    source_dir: Optional[Path] = None,
+) -> Dict[str, Any]:
     outcome_counts: Dict[str, int] = {}
     setup_counts: Dict[str, int] = {}
     for record in records:
@@ -357,6 +375,7 @@ def build_report(records: List[Dict[str, Any]], skipped_duplicates: int, dry_run
         "records_generated": len(records),
         "skipped_duplicates": skipped_duplicates,
         "symbols_scanned": len(symbols),
+        "source_dir": str(resolve_source_dir(source_dir)),
         "output_jsonl": str(JSONL_PATH),
         "output_csv": str(CSV_PATH),
         "safety": SAFETY_TAGS,
@@ -372,8 +391,10 @@ def run_feeder(
     lookahead: int = 16,
     min_history: int = 80,
     dry_run: bool = False,
+    source_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
-    selected_symbols = discover_symbols(symbols)
+    source_path = resolve_source_dir(source_dir)
+    selected_symbols = discover_symbols(symbols, source_dir=source_path)
     existing_hashes = load_existing_hashes()
     emitted_hashes = set(existing_hashes)
     records: List[Dict[str, Any]] = []
@@ -383,7 +404,7 @@ def run_feeder(
     for symbol in selected_symbols:
         if len(records) >= limit:
             break
-        candidates = simulate_symbol(symbol, per_symbol_limit, lookahead, min_history)
+        candidates = simulate_symbol(symbol, per_symbol_limit, lookahead, min_history, source_dir=source_path)
         for candidate in candidates:
             if candidate["experience_hash"] in emitted_hashes:
                 skipped_duplicates += 1
@@ -393,7 +414,7 @@ def run_feeder(
             if len(records) >= limit:
                 break
 
-    report = build_report(records, skipped_duplicates, dry_run, selected_symbols)
+    report = build_report(records, skipped_duplicates, dry_run, selected_symbols, source_dir=source_path)
     if not dry_run:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         write_jsonl(JSONL_PATH, records)
@@ -412,6 +433,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lookahead", type=int, default=16, help="Future candles used to resolve outcome")
     parser.add_argument("--min-history", type=int, default=80, help="Minimum candles before a signal can be simulated")
     parser.add_argument("--dry-run", action="store_true", help="Generate summary without writing output files")
+    parser.add_argument("--source-dir", type=Path, default=CACHE_DIR, help="Folder containing source candle CSV files")
     return parser.parse_args()
 
 
@@ -423,6 +445,7 @@ def main() -> None:
         lookahead=max(1, args.lookahead),
         min_history=max(60, args.min_history),
         dry_run=args.dry_run,
+        source_dir=args.source_dir,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
 

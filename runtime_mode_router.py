@@ -177,6 +177,11 @@ def should_run_task(task_name):
         return True
 
     current_mode = get_runtime_mode()
+    if task == "historical_replay":
+        allowed = current_mode in {"RESEARCH_MODE", "RESEARCH_ONLY", "WEEKEND_MODE"} and not is_market_open_now()
+        runtime_mode_snapshot()
+        return allowed
+
     if task in NEWS_RESEARCH_TASKS:
         allowed = current_mode in {"MARKET_MODE", "RESEARCH_MODE", "WEEKEND_MODE"}
         runtime_mode_snapshot()

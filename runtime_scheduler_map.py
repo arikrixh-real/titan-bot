@@ -84,7 +84,7 @@ def get_scheduler_map(mode):
             "experience_vault_runner",
         ]
 
-    elif mode == "INTELLIGENCE_MODE":
+    elif mode in {"INTELLIGENCE_MODE", "RESEARCH_MODE", "RESEARCH_ONLY"}:
         scheduler_map["every_1_second"] = [
             "heartbeat",
             "runtime_status",
@@ -114,6 +114,7 @@ def get_scheduler_map(mode):
             "scenario_simulation",
             "next_day_preparation",
             "evolution_engine",
+            "historical_replay",
             "replay_batch",
         ]
 
