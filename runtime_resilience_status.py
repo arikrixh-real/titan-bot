@@ -17,11 +17,16 @@ WORKER_RECENT_FINISH_GRACE_SECONDS = 180
 IST = timezone(timedelta(hours=5, minutes=30))
 NON_DEGRADED_WORKER_STATUSES = {
     "OK",
+    "OK_STALE_ACTIVE_MARKER",
     "OK_RECENT_FINISH",
     "SKIPPED_UNCHANGED",
     "SKIPPED_RECENT",
     "SKIPPED_LOCKED",
     "WAITING_FOR_MODE",
+    "STANDBY",
+    "STANDBY_ALLOWED_IDLE",
+    "RECOVERED_LAST_GOOD",
+    "AUXILIARY_WARNING",
     "SKIPPED_PLACEHOLDER",
     "MISSING_HANDLER",
     "STARTING",
@@ -87,6 +92,22 @@ MARKET_ONLY_WORKERS = {
     "volatility_check",
 }
 RESEARCH_NEWS_WORKERS = {"news_pulse", "light_news_pulse", "news_intelligence"}
+TASK_OUTPUT_PATHS = {
+    "heartbeat": RUNTIME_DIR / "titan_heartbeat.json",
+    "runtime_status": RUNTIME_DIR / "titan_runtime_status.json",
+    "report_aggregator": Path("data") / "report_vault" / "latest_aggregated_packet.json",
+    "experience_memory": Path("data") / "consciousness_core" / "real_experience_memory.json",
+    "historical_replay": RUNTIME_DIR / "historical_replay_status.json",
+    "knowledge_vault_runner": Path("data") / "knowledge_vault" / "reports" / "knowledge_to_consciousness_packet.json",
+    "scenario_simulation": Path("data") / "consciousness_core" / "real_scenario_simulation.json",
+}
+SUPPORT_WORKERS = {"heartbeat", "runtime_status", "dashboard_sync"}
+AUXILIARY_RESEARCH_WORKERS = {
+    "experience_memory",
+    "historical_replay",
+    "knowledge_vault_runner",
+    "scenario_simulation",
+}
 
 
 def _runtime_mode():
@@ -182,8 +203,49 @@ def parse_runtime_timestamp(value, naive_tz=IST):
 
 
 def _last_good_output_path(task):
-    path = RUNTIME_DIR / f"{task}_status.json"
+    path = TASK_OUTPUT_PATHS.get(task) or RUNTIME_DIR / f"{task}_status.json"
     return str(path).replace("\\", "/") if path.exists() else None
+
+
+def _worker_output_fresh(task, seconds=STALE_PACKET_SECONDS):
+    path = TASK_OUTPUT_PATHS.get(task) or RUNTIME_DIR / f"{task}_status.json"
+    if task in SUPPORT_WORKERS:
+        seconds = min(seconds, 15 * 60)
+    return _fresh_packet(path, seconds)
+
+
+def _process_exists(pid):
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+
+def _status_write_error_only(error_text):
+    text = str(error_text or "").lower()
+    if not text:
+        return False
+    markers = (
+        "access is denied",
+        "permissionerror",
+        "permission denied",
+        ".tmp",
+        "temp",
+        "os.replace",
+        "intelligence_load_control_status.json",
+        "runtime_mode_status.json",
+        "status.json",
+    )
+    return any(marker in text for marker in markers)
 
 
 def build_worker_health_summary(worker_health=None, runtime_mode=None):
@@ -204,6 +266,7 @@ def build_worker_health_summary(worker_health=None, runtime_mode=None):
         active_started_at = parse_runtime_timestamp(item.get("active_run_started_at") or item.get("last_started_at"))
         last_finished_at = parse_runtime_timestamp(item.get("last_finished_at"))
         timeout_seconds = int(item.get("active_timeout_seconds") or item.get("last_timeout_seconds") or 0)
+        active_pid = item.get("active_pid")
         stuck = False
         active_age_seconds = None
         recent_finish_age_seconds = None
@@ -220,9 +283,33 @@ def build_worker_health_summary(worker_health=None, runtime_mode=None):
 
         effective_status = "DEGRADED" if stuck else status
         allowed_idle_market_worker = outside_market and task in MARKET_ONLY_WORKERS
+        output_fresh = _worker_output_fresh(task)
+        daemon_fresh = _fresh_packet(DAEMON_HEALTH_PATH, 15 * 60) or _fresh_packet(
+            RUNTIME_DIR / "titan_heartbeat.json",
+            15 * 60,
+        )
+        active_pid_exists = _process_exists(active_pid)
         false_degraded_grace = False
-        if allowed_idle_market_worker and status in {"DEGRADED", "TIMEOUT", "ERROR", "WAITING_FOR_MODE", "STALE"}:
+        stale_active_marker_conditions = (
+            status == "RUNNING"
+            and stuck
+            and daemon_fresh
+            and output_fresh
+            and (active_pid is None or not active_pid_exists)
+        )
+        if allowed_idle_market_worker and status in {
+            "DEGRADED",
+            "TIMEOUT",
+            "ERROR",
+            "WAITING_FOR_MODE",
+            "STALE",
+            "RUNNING",
+        }:
             effective_status = "STANDBY_ALLOWED_IDLE"
+            stuck = False
+            stale_active_marker_ignored = True
+        elif stale_active_marker_conditions:
+            effective_status = "OK_STALE_ACTIVE_MARKER"
             stuck = False
             stale_active_marker_ignored = True
         elif (
@@ -247,9 +334,26 @@ def build_worker_health_summary(worker_health=None, runtime_mode=None):
         elif status in NON_DEGRADED_WORKER_STATUSES and not stuck:
             effective_status = status
         last_good_output_path = item.get("last_good_output_path") or _last_good_output_path(task)
+        last_good_output_fresh = bool(last_good_output_path) and _fresh_packet(last_good_output_path)
+        auxiliary_research_worker = task in AUXILIARY_RESEARCH_WORKERS
         last_good_output_used = bool(item.get("last_good_output_used")) or (
             effective_status in {"DEGRADED", "TIMEOUT", "ERROR"} and bool(last_good_output_path)
         )
+        if (
+            auxiliary_research_worker
+            and outside_market
+            and effective_status in {"DEGRADED", "TIMEOUT", "ERROR"}
+            and (_status_write_error_only(last_error) or last_good_output_path)
+        ):
+            effective_status = "RECOVERED_LAST_GOOD" if last_good_output_path else "AUXILIARY_WARNING"
+            stuck = False
+            last_good_output_used = bool(last_good_output_path)
+        elif (
+            auxiliary_research_worker
+            and outside_market
+            and status in {"SKIPPED_RECENT", "SKIPPED_UNCHANGED", "WAITING_FOR_MODE"}
+        ):
+            effective_status = status
 
         workers[task] = {
             "status": effective_status,
@@ -263,6 +367,10 @@ def build_worker_health_summary(worker_health=None, runtime_mode=None):
             ),
             "recent_finish_grace_active": recent_finish_grace_active,
             "stale_active_marker_ignored": stale_active_marker_ignored,
+            "output_fresh": output_fresh,
+            "daemon_fresh": daemon_fresh,
+            "active_pid": active_pid,
+            "active_pid_exists": active_pid_exists,
             "false_degraded_grace_applied": false_degraded_grace,
             "stuck_threshold_seconds": (
                 timeout_seconds + WORKER_STUCK_GRACE_SECONDS
@@ -274,6 +382,8 @@ def build_worker_health_summary(worker_health=None, runtime_mode=None):
             "retry_backoff_seconds": item.get("retry_backoff_seconds", 0),
             "last_good_output_path": last_good_output_path,
             "last_good_output_used": last_good_output_used,
+            "last_good_output_fresh": last_good_output_fresh,
+            "auxiliary_research_worker": auxiliary_research_worker,
         }
         if effective_status in {"DEGRADED", "TIMEOUT", "ERROR"}:
             degraded_components.append(task)
@@ -359,11 +469,17 @@ def build_runtime_resilience_status():
     worker_summary = build_worker_health_summary(runtime_mode=runtime_mode)
     stale_summary = build_stale_packet_summary(_critical_packet_paths_for_mode(runtime_mode))
     always_fresh_failures = []
+    daemon_or_heartbeat_fresh = _fresh_packet(RUNTIME_DIR / "daemon_health.json", 15 * 60) or _fresh_packet(
+        RUNTIME_DIR / "titan_heartbeat.json",
+        15 * 60,
+    )
     for path in (
         RUNTIME_DIR / "daemon_health.json",
         RUNTIME_DIR / "titan_heartbeat.json",
         RUNTIME_DIR / "titan_runtime_status.json",
     ):
+        if path == RUNTIME_DIR / "daemon_health.json" and daemon_or_heartbeat_fresh:
+            continue
         if not _fresh_packet(path, 15 * 60):
             always_fresh_failures.append(str(path).replace("\\", "/"))
     degraded_components = sorted(

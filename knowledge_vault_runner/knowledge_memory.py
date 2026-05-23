@@ -3,22 +3,12 @@ import os
 import tempfile
 from pathlib import Path
 
+from runtime_safe_json import safe_atomic_write_json
 from .vault_paths import BELIEFS_PATH, KNOWLEDGE_MEMORY_PATH, PROCESSED_INDEX_PATH, RESEARCH_IDEAS_PATH
 
 
 def atomic_write_json(path, payload):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = None
-    try:
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False, prefix=f".{path.name}.", suffix=".tmp") as temp_file:
-            json.dump(payload, temp_file, indent=2, sort_keys=True, ensure_ascii=True)
-            temp_file.write("\n")
-            temp_path = Path(temp_file.name)
-        os.replace(temp_path, path)
-    finally:
-        if temp_path and temp_path.exists():
-            temp_path.unlink()
+    safe_atomic_write_json(path, payload, ensure_ascii=True)
 
 
 def load_json(path, default):
@@ -60,4 +50,3 @@ def load_research_ideas():
 
 def save_research_ideas(ideas):
     atomic_write_json(RESEARCH_IDEAS_PATH, ideas)
-

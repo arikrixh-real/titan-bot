@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from runtime_resilience_status import OFFICIAL_RUNTIME_PATH, read_json_safe
+from runtime_safe_json import safe_atomic_write_json
 
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -87,24 +88,7 @@ def now_ist():
 
 
 def _atomic_write_json(path, payload):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=path.parent,
-            delete=False,
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-        ) as temp_file:
-            json.dump(payload, temp_file, indent=2, sort_keys=True, default=str)
-            temp_file.write("\n")
-            temp_path = Path(temp_file.name)
-        os.replace(temp_path, path)
-    finally:
-        if temp_path and temp_path.exists():
-            temp_path.unlink()
+    safe_atomic_write_json(path, payload)
 
 
 def _read_status():
@@ -136,7 +120,10 @@ def _write_status(status):
             "worker_degraded_count": resilience_status.get("worker_health_summary", {}).get("degraded_count"),
             "last_good_outputs_used": resilience_status.get("last_good_outputs_used", []),
         }
-    _atomic_write_json(LOAD_CONTROL_STATUS_PATH, status)
+    try:
+        _atomic_write_json(LOAD_CONTROL_STATUS_PATH, status)
+    except OSError as exc:
+        status["last_status_write_error"] = str(exc)
 
 
 def _file_signature(path):

@@ -20,10 +20,16 @@ from runtime_lock import acquire_lock, release_lock
 from runtime_load_control import HEAVY_TASK_RULES, record_task_result, should_skip_task
 from runtime_mode_router import runtime_mode_snapshot, should_run_task
 from runtime_timeout import run_with_timeout
+from runtime_safe_json import safe_atomic_write_json
 
 
 IST = timezone(timedelta(hours=5, minutes=30))
 WORKER_HEALTH_PATH = Path("data") / "runtime" / "worker_health.json"
+TASK_OUTPUT_PATHS = {
+    "heartbeat": Path("data") / "runtime" / "titan_heartbeat.json",
+    "runtime_status": Path("data") / "runtime" / "titan_runtime_status.json",
+    "report_aggregator": Path("data") / "report_vault" / "latest_aggregated_packet.json",
+}
 DEFAULT_TASK_TIMEOUT_SECONDS = 60
 TASK_TIMEOUT_SECONDS = {
     "ohlc_refresh": 120,
@@ -178,26 +184,7 @@ def _task_lock_stale_seconds(task):
 
 
 def _atomic_write_json(path, payload):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = None
-
-    try:
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=path.parent,
-            delete=False,
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-        ) as temp_file:
-            json.dump(payload, temp_file, indent=2, sort_keys=True)
-            temp_file.write("\n")
-            temp_path = Path(temp_file.name)
-
-        os.replace(temp_path, path)
-    finally:
-        if temp_path and temp_path.exists():
-            temp_path.unlink()
+    safe_atomic_write_json(path, payload)
 
 
 def _write_worker_health(task, **updates):
@@ -254,8 +241,38 @@ def _log_runtime_error(source, error, mode):
 
 
 def _last_good_output_path(task):
-    path = Path("data") / "runtime" / f"{task}_status.json"
+    path = TASK_OUTPUT_PATHS.get(task) or Path("data") / "runtime" / f"{task}_status.json"
     return str(path).replace("\\", "/") if path.exists() else None
+
+
+def _clear_active_marker(task, started_at=None):
+    with _health_lock:
+        current = _health.get(task)
+        if not isinstance(current, dict):
+            return
+        if started_at is not None and current.get("active_run_started_at") not in (None, started_at):
+            return
+
+        current_status = str(current.get("status") or "").upper()
+        last_status = str(current.get("last_status") or "").upper()
+        final_status = current_status
+        if current_status == "RUNNING":
+            final_status = last_status if last_status and last_status != "RUNNING" else "OK"
+            current["status"] = final_status
+            current["last_status"] = final_status
+        elif current_status:
+            current["last_status"] = current_status
+
+        current["active_run_started_at"] = None
+        current["active_pid"] = None
+        current["last_finished_at"] = _now_ist()
+        current["last_good_output_path"] = current.get("last_good_output_path") or _last_good_output_path(task)
+        if final_status != "RUNNING":
+            current["last_timeout_seconds"] = None
+        try:
+            _atomic_write_json(WORKER_HEALTH_PATH, _health)
+        except OSError:
+            pass
 
 
 def _retry_backoff_seconds(task):
@@ -407,6 +424,7 @@ def _run_worker(task, sleep_seconds, intent):
                 status="RUNNING",
                 last_started_at=started_at,
                 active_run_started_at=started_at,
+                active_pid=os.getpid(),
                 active_timeout_seconds=_task_timeout_seconds(task),
                 last_timeout_reason=None,
                 last_error=None,
@@ -752,6 +770,7 @@ def _run_worker(task, sleep_seconds, intent):
                         error=exc,
                         mode=mode,
                     )
+            _clear_active_marker(task)
 
         backoff_seconds = _retry_backoff_seconds(task)
         if backoff_seconds:

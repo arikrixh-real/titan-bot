@@ -19,6 +19,8 @@ NEWS_PULSE_STATUS_PATH = Path("data") / "runtime" / "news_pulse_status.json"
 LIGHT_NEWS_PULSE_STATUS_PATH = Path("data") / "runtime" / "light_news_pulse_status.json"
 NEWS_INTELLIGENCE_STATUS_PATH = Path("data") / "runtime" / "news_intelligence_status.json"
 DAEMON_HEALTH_PATH = Path("data") / "runtime" / "daemon_health.json"
+RUNTIME_RESILIENCE_STATUS_PATH = Path("data") / "runtime" / "runtime_resilience_status.json"
+PYRAMID_GOVERNANCE_STATUS_PATH = Path("data") / "runtime" / "pyramid_governance_status.json"
 RUNTIME_STATUS_TABLE = "runtime_status"
 IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -37,6 +39,8 @@ RUNTIME_STATUS_SOURCES = {
     "news_pulse_status": NEWS_PULSE_STATUS_PATH,
     "light_news_pulse_status": LIGHT_NEWS_PULSE_STATUS_PATH,
     "news_intelligence_status": NEWS_INTELLIGENCE_STATUS_PATH,
+    "runtime_resilience_status": RUNTIME_RESILIENCE_STATUS_PATH,
+    "pyramid_governance_status": PYRAMID_GOVERNANCE_STATUS_PATH,
 }
 
 
@@ -214,6 +218,8 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
     news_intelligence_status = runtime_payloads["news_intelligence_status"]
     live_price_monitor_status = runtime_payloads["live_price_monitor_status"]
     daemon_health = runtime_payloads["daemon_health"]
+    resilience_status = runtime_payloads["runtime_resilience_status"]
+    governance_status = runtime_payloads["pyramid_governance_status"]
 
     daemon_alive = (
         isinstance(daemon_health, dict)
@@ -265,6 +271,26 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
     attention_reasons = [
         reason for is_active, reason in runtime_health_checks.values() if not is_active
     ]
+    governance = governance_status.get("governance") if isinstance(governance_status, dict) else {}
+    block_reasons = governance.get("block_reasons") if isinstance(governance, dict) else []
+    governance_decision = governance.get("decision") if isinstance(governance, dict) else None
+    worker_degraded_count = (
+        resilience_status.get("worker_health_summary", {}).get("degraded_count")
+        if isinstance(resilience_status, dict)
+        else None
+    )
+    stale_packet_count = (
+        resilience_status.get("stale_packet_summary", {}).get("stale_count")
+        if isinstance(resilience_status, dict)
+        else None
+    )
+    no_block_reasons = not block_reasons
+    if no_block_reasons and market_workers_allowed_idle:
+        attention_reasons = [
+            reason
+            for reason in attention_reasons
+            if reason not in {"scanner_inactive", "master_brain_inactive", "paper_engine_inactive", "live_price_monitor_inactive"}
+        ]
     recovery_suggestion_map = {
         "daemon_not_alive": "Start titan_daemon.py",
         "runtime_status_stale": "Check titan_runtime_status heartbeat writer",
@@ -301,6 +327,8 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
         "paper_engine_status": paper_engine_status or {},
         "news_pulse_status": news_pulse_status or {},
         "news_intelligence_status": news_intelligence_status or {},
+        "runtime_resilience_status": resilience_status or {},
+        "pyramid_governance_status": governance_status or {},
         "autonomous_runtime_summary": {
             "daemon_alive": runtime_health_checks["daemon_alive"][0],
             "runtime_status_fresh": runtime_health_checks["runtime_status_fresh"][0],
@@ -309,7 +337,7 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
             "paper_engine_active": runtime_health_checks["paper_engine_active"][0],
             "live_price_monitor_active": runtime_health_checks["live_price_monitor_active"][0],
             "news_engine_active": runtime_health_checks["news_engine_active"][0],
-            "needs_attention": bool(attention_reasons),
+            "needs_attention": bool(attention_reasons) and not (no_block_reasons and worker_degraded_count == 0),
             "attention_reasons": attention_reasons,
             "recovery_suggestions": recovery_suggestions,
             "open_paper_positions": open_paper_positions,
@@ -317,8 +345,22 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
             "runtime_mode": runtime_mode,
             "market_workers_allowed_idle": market_workers_allowed_idle,
             "paper_engine_status_recommendation": (
-                "IDLE_RESEARCH_MODE" if market_workers_allowed_idle and no_open_paper_positions else "ACTIVE"
+                "STANDBY" if runtime_mode == "WEEKEND_MODE" and no_open_paper_positions else (
+                    "IDLE_RESEARCH_MODE" if market_workers_allowed_idle and no_open_paper_positions else "ACTIVE"
+                )
             ),
+            "dashboard_status_recommendation": (
+                "HEALTHY"
+                if no_block_reasons and worker_degraded_count == 0 and stale_packet_count == 0
+                else ("WEEKEND_MODE" if runtime_mode == "WEEKEND_MODE" else runtime_mode)
+            ),
+            "governance_decision": governance_decision,
+            "block_reasons": block_reasons or [],
+            "worker_degraded_count": worker_degraded_count,
+            "stale_packet_count": stale_packet_count,
+            "auxiliary_research_workers_status": "AUXILIARY_WARNING_OR_STANDBY_ALLOWED"
+            if market_workers_allowed_idle
+            else "ACTIVE",
             "last_runtime_update": latest_timestamp(
                 scanner_status,
                 master_brain_status,

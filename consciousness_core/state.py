@@ -5,6 +5,8 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from runtime_safe_json import safe_atomic_write_json
+
 
 IST = timezone(timedelta(hours=5, minutes=30))
 STATE_VERSION = 1
@@ -16,25 +18,7 @@ def now_ist():
 
 
 def atomic_write_json(path, payload):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=path.parent,
-            delete=False,
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-        ) as temp_file:
-            json.dump(payload, temp_file, indent=2, sort_keys=True, default=str)
-            temp_file.write("\n")
-            temp_path = Path(temp_file.name)
-        os.replace(temp_path, path)
-    finally:
-        if temp_path and temp_path.exists():
-            temp_path.unlink()
+    safe_atomic_write_json(path, payload)
 
 
 def stable_hash(payload):
