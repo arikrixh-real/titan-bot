@@ -202,12 +202,12 @@ def _sanitized_setups(candidate_details):
     return setups
 
 
-def _write_status(payload, path=MASTER_BRAIN_STATUS_PATH):
+def _write_status(payload, path=None):
     if isinstance(payload, dict):
         phase38_guard = evaluate_phase38_runtime_guard(payload)
         payload["phase38_runtime_guard"] = phase38_guard
         write_phase38_runtime_status(payload)
-    path = Path(path)
+    path = Path(path or MASTER_BRAIN_STATUS_PATH)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
@@ -312,13 +312,42 @@ def _evaluated_trade_setups(evaluated):
     return trade_setups
 
 
+def _read_scanner_status():
+    if not SCANNER_STATUS_PATH.exists():
+        return {}, {
+            "scanner_status_available": False,
+            "scanner_status_error": "missing_scanner_status",
+        }
+
+    scanner_status = json.loads(SCANNER_STATUS_PATH.read_text(encoding="utf-8"))
+    if not isinstance(scanner_status, dict):
+        raise ValueError("scanner_status.json must contain a JSON object")
+
+    return scanner_status, {
+        "scanner_status_available": True,
+        "scanner_status_error": None,
+    }
+
+
 def _run_read_only_master_brain():
     scanner_status = None
 
     try:
-        scanner_status = json.loads(SCANNER_STATUS_PATH.read_text(encoding="utf-8"))
+        scanner_status, scanner_status_metadata = _read_scanner_status()
         payload = _base_payload(scanner_status)
         payload.update(_runtime_contract(_runtime_mode()))
+        payload.update(scanner_status_metadata)
+        if not scanner_status_metadata["scanner_status_available"]:
+            payload.update(
+                {
+                    "status": "MASTER_BRAIN_READ_ONLY_NO_CANDIDATES",
+                    "input_candidates": 0,
+                    "evaluated_count": 0,
+                }
+            )
+            _write_status(payload)
+            return payload
+
         scanner_scan_only = bool(scanner_status.get("scan_only"))
 
         candidate_details = scanner_status.get("candidate_details", [])
@@ -363,6 +392,16 @@ def _run_read_only_master_brain():
     except Exception as exc:
         payload = _base_payload(scanner_status)
         payload.update(_runtime_contract(_runtime_mode()))
+        payload.update(
+            {
+                "scanner_status_available": SCANNER_STATUS_PATH.exists(),
+                "scanner_status_error": (
+                    "invalid_scanner_status"
+                    if SCANNER_STATUS_PATH.exists()
+                    else "missing_scanner_status"
+                ),
+            }
+        )
         payload.update(
             {
                 "status": "MASTER_BRAIN_READ_ONLY_ERROR",
