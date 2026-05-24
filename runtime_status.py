@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from pathlib import Path
 
 from engines.time_filter import get_mode_permissions
@@ -10,6 +11,16 @@ from utils.market_hours import IST, as_ist_datetime
 STATUS_PATH = Path("data") / "runtime" / "titan_runtime_status.json"
 HISTORICAL_REPLAY_STATUS_PATH = Path("data") / "runtime" / "historical_replay_status.json"
 HISTORICAL_REPLAY_PROGRESS_PATH = Path("data") / "runtime" / "historical_replay_progress.json"
+HISTORICAL_EXPERIENCE_REPORT_PATH = (
+    Path("data") / "experience_vault" / "imported_trade_logs" / "historical_experience_import_report.json"
+)
+HISTORICAL_EXPERIENCE_CSV_PATH = (
+    Path("data") / "experience_vault" / "imported_trade_logs" / "historical_experience_import.csv"
+)
+HISTORICAL_EXPERIENCE_JSONL_PATH = (
+    Path("data") / "experience_vault" / "imported_trade_logs" / "historical_experience_import.jsonl"
+)
+PHASE39_STALE_REPLAY_SECONDS = 24 * 60 * 60
 PHASE_STATUS_ARTIFACTS = {
     "phase21_autonomous_research": {
         "path": Path("data") / "research" / "autonomous_research_report.json",
@@ -55,6 +66,77 @@ PHASE_STATUS_ARTIFACTS = {
         "fields": ("repair_data_mode", "repair_status", "severity_score"),
     },
 }
+PHASE39_MEMORY_ARTIFACTS = {
+    "adaptive_memory": {
+        "path": Path("data") / "memory" / "historical_adaptive_intelligence_state.json",
+        "report_path": Path("reports") / "historical_adaptive_intelligence_report.txt",
+        "progress_key": "adaptive_memory",
+    },
+    "rl_shadow_refresh": {
+        "path": Path("data") / "memory" / "reinforcement_learning_memory.json",
+        "report_path": Path("reports") / "phase20_reinforcement_learning_report.txt",
+        "runtime_path": Path("data") / "runtime" / "reinforcement_learning_status.json",
+        "progress_key": "reinforcement_learning",
+    },
+    "volatility_memory": {
+        "path": Path("data") / "memory" / "volatility_expansion_compression_memory.json",
+        "report_path": Path("reports") / "volatility_memory_report.txt",
+    },
+    "trap_memory": {
+        "path": Path("data") / "memory" / "trap_fakeout_memory.json",
+        "report_path": Path("reports") / "trap_memory_report.txt",
+    },
+    "confidence_decay_memory": {
+        "path": Path("data") / "memory" / "confidence_decay_memory.json",
+        "report_path": Path("reports") / "confidence_decay_memory_report.txt",
+    },
+    "transition_instability_memory": {
+        "path": Path("data") / "memory" / "transition_instability_memory.json",
+        "report_path": Path("reports") / "transition_instability_memory_report.txt",
+    },
+    "multi_timeframe_conflict_memory": {
+        "path": Path("data") / "memory" / "multi_timeframe_conflict_memory.json",
+        "report_path": Path("reports") / "multi_timeframe_conflict_memory_report.txt",
+    },
+    "no_trade_refinement_memory": {
+        "path": Path("data") / "memory" / "no_trade_refinement_memory.json",
+        "report_path": Path("reports") / "no_trade_refinement_memory_report.txt",
+    },
+}
+PHASE39_REPLAY_FIELD_GROUPS = {
+    "replay_realism": (
+        "replay_realism",
+        "signal_age_minutes",
+        "holding_period_days",
+        "session_context_label",
+        "entry_timing_label",
+        "exit_timing_label",
+        "holding_time_label",
+        "decay_risk_label",
+        "replay_realism_confidence",
+    ),
+    "semantic_replay_labels": (
+        "semantic_labels",
+        "trap_label",
+        "fake_breakout_label",
+        "liquidity_sweep_label",
+        "regime_label",
+        "volatility_state_label",
+        "mtf_alignment_label",
+        "gap_behavior_label",
+        "panic_euphoria_label",
+    ),
+    "interpretation_engine": (
+        "interpreted_outcome_label",
+        "failure_reason_label",
+        "success_reason_label",
+        "behavioral_pattern_label",
+        "emotional_market_proxy",
+        "market_context_label",
+        "conviction_quality_label",
+        "experience_weight",
+    ),
+}
 
 
 def _read_json_safe(path):
@@ -66,6 +148,212 @@ def _read_json_safe(path):
     except Exception:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _read_first_jsonl_record_safe(path):
+    try:
+        path = Path(path)
+        if not path.exists():
+            return {}
+        with path.open("r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                line = raw_line.strip()
+                if not line:
+                    continue
+                payload = json.loads(line)
+                return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+    return {}
+
+
+def _read_csv_header_safe(path):
+    try:
+        path = Path(path)
+        if not path.exists():
+            return []
+        with path.open("r", encoding="utf-8") as handle:
+            header = handle.readline().strip()
+    except Exception:
+        return []
+    return [item.strip() for item in header.split(",") if item.strip()]
+
+
+def _parse_datetime_safe(value):
+    if not value:
+        return None
+    text = str(value).strip()
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _age_seconds_from_timestamp(value, now):
+    parsed = _parse_datetime_safe(value)
+    if parsed is None:
+        return None
+    current = as_ist_datetime(now)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=current.tzinfo)
+    return max(0.0, (current - parsed.astimezone(current.tzinfo)).total_seconds())
+
+
+def _path_available(path):
+    if path is None:
+        return False
+    try:
+        return Path(path).exists()
+    except OSError:
+        return False
+
+
+def _phase39_artifact_summary(name, spec, progress):
+    progress_key = spec.get("progress_key") or name
+    progress_payload = progress.get(progress_key)
+    artifact_path = spec.get("path")
+    report_path = spec.get("report_path")
+    runtime_path = spec.get("runtime_path")
+    connected = (
+        bool(progress_payload)
+        or _path_available(artifact_path)
+        or _path_available(report_path)
+        or _path_available(runtime_path)
+    )
+
+    return {
+        "connected": connected,
+        "active": connected,
+        "artifact_path": str(artifact_path).replace("\\", "/") if artifact_path else None,
+        "report_path": str(report_path).replace("\\", "/") if report_path else None,
+        "runtime_status_path": str(runtime_path).replace("\\", "/") if runtime_path else None,
+        "progress_key": progress_key,
+        "progress_present": bool(progress_payload),
+        "advisory_only": True,
+        "research_only": True,
+        "shadow_mode": True,
+    }
+
+
+def _phase39_replay_field_status(csv_fields, jsonl_record):
+    field_source = set(csv_fields) | set(jsonl_record.keys())
+    summaries = {}
+    for group, fields in PHASE39_REPLAY_FIELD_GROUPS.items():
+        present = sorted(field for field in fields if field in field_source)
+        summaries[group] = {
+            "active": bool(present),
+            "fields_present": present,
+            "fields_expected": list(fields),
+            "advisory_only": True,
+            "research_only": True,
+            "shadow_mode": True,
+        }
+    return summaries
+
+
+def _phase39_research_memory_observatory(now=None):
+    """
+    Phase 39 is visibility-only. It reads existing replay/research artifacts and
+    never participates in live ranking, execution, alert filtering, or scanning.
+    """
+    status = _read_json_safe(HISTORICAL_REPLAY_STATUS_PATH)
+    progress = _read_json_safe(HISTORICAL_REPLAY_PROGRESS_PATH)
+    import_report = _read_json_safe(HISTORICAL_EXPERIENCE_REPORT_PATH)
+    csv_fields = _read_csv_header_safe(HISTORICAL_EXPERIENCE_CSV_PATH)
+    jsonl_record = _read_first_jsonl_record_safe(HISTORICAL_EXPERIENCE_JSONL_PATH)
+    replay_fields = _phase39_replay_field_status(csv_fields, jsonl_record)
+
+    latest_replay_timestamp = (
+        progress.get("last_completed_at_ist")
+        or status.get("timestamp_ist")
+        or import_report.get("generated_at")
+    )
+    latest_replay_record_count = progress.get("last_records_generated")
+    if latest_replay_record_count is None:
+        latest_replay_record_count = import_report.get("records_generated")
+    stale_age_seconds = _age_seconds_from_timestamp(latest_replay_timestamp, now)
+    stale_replay = stale_age_seconds is None or stale_age_seconds > PHASE39_STALE_REPLAY_SECONDS
+
+    research_refresh = progress.get("research_memory_refresh") if isinstance(progress.get("research_memory_refresh"), dict) else {}
+    maturity_engines = {}
+    for name in (
+        "volatility_memory",
+        "trap_memory",
+        "confidence_decay_memory",
+        "transition_instability_memory",
+        "multi_timeframe_conflict_memory",
+        "no_trade_refinement_memory",
+    ):
+        summary = _phase39_artifact_summary(name, PHASE39_MEMORY_ARTIFACTS[name], progress)
+        summary["progress_present"] = name in research_refresh
+        summary["active"] = summary["connected"] or name in research_refresh
+        maturity_engines[name] = summary
+
+    adaptive_memory = _phase39_artifact_summary("adaptive_memory", PHASE39_MEMORY_ARTIFACTS["adaptive_memory"], progress)
+    rl_shadow_refresh = _phase39_artifact_summary("rl_shadow_refresh", PHASE39_MEMORY_ARTIFACTS["rl_shadow_refresh"], progress)
+    research_memory_refresh_active = bool(research_refresh)
+
+    warnings = []
+    if stale_replay:
+        warnings.append("phase39_replay_artifacts_stale")
+    for group, summary in replay_fields.items():
+        if not summary["active"]:
+            warnings.append(f"phase39_{group}_not_visible_in_latest_import")
+    if not research_memory_refresh_active:
+        warnings.append("phase39_research_memory_refresh_not_visible")
+    if not adaptive_memory["active"]:
+        warnings.append("phase39_adaptive_memory_refresh_not_visible")
+    if not rl_shadow_refresh["active"]:
+        warnings.append("phase39_rl_shadow_refresh_not_visible")
+
+    safety = {
+        "visibility_only": True,
+        "advisory_only": True,
+        "research_only": True,
+        "shadow_mode": True,
+        "live_rank_mutation_allowed": False,
+        "scanner_changes": False,
+        "broker_orders": False,
+        "telegram_changes": False,
+        "supabase_writes": False,
+        "dashboard_changes": False,
+        "execution_packet_changes": False,
+        "alert_filter_changes": False,
+        "live_order_behavior_changes": False,
+        "autonomous_mutation": False,
+    }
+
+    return {
+        "phase": "PHASE_39_RUNTIME_VISIBILITY_RESEARCH_MEMORY_OBSERVATORY",
+        "name": "Runtime Visibility / Research Memory Observatory",
+        "status": "WARNING" if warnings else "OK",
+        "pyramid_placement": "runtime_status_visibility_only",
+        "connected_to_runtime_status": True,
+        "connected_to_master_controller": False,
+        "affects_live_ranking_or_execution": False,
+        "latest_replay_generation_timestamp": latest_replay_timestamp,
+        "latest_replay_record_count": latest_replay_record_count,
+        "replay_artifact_age_seconds": round(stale_age_seconds, 3) if stale_age_seconds is not None else None,
+        "stale_replay_threshold_seconds": PHASE39_STALE_REPLAY_SECONDS,
+        "stale_replay": stale_replay,
+        "replay_status": progress.get("status") or status.get("status") or import_report.get("status") or "UNKNOWN",
+        "replay_realism_active": replay_fields["replay_realism"]["active"],
+        "semantic_replay_labels_active": replay_fields["semantic_replay_labels"]["active"],
+        "interpretation_engine_active": replay_fields["interpretation_engine"]["active"],
+        "replay_field_visibility": replay_fields,
+        "adaptive_memory_refreshed": adaptive_memory["active"],
+        "adaptive_memory": adaptive_memory,
+        "research_memory_refresh_active": research_memory_refresh_active,
+        "research_memory_refresh_keys": sorted(research_refresh.keys()),
+        "rl_shadow_refresh_active": rl_shadow_refresh["active"],
+        "rl_shadow_refresh": rl_shadow_refresh,
+        "experience_maturity_memory_engines_active": any(item["active"] for item in maturity_engines.values()),
+        "experience_maturity_memory_engines": maturity_engines,
+        "runtime_safety_summary": safety,
+        "warnings": warnings,
+    }
 
 
 def _historical_replay_status_summary():
@@ -160,6 +448,7 @@ def build_runtime_status(value=None):
         "reason": permissions["reason"],
         "phase38_runtime_guard": phase38_guard,
         "historical_replay": _historical_replay_status_summary(),
+        "phase39_research_memory_observatory": _phase39_research_memory_observatory(now),
         "phase_sidecar_status": _phase_status_summaries(),
     }
 
