@@ -1828,7 +1828,9 @@ def refresh_roadmap_batch3_safely(master_input=None, context=None, evaluated_set
         )
         phase44 = result.get("phase44_temporal_intelligence", {}) if isinstance(result, dict) else {}
         phase45 = result.get("phase45_market_breadth_intelligence", {}) if isinstance(result, dict) else {}
-        phase46 = result.get("phase46_crowd_psychology", {}) if isinstance(result, dict) else {}
+        phase46 = {}
+        if isinstance(result, dict):
+            phase46 = result.get("phase46_crowd_psychology_engine") or result.get("phase46_crowd_psychology", {})
         phase47 = result.get("phase47_market_narrative_intelligence", {}) if isinstance(result, dict) else {}
         print(
             "[Phases44-47] Batch 3 refreshed: "

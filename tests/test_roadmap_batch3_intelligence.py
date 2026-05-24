@@ -142,12 +142,27 @@ class RoadmapBatch3IntelligenceTests(unittest.TestCase):
                     "mode": "advisory_only",
                     "fields": ("status", "connected", "run_count", "phase44_consumed", "phase44_run_count_seen"),
                 },
-                "phase46_crowd_psychology": {
+                "phase46_crowd_psychology_engine": {
                     "path": phase_paths["phase46"]["runtime"],
                     "fallback_path": phase_paths["phase46"]["memory"],
                     "placement": "master_controller_phase46_sidecar",
                     "mode": "advisory_only",
-                    "fields": ("status", "connected", "run_count", "phase44_consumed", "phase45_consumed"),
+                    "fields": (
+                        "status",
+                        "connected",
+                        "run_count",
+                        "continued_from_previous_state",
+                        "phase44_consumed",
+                        "phase45_consumed",
+                        "phase44_run_count_seen",
+                        "phase45_run_count_seen",
+                        "fear_euphoria",
+                        "panic_behavior_score",
+                        "crowd_instability_score",
+                        "trap_psychology_score",
+                        "overconfidence_score",
+                        "emotional_replay_patterns",
+                    ),
                 },
                 "phase47_market_narrative_intelligence": {
                     "path": phase_paths["phase47"]["runtime"],
@@ -167,9 +182,12 @@ class RoadmapBatch3IntelligenceTests(unittest.TestCase):
 
         phase44 = second["phase44_temporal_intelligence"]
         phase45 = second["phase45_market_breadth_intelligence"]
-        phase46 = second["phase46_crowd_psychology"]
+        phase46 = second["phase46_crowd_psychology_engine"]
         phase47 = second["phase47_market_narrative_intelligence"]
 
+        self.assertIn("phase46_crowd_psychology_engine", second)
+        self.assertTrue(second["phase46_crowd_psychology_engine"])
+        self.assertIs(second["phase46_crowd_psychology_engine"], second["phase46_crowd_psychology"])
         self.assertEqual(first["phase44_temporal_intelligence"]["run_count"], 1)
         self.assertEqual(phase44["run_count"], 2)
         self.assertTrue(phase44["continued_from_previous_state"])
@@ -178,13 +196,37 @@ class RoadmapBatch3IntelligenceTests(unittest.TestCase):
         self.assertEqual(phase45["phase44_run_count_seen"], 2)
         self.assertTrue(phase46["phase44_consumed"])
         self.assertTrue(phase46["phase45_consumed"])
+        self.assertTrue(phase46["continued_from_previous_state"])
+        self.assertEqual(phase46["run_count"], 2)
+        self.assertEqual(phase46["phase44_run_count_seen"], 2)
         self.assertEqual(phase46["phase45_run_count_seen"], 2)
+        self.assertTrue(phase46["fear_euphoria"])
+        self.assertIn("dominant_state", phase46["fear_euphoria"])
+        self.assertIn("emotional_replay_patterns", phase46)
         self.assertTrue(phase47["phase45_consumed"])
         self.assertTrue(phase47["phase46_consumed"])
         self.assertEqual(phase47["phase46_run_count_seen"], 2)
         self.assertGreaterEqual(phase45["breadth_divergence_score"], 0.0)
         self.assertGreaterEqual(phase46["crowd_instability_score"], 0.0)
         self.assertTrue(phase47["dominant_narrative"])
+
+        self.assertIn("phase46_crowd_psychology_engine", visibility)
+        phase46_visibility = visibility["phase46_crowd_psychology_engine"]
+        self.assertTrue(phase46_visibility["connected"])
+        self.assertTrue(phase46_visibility["values"]["connected"])
+        self.assertEqual(phase46_visibility["values"]["run_count"], 2)
+        self.assertTrue(phase46_visibility["values"]["continued_from_previous_state"])
+        self.assertTrue(phase46_visibility["values"]["phase44_consumed"])
+        self.assertTrue(phase46_visibility["values"]["phase45_consumed"])
+        self.assertEqual(phase46_visibility["values"]["phase44_run_count_seen"], 2)
+        self.assertEqual(phase46_visibility["values"]["phase45_run_count_seen"], 2)
+        self.assertTrue(phase46_visibility["values"]["fear_euphoria"])
+        self.assertIn("dominant_state", phase46_visibility["values"]["fear_euphoria"])
+        self.assertIn("panic_behavior_score", phase46_visibility["values"])
+        self.assertIn("crowd_instability_score", phase46_visibility["values"])
+        self.assertIn("trap_psychology_score", phase46_visibility["values"])
+        self.assertIn("overconfidence_score", phase46_visibility["values"])
+        self.assertIn("emotional_replay_patterns", phase46_visibility["values"])
 
         for phase in visibility.values():
             self.assertTrue(phase["connected"])

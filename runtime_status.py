@@ -134,7 +134,7 @@ PHASE_STATUS_ARTIFACTS = {
             "market_wide_confirmation_quality",
         ),
     },
-    "phase46_crowd_psychology": {
+    "phase46_crowd_psychology_engine": {
         "path": Path("data") / "runtime" / "crowd_psychology_status.json",
         "fallback_path": Path("data") / "memory" / "crowd_psychology_state.json",
         "placement": "master_controller_phase46_sidecar",
@@ -148,8 +148,12 @@ PHASE_STATUS_ARTIFACTS = {
             "phase45_consumed",
             "phase44_run_count_seen",
             "phase45_run_count_seen",
+            "fear_euphoria",
             "panic_behavior_score",
             "crowd_instability_score",
+            "trap_psychology_score",
+            "overconfidence_score",
+            "emotional_replay_patterns",
         ),
     },
     "phase47_market_narrative_intelligence": {

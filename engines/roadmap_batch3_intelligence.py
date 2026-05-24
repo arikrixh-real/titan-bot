@@ -682,7 +682,25 @@ def run_market_breadth_intelligence(master_input: Dict[str, Any] | None = None, 
 def run_crowd_psychology_engine(context: Dict[str, Any] | None = None, temporal_state: Dict[str, Any] | None = None, breadth_state: Dict[str, Any] | None = None, write_files: bool = True) -> Dict[str, Any]:
     previous = _read_json(PHASE_PATHS["phase46"]["memory"])
     state = build_crowd_psychology_state(previous=previous, temporal_state=temporal_state, breadth_state=breadth_state, context=context)
-    return _persist("phase46", state, "TITAN Phase 46 Crowd Psychology Report", ("fear_euphoria", "panic_behavior_score", "crowd_instability_score", "trap_psychology_score", "overconfidence_score"), ("phase44_consumed", "phase45_consumed", "phase44_run_count_seen", "phase45_run_count_seen", "panic_behavior_score", "crowd_instability_score"), write_files)
+    return _persist(
+        "phase46",
+        state,
+        "TITAN Phase 46 Crowd Psychology Report",
+        ("fear_euphoria", "panic_behavior_score", "crowd_instability_score", "trap_psychology_score", "overconfidence_score"),
+        (
+            "phase44_consumed",
+            "phase45_consumed",
+            "phase44_run_count_seen",
+            "phase45_run_count_seen",
+            "fear_euphoria",
+            "panic_behavior_score",
+            "crowd_instability_score",
+            "trap_psychology_score",
+            "overconfidence_score",
+            "emotional_replay_patterns",
+        ),
+        write_files,
+    )
 
 
 def run_market_narrative_intelligence(context: Dict[str, Any] | None = None, news_items: List[Dict[str, Any]] | None = None, breadth_state: Dict[str, Any] | None = None, crowd_state: Dict[str, Any] | None = None, write_files: bool = True) -> Dict[str, Any]:
@@ -705,6 +723,7 @@ def run_roadmap_batch3_intelligence(
     return {
         "phase44_temporal_intelligence": phase44,
         "phase45_market_breadth_intelligence": phase45,
+        "phase46_crowd_psychology_engine": phase46,
         "phase46_crowd_psychology": phase46,
         "phase47_market_narrative_intelligence": phase47,
         "advisory_only": True,
