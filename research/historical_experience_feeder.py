@@ -38,6 +38,7 @@ from engines.trend_engine import trade_side_from_trend, trend_direction
 from scanners.compression_scanner import compression_score
 from scanners.strength_scanner import price_strength_score
 from scanners.volume_scanner import volume_anomaly_score
+from research.replay_realism_enrichment import REPLAY_REALISM_FIELDS, build_replay_realism_fields
 from research.semantic_replay_enrichment import build_semantic_replay_labels
 
 
@@ -91,6 +92,7 @@ CSV_FIELDS = [
     "news_reaction_label",
     "semantic_label_confidence",
     "semantic_label_reasons",
+    *REPLAY_REALISM_FIELDS,
     "reason",
     "lesson_learned",
     "source_type",
@@ -364,6 +366,7 @@ def simulate_symbol(
             "reason": build_reason(trend, side, setup_type, volume, strength, compression, score),
         }
         record.update(build_semantic_replay_labels(history, future, record))
+        record.update(build_replay_realism_fields(history, future, record))
         record["lesson_learned"] = build_lesson(record)
         record["experience_hash"] = build_experience_hash(record)
         records.append(record)

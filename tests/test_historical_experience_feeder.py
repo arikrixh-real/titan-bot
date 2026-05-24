@@ -11,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from research import historical_experience_feeder as feeder
+from research.replay_realism_enrichment import build_replay_realism_fields
 from research.semantic_replay_enrichment import build_semantic_replay_labels
 
 
@@ -62,6 +63,21 @@ class HistoricalExperienceFeederTests(unittest.TestCase):
         ]:
             self.assertIn(field, feeder.CSV_FIELDS)
 
+    def test_replay_realism_fields_are_csv_additive(self):
+        for field in [
+            "replay_realism",
+            "signal_age_minutes",
+            "holding_period_days",
+            "session_context_label",
+            "entry_timing_label",
+            "exit_timing_label",
+            "holding_time_label",
+            "decay_risk_label",
+            "replay_realism_confidence",
+            "replay_realism_reasons",
+        ]:
+            self.assertIn(field, feeder.CSV_FIELDS)
+
     def test_experience_hash_includes_signal_time(self):
         first = _record("AAA", 2020, "trend_momentum_breakout", 1)
         second = dict(first)
@@ -78,6 +94,104 @@ class HistoricalExperienceFeederTests(unittest.TestCase):
         second["semantic_label_confidence"] = 0.5
 
         self.assertEqual(feeder.build_experience_hash(first), feeder.build_experience_hash(second))
+
+    def test_replay_realism_fields_are_not_in_experience_hash(self):
+        first = _record("AAA", 2020, "trend_momentum_breakout", 1)
+        second = dict(first)
+        second.update(
+            {
+                "replay_realism": {"advisory_only": True},
+                "signal_age_minutes": 0.0,
+                "holding_period_days": 3.0,
+                "session_context_label": "DAILY_CANDLE_CONTEXT",
+                "entry_timing_label": "MID_MOVE_ENTRY",
+                "exit_timing_label": "NORMAL_EXIT",
+                "holding_time_label": "SHORT_SWING",
+                "decay_risk_label": "MODERATE_DECAY_RISK",
+                "replay_realism_confidence": 1.0,
+                "replay_realism_reasons": ["test"],
+            }
+        )
+
+        self.assertEqual(feeder.build_experience_hash(first), feeder.build_experience_hash(second))
+
+    def test_replay_realism_enrichment_uses_daily_context_and_exit_timing(self):
+        history = pd.DataFrame(
+            [
+                {
+                    "Datetime": f"2020-01-{day:02d}T00:00:00+00:00",
+                    "Open": 100 + day * 0.1,
+                    "High": 101 + day * 0.1,
+                    "Low": 99 + day * 0.1,
+                    "Close": 100 + day * 0.1,
+                    "Volume": 1000,
+                }
+                for day in range(1, 25)
+            ]
+        )
+        future = pd.DataFrame(
+            [
+                {"Datetime": "2020-01-25T00:00:00+00:00", "Open": 102, "High": 102.5, "Low": 101, "Close": 102, "Volume": 1000},
+                {"Datetime": "2020-01-26T00:00:00+00:00", "Open": 102, "High": 103.5, "Low": 101, "Close": 103, "Volume": 1000},
+            ]
+        )
+        record = _record("AAA", 2020, "trend_momentum_breakout", 24)
+        record.update({"entry": 102.0, "sl": 100.0, "target": 103.0, "signal_time": "2020-01-24T00:00:00+00:00"})
+
+        fields = build_replay_realism_fields(history, future, record)
+
+        self.assertTrue(fields["replay_realism"]["advisory_only"])
+        self.assertEqual(fields["replay_realism"]["source"], "HISTORICAL_OHLC_REPLAY")
+        self.assertEqual(fields["session_context_label"], "DAILY_CANDLE_CONTEXT")
+        self.assertEqual(fields["signal_age_minutes"], 0.0)
+        self.assertEqual(fields["exit_timing_label"], "FAST_EXIT")
+        self.assertEqual(fields["holding_period_days"], 2.0)
+        self.assertEqual(fields["holding_time_label"], "SHORT_SWING")
+
+    def test_replay_realism_marks_slow_failed_expansion_as_high_decay(self):
+        history = pd.DataFrame(
+            [
+                {
+                    "Datetime": f"2020-02-{day:02d}T00:00:00+00:00",
+                    "Open": 100,
+                    "High": 101,
+                    "Low": 99,
+                    "Close": 100 + day * 0.05,
+                    "Volume": 1000,
+                }
+                for day in range(1, 25)
+            ]
+        )
+        future = pd.DataFrame(
+            [
+                {
+                    "Datetime": f"2020-03-{day:02d}T00:00:00+00:00",
+                    "Open": 101,
+                    "High": 101.5,
+                    "Low": 100.5,
+                    "Close": 100.8,
+                    "Volume": 1000,
+                }
+                for day in range(1, 11)
+            ]
+        )
+        record = _record("AAA", 2020, "trend_momentum_breakout", 24)
+        record.update(
+            {
+                "entry": 101.0,
+                "sl": 95.0,
+                "target": 110.0,
+                "outcome": "LOSS",
+                "signal_time": "2020-02-24T00:00:00+00:00",
+                "volatility_state_label": "EXPANSION",
+            }
+        )
+
+        fields = build_replay_realism_fields(history, future, record)
+
+        self.assertEqual(fields["exit_timing_label"], "SLOW_EXIT")
+        self.assertEqual(fields["holding_time_label"], "MEDIUM_SWING")
+        self.assertEqual(fields["decay_risk_label"], "HIGH_DECAY_RISK")
 
     def test_semantic_enrichment_detects_fake_breakout_and_liquidity_sweep(self):
         history = pd.DataFrame(
