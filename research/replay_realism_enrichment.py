@@ -103,7 +103,31 @@ def _session_context_label(history: Any) -> Tuple[str, List[str]]:
     if stamp is None:
         return UNKNOWN, ["signal_timestamp_unavailable_for_session_context"]
 
-    return "DAILY_CANDLE_CONTEXT", ["historical_feeder_uses_daily_or_coarse_cached_candles"]
+    previous = _parse_datetime(_iloc(history, -2).get("Datetime"))
+    if previous is None:
+        return UNKNOWN, ["previous_timestamp_unavailable_for_session_context"]
+
+    minutes = max(0.0, (stamp - previous).total_seconds() / 60.0)
+    if minutes <= 60.0:
+        return "INTRADAY_SESSION_CONTEXT", ["historical_replay_uses_intraday_candles"]
+    if minutes <= 1440.0:
+        return "DAILY_CANDLE_CONTEXT", ["historical_replay_uses_daily_or_session_candles"]
+    return "COARSE_CANDLE_CONTEXT", ["historical_replay_uses_multi_day_or_coarse_candles"]
+
+
+def _signal_age_minutes(history: Any, record: Dict[str, Any]) -> Tuple[Optional[float], List[str]]:
+    signal_time = _parse_datetime(record.get("signal_time"))
+    if signal_time is None:
+        return None, ["signal_time_unavailable_for_signal_age"]
+    if _len(history) <= 0:
+        return None, ["history_unavailable_for_signal_age"]
+
+    replay_time = _parse_datetime(_iloc(history, -1).get("Datetime"))
+    if replay_time is None:
+        return None, ["replay_timestamp_unavailable_for_signal_age"]
+
+    minutes = max(0.0, (replay_time - signal_time).total_seconds() / 60.0)
+    return round(minutes, 4), ["signal_age_derived_from_signal_and_replay_timestamps"]
 
 
 def _entry_timing_label(history: Any, side: str) -> Tuple[str, List[str]]:
@@ -191,7 +215,13 @@ def _holding_time_label(days: Optional[float]) -> Tuple[str, List[str]]:
     return "LONG_HOLD", ["holding_period_above_twenty_days"]
 
 
-def _decay_risk_label(holding_days: Optional[float], volatility: str, outcome: str, exit_label: str) -> Tuple[str, List[str]]:
+def _decay_risk_label(
+    holding_days: Optional[float],
+    signal_age_minutes: Optional[float],
+    volatility: str,
+    outcome: str,
+    exit_label: str,
+) -> Tuple[str, List[str]]:
     if holding_days is None:
         return UNKNOWN, ["holding_period_unavailable_for_decay_risk"]
 
@@ -208,6 +238,17 @@ def _decay_risk_label(holding_days: Optional[float], volatility: str, outcome: s
         reasons.append("holding_period_above_three_days")
     else:
         reasons.append("short_holding_period")
+
+    if signal_age_minutes is None:
+        reasons.append("signal_age_unavailable_for_decay_risk")
+    elif signal_age_minutes > 90:
+        risk_score += 2
+        reasons.append("stale_signal_age_above_ninety_minutes")
+    elif signal_age_minutes > 45:
+        risk_score += 1
+        reasons.append("mature_signal_age_above_forty_five_minutes")
+    else:
+        reasons.append("fresh_signal_age")
 
     if volatility == "EXPANSION":
         risk_score += 1
@@ -245,6 +286,9 @@ def build_replay_realism_fields(history: Any, future: Any, record: Dict[str, Any
     entry_label, entry_reasons = _entry_timing_label(history, side)
     reasons.extend(entry_reasons)
 
+    signal_age, signal_age_reasons = _signal_age_minutes(history, record)
+    reasons.extend(signal_age_reasons)
+
     exit_index, exit_label, exit_reasons = _resolve_exit_index(future, record)
     reasons.extend(exit_reasons)
 
@@ -256,6 +300,7 @@ def build_replay_realism_fields(history: Any, future: Any, record: Dict[str, Any
 
     decay_label, decay_reasons = _decay_risk_label(
         holding_days,
+        signal_age,
         str(record.get("volatility_state_label") or UNKNOWN),
         str(record.get("outcome") or UNKNOWN),
         exit_label,
@@ -281,7 +326,7 @@ def build_replay_realism_fields(history: Any, future: Any, record: Dict[str, Any
 
     return {
         "replay_realism": replay_realism,
-        "signal_age_minutes": 0.0,
+        "signal_age_minutes": signal_age if signal_age is not None else UNKNOWN,
         "holding_period_days": holding_days if holding_days is not None else UNKNOWN,
         **labels,
         "replay_realism_confidence": confidence,

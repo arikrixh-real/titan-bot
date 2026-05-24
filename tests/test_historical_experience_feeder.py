@@ -193,6 +193,75 @@ class HistoricalExperienceFeederTests(unittest.TestCase):
         self.assertEqual(fields["holding_time_label"], "MEDIUM_SWING")
         self.assertEqual(fields["decay_risk_label"], "HIGH_DECAY_RISK")
 
+    def test_replay_realism_detects_intraday_context_and_signal_age(self):
+        history = pd.DataFrame(
+            [
+                {
+                    "Datetime": f"2020-01-01T{hour:02d}:{minute:02d}:00+00:00",
+                    "Open": 100,
+                    "High": 101,
+                    "Low": 99,
+                    "Close": 100 + index * 0.05,
+                    "Volume": 1000,
+                }
+                for index, (hour, minute) in enumerate((divmod(step * 15, 60) for step in range(24)))
+            ]
+        )
+        future = pd.DataFrame(
+            [
+                {"Datetime": "2020-01-01T06:00:00+00:00", "Open": 101, "High": 103, "Low": 100, "Close": 102, "Volume": 1000},
+            ]
+        )
+        record = _record("AAA", 2020, "trend_momentum_breakout", 1)
+        record.update({"entry": 101.0, "sl": 99.0, "target": 102.0, "signal_time": "2020-01-01T04:15:00+00:00"})
+
+        fields = build_replay_realism_fields(history, future, record)
+
+        self.assertEqual(fields["session_context_label"], "INTRADAY_SESSION_CONTEXT")
+        self.assertEqual(fields["signal_age_minutes"], 90.0)
+
+    def test_replay_realism_stale_signal_age_contributes_to_decay_risk(self):
+        history = pd.DataFrame(
+            [
+                {
+                    "Datetime": f"2020-01-01T{hour:02d}:{minute:02d}:00+00:00",
+                    "Open": 100,
+                    "High": 101,
+                    "Low": 99,
+                    "Close": 100 + index * 0.02,
+                    "Volume": 1000,
+                }
+                for index, (hour, minute) in enumerate((divmod(step * 15, 60) for step in range(28)))
+            ]
+        )
+        future = pd.DataFrame(
+            [
+                {
+                    "Datetime": "2020-01-01T07:00:00+00:00",
+                    "Open": 101,
+                    "High": 101.5,
+                    "Low": 100.5,
+                    "Close": 101,
+                    "Volume": 1000,
+                }
+            ]
+        )
+        record = _record("AAA", 2020, "trend_momentum_breakout", 1)
+        record.update(
+            {
+                "entry": 101.0,
+                "sl": 95.0,
+                "target": 110.0,
+                "outcome": "LOSS",
+                "signal_time": "2020-01-01T03:30:00+00:00",
+            }
+        )
+
+        fields = build_replay_realism_fields(history, future, record)
+
+        self.assertEqual(fields["signal_age_minutes"], 195.0)
+        self.assertEqual(fields["decay_risk_label"], "HIGH_DECAY_RISK")
+
     def test_semantic_enrichment_detects_fake_breakout_and_liquidity_sweep(self):
         history = pd.DataFrame(
             [
