@@ -150,21 +150,44 @@ def _read_json_safe(path):
     return payload if isinstance(payload, dict) else {}
 
 
-def _read_first_jsonl_record_safe(path):
+def _read_latest_jsonl_record_safe(path):
+    meta = {
+        "available": False,
+        "reason": "missing",
+        "line_number": None,
+        "invalid_line_count": 0,
+    }
     try:
         path = Path(path)
         if not path.exists():
-            return {}
+            return {}, meta
+        meta["reason"] = "empty"
+        latest_record = {}
+        latest_line_number = None
         with path.open("r", encoding="utf-8") as handle:
-            for raw_line in handle:
+            for line_number, raw_line in enumerate(handle, start=1):
                 line = raw_line.strip()
                 if not line:
                     continue
-                payload = json.loads(line)
-                return payload if isinstance(payload, dict) else {}
+                meta["reason"] = "no_valid_json_object"
+                try:
+                    payload = json.loads(line)
+                except Exception:
+                    meta["invalid_line_count"] += 1
+                    continue
+                if not isinstance(payload, dict):
+                    meta["invalid_line_count"] += 1
+                    continue
+                latest_record = payload
+                latest_line_number = line_number
     except Exception:
-        return {}
-    return {}
+        meta["reason"] = "unreadable"
+        return {}, meta
+    if latest_record:
+        meta["available"] = True
+        meta["reason"] = "ok"
+        meta["line_number"] = latest_line_number
+    return latest_record, meta
 
 
 def _read_csv_header_safe(path):
@@ -237,8 +260,8 @@ def _phase39_artifact_summary(name, spec, progress):
     }
 
 
-def _phase39_replay_field_status(csv_fields, jsonl_record):
-    field_source = set(csv_fields) | set(jsonl_record.keys())
+def _phase39_replay_field_status(jsonl_record):
+    field_source = set(jsonl_record.keys())
     summaries = {}
     for group, fields in PHASE39_REPLAY_FIELD_GROUPS.items():
         present = sorted(field for field in fields if field in field_source)
@@ -261,9 +284,8 @@ def _phase39_research_memory_observatory(now=None):
     status = _read_json_safe(HISTORICAL_REPLAY_STATUS_PATH)
     progress = _read_json_safe(HISTORICAL_REPLAY_PROGRESS_PATH)
     import_report = _read_json_safe(HISTORICAL_EXPERIENCE_REPORT_PATH)
-    csv_fields = _read_csv_header_safe(HISTORICAL_EXPERIENCE_CSV_PATH)
-    jsonl_record = _read_first_jsonl_record_safe(HISTORICAL_EXPERIENCE_JSONL_PATH)
-    replay_fields = _phase39_replay_field_status(csv_fields, jsonl_record)
+    jsonl_record, jsonl_record_meta = _read_latest_jsonl_record_safe(HISTORICAL_EXPERIENCE_JSONL_PATH)
+    replay_fields = _phase39_replay_field_status(jsonl_record)
 
     latest_replay_timestamp = (
         progress.get("last_completed_at_ist")
@@ -296,6 +318,8 @@ def _phase39_research_memory_observatory(now=None):
     research_memory_refresh_active = bool(research_refresh)
 
     warnings = []
+    if not jsonl_record_meta["available"]:
+        warnings.append(f"phase39_latest_jsonl_record_{jsonl_record_meta['reason']}")
     if stale_replay:
         warnings.append("phase39_replay_artifacts_stale")
     for group, summary in replay_fields.items():
@@ -339,6 +363,7 @@ def _phase39_research_memory_observatory(now=None):
         "stale_replay_threshold_seconds": PHASE39_STALE_REPLAY_SECONDS,
         "stale_replay": stale_replay,
         "replay_status": progress.get("status") or status.get("status") or import_report.get("status") or "UNKNOWN",
+        "latest_jsonl_record_status": jsonl_record_meta,
         "replay_realism_active": replay_fields["replay_realism"]["active"],
         "semantic_replay_labels_active": replay_fields["semantic_replay_labels"]["active"],
         "interpretation_engine_active": replay_fields["interpretation_engine"]["active"],
