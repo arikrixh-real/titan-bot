@@ -385,6 +385,12 @@ def build_execution_safety_report(state: Any = None, account_snapshot: Any = Non
         explanations.append("Broker connection is not confirmed healthy.")
     safety_gate_status = "HEALTHY" if risk_status in {"READ_ONLY_SAFE", "SAFE", "CAUTION"} else "BLOCKED"
     return {
+        "advisory_only": True,
+        "safety_only": True,
+        "shadow_mode": True,
+        "live_order_allowed": False,
+        "live_rank_mutation_allowed": False,
+        "pyramid_placement": "master_controller_execution_safety_sidecar",
         "status": "HEALTHY" if safety_gate_status == "HEALTHY" else "BLOCKED",
         "generated_at": _now(),
         "broker_orders": False,

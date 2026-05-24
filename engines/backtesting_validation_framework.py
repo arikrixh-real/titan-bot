@@ -359,6 +359,12 @@ def build_validation_report(strategy: Any = None, historical_data: Any = None, c
     explanations.append("Validation only; live deployment is explicitly disabled.")
 
     return {
+        "advisory_only": True,
+        "research_only": True,
+        "shadow_mode": True,
+        "live_order_allowed": False,
+        "live_rank_mutation_allowed": False,
+        "pyramid_placement": "master_controller_validation_sidecar",
         "historical_backtest": historical,
         "walk_forward_test": walk_forward,
         "out_of_sample_validation": out_sample,

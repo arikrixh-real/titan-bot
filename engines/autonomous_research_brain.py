@@ -430,6 +430,12 @@ def build_autonomous_research_report(trade_history: Any = None, scan_history: An
     explanations.append("No live trading rules or strategy weights were changed.")
 
     return {
+        "advisory_only": True,
+        "research_only": True,
+        "shadow_mode": True,
+        "live_order_allowed": False,
+        "live_rank_mutation_allowed": False,
+        "pyramid_placement": "master_controller_research_sidecar",
         "generated_hypotheses": hypotheses,
         "failure_research": failure_research,
         "strongest_confluences": confluences,

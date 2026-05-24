@@ -349,6 +349,12 @@ def build_auto_repair_report(error_logs=None, runtime_context=None, github_logs=
         explanations.append("WinError 10013 classified as REVIEW unless it blocks the cycle.")
 
     report = {
+        "advisory_only": True,
+        "diagnostic_only": True,
+        "shadow_mode": True,
+        "live_order_allowed": False,
+        "live_rank_mutation_allowed": False,
+        "pyramid_placement": "master_controller_diagnostic_sidecar",
         "repair_data_mode": mode,
         "error_classification": {
             "count": len(classifications),

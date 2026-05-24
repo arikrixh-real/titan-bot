@@ -259,6 +259,14 @@ def build_smart_execution_report(order: Any = None, market_context: Any = None) 
         explanations.append("Quality is sufficient for paper execution only.")
 
     return {
+        "advisory_only": True,
+        "execution_analysis_only": True,
+        "shadow_mode": True,
+        "live_order_allowed": False,
+        "broker_orders": False,
+        "telegram_changes": False,
+        "live_rank_mutation_allowed": False,
+        "pyramid_placement": "master_controller_execution_quality_sidecar",
         "execution_mode": "ANALYSIS_ONLY",
         "symbol": _symbol(order),
         "slippage_prediction": slippage,

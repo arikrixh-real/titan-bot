@@ -371,6 +371,12 @@ def build_memory_consolidation_report(memory_data=None, trade_history=None, cont
         explanations.append(f"{mode} consolidation used available memory, trade history, and context.")
 
     report = {
+        "advisory_only": True,
+        "research_only": True,
+        "shadow_mode": True,
+        "live_order_allowed": False,
+        "live_rank_mutation_allowed": False,
+        "pyramid_placement": "master_controller_memory_sidecar",
         "memory_data_mode": mode,
         "memory_compression": compression,
         "important_patterns": important,

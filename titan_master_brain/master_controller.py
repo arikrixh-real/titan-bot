@@ -255,6 +255,7 @@ BACKTESTING_VALIDATION_REPORT_PATH = RESEARCH_DIR / "backtesting_validation_repo
 EXECUTION_SAFETY_DIR = Path("data/execution_safety")
 LATEST_EXECUTION_SAFETY_REPORT_PATH = EXECUTION_SAFETY_DIR / "latest_execution_safety_report.json"
 LATEST_SMART_EXECUTION_REPORT_PATH = EXECUTION_SAFETY_DIR / "latest_smart_execution_report.json"
+LATEST_PAPER_TRADING_REPORT_PATH = Path("data") / "paper_trading" / "latest_paper_trading_report.json"
 MAX_RESEARCH_ROWS = 300
 
 TRADE_HISTORY_PATHS = [
@@ -895,6 +896,15 @@ def refresh_phase21_autonomous_research_safely(
             scan_history=scan_history,
             context=research_context,
         )
+        if isinstance(report, dict):
+            report.update({
+                "advisory_only": True,
+                "research_only": True,
+                "shadow_mode": True,
+                "live_order_allowed": False,
+                "live_rank_mutation_allowed": False,
+                "pyramid_placement": "master_controller_research_sidecar",
+            })
 
         RESEARCH_DIR.mkdir(parents=True, exist_ok=True)
         with open(AUTONOMOUS_RESEARCH_REPORT_PATH, "w", encoding="utf-8") as f:
@@ -949,6 +959,15 @@ def refresh_phase22_backtesting_validation_safely(
             historical_data=history,
             context=validation_context,
         )
+        if isinstance(report, dict):
+            report.update({
+                "advisory_only": True,
+                "research_only": True,
+                "shadow_mode": True,
+                "live_order_allowed": False,
+                "live_rank_mutation_allowed": False,
+                "pyramid_placement": "master_controller_validation_sidecar",
+            })
 
         RESEARCH_DIR.mkdir(parents=True, exist_ok=True)
         with open(BACKTESTING_VALIDATION_REPORT_PATH, "w", encoding="utf-8") as f:
@@ -1004,6 +1023,18 @@ def refresh_phase23_paper_trading_safely(final_decisions=None, context=None):
             sync_paper_account_from_trade_results()
 
         report = build_paper_trading_report(load_paper_account())
+        if isinstance(report, dict):
+            report.update({
+                "advisory_only": True,
+                "paper_only": True,
+                "shadow_mode": True,
+                "live_order_allowed": False,
+                "broker_orders": False,
+                "telegram_changes": False,
+                "supabase_writes": False,
+                "live_rank_mutation_allowed": False,
+                "pyramid_placement": "master_controller_paper_sidecar",
+            })
         print(
             "[Phase23] Paper trading refreshed. "
             f"status={report.get('paper_trading_status')} | "
@@ -1011,6 +1042,9 @@ def refresh_phase23_paper_trading_safely(final_decisions=None, context=None):
             f"orders={len(paper_orders)}"
         )
         report["paper_orders_created"] = paper_orders
+        LATEST_PAPER_TRADING_REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(LATEST_PAPER_TRADING_REPORT_PATH, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
         return report
 
     except Exception as e:
@@ -1058,6 +1092,19 @@ def refresh_phase24_execution_safety_safely(final_decisions=None, context=None):
             broker_status=broker_status,
             extra_fields={"pre_order_safety_checks": pre_order},
         )
+        if isinstance(report, dict):
+            report.update({
+                "advisory_only": True,
+                "safety_only": True,
+                "shadow_mode": True,
+                "live_order_allowed": False,
+                "broker_orders": False,
+                "telegram_changes": False,
+                "live_rank_mutation_allowed": False,
+                "pyramid_placement": "master_controller_execution_safety_sidecar",
+            })
+            with open(LATEST_EXECUTION_SAFETY_REPORT_PATH, "w", encoding="utf-8") as f:
+                json.dump(report, f, indent=2, ensure_ascii=False)
         print(
             "[Phase24] Execution safety report saved: "
             f"{LATEST_EXECUTION_SAFETY_REPORT_PATH} | "
@@ -1092,6 +1139,17 @@ def refresh_phase25_smart_execution_safely(final_decisions=None, paper_result=No
             if isinstance(paper_orders, list) and paper_orders and isinstance(paper_orders[0], dict):
                 order = dict(paper_orders[0])
         report = build_smart_execution_report(order, context if isinstance(context, dict) else {})
+        if isinstance(report, dict):
+            report.update({
+                "advisory_only": True,
+                "execution_analysis_only": True,
+                "shadow_mode": True,
+                "live_order_allowed": False,
+                "broker_orders": False,
+                "telegram_changes": False,
+                "live_rank_mutation_allowed": False,
+                "pyramid_placement": "master_controller_execution_quality_sidecar",
+            })
         EXECUTION_SAFETY_DIR.mkdir(parents=True, exist_ok=True)
         with open(LATEST_SMART_EXECUTION_REPORT_PATH, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
@@ -1500,6 +1558,19 @@ def refresh_phase36_memory_consolidation_safely(context=None):
             trade_history=trade_history,
             context=market_context,
         )
+        if isinstance(report, dict):
+            report.update({
+                "advisory_only": True,
+                "research_only": True,
+                "shadow_mode": True,
+                "live_order_allowed": False,
+                "live_rank_mutation_allowed": False,
+                "pyramid_placement": "master_controller_memory_sidecar",
+            })
+            memory_report_path = Path("data") / "memory_consolidation" / "latest_memory_consolidation_report.json"
+            memory_report_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(memory_report_path, "w", encoding="utf-8") as f:
+                json.dump(report, f, indent=2, ensure_ascii=False)
         print(
             "[Phase36] Memory consolidation report saved: data/memory_consolidation/latest_memory_consolidation_report.json | "
             f"mode={report.get('memory_data_mode')} | score={report.get('memory_quality_score')}"
@@ -1544,6 +1615,20 @@ def refresh_phase37_auto_repair_safely(context=None, github_logs=None):
             runtime_context=market_context,
             github_logs=github_logs or market_context.get("github_logs"),
         )
+        if isinstance(report, dict):
+            report.update({
+                "advisory_only": True,
+                "diagnostic_only": True,
+                "shadow_mode": True,
+                "live_order_allowed": False,
+                "live_rank_mutation_allowed": False,
+                "auto_file_changes_allowed": False,
+                "pyramid_placement": "master_controller_diagnostic_sidecar",
+            })
+            auto_repair_report_path = Path("data") / "auto_repair" / "latest_auto_repair_report.json"
+            auto_repair_report_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(auto_repair_report_path, "w", encoding="utf-8") as f:
+                json.dump(report, f, indent=2, ensure_ascii=False)
         print(
             "[Phase37] Auto-repair report saved: data/auto_repair/latest_auto_repair_report.json | "
             f"status={report.get('repair_status')} | severity={report.get('severity_score')}"

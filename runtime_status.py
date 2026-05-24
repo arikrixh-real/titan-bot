@@ -10,6 +10,51 @@ from utils.market_hours import IST, as_ist_datetime
 STATUS_PATH = Path("data") / "runtime" / "titan_runtime_status.json"
 HISTORICAL_REPLAY_STATUS_PATH = Path("data") / "runtime" / "historical_replay_status.json"
 HISTORICAL_REPLAY_PROGRESS_PATH = Path("data") / "runtime" / "historical_replay_progress.json"
+PHASE_STATUS_ARTIFACTS = {
+    "phase21_autonomous_research": {
+        "path": Path("data") / "research" / "autonomous_research_report.json",
+        "placement": "master_controller_research_sidecar",
+        "mode": "research_only",
+        "fields": ("research_mode", "research_priority_score"),
+    },
+    "phase22_backtesting_validation": {
+        "path": Path("data") / "research" / "backtesting_validation_report.json",
+        "placement": "master_controller_validation_sidecar",
+        "mode": "research_only",
+        "fields": ("validation_status", "validation_score"),
+    },
+    "phase23_paper_trading": {
+        "path": Path("data") / "paper_trading" / "latest_paper_trading_report.json",
+        "fallback_path": Path("data") / "runtime" / "paper_engine_status.json",
+        "placement": "master_controller_paper_sidecar",
+        "mode": "paper_only",
+        "fields": ("paper_trading_status", "risk_status", "current_balance"),
+    },
+    "phase24_broker_execution_safety": {
+        "path": Path("data") / "execution_safety" / "latest_execution_safety_report.json",
+        "placement": "master_controller_execution_safety_sidecar",
+        "mode": "safety_only",
+        "fields": ("status", "broker_execution_mode", "execution_allowed"),
+    },
+    "phase25_smart_execution": {
+        "path": Path("data") / "execution_safety" / "latest_smart_execution_report.json",
+        "placement": "master_controller_execution_quality_sidecar",
+        "mode": "advisory_only",
+        "fields": ("execution_mode", "execution_recommendation", "execution_quality_score"),
+    },
+    "phase36_memory_consolidation": {
+        "path": Path("data") / "memory_consolidation" / "latest_memory_consolidation_report.json",
+        "placement": "master_controller_memory_sidecar",
+        "mode": "research_only",
+        "fields": ("memory_data_mode", "memory_quality_score", "memory_warning"),
+    },
+    "phase37_auto_repair": {
+        "path": Path("data") / "auto_repair" / "latest_auto_repair_report.json",
+        "placement": "master_controller_diagnostic_sidecar",
+        "mode": "diagnostic_only",
+        "fields": ("repair_data_mode", "repair_status", "severity_score"),
+    },
+}
 
 
 def _read_json_safe(path):
@@ -57,6 +102,42 @@ def _historical_replay_status_summary():
     }
 
 
+def _phase_status_summaries():
+    summaries = {}
+    for phase, spec in PHASE_STATUS_ARTIFACTS.items():
+        path = spec["path"]
+        payload = _read_json_safe(path)
+        artifact_path = path
+        if not payload and spec.get("fallback_path"):
+            artifact_path = spec["fallback_path"]
+            payload = _read_json_safe(artifact_path)
+
+        summary = {
+            "connected": bool(payload),
+            "artifact_path": str(artifact_path).replace("\\", "/"),
+            "pyramid_placement": payload.get("pyramid_placement") or spec["placement"],
+            "mode": spec["mode"],
+            "advisory_only": payload.get("advisory_only", True),
+            "research_only": payload.get("research_only", spec["mode"] == "research_only"),
+            "paper_only": payload.get("paper_only", spec["mode"] == "paper_only"),
+            "shadow_mode": payload.get("shadow_mode", True),
+            "safety": {
+                "live_order_allowed": bool(payload.get("live_order_allowed", False)),
+                "live_rank_mutation_allowed": bool(payload.get("live_rank_mutation_allowed", False)),
+                "broker_orders": bool(payload.get("broker_orders", False)),
+                "telegram_changes": bool(payload.get("telegram_changes", False)),
+                "supabase_writes": bool(payload.get("supabase_writes", False)),
+                "auto_file_changes_allowed": bool(payload.get("auto_file_changes_allowed", False)),
+            },
+            "values": {},
+        }
+        for field in spec["fields"]:
+            if field in payload:
+                summary["values"][field] = payload.get(field)
+        summaries[phase] = summary
+    return summaries
+
+
 def build_runtime_status(value=None):
     now = as_ist_datetime(value)
     permissions = get_mode_permissions(now)
@@ -79,6 +160,7 @@ def build_runtime_status(value=None):
         "reason": permissions["reason"],
         "phase38_runtime_guard": phase38_guard,
         "historical_replay": _historical_replay_status_summary(),
+        "phase_sidecar_status": _phase_status_summaries(),
     }
 
 

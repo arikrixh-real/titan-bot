@@ -1108,6 +1108,15 @@ def build_paper_trading_report(account: Dict[str, Any]) -> Dict[str, Any]:
     if not _list(account.get("open_positions")):
         explanations.append("No open paper positions currently tracked.")
     return {
+        "advisory_only": True,
+        "paper_only": True,
+        "shadow_mode": True,
+        "live_order_allowed": False,
+        "broker_orders": False,
+        "telegram_changes": False,
+        "supabase_writes": False,
+        "live_rank_mutation_allowed": False,
+        "pyramid_placement": "master_controller_paper_sidecar",
         "paper_trading_status": status,
         "initial_balance": safe_float(account.get("initial_balance"), DEFAULT_INITIAL_BALANCE),
         "current_balance": safe_float(account.get("current_balance"), DEFAULT_INITIAL_BALANCE),
