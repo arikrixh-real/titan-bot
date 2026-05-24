@@ -119,6 +119,12 @@ except Exception:
     run_roadmap_batch6_intelligence = None
 
 try:
+    from engines.roadmap_batch7_intelligence import run_roadmap_batch7_intelligence
+    print("PHASES 57-59 ROADMAP BATCH 7 INTELLIGENCE CONNECTED")
+except Exception:
+    run_roadmap_batch7_intelligence = None
+
+try:
     from engines.autonomous_research_brain import build_autonomous_research_report
     print("PHASE 21 AUTONOMOUS RESEARCH BRAIN ACTIVE")
 except Exception:
@@ -2021,6 +2027,57 @@ def refresh_roadmap_batch6_safely(master_input=None, context=None, evaluated_set
         }
 
 
+def refresh_roadmap_batch7_safely(master_input=None, context=None, final_decisions=None):
+    """
+    Phases 57-59 advisory/research sidecars.
+
+    Runs recursive self-reflection, long-term market memory, and institutional
+    coordination in order so Phase 58 consumes Phase 57 and Phase 59 consumes
+    both. This writes only local memory/runtime/report artifacts and never
+    changes live ranking, scanners, alert filtering, execution, broker state,
+    Telegram, Supabase, dashboards, or live orders.
+    """
+    if run_roadmap_batch7_intelligence is None:
+        print("[Phases57-59] Roadmap Batch 7 intelligence not connected.")
+        return None
+
+    try:
+        result = run_roadmap_batch7_intelligence(
+            master_input=master_input,
+            context=context,
+            final_decisions=final_decisions,
+            write_files=True,
+        )
+        phase57 = result.get("phase57_recursive_self_reflection_engine", {}) if isinstance(result, dict) else {}
+        phase58 = result.get("phase58_long_term_market_memory", {}) if isinstance(result, dict) else {}
+        phase59 = result.get("phase59_institutional_coordination_intelligence", {}) if isinstance(result, dict) else {}
+        print(
+            "[Phases57-59] Batch 7 refreshed: "
+            f"p57_run={phase57.get('run_count')} | "
+            f"p58_uses57={phase58.get('phase57_consumed')} | "
+            f"p59_uses57_58={phase59.get('phase57_consumed')}/{phase59.get('phase58_consumed')} | "
+            f"coordination={phase59.get('coordination_advisory')}"
+        )
+        return result
+    except Exception as e:
+        print(f"[Phases57-59 ERROR] Roadmap Batch 7 failed open: {e}")
+        return {
+            "error": str(e),
+            "failed_open": True,
+            "advisory_only": True,
+            "research_only": True,
+            "shadow_mode": True,
+            "affects_live_ranking": False,
+            "affects_execution": False,
+            "broker_mutation": False,
+            "telegram_mutation": False,
+            "supabase_mutation": False,
+            "live_order_behavior": False,
+            "recommended_live_weight": 0.0,
+            "rank_adjustment": 0.0,
+        }
+
+
 def refresh_adaptive_memory_safely():
     """
     Phase 3 cache refresh.
@@ -2532,6 +2589,11 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
             evaluated_setups=[],
             final_decisions={},
         )
+        roadmap_batch7_result = refresh_roadmap_batch7_safely(
+            master_input={},
+            context={},
+            final_decisions={},
+        )
         phase14_meta_evolution_result = refresh_phase14_meta_evolution_safely(
             evaluated_setups=[],
             context={},
@@ -2546,6 +2608,7 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
                 "roadmap_batch4_result": roadmap_batch4_result,
                 "roadmap_batch5_result": roadmap_batch5_result,
                 "roadmap_batch6_result": roadmap_batch6_result,
+                "roadmap_batch7_result": roadmap_batch7_result,
             },
         )
         phase21_autonomous_research_result = refresh_phase21_autonomous_research_safely(
@@ -2648,6 +2711,7 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
             "roadmap_batch4_result": roadmap_batch4_result,
             "roadmap_batch5_result": roadmap_batch5_result,
             "roadmap_batch6_result": roadmap_batch6_result,
+            "roadmap_batch7_result": roadmap_batch7_result,
             "phase14_meta_evolution_result": phase14_meta_evolution_result,
             "phase21_autonomous_research_result": phase21_autonomous_research_result,
             "phase22_backtesting_validation_result": phase22_backtesting_validation_result,
@@ -2892,6 +2956,11 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
         evaluated_setups=evaluated_setups,
         final_decisions=final_decisions,
     )
+    roadmap_batch7_result = refresh_roadmap_batch7_safely(
+        master_input=master_input,
+        context=context,
+        final_decisions=final_decisions,
+    )
     phase14_meta_evolution_result = refresh_phase14_meta_evolution_safely(
         evaluated_setups=evaluated_setups,
         context=context,
@@ -2906,6 +2975,7 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
             "roadmap_batch4_result": roadmap_batch4_result,
             "roadmap_batch5_result": roadmap_batch5_result,
             "roadmap_batch6_result": roadmap_batch6_result,
+            "roadmap_batch7_result": roadmap_batch7_result,
             "phase5_memory_result": phase5_memory_result,
             "phase6_shadow_report_result": phase6_shadow_report_result,
             "phase8_market_narrative_result": phase8_market_narrative_result,
@@ -2958,6 +3028,7 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
         "roadmap_batch4_result": roadmap_batch4_result,
         "roadmap_batch5_result": roadmap_batch5_result,
         "roadmap_batch6_result": roadmap_batch6_result,
+        "roadmap_batch7_result": roadmap_batch7_result,
         "phase14_meta_evolution_result": phase14_meta_evolution_result,
         "phase21_autonomous_research_result": phase21_autonomous_research_result,
         "phase22_backtesting_validation_result": phase22_backtesting_validation_result,
