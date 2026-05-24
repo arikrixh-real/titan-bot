@@ -1,0 +1,74 @@
+TITAN Mission Automation System
+
+Purpose
+- Run controlled, test-mode-only TITAN maintenance missions.
+- Preserve human review and explicit approval at every step.
+- Keep all live trading, secrets, Supabase schema, and deployment surfaces out of scope.
+
+Non-Negotiable Safety Rules
+- NEVER touch live trading execution.
+- NEVER modify .env or any .env.* file.
+- NEVER change Supabase schema or migration files.
+- NEVER auto-approve anything.
+- Use workspace-write sandbox only.
+- Require explicit human approval before edits or commands.
+- Do not deploy automatically.
+- Show all diffs before execution.
+- Test mode only.
+- Only one mission can run at a time.
+- Use tools/titan_mission_runner/mission.lock as the runtime mission lock.
+- If an active mission lock exists, abort safely.
+- If a stale mission lock remains after a crashed process, remove it only when the recorded PID is dead.
+- Remove the runtime mission lock after completion or failure.
+
+Blocked Paths and Surfaces
+- .env
+- .env.*
+- supabase/
+- **/supabase/**
+- **/migrations/**
+- **/schema.sql
+- **/*schema*.sql
+- Any file or command related to live order placement, broker execution, production trading, production deployment, or production secrets.
+
+Mission Workflow
+1. Read the mission request and classify risk.
+2. Refuse any mission that touches blocked paths or live trading execution.
+3. Acquire the runtime mission lock.
+4. Create a rollback-safe git branch before edits.
+5. Show current git status before work.
+6. Run only read-only inspection commands until the human approves edits.
+7. Make scoped edits only after explicit approval.
+8. Show the complete diff after edits.
+9. Run tests only after explicit approval.
+10. Remove the runtime mission lock after completion or failure.
+11. Do not commit, push, merge, deploy, or approve anything automatically.
+12. Use push_after_approval.ps1 only after the human reviews the diff and explicitly approves push.
+
+Approval Rules
+- Approval must be explicit and mission-specific.
+- Silence is not approval.
+- Prior approval for one step does not approve later steps.
+- Pushing requires a separate approval after diff review.
+- Any command that modifies files, git history, remote state, dependencies, environment, infrastructure, database schema, or deployment state requires approval first.
+
+Rollback-Safe Git Rules
+- Start from a clean understanding of git status.
+- Create a mission branch named mission/<timestamp>-<slug>.
+- Before edits, record the base commit.
+- Keep changes scoped to the mission.
+- Show diff before tests, commit, or push.
+- Never force-push.
+- Never reset, checkout, clean, or remove user changes unless explicitly requested.
+
+Test Mode
+- Scripts default to test mode.
+- Test mode validates guardrails, branch state, git status, and diffs.
+- Test mode does not execute deployment, live trading, Supabase schema changes, or secret changes.
+
+Mission Completion
+- Report changed files.
+- Report commands run.
+- Report tests run and results.
+- Report anything skipped because approval was missing.
+- Leave final commit and push decisions to the human.
