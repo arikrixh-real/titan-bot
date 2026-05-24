@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 from engines.time_filter import current_bot_mode
 from utils.market_hours import as_ist_datetime, is_trade_window
@@ -11,6 +11,10 @@ HISTORICAL_REPLAY_PROGRESS_PATH = Path("data") / "runtime" / "historical_replay_
 HISTORICAL_SOURCE_DIR = Path("data") / "historical_longterm"
 DEFAULT_BATCH_SIZE = 250
 MAX_PER_RUN = 500
+DEFAULT_SAMPLING_MODE = "stratified"
+DEFAULT_YEAR_FOCUS = [2008, 2020, 2022, 2024]
+DEFAULT_MAX_PER_SYMBOL = 5
+DEFAULT_MAX_PER_YEAR = 100
 
 
 def _write_json(path: Path, payload: Dict[str, Any]) -> None:
@@ -34,6 +38,33 @@ def _bounded_batch_size(value: Any) -> int:
     except (TypeError, ValueError):
         requested = DEFAULT_BATCH_SIZE
     return min(max(1, requested), MAX_PER_RUN)
+
+
+def _active_replay_config(
+    sampling_mode: str = DEFAULT_SAMPLING_MODE,
+    year_focus: Optional[Union[str, Iterable[int]]] = None,
+    max_per_symbol: Optional[int] = DEFAULT_MAX_PER_SYMBOL,
+    max_per_year: Optional[int] = DEFAULT_MAX_PER_YEAR,
+) -> Dict[str, Any]:
+    clean_sampling_mode = sampling_mode if sampling_mode in {"sequential", "stratified"} else DEFAULT_SAMPLING_MODE
+    clean_year_focus: List[int] = []
+    raw_year_focus = DEFAULT_YEAR_FOCUS if year_focus is None else year_focus
+    if isinstance(raw_year_focus, str):
+        year_values = [value.strip() for value in raw_year_focus.split(",")]
+    else:
+        year_values = list(raw_year_focus)
+    for value in year_values:
+        try:
+            clean_year_focus.append(int(value))
+        except (TypeError, ValueError):
+            continue
+
+    return {
+        "sampling_mode": clean_sampling_mode,
+        "year_focus": clean_year_focus,
+        "max_per_symbol": max(1, int(max_per_symbol)) if max_per_symbol is not None else None,
+        "max_per_year": max(1, int(max_per_year)) if max_per_year is not None else None,
+    }
 
 
 def _latest_jsonl_records(path: Path, limit: int) -> List[Dict[str, Any]]:
@@ -380,10 +411,22 @@ def _refresh_research_memory_engines(records: List[Dict[str, Any]]) -> Dict[str,
     return report
 
 
-def run_historical_replay(batch_size: int = DEFAULT_BATCH_SIZE):
+def run_historical_replay(
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    sampling_mode: str = DEFAULT_SAMPLING_MODE,
+    year_focus: Optional[Union[str, Iterable[int]]] = None,
+    max_per_symbol: Optional[int] = DEFAULT_MAX_PER_SYMBOL,
+    max_per_year: Optional[int] = DEFAULT_MAX_PER_YEAR,
+):
     now_ist = as_ist_datetime()
     mode = current_bot_mode(now_ist)
     bounded_batch_size = _bounded_batch_size(batch_size)
+    replay_config = _active_replay_config(
+        sampling_mode=sampling_mode,
+        year_focus=year_focus,
+        max_per_symbol=max_per_symbol,
+        max_per_year=max_per_year,
+    )
     payload = {
         "timestamp_ist": now_ist.isoformat(),
         "mode": mode,
@@ -392,6 +435,7 @@ def run_historical_replay(batch_size: int = DEFAULT_BATCH_SIZE):
         "source_dir": str(HISTORICAL_SOURCE_DIR),
         "batch_size": bounded_batch_size,
         "max_per_run": MAX_PER_RUN,
+        **replay_config,
         "safety": {
             "telegram": False,
             "broker": False,
@@ -407,6 +451,7 @@ def run_historical_replay(batch_size: int = DEFAULT_BATCH_SIZE):
         "source_dir": str(HISTORICAL_SOURCE_DIR),
         "batch_size": bounded_batch_size,
         "max_per_run": MAX_PER_RUN,
+        **replay_config,
     }
 
     if is_trade_window(now_ist):
@@ -432,6 +477,7 @@ def run_historical_replay(batch_size: int = DEFAULT_BATCH_SIZE):
             limit=bounded_batch_size,
             dry_run=False,
             source_dir=HISTORICAL_SOURCE_DIR,
+            **replay_config,
         )
         generated = int(feeder_report.get("records_generated") or 0)
         latest_records = _latest_jsonl_records(consolidate_historical_experience.INPUT_PATH, generated)
