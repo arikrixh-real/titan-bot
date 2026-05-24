@@ -79,6 +79,28 @@ PHASE_STATUS_ARTIFACTS = {
         "mode": "advisory_only",
         "fields": ("status", "run_count", "priority_count", "phase40_run_count_seen"),
     },
+    "phase42_strategy_genome_architecture": {
+        "path": Path("data") / "runtime" / "strategy_genome_status.json",
+        "fallback_path": Path("data") / "memory" / "strategy_genome_memory.json",
+        "placement": "master_controller_strategy_genome_sidecar",
+        "mode": "advisory_only",
+        "fields": ("status", "run_count", "family_count", "active_regime"),
+    },
+    "phase43_meta_regime_intelligence": {
+        "path": Path("data") / "runtime" / "meta_regime_intelligence_status.json",
+        "fallback_path": Path("data") / "memory" / "meta_regime_intelligence_state.json",
+        "placement": "master_controller_meta_regime_sidecar",
+        "mode": "advisory_only",
+        "fields": (
+            "status",
+            "run_count",
+            "phase42_consumed",
+            "phase42_run_count_seen",
+            "transition_risk_score",
+            "strategy_regime_mismatch_score",
+            "global_meta_regime_risk_score",
+        ),
+    },
 }
 PHASE39_MEMORY_ARTIFACTS = {
     "adaptive_memory": {

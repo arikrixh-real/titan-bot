@@ -33,11 +33,18 @@ IST = ZoneInfo("Asia/Kolkata")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REPORT_PATH = PROJECT_ROOT / "reports" / "strategy_genome_report.txt"
 MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "strategy_genome_memory.json"
+RUNTIME_STATUS_PATH = PROJECT_ROOT / "data" / "runtime" / "strategy_genome_status.json"
 
 REGIME_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "advanced_regime_intelligence_memory.json"
 LIFECYCLE_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "lifecycle_memory.json"
 PROMOTION_GATE_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "promotion_gate_memory.json"
 MASTER_SHADOW_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "master_shadow_memory.json"
+ACCURACY_VALIDATION_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "accuracy_validation_state.json"
+META_LEARNING_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "meta_learning_state.json"
+RL_SHADOW_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "reinforcement_learning_memory.json"
+ADAPTIVE_INTELLIGENCE_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "adaptive_intelligence_state.json"
+HISTORICAL_ADAPTIVE_MEMORY_PATH = PROJECT_ROOT / "data" / "memory" / "historical_adaptive_intelligence_state.json"
+HISTORICAL_REPLAY_PROGRESS_PATH = PROJECT_ROOT / "data" / "runtime" / "historical_replay_progress.json"
 
 OUTCOME_PATHS = [
     PROJECT_ROOT / "data" / "journals" / "trade_outcomes.jsonl",
@@ -48,8 +55,9 @@ OUTCOME_PATHS = [
     PROJECT_ROOT / "journal" / "trade_journal.csv",
 ]
 
-STATE_VERSION = "13.0"
+STATE_VERSION = "42.0"
 PHASE13_SHADOW_MODE = True
+PHASE42_ADVISORY_ONLY = True
 MAX_FILE_BYTES = 1_000_000
 MAX_OUTCOME_ROWS = 300
 MAX_INPUT_SETUPS = 50
@@ -164,6 +172,50 @@ def _read_json_limited(path: Path, name: str) -> tuple[Dict[str, Any], Dict[str,
         freshness["status"] = "READ_ERROR"
         warnings.append(f"{name}_read_error")
         return {}, freshness, warnings
+
+
+def _memory_sample_hint(payload: Dict[str, Any]) -> float:
+    if not isinstance(payload, dict):
+        return 0.0
+    result = 0.0
+    for key in (
+        "records_processed",
+        "total_trades",
+        "total_closed_trades",
+        "closed_records_this_run",
+        "record_count",
+        "last_records_generated",
+        "total_records_generated",
+        "priority_count",
+    ):
+        result = max(result, _safe_float(payload.get(key), 0.0))
+    runtime = payload.get("runtime_status") if isinstance(payload.get("runtime_status"), dict) else {}
+    for key in ("records_processed", "record_count", "priority_count"):
+        result = max(result, _safe_float(runtime.get(key), 0.0))
+    return result
+
+
+def _memory_context_weights(memories: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    weights: Dict[str, Any] = {}
+    for name in (
+        "accuracy_validation",
+        "meta_learning",
+        "rl_shadow",
+        "adaptive_intelligence",
+        "historical_adaptive",
+        "historical_replay",
+    ):
+        payload = memories.get(name, {})
+        sample_hint = _memory_sample_hint(payload)
+        weights[name] = {
+            "available": bool(payload),
+            "sample_hint": round(sample_hint, 3),
+            "genome_context_weight": _score((0.45 if payload else 0.0) + min(1.0, sample_hint / 100.0) * 0.55),
+            "advisory_only": True,
+            "live_weight": 0.0,
+            "rank_adjustment": 0.0,
+        }
+    return weights
 
 
 def _normalize_outcome(value: Any) -> str:
@@ -395,6 +447,14 @@ def _compile_genome(
 ) -> Dict[str, Any]:
     regime = _active_regime(memories.get("regime", {}))
     family_health = _lifecycle_family_health(memories.get("lifecycle", {}))
+    memory_weights = _memory_context_weights(memories)
+    replay_weight = _safe_float((memory_weights.get("historical_replay") or {}).get("genome_context_weight"))
+    meta_weight = _safe_float((memory_weights.get("meta_learning") or {}).get("genome_context_weight"))
+    adaptive_weight = max(
+        _safe_float((memory_weights.get("adaptive_intelligence") or {}).get("genome_context_weight")),
+        _safe_float((memory_weights.get("historical_adaptive") or {}).get("genome_context_weight")),
+    )
+    rl_weight = _safe_float((memory_weights.get("rl_shadow") or {}).get("genome_context_weight"))
     family_rows: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     fingerprint_rows: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     failure_counter: Counter = Counter()
@@ -439,6 +499,9 @@ def _compile_genome(
         decay = _score(max(0.0, previous_win_rate - win_rate) * confidence)
         dominance = _score(len(items) / total_rows)
         stability = _score((1.0 - drift) * 0.55 + avg_health * 0.25 + (1.0 - loss_rate) * 0.20)
+        durability = _score((stability * 0.45) + (_clamp01(samples / float(MIN_FAMILY_SAMPLES)) * 0.25) + (replay_weight * 0.15) + (rl_weight * 0.15))
+        adaptability = _score(((1.0 - drift) * 0.35) + (avg_health * 0.20) + (adaptive_weight * 0.25) + (meta_weight * 0.20))
+        recovery = _score((win_rate * 0.40) + ((1.0 - loss_rate) * 0.30) + (avg_health * 0.20) + (meta_weight * 0.10))
         families[family] = {
             "samples": samples,
             "wins": wins,
@@ -450,6 +513,9 @@ def _compile_genome(
             "avg_rr": round(sum(rrs) / len(rrs), 4) if rrs else 0.0,
             "avg_lifecycle_health": round(avg_health, 4),
             "stability_score": stability,
+            "durability_score": durability,
+            "adaptability_score": adaptability,
+            "recovery_ability_score": recovery,
             "drift_score": drift,
             "decay_score": decay,
             "dominance_score": dominance,
@@ -501,6 +567,7 @@ def _compile_genome(
         "failure_clusters": failure_clusters,
         "dominant_families": dominant[:MAX_REPORT_ITEMS],
         "decaying_families": decaying[:MAX_REPORT_ITEMS],
+        "memory_context_weights": memory_weights,
     }
 
 
@@ -554,7 +621,19 @@ def _detect_forbidden_imports() -> List[str]:
 def _safety_block() -> Dict[str, Any]:
     violations = _detect_forbidden_imports()
     return {
+        "advisory_only": True,
+        "research_only": True,
+        "shadow_mode": True,
+        "affects_live_ranking": False,
+        "affects_execution": False,
+        "broker_mutation": False,
+        "telegram_mutation": False,
+        "supabase_mutation": False,
+        "dashboard_mutation": False,
+        "scanner_mutation": False,
+        "live_order_behavior": False,
         "phase13_shadow_mode": PHASE13_SHADOW_MODE,
+        "phase42_advisory_only": PHASE42_ADVISORY_ONLY,
         "rank_adjustment": 0.0,
         "recommended_live_weight": 0.0,
         "ranking_changes": False,
@@ -585,6 +664,11 @@ def _neutral_snapshot(error: str | None = None, started_at: float | None = None)
     return {
         "version": STATE_VERSION,
         "phase13_shadow_mode": PHASE13_SHADOW_MODE,
+        "phase": "PHASE_42_STRATEGY_GENOME_ARCHITECTURE",
+        "status": "FAILED_OPEN",
+        "run_count": 0,
+        "continued_from_previous_state": False,
+        "previous_run_count": 0,
         "generated_at": _now_text(),
         "runtime_ms": elapsed_ms,
         "runtime_bounded": elapsed_ms <= RUNTIME_BUDGET_SECONDS * 1000.0,
@@ -595,6 +679,7 @@ def _neutral_snapshot(error: str | None = None, started_at: float | None = None)
         "failure_clusters": {},
         "dominant_families": [],
         "decaying_families": [],
+        "memory_context_weights": {},
         "history": [],
         "promotion_gate_features": {
             "samples": 0,
@@ -609,6 +694,7 @@ def _neutral_snapshot(error: str | None = None, started_at: float | None = None)
         "safety": _safety_block(),
         "rank_adjustment": 0.0,
         "recommended_live_weight": 0.0,
+        **_safety_block(),
     }
 
 
@@ -633,6 +719,12 @@ def build_strategy_genome_snapshot(
             "lifecycle": LIFECYCLE_MEMORY_PATH,
             "promotion_gate": PROMOTION_GATE_MEMORY_PATH,
             "master_shadow": MASTER_SHADOW_MEMORY_PATH,
+            "accuracy_validation": ACCURACY_VALIDATION_MEMORY_PATH,
+            "meta_learning": META_LEARNING_MEMORY_PATH,
+            "rl_shadow": RL_SHADOW_MEMORY_PATH,
+            "adaptive_intelligence": ADAPTIVE_INTELLIGENCE_MEMORY_PATH,
+            "historical_adaptive": HISTORICAL_ADAPTIVE_MEMORY_PATH,
+            "historical_replay": HISTORICAL_REPLAY_PROGRESS_PATH,
         }.items():
             if time.monotonic() - started_at > RUNTIME_BUDGET_SECONDS:
                 warnings.append("phase13_runtime_budget_reached")
@@ -645,6 +737,8 @@ def build_strategy_genome_snapshot(
         previous, previous_info, previous_warnings = _read_json_limited(MEMORY_PATH, "phase13_previous")
         if previous_info.get("status") not in {"MISSING", "OVERSIZED_SKIPPED"}:
             warnings.extend(previous_warnings)
+        run_count = _safe_int(previous.get("run_count"), 0) + 1
+        continued = bool(previous)
 
         rows, outcome_warnings = _read_outcome_rows()
         warnings.extend(outcome_warnings)
@@ -669,8 +763,15 @@ def build_strategy_genome_snapshot(
 
         return {
             "version": STATE_VERSION,
+            "phase": "PHASE_42_STRATEGY_GENOME_ARCHITECTURE",
+            "status": "OK",
             "phase13_shadow_mode": PHASE13_SHADOW_MODE,
+            "phase42_advisory_only": PHASE42_ADVISORY_ONLY,
             "generated_at": _now_text(),
+            "run_count": run_count,
+            "continued_from_previous_state": continued,
+            "previous_run_count": previous.get("run_count", 0),
+            "previous_generated_at": previous.get("generated_at"),
             "runtime_ms": elapsed_ms,
             "runtime_bounded": runtime_bounded,
             "active_regime": genome.get("active_regime"),
@@ -680,6 +781,21 @@ def build_strategy_genome_snapshot(
             "failure_clusters": genome.get("failure_clusters"),
             "dominant_families": genome.get("dominant_families"),
             "decaying_families": genome.get("decaying_families"),
+            "memory_context_weights": genome.get("memory_context_weights"),
+            "strategy_survival_signals": {
+                family: {
+                    "durability_score": stats.get("durability_score"),
+                    "adaptability_score": stats.get("adaptability_score"),
+                    "decay_score": stats.get("decay_score"),
+                    "regime_affinity": (genome.get("regime_family_compatibility") or {}).get(genome.get("active_regime"), {}).get(family, {}),
+                    "recovery_ability_score": stats.get("recovery_ability_score"),
+                    "advisory_only": True,
+                    "live_weight": 0.0,
+                    "rank_adjustment": 0.0,
+                }
+                for family, stats in (genome.get("families") or {}).items()
+                if isinstance(stats, dict)
+            },
             "history": history,
             "layer_freshness": freshness,
             "promotion_gate_features": promotion_features,
@@ -693,6 +809,7 @@ def build_strategy_genome_snapshot(
             "safety": _safety_block(),
             "rank_adjustment": 0.0,
             "recommended_live_weight": 0.0,
+            **_safety_block(),
         }
     except Exception as exc:
         return _neutral_snapshot(str(exc), started_at)
@@ -716,6 +833,8 @@ def render_strategy_genome_report(snapshot: Dict[str, Any]) -> str:
         f"- No forbidden imports detected: {safety.get('no_forbidden_imports_detected', False)}",
         "",
         f"Updated: {snapshot.get('generated_at')}",
+        f"Phase: {snapshot.get('phase', 'PHASE_42_STRATEGY_GENOME_ARCHITECTURE')}",
+        f"Run Count: {snapshot.get('run_count', 0)} | Continued: {snapshot.get('continued_from_previous_state', False)}",
         f"Runtime Ms: {snapshot.get('runtime_ms')} | Bounded: {snapshot.get('runtime_bounded')}",
         f"Active Regime: {snapshot.get('active_regime')}",
         "",
@@ -726,6 +845,8 @@ def render_strategy_genome_report(snapshot: Dict[str, Any]) -> str:
             f"- {family}: samples={stats.get('samples', 0)}, "
             f"win_rate={stats.get('win_rate', 0.0)}, "
             f"stability={stats.get('stability_score', 0.0)}, "
+            f"durability={stats.get('durability_score', 0.0)}, "
+            f"adaptability={stats.get('adaptability_score', 0.0)}, "
             f"drift={stats.get('drift_score', 0.0)}, "
             f"state={stats.get('family_state')}"
         )
@@ -745,6 +866,18 @@ def render_strategy_genome_report(snapshot: Dict[str, Any]) -> str:
             f"- Regime compatibility quality: {promotion.get('regime_compatibility_quality', 0.0)}",
             f"- Promotion eligible: {promotion.get('promotion_eligible', False)}",
             f"- Recommended live weight: {promotion.get('recommended_live_weight', 0.0)}",
+            "",
+            "Memory Inputs:",
+        ]
+    )
+    for name, item in sorted((snapshot.get("memory_context_weights") or {}).items()):
+        if isinstance(item, dict):
+            lines.append(
+                f"- {name}: available={item.get('available')}, "
+                f"sample_hint={item.get('sample_hint')}, weight={item.get('genome_context_weight')}"
+            )
+    lines.extend(
+        [
             "",
             "Warnings:",
         ]
@@ -782,6 +915,24 @@ def refresh_strategy_genome(
         )
         MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
         MEMORY_PATH.write_text(json.dumps(snapshot, indent=2, sort_keys=True), encoding="utf-8")
+        runtime_status = {
+            "phase": snapshot.get("phase"),
+            "status": snapshot.get("status", "OK"),
+            "generated_at": snapshot.get("generated_at"),
+            "run_count": snapshot.get("run_count", 0),
+            "continued_from_previous_state": snapshot.get("continued_from_previous_state", False),
+            "family_count": len(snapshot.get("families") or {}),
+            "active_regime": snapshot.get("active_regime"),
+            "dominant_families": snapshot.get("dominant_families") or [],
+            "decaying_families": snapshot.get("decaying_families") or [],
+            "state_path": _display_path(MEMORY_PATH),
+            "report_path": _display_path(REPORT_PATH),
+            "safety_flags": _safety_block(),
+            **_safety_block(),
+        }
+        RUNTIME_STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        RUNTIME_STATUS_PATH.write_text(json.dumps(runtime_status, indent=2, sort_keys=True), encoding="utf-8")
+        snapshot["runtime_status"] = runtime_status
 
         if _report_throttled(force=force):
             return {"skipped": "CACHE_FRESH", "snapshot": snapshot}

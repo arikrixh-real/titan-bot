@@ -48,7 +48,14 @@ class StrategyGenomeEngineTests(unittest.TestCase):
             "LIFECYCLE_MEMORY_PATH": genome.LIFECYCLE_MEMORY_PATH,
             "PROMOTION_GATE_MEMORY_PATH": genome.PROMOTION_GATE_MEMORY_PATH,
             "MASTER_SHADOW_MEMORY_PATH": genome.MASTER_SHADOW_MEMORY_PATH,
+            "ACCURACY_VALIDATION_MEMORY_PATH": genome.ACCURACY_VALIDATION_MEMORY_PATH,
+            "META_LEARNING_MEMORY_PATH": genome.META_LEARNING_MEMORY_PATH,
+            "RL_SHADOW_MEMORY_PATH": genome.RL_SHADOW_MEMORY_PATH,
+            "ADAPTIVE_INTELLIGENCE_MEMORY_PATH": genome.ADAPTIVE_INTELLIGENCE_MEMORY_PATH,
+            "HISTORICAL_ADAPTIVE_MEMORY_PATH": genome.HISTORICAL_ADAPTIVE_MEMORY_PATH,
+            "HISTORICAL_REPLAY_PROGRESS_PATH": genome.HISTORICAL_REPLAY_PROGRESS_PATH,
             "MEMORY_PATH": genome.MEMORY_PATH,
+            "RUNTIME_STATUS_PATH": genome.RUNTIME_STATUS_PATH,
             "REPORT_PATH": genome.REPORT_PATH,
             "OUTCOME_PATHS": genome.OUTCOME_PATHS,
             "REPORT_REFRESH_SECONDS": genome.REPORT_REFRESH_SECONDS,
@@ -65,7 +72,14 @@ class StrategyGenomeEngineTests(unittest.TestCase):
         genome.LIFECYCLE_MEMORY_PATH = tmp_path / "missing_lifecycle.json"
         genome.PROMOTION_GATE_MEMORY_PATH = tmp_path / "missing_promotion.json"
         genome.MASTER_SHADOW_MEMORY_PATH = tmp_path / "missing_master.json"
+        genome.ACCURACY_VALIDATION_MEMORY_PATH = tmp_path / "missing_accuracy.json"
+        genome.META_LEARNING_MEMORY_PATH = tmp_path / "missing_meta_learning.json"
+        genome.RL_SHADOW_MEMORY_PATH = tmp_path / "missing_rl.json"
+        genome.ADAPTIVE_INTELLIGENCE_MEMORY_PATH = tmp_path / "missing_adaptive.json"
+        genome.HISTORICAL_ADAPTIVE_MEMORY_PATH = tmp_path / "missing_historical_adaptive.json"
+        genome.HISTORICAL_REPLAY_PROGRESS_PATH = tmp_path / "missing_replay_progress.json"
         genome.MEMORY_PATH = tmp_path / "memory" / "strategy_genome_memory.json"
+        genome.RUNTIME_STATUS_PATH = tmp_path / "runtime" / "strategy_genome_status.json"
         genome.REPORT_PATH = tmp_path / "reports" / "strategy_genome_report.txt"
         genome.OUTCOME_PATHS = [tmp_path / "missing_outcomes.jsonl"]
 
@@ -274,9 +288,39 @@ class StrategyGenomeEngineTests(unittest.TestCase):
             result = genome.refresh_strategy_genome(force=True)
 
             self.assertTrue(result["phase13_shadow_mode"])
+            self.assertEqual(result["phase"], "PHASE_42_STRATEGY_GENOME_ARCHITECTURE")
+            self.assertEqual(result["run_count"], 1)
             self.assertTrue(genome.MEMORY_PATH.exists())
+            self.assertTrue(genome.RUNTIME_STATUS_PATH.exists())
             self.assertTrue(genome.REPORT_PATH.exists())
             self.assertLess(genome.REPORT_PATH.stat().st_size, 10000)
+
+    def test_phase42_continues_from_previous_state_and_populates_survival_signals(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            self._point_paths(tmp_path)
+            self._write_sample_artifacts(tmp_path)
+            genome.REPORT_REFRESH_SECONDS = -1
+
+            first = genome.refresh_strategy_genome(force=True)
+            second = genome.refresh_strategy_genome(force=True)
+            runtime = json.loads(genome.RUNTIME_STATUS_PATH.read_text(encoding="utf-8"))
+
+            self.assertEqual(first["run_count"], 1)
+            self.assertEqual(second["run_count"], 2)
+            self.assertTrue(second["continued_from_previous_state"])
+            self.assertEqual(second["previous_run_count"], 1)
+            self.assertTrue(second["strategy_survival_signals"])
+            self.assertTrue(second["advisory_only"])
+            self.assertTrue(second["research_only"])
+            self.assertTrue(second["shadow_mode"])
+            self.assertFalse(second["affects_live_ranking"])
+            self.assertFalse(second["affects_execution"])
+            self.assertFalse(second["broker_mutation"])
+            self.assertFalse(second["telegram_mutation"])
+            self.assertFalse(second["supabase_mutation"])
+            self.assertEqual(runtime["run_count"], 2)
+            self.assertEqual(runtime["family_count"], len(second["families"]))
 
     def test_forbidden_imports_absent(self):
         source_path = PROJECT_ROOT / "engines" / "strategy_genome_engine.py"
