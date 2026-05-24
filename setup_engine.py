@@ -359,14 +359,20 @@ def _causal_adjusted_confidence(report):
 
 
 def apply_causal_fields(setup, context, news_items=None):
+    """
+    Fail-open Phase 16 causal annotation.
+
+    Canonical live causal rank ownership belongs to
+    titan_master_brain.final_decision_engine. This setup layer preserves
+    advisory diagnostics only and must not write new_blended_rank_score.
+    """
     if not isinstance(setup, dict):
         return setup
 
     result = dict(setup)
-    existing_rank = _base_rank_score(result)
 
     if build_causal_reasoning_report is None:
-        result["new_blended_rank_score"] = existing_rank
+        result["causal_rank_role"] = "advisory_setup_only"
         return result
 
     try:
@@ -381,10 +387,11 @@ def apply_causal_fields(setup, context, news_items=None):
         result["causal_delayed_effect"] = report.get("delayed_effect_tracking", {})
         result["causal_cascading_risk"] = report.get("cascading_event_risk", {})
         result["causal_explanations"] = report.get("explanations", [])
-        result["new_blended_rank_score"] = round((existing_rank * 0.85) + (causal_confidence * 0.15), 4)
+        result["advisory_causal_confidence_score"] = causal_confidence
+        result["causal_rank_role"] = "advisory_setup_only"
     except Exception as e:
-        result["new_blended_rank_score"] = existing_rank
         result["causal_error"] = str(e)
+        result["causal_rank_role"] = "advisory_setup_only"
 
     return result
 
@@ -393,12 +400,9 @@ def apply_causal_ranking(setups, context, news_items=None):
     if not isinstance(setups, list):
         return []
 
-    ranked = [apply_causal_fields(setup, context, news_items=news_items) for setup in setups]
-    ranked.sort(
-        key=lambda setup: safe_float(setup.get("new_blended_rank_score"), _base_rank_score(setup)),
-        reverse=True,
-    )
-    return ranked
+    # Backward-compatible call surface only. Phase 16 live ordering is
+    # canonical in final_decision_engine, so setup_engine keeps input order.
+    return [apply_causal_fields(setup, context, news_items=news_items) for setup in setups]
 
 
 def clean_market_dataframe(df):

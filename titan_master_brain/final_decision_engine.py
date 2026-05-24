@@ -833,6 +833,11 @@ def _causal_adjusted_confidence(report: Dict[str, Any]) -> float:
 
 
 def _attach_causal_fields(setup: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Canonical Phase 16 live causal ranking layer.
+    setup_engine may attach advisory causal diagnostics, but only this
+    function writes new_blended_rank_score for live master ranking.
+    """
     result = dict(setup)
     existing_rank = _base_rank_score(result)
 
