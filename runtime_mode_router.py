@@ -6,6 +6,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from engines.time_filter import current_bot_mode
+from engines.phase38_test_mode_guard import evaluate_phase38_runtime_guard, write_phase38_runtime_status
 
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -227,5 +228,19 @@ def runtime_mode_snapshot():
         "timezone": "Asia/Kolkata",
         "allow_research_during_market": _allow_research_during_market(),
     }
+    payload["phase38_runtime_guard"] = evaluate_phase38_runtime_guard(
+        {
+            "runtime_mode": os.getenv(MASTER_BRAIN_MODE_ENV) or "READ_ONLY",
+            "current_mode": current_mode,
+            "research_only": current_mode in {"RESEARCH_MODE", "RESEARCH_ONLY", "WEEKEND_MODE"},
+            "live_execution_enabled": False,
+            "telegram_enabled": False,
+            "broker_enabled": False,
+        }
+    )
     _atomic_write_json(RUNTIME_MODE_STATUS_PATH, payload)
+    try:
+        write_phase38_runtime_status(payload)
+    except OSError:
+        pass
     return payload

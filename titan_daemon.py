@@ -9,6 +9,7 @@ from runtime_dispatcher import preview_dispatch
 from runtime_scheduler_map import get_scheduler_map
 from runtime_health import write_daemon_health
 from runtime_error_log import log_runtime_error
+from engines.phase38_test_mode_guard import evaluate_phase38_runtime_guard, write_phase38_runtime_status
 from runtime_resilience_status import (
     OFFICIAL_RUNTIME_PATH,
     update_existing_status_outputs,
@@ -38,6 +39,20 @@ def _runtime_intent():
             "live_execution_enabled": True,
             "telegram_enabled": True,
             "lifecycle_mutation_enabled": True,
+        }
+
+    if runtime_mode in {"LIVE", "TEST", "RESEARCH_ONLY", "SHADOW", "PAPER"}:
+        return {
+            "runtime_mode": runtime_mode,
+            "execution_owner": "NONE",
+            "execution_contract": (
+                f"{runtime_mode} mode is Phase 38 validated and fail-closed in "
+                "the daemon path; no live execution, no Telegram, no journaling, "
+                "no outcomes, no lifecycle mutation."
+            ),
+            "live_execution_enabled": False,
+            "telegram_enabled": False,
+            "lifecycle_mutation_enabled": False,
         }
 
     if runtime_mode == "HEALTH":
@@ -85,6 +100,12 @@ def _write_daemon_health(
         status=status,
     )
     payload.update(_runtime_intent())
+    phase38_guard = evaluate_phase38_runtime_guard(payload)
+    payload["phase38_runtime_guard"] = phase38_guard
+    try:
+        write_phase38_runtime_status(payload)
+    except OSError:
+        pass
     payload.update(
         {
             "official_runtime_path": OFFICIAL_RUNTIME_PATH,

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from engines.risk_engine import calculate_rr
+from engines.phase38_test_mode_guard import evaluate_phase38_runtime_guard, write_phase38_runtime_status
 from engines.trade_levels import calculate_trade_levels
 from titan_master_brain.setup_reasoning_engine import evaluate_setups
 
@@ -15,7 +16,21 @@ RUNTIME_MODE_ENV = "TITAN_RUNTIME_MASTER_BRAIN_MODE"
 MODE_READ_ONLY = "READ_ONLY"
 MODE_HEALTH = "HEALTH"
 MODE_REAL = "REAL"
-SUPPORTED_RUNTIME_MODES = {MODE_READ_ONLY, MODE_HEALTH, MODE_REAL}
+MODE_LIVE = "LIVE"
+MODE_TEST = "TEST"
+MODE_RESEARCH_ONLY = "RESEARCH_ONLY"
+MODE_SHADOW = "SHADOW"
+MODE_PAPER = "PAPER"
+SUPPORTED_RUNTIME_MODES = {
+    MODE_READ_ONLY,
+    MODE_HEALTH,
+    MODE_REAL,
+    MODE_LIVE,
+    MODE_TEST,
+    MODE_RESEARCH_ONLY,
+    MODE_SHADOW,
+    MODE_PAPER,
+}
 EXECUTION_OWNER_NONE = "NONE"
 EXECUTION_OWNER_GITHUB_HEALTH = "GITHUB_HEALTH_ONLY"
 EXECUTION_OWNER_VPS_REAL = "VPS_REAL_SOLE_LIVE_OWNER"
@@ -28,6 +43,7 @@ def _timestamp_ist():
 def _base_payload(scanner_status=None):
     scanner_status = scanner_status if isinstance(scanner_status, dict) else {}
     runtime_contract = _runtime_contract(MODE_READ_ONLY)
+    phase38_guard = evaluate_phase38_runtime_guard(runtime_contract)
     return {
         "timestamp_ist": _timestamp_ist(),
         "mode": scanner_status.get("mode", "READ_ONLY_MASTER_BRAIN"),
@@ -39,6 +55,7 @@ def _base_payload(scanner_status=None):
         "lifecycle_mutation_enabled": runtime_contract["lifecycle_mutation_enabled"],
         "journal_writes_enabled": runtime_contract["journal_writes_enabled"],
         "outcome_tracking_enabled": runtime_contract["outcome_tracking_enabled"],
+        "phase38_runtime_guard": phase38_guard,
         "status": "MASTER_BRAIN_READ_ONLY_COMPLETE",
         "scan_only": bool(scanner_status.get("scan_only")),
         "observe_only": True,
@@ -57,6 +74,21 @@ def _base_payload(scanner_status=None):
 
 
 def _runtime_contract(mode):
+    if mode in {MODE_LIVE, MODE_TEST, MODE_RESEARCH_ONLY, MODE_SHADOW, MODE_PAPER}:
+        return {
+            "runtime_mode": mode,
+            "execution_owner": EXECUTION_OWNER_NONE,
+            "execution_contract": (
+                f"{mode} mode is validated by Phase 38 and held read-only; "
+                "no live execution, Telegram, journaling, outcomes, or lifecycle mutation."
+            ),
+            "live_execution_enabled": False,
+            "telegram_enabled": False,
+            "lifecycle_mutation_enabled": False,
+            "journal_writes_enabled": False,
+            "outcome_tracking_enabled": False,
+        }
+
     if mode == MODE_HEALTH:
         return {
             "runtime_mode": "HEALTH_ONLY",
@@ -171,6 +203,10 @@ def _sanitized_setups(candidate_details):
 
 
 def _write_status(payload, path=MASTER_BRAIN_STATUS_PATH):
+    if isinstance(payload, dict):
+        phase38_guard = evaluate_phase38_runtime_guard(payload)
+        payload["phase38_runtime_guard"] = phase38_guard
+        write_phase38_runtime_status(payload)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
@@ -198,12 +234,35 @@ def _run_real_master_controller(*, health_check=False):
     if health_check:
         return run_real_master_brain(health_check=True)
 
+    runtime_contract = _runtime_contract(MODE_REAL)
+    phase38_guard = evaluate_phase38_runtime_guard(runtime_contract)
+    write_phase38_runtime_status(runtime_contract)
+    if not phase38_guard.get("phase38_runtime_allowed"):
+        payload = {
+            "timestamp_ist": _timestamp_ist(),
+            "mode": "REAL_MASTER_CONTROLLER_BLOCKED_PHASE38",
+            "status": "BLOCKED_PHASE38_FAIL_CLOSED",
+            **_runtime_contract(MODE_READ_ONLY),
+            "phase38_runtime_guard": phase38_guard,
+            "observe_only": True,
+            "scan_only": True,
+            "trade_creation": False,
+            "telegram_alerts": False,
+            "supabase_writes": False,
+            "journal_writes": False,
+            "error_type": None,
+            "error_message": None,
+        }
+        _write_status(payload)
+        return payload
+
     _write_status(
         {
             "timestamp_ist": _timestamp_ist(),
             "mode": "REAL_MASTER_BRAIN_HANDOFF",
             "status": "REAL_MASTER_CONTROLLER_HANDOFF",
-            **_runtime_contract(MODE_REAL),
+            **runtime_contract,
+            "phase38_runtime_guard": phase38_guard,
             "observe_only": False,
             "scan_only": False,
             "trade_creation": True,
@@ -259,6 +318,7 @@ def _run_read_only_master_brain():
     try:
         scanner_status = json.loads(SCANNER_STATUS_PATH.read_text(encoding="utf-8"))
         payload = _base_payload(scanner_status)
+        payload.update(_runtime_contract(_runtime_mode()))
         scanner_scan_only = bool(scanner_status.get("scan_only"))
 
         candidate_details = scanner_status.get("candidate_details", [])
@@ -302,6 +362,7 @@ def _run_read_only_master_brain():
 
     except Exception as exc:
         payload = _base_payload(scanner_status)
+        payload.update(_runtime_contract(_runtime_mode()))
         payload.update(
             {
                 "status": "MASTER_BRAIN_READ_ONLY_ERROR",

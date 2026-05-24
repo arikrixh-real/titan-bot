@@ -1,8 +1,10 @@
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Union
 
 from engines.time_filter import current_bot_mode
+from engines.phase38_test_mode_guard import evaluate_phase38_runtime_guard, write_phase38_runtime_status
 from utils.market_hours import as_ist_datetime, is_trade_window
 
 
@@ -469,6 +471,22 @@ def run_historical_replay(
             "live_journal_writes": False,
         },
     }
+    phase38_guard = evaluate_phase38_runtime_guard(
+        {
+            "runtime_mode": os.getenv("TITAN_RUNTIME_MASTER_BRAIN_MODE") or mode,
+            "current_mode": mode,
+            "research_only": True,
+            "replay_active": True,
+            "live_execution_enabled": False,
+            "telegram_enabled": False,
+            "broker_enabled": False,
+        }
+    )
+    payload["phase38_runtime_guard"] = phase38_guard
+    try:
+        write_phase38_runtime_status(payload)
+    except OSError:
+        pass
 
     progress = {
         **_read_json(HISTORICAL_REPLAY_PROGRESS_PATH),
@@ -487,6 +505,20 @@ def run_historical_replay(
                 "status": payload["status"],
                 "last_skipped_at_ist": payload["timestamp_ist"],
                 "last_skip_reason": "Market hours are active; heavy historical replay is deferred.",
+            }
+        )
+        _write_json(HISTORICAL_REPLAY_STATUS_PATH, payload)
+        _write_json(HISTORICAL_REPLAY_PROGRESS_PATH, progress)
+        return payload
+
+    if not phase38_guard.get("phase38_runtime_allowed"):
+        payload["status"] = "SKIPPED_PHASE38_FAIL_CLOSED"
+        progress.update(
+            {
+                "status": payload["status"],
+                "last_skipped_at_ist": payload["timestamp_ist"],
+                "last_skip_reason": "Phase 38 blocked replay/live runtime combination.",
+                "phase38_runtime_guard": phase38_guard,
             }
         )
         _write_json(HISTORICAL_REPLAY_STATUS_PATH, payload)

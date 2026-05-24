@@ -211,6 +211,13 @@ except Exception:
     build_auto_repair_report = None
 
 try:
+    from engines.phase38_test_mode_guard import evaluate_phase38_runtime_guard, write_phase38_runtime_status
+    print("PHASE 38 TEST MODE GUARD ACTIVE")
+except Exception:
+    evaluate_phase38_runtime_guard = None
+    write_phase38_runtime_status = None
+
+try:
     from intelligence.news_engine import run_news_engine
 except Exception:
     run_news_engine = None
@@ -1569,6 +1576,39 @@ def refresh_phase37_auto_repair_safely(context=None, github_logs=None):
         return {"error": str(e), "failed_open": True, "live_order_allowed": False, "auto_file_changes_allowed": False}
 
 
+def refresh_phase38_test_mode_guard_safely(context=None):
+    """
+    Phase 38 runtime guard sidecar.
+
+    Advisory visibility only in the master controller; it does not alter ranks,
+    scanner output, broker state, Telegram state, Supabase, or final decisions.
+    """
+    if evaluate_phase38_runtime_guard is None:
+        print("[Phase38] Test mode guard not connected.")
+        return None
+
+    try:
+        runtime_context = context if isinstance(context, dict) else {}
+        report = evaluate_phase38_runtime_guard(runtime_context)
+        if write_phase38_runtime_status is not None:
+            write_phase38_runtime_status(runtime_context)
+        print(
+            "[Phase38] Runtime guard evaluated | "
+            f"allowed={report.get('phase38_runtime_allowed')} | "
+            f"unsafe={report.get('phase38_unsafe_states')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase38 ERROR] Runtime guard failed closed: {e}")
+        return {
+            "phase38_runtime_guard_applied": True,
+            "phase38_runtime_allowed": False,
+            "phase38_fail_closed": True,
+            "phase38_unsafe_states": ["PHASE38_GUARD_ERROR_FAIL_CLOSED"],
+            "error": str(e),
+        }
+
+
 def refresh_adaptive_memory_safely():
     """
     Phase 3 cache refresh.
@@ -1955,16 +1995,50 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
 
     if health_check:
         print("[MasterBrain] Health check mode: read-only status checks only.")
+        phase38_runtime_guard = refresh_phase38_test_mode_guard_safely(
+            {
+                "runtime_mode": "HEALTH",
+                "live_execution_enabled": False,
+                "telegram_enabled": False,
+                "broker_enabled": False,
+                "lifecycle_mutation_enabled": False,
+            }
+        )
         return {
             "mode": "HEALTH_CHECK",
             "trade_window_open": _is_market_alert_time(),
             "supabase_configured": bool(os.getenv("SUPABASE_URL") and (os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY"))),
             "telegram_enabled": bool(send_telegram),
             "outcome_tracker_enabled": bool(run_outcome_tracker),
+            "phase38_runtime_guard": phase38_runtime_guard,
             "status": "OK",
         }
 
     trade_window_open = _is_market_alert_time()
+    phase38_runtime_guard = refresh_phase38_test_mode_guard_safely(
+        {
+            "runtime_mode": os.getenv("TITAN_RUNTIME_MASTER_BRAIN_MODE") or "READ_ONLY",
+            "current_mode": "MARKET_MODE" if trade_window_open else "RESEARCH_ONLY",
+            "research_only": not trade_window_open,
+            "live_execution_enabled": bool(send_telegram and trade_window_open),
+            "telegram_enabled": bool(send_telegram and trade_window_open),
+            "broker_enabled": False,
+            "lifecycle_mutation_enabled": bool(run_outcome_tracker and trade_window_open),
+        }
+    )
+    if isinstance(phase38_runtime_guard, dict) and not phase38_runtime_guard.get("phase38_runtime_allowed", False):
+        print("[Phase38] Unsafe runtime combination blocked before live-side effects.")
+        return {
+            "mode": "BLOCKED_PHASE38_FAIL_CLOSED",
+            "status": "BLOCKED",
+            "reason": "Phase 38 blocked unsafe runtime/live capability combination.",
+            "sent_packets": [],
+            "trade_creation": False,
+            "telegram_alerts": False,
+            "supabase_writes": False,
+            "journal_writes": False,
+            "phase38_runtime_guard": phase38_runtime_guard,
+        }
 
     # Always keep market-close cleanup safe.
     auto_close_live_trades_after_market_close()
@@ -2134,6 +2208,7 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
             "phase35_no_trade_intelligence_result": phase35_no_trade_intelligence_result,
             "phase36_memory_consolidation_result": phase36_memory_consolidation_result,
             "phase37_auto_repair_result": phase37_auto_repair_result,
+            "phase38_runtime_guard": phase38_runtime_guard,
         }
 
     master_input = build_master_input()
@@ -2402,6 +2477,7 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
         "phase35_no_trade_intelligence_result": phase35_no_trade_intelligence_result,
         "phase36_memory_consolidation_result": phase36_memory_consolidation_result,
         "phase37_auto_repair_result": phase37_auto_repair_result,
+        "phase38_runtime_guard": phase38_runtime_guard,
     }
 
 
