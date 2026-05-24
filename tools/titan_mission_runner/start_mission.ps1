@@ -13,16 +13,27 @@ param(
     [string]$ApprovalToken,
 
     [Parameter(Mandatory = $false)]
-    [string]$RunMissionApprovalToken
+    [string]$RunMissionApprovalToken,
+
+    [Parameter(Mandatory = $false)]
+    [string]$Phase,
+
+    [Parameter(Mandatory = $false)]
+    [string]$MissionDescription,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$InteractiveStart
 )
 
 $ErrorActionPreference = "Stop"
 
 $RequiredPromptWriteToken = "I_APPROVE_TITAN_MISSION_PROMPT_WRITE"
+$RequiredStartToken = "I_APPROVE_TITAN_MISSION_START"
 $RunMissionToken = "I_APPROVE_TITAN_TEST_MODE_MISSION"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $PromptPath = Join-Path $PSScriptRoot "mission_prompt.txt"
 $RunMissionPath = Join-Path $PSScriptRoot "run_mission.ps1"
+$PushAfterApprovalPath = Join-Path $PSScriptRoot "push_after_approval.ps1"
 
 function Write-Section {
     param([Parameter(Mandatory = $true)][string]$Title)
@@ -31,9 +42,52 @@ function Write-Section {
 }
 
 function Assert-PromptWriteApproval {
+    if ($InteractiveStart) {
+        if ($ApprovalToken -ne $RequiredStartToken) {
+            throw "Approval required before starting the TITAN mission. Re-run and enter exact token '$RequiredStartToken'."
+        }
+        return
+    }
+
     if (-not $ApprovedForPromptWrite -or $ApprovalToken -ne $RequiredPromptWriteToken) {
         throw "Approval required before writing mission_prompt.txt. Re-run with -ApprovedForPromptWrite and -ApprovalToken '$RequiredPromptWriteToken'."
     }
+}
+
+function New-MissionSlug {
+    param([Parameter(Mandatory = $true)][string]$Value)
+
+    $slug = ($Value.ToLowerInvariant() -replace "[^a-z0-9]+", "-").Trim("-")
+    if ([string]::IsNullOrWhiteSpace($slug)) {
+        return "mission"
+    }
+
+    return $slug
+}
+
+function Get-CurrentCommit {
+    $commit = (& git rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to read current git commit."
+    }
+
+    return $commit
+}
+
+function Show-PostMissionCommit {
+    param([Parameter(Mandatory = $true)][string]$BaseCommit)
+
+    $headCommit = Get-CurrentCommit
+    Write-Section "Mission Completion"
+    if ($headCommit -ne $BaseCommit) {
+        Write-Host "Commit created: $headCommit"
+    }
+    else {
+        Write-Host "Commit created: none"
+    }
+
+    Write-Host "Review the final diff, then run this only after approval:"
+    Write-Host $PushAfterApprovalPath
 }
 
 function Read-MultilinePrompt {
@@ -135,17 +189,38 @@ try {
         throw "Missing run_mission.ps1: $RunMissionPath"
     }
 
-    $missionTitle = (Read-Host "Mission title").Trim()
+    $missionTitle = $Phase
     if ([string]::IsNullOrWhiteSpace($missionTitle)) {
-        throw "Mission title is required."
+        $missionTitle = Read-Host "Phase number/name"
+    }
+    $missionTitle = $missionTitle.Trim()
+    if ([string]::IsNullOrWhiteSpace($missionTitle)) {
+        throw "Phase number/name is required."
     }
 
-    $missionDescription = Read-MultilinePrompt
+    $missionDescription = $MissionDescription
+    if ([string]::IsNullOrWhiteSpace($missionDescription)) {
+        $missionDescription = Read-MultilinePrompt
+    }
+    $missionDescription = $missionDescription.Trim()
     if ([string]::IsNullOrWhiteSpace($missionDescription)) {
         throw "Mission description/prompt is required."
     }
 
+    $branchSlug = New-MissionSlug -Value $missionTitle
+    $generatedBranchPattern = "mission/<timestamp>-$branchSlug"
+
+    Write-Section "Mission Summary"
+    Write-Host "Phase: $missionTitle"
+    Write-Host "Branch: $generatedBranchPattern"
+    Write-Host "Prompt path: $PromptPath"
+    Write-Host ""
+    Write-Host $missionDescription
+
     Write-Section "Approval Required"
+    if ($InteractiveStart -and [string]::IsNullOrWhiteSpace($ApprovalToken)) {
+        $ApprovalToken = Read-Host "Type $RequiredStartToken to start"
+    }
     Assert-PromptWriteApproval
 
     $generatedPrompt = New-GeneratedMissionPrompt -Title $missionTitle -Description $missionDescription
@@ -154,12 +229,27 @@ try {
     Write-Section "Mission Prompt Written"
     Write-Host $PromptPath
 
+    $baseCommit = Get-CurrentCommit
+
+    $effectiveRunMissionApprovalToken = $RunMissionApprovalToken
+    if ($InteractiveStart) {
+        $effectiveRunMissionApprovalToken = $RunMissionToken
+    }
+
     $runArgs = @(
         "-ExecutionPolicy", "Bypass",
         "-File", $RunMissionPath,
-        "-MissionName", $missionTitle,
-        "-ApprovalToken", $RunMissionApprovalToken
+        "-MissionName", $missionTitle
     )
+
+    if (-not [string]::IsNullOrWhiteSpace($effectiveRunMissionApprovalToken)) {
+        $runArgs += "-ApprovalToken"
+        $runArgs += $effectiveRunMissionApprovalToken
+    }
+
+    if ($InteractiveStart) {
+        $runArgs += "-ApprovedForSetup"
+    }
 
     if ($ApprovedForSetup) {
         $runArgs += "-ApprovedForSetup"
@@ -173,6 +263,8 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "run_mission.ps1 failed with exit code $LASTEXITCODE."
     }
+
+    Show-PostMissionCommit -BaseCommit $baseCommit
 }
 finally {
     Pop-Location
