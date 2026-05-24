@@ -19,6 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from engines import strategy_genome_engine as genome
+from engines.strategy_genome_engine import run_strategy_genome_engine
 
 
 def sample_setups():
@@ -321,6 +322,28 @@ class StrategyGenomeEngineTests(unittest.TestCase):
             self.assertFalse(second["supabase_mutation"])
             self.assertEqual(runtime["run_count"], 2)
             self.assertEqual(runtime["family_count"], len(second["families"]))
+
+    def test_public_phase42_callable_imports_writes_and_progresses(self):
+        self.assertTrue(callable(run_strategy_genome_engine))
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            self._point_paths(tmp_path)
+            self._write_sample_artifacts(tmp_path)
+
+            first = run_strategy_genome_engine(write_files=True)
+            second = run_strategy_genome_engine(write_files=True)
+            runtime = json.loads(genome.RUNTIME_STATUS_PATH.read_text(encoding="utf-8"))
+
+            self.assertEqual(first["status"], "OK")
+            self.assertEqual(first["run_count"], 1)
+            self.assertFalse(first["continued_from_previous_state"])
+            self.assertEqual(second["status"], "OK")
+            self.assertEqual(second["run_count"], 2)
+            self.assertTrue(second["continued_from_previous_state"])
+            self.assertTrue(genome.MEMORY_PATH.exists())
+            self.assertTrue(genome.RUNTIME_STATUS_PATH.exists())
+            self.assertTrue(genome.REPORT_PATH.exists())
+            self.assertEqual(runtime["run_count"], 2)
 
     def test_forbidden_imports_absent(self):
         source_path = PROJECT_ROOT / "engines" / "strategy_genome_engine.py"

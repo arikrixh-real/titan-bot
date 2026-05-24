@@ -84,7 +84,7 @@ PHASE_STATUS_ARTIFACTS = {
         "fallback_path": Path("data") / "memory" / "strategy_genome_memory.json",
         "placement": "master_controller_strategy_genome_sidecar",
         "mode": "advisory_only",
-        "fields": ("status", "run_count", "family_count", "active_regime"),
+        "fields": ("status", "run_count", "continued_from_previous_state", "family_count", "active_regime"),
     },
     "phase43_meta_regime_intelligence": {
         "path": Path("data") / "runtime" / "meta_regime_intelligence_status.json",
@@ -94,6 +94,7 @@ PHASE_STATUS_ARTIFACTS = {
         "fields": (
             "status",
             "run_count",
+            "continued_from_previous_state",
             "phase42_consumed",
             "phase42_run_count_seen",
             "transition_risk_score",

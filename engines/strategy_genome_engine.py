@@ -944,8 +944,42 @@ def refresh_strategy_genome(
         return _neutral_snapshot(str(exc))
 
 
+def run_strategy_genome_engine(
+    evaluated_setups: List[Dict[str, Any]] | None = None,
+    final_decisions: Dict[str, Any] | None = None,
+    context: Dict[str, Any] | None = None,
+    phase_results: Dict[str, Any] | None = None,
+    write_files: bool = True,
+    force: bool = True,
+) -> Dict[str, Any]:
+    """
+    Stable Phase 42 public runtime callable.
+
+    Defaults write the Phase 42 memory, runtime status, and report artifacts
+    while preserving continuity through the existing persisted state file.
+    """
+    if not write_files:
+        return build_strategy_genome_snapshot(
+            evaluated_setups=evaluated_setups,
+            final_decisions=final_decisions,
+            context=context,
+            phase_results=phase_results,
+        )
+
+    result = refresh_strategy_genome(
+        evaluated_setups=evaluated_setups,
+        final_decisions=final_decisions,
+        context=context,
+        phase_results=phase_results,
+        force=force,
+    )
+    if isinstance(result, dict) and isinstance(result.get("snapshot"), dict):
+        return result["snapshot"]
+    return result
+
+
 if __name__ == "__main__":
-    result = refresh_strategy_genome(force=True)
+    result = run_strategy_genome_engine(write_files=True)
     print("TITAN Phase 13 Strategy Genome refreshed")
     print("Families:", len(result.get("families", {}) or {}))
     print("Report:", REPORT_PATH)

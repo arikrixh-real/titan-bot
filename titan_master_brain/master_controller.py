@@ -79,9 +79,9 @@ except Exception:
     refresh_advanced_regime_intelligence = None
 
 try:
-    from engines.strategy_genome_engine import refresh_strategy_genome
+    from engines.strategy_genome_engine import run_strategy_genome_engine
 except Exception:
-    refresh_strategy_genome = None
+    run_strategy_genome_engine = None
 
 try:
     from engines.meta_evolution_intelligence import refresh_meta_evolution_intelligence
@@ -2107,12 +2107,12 @@ def refresh_phase13_strategy_genome_safely(evaluated_setups, context, final_deci
     never feeds ranking, final decisions, alerts, Telegram, execution, TP/SL,
     broker behavior, market data, alert caps, duplicate prevention, or dashboard.
     """
-    if refresh_strategy_genome is None:
+    if run_strategy_genome_engine is None:
         print("[Phase13] Strategy genome engine not connected.")
         return None
 
     try:
-        result = refresh_strategy_genome(
+        result = run_strategy_genome_engine(
             evaluated_setups=deepcopy(evaluated_setups or []),
             context=deepcopy(context or {}),
             final_decisions=deepcopy(final_decisions or {}),
