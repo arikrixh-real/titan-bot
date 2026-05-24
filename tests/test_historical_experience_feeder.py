@@ -11,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from research import historical_experience_feeder as feeder
+from research.experience_interpretation_engine import build_experience_interpretation_fields
 from research.replay_realism_enrichment import build_replay_realism_fields
 from research.semantic_replay_enrichment import build_semantic_replay_labels
 
@@ -114,6 +115,141 @@ class HistoricalExperienceFeederTests(unittest.TestCase):
         )
 
         self.assertEqual(feeder.build_experience_hash(first), feeder.build_experience_hash(second))
+
+    def test_experience_interpretation_fields_are_csv_additive(self):
+        for field in [
+            "interpreted_outcome_label",
+            "failure_reason_label",
+            "success_reason_label",
+            "behavioral_pattern_label",
+            "emotional_market_proxy",
+            "market_context_label",
+            "conviction_quality_label",
+            "reflection_summary",
+            "experience_weight",
+            "replay_interpretation_confidence",
+            "replay_interpretation_reasons",
+        ]:
+            self.assertIn(field, feeder.CSV_FIELDS)
+
+    def test_experience_interpretation_fields_are_not_in_experience_hash(self):
+        first = _record("AAA", 2020, "trend_momentum_breakout", 1)
+        second = dict(first)
+        second.update(
+            {
+                "interpreted_outcome_label": "CLEAN_WIN",
+                "failure_reason_label": "UNKNOWN",
+                "success_reason_label": "STRONG_BREAKOUT",
+                "behavioral_pattern_label": "DISCIPLINED_ENTRY",
+                "emotional_market_proxy": "TREND_CONFIDENT",
+                "market_context_label": "TRENDING_MARKET",
+                "conviction_quality_label": "HIGH_CONVICTION",
+                "reflection_summary": "test",
+                "experience_weight": 0.9,
+                "replay_interpretation_confidence": 1.0,
+                "replay_interpretation_reasons": ["test"],
+            }
+        )
+
+        self.assertEqual(feeder.build_experience_hash(first), feeder.build_experience_hash(second))
+
+    def test_experience_interpretation_clean_win_is_advisory_and_weighted(self):
+        history = pd.DataFrame(
+            [
+                {
+                    "Datetime": f"2020-01-{day:02d}T00:00:00+00:00",
+                    "Open": 100 + day * 0.4,
+                    "High": 101 + day * 0.4,
+                    "Low": 99 + day * 0.4,
+                    "Close": 100 + day * 0.4,
+                    "Volume": 1000 + day * 20,
+                }
+                for day in range(1, 31)
+            ]
+        )
+        future = pd.DataFrame(
+            [
+                {"Datetime": "2020-02-01T00:00:00+00:00", "Open": 112, "High": 113, "Low": 111, "Close": 112.5, "Volume": 1800},
+                {"Datetime": "2020-02-02T00:00:00+00:00", "Open": 112.5, "High": 115, "Low": 112, "Close": 114, "Volume": 1900},
+            ]
+        )
+        record = _record("AAA", 2020, "trend_momentum_breakout", 30)
+        record.update(
+            {
+                "entry": 112.0,
+                "sl": 110.0,
+                "target": 115.0,
+                "outcome": "WIN",
+                "rr": 1.5,
+                "score": 78.0,
+                "semantic_label_confidence": 0.45,
+                "replay_realism_confidence": 0.9,
+                "exit_timing_label": "NORMAL_EXIT",
+                "regime_label": "TRENDING",
+                "volatility_state_label": "NORMAL",
+            }
+        )
+
+        fields = build_experience_interpretation_fields(history, future, record)
+
+        self.assertEqual(fields["interpreted_outcome_label"], "CLEAN_WIN")
+        self.assertEqual(fields["failure_reason_label"], "UNKNOWN")
+        self.assertIn(fields["success_reason_label"], {"EARLY_TREND_CAPTURE", "STRONG_BREAKOUT", "HIGH_CONFIRMATION"})
+        self.assertGreater(fields["experience_weight"], 0.5)
+        self.assertIn("advisory_research_only_ohlc_replay", fields["replay_interpretation_reasons"])
+
+    def test_experience_interpretation_late_fake_breakout_loss_is_avoidable(self):
+        history = pd.DataFrame(
+            [{"Open": 100, "High": 101, "Low": 99, "Close": 100, "Volume": 1000} for _ in range(24)]
+            + [
+                {"Open": 100, "High": 102, "Low": 99, "Close": 101, "Volume": 1200},
+                {"Open": 101, "High": 103, "Low": 100, "Close": 102, "Volume": 1300},
+                {"Open": 102, "High": 104, "Low": 101, "Close": 103, "Volume": 1400},
+                {"Open": 103, "High": 105, "Low": 102, "Close": 104, "Volume": 1500},
+                {"Open": 104, "High": 109, "Low": 103, "Close": 104.2, "Volume": 1900},
+            ]
+        )
+        future = pd.DataFrame(
+            [
+                {"Open": 104, "High": 105, "Low": 101, "Close": 101.5, "Volume": 1800},
+                {"Open": 101.5, "High": 102, "Low": 99, "Close": 100, "Volume": 1700},
+            ]
+        )
+        record = _record("AAA", 2020, "compression_breakout_attempt", 29)
+        record.update(
+            {
+                "entry": 104.2,
+                "sl": 102.0,
+                "target": 108.0,
+                "outcome": "LOSS",
+                "rr": -1.0,
+                "score": 68.0,
+                "fake_breakout_label": "UPSIDE_FAKE_BREAKOUT",
+                "entry_timing_label": "LATE_ENTRY",
+                "volatility_state_label": "EXPANSION",
+                "semantic_label_confidence": 0.3,
+                "replay_realism_confidence": 0.7,
+            }
+        )
+
+        fields = build_experience_interpretation_fields(history, future, record)
+
+        self.assertEqual(fields["interpreted_outcome_label"], "AVOIDABLE_LOSS")
+        self.assertEqual(fields["failure_reason_label"], "FAKE_BREAKOUT")
+        self.assertEqual(fields["behavioral_pattern_label"], "CHASING")
+        self.assertLess(fields["experience_weight"], 0.7)
+
+    def test_experience_interpretation_unknown_fallbacks_for_sparse_inputs(self):
+        fields = build_experience_interpretation_fields(
+            pd.DataFrame([{"Open": 100, "High": 101, "Low": 99, "Close": 100, "Volume": 1000}]),
+            pd.DataFrame(),
+            {"side": "LONG", "outcome": "NO_FOLLOWUP"},
+        )
+
+        self.assertEqual(fields["interpreted_outcome_label"], "UNKNOWN")
+        self.assertEqual(fields["failure_reason_label"], "UNKNOWN")
+        self.assertEqual(fields["success_reason_label"], "UNKNOWN")
+        self.assertLess(fields["replay_interpretation_confidence"], 0.5)
 
     def test_replay_realism_enrichment_uses_daily_context_and_exit_timing(self):
         history = pd.DataFrame(
