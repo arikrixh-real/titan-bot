@@ -16,6 +16,7 @@ It only makes final decision recommendations safely.
 import csv
 import json
 import os
+from copy import deepcopy
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -980,7 +981,7 @@ def _attach_microstructure_fields(setup: Dict[str, Any], context: Dict[str, Any]
     Fail-open microstructure annotation and bounded 5% ranking blend.
     If data is insufficient, score stays neutral and penalty is minimal.
     """
-    result = dict(setup)
+    result = deepcopy(setup)
     existing_rank = _pre_microstructure_rank_score(result)
 
     if build_microstructure_report is None:
@@ -1004,7 +1005,7 @@ def _attach_microstructure_fields(setup: Dict[str, Any], context: Dict[str, Any]
         market_context = dict(context or {})
         if isinstance(raw.get("market_context"), dict):
             market_context.update(raw.get("market_context"))
-        report = build_microstructure_report(result, depth_data=depth_data, tick_data=tick_data, market_context=market_context)
+        report = build_microstructure_report(deepcopy(result), depth_data=depth_data, tick_data=tick_data, market_context=market_context)
         micro_score = _safe_float(report.get("microstructure_score"), 50.0)
         warning = str(report.get("execution_warning") or "NONE").upper()
         data_mode = str(report.get("data_mode") or "INSUFFICIENT").upper()
@@ -1059,7 +1060,7 @@ def _attach_options_flow_fields(setup: Dict[str, Any], context: Dict[str, Any]) 
     Live execution remains fail-closed; live_order_allowed is never used to
     permit orders.
     """
-    result = dict(setup)
+    result = deepcopy(setup)
     existing_rank = _pre_options_rank_score(result)
 
     if build_options_flow_report is None:
@@ -1068,7 +1069,7 @@ def _attach_options_flow_fields(setup: Dict[str, Any], context: Dict[str, Any]) 
 
     try:
         option_chain = _option_chain_for_setup(result, context)
-        report = build_options_flow_report(setup=result, option_chain=option_chain, context=context or {})
+        report = build_options_flow_report(setup=deepcopy(result), option_chain=option_chain, context=context or {})
         options_score = _safe_float(report.get("options_flow_score"), 50.0)
         warning = str(report.get("options_warning") or "REVIEW").upper()
 
@@ -1114,7 +1115,7 @@ def _attach_news_intelligence_fields(setup: Dict[str, Any], context: Dict[str, A
     Warning penalties are local to final_news_intelligence_rank and never alter
     Telegram, dashboard, alert caps, or live execution.
     """
-    result = dict(setup)
+    result = deepcopy(setup)
     existing_rank = _pre_news_intelligence_rank_score(result)
 
     if build_news_intelligence_report is None:
@@ -1123,7 +1124,7 @@ def _attach_news_intelligence_fields(setup: Dict[str, Any], context: Dict[str, A
 
     try:
         news_items = _news_items_for_setup(result, context)
-        report = build_news_intelligence_report(setup=result, news_items=news_items, context=context or {})
+        report = build_news_intelligence_report(setup=deepcopy(result), news_items=news_items, context=context or {})
         news_score = _safe_float(report.get("news_intelligence_score"), 50.0)
         warning = str(report.get("news_warning") or "REVIEW").upper()
         data_mode = str(report.get("news_data_mode") or "INSUFFICIENT").upper()
@@ -1179,7 +1180,7 @@ def _attach_calendar_fields(setup: Dict[str, Any], context: Dict[str, Any]) -> D
     Fail-open economic-calendar annotation and bounded 5% ranking blend.
     Warning penalties are local to final_calendar_rank.
     """
-    result = dict(setup)
+    result = deepcopy(setup)
     existing_rank = _pre_calendar_rank_score(result)
 
     if build_economic_calendar_report is None:
@@ -1188,7 +1189,7 @@ def _attach_calendar_fields(setup: Dict[str, Any], context: Dict[str, Any]) -> D
 
     try:
         events = _calendar_events_for_setup(result, context)
-        report = build_economic_calendar_report(setup=result, calendar_events=events, context=context or {})
+        report = build_economic_calendar_report(setup=deepcopy(result), calendar_events=events, context=context or {})
         score = _safe_float(report.get("calendar_intelligence_score"), 50.0)
         warning = str(report.get("calendar_warning") or "REVIEW").upper()
         data_mode = str(report.get("calendar_data_mode") or "INSUFFICIENT").upper()
@@ -1244,7 +1245,7 @@ def _attach_liquidity_fields(setup: Dict[str, Any], context: Dict[str, Any]) -> 
     Fail-open institutional liquidity-map annotation and bounded 5% ranking
     blend. Warning penalties are local to final_liquidity_rank.
     """
-    result = dict(setup)
+    result = deepcopy(setup)
     existing_rank = _pre_liquidity_rank_score(result)
 
     if build_institutional_liquidity_report is None:
@@ -1253,7 +1254,7 @@ def _attach_liquidity_fields(setup: Dict[str, Any], context: Dict[str, Any]) -> 
 
     try:
         liquidity_data = _liquidity_data_for_setup(result, context)
-        report = build_institutional_liquidity_report(setup=result, liquidity_data=liquidity_data, context=context or {})
+        report = build_institutional_liquidity_report(setup=deepcopy(result), liquidity_data=liquidity_data, context=context or {})
         score = _safe_float(report.get("liquidity_map_score"), 50.0)
         warning = str(report.get("liquidity_warning") or "REVIEW").upper()
         data_mode = str(report.get("liquidity_data_mode") or "INSUFFICIENT").upper()
@@ -1309,7 +1310,7 @@ def _attach_scenario_fields(setup: Dict[str, Any], context: Dict[str, Any]) -> D
     Fail-open scenario-simulation annotation and bounded 5% ranking blend.
     Warning penalties are local to final_scenario_rank.
     """
-    result = dict(setup)
+    result = deepcopy(setup)
     existing_rank = _pre_scenario_rank_score(result)
 
     if build_scenario_simulation_report is None:
@@ -1318,7 +1319,7 @@ def _attach_scenario_fields(setup: Dict[str, Any], context: Dict[str, Any]) -> D
 
     try:
         market_data = _market_data_for_setup(result, context)
-        report = build_scenario_simulation_report(setup=result, context=context or {}, market_data=market_data)
+        report = build_scenario_simulation_report(setup=deepcopy(result), context=context or {}, market_data=market_data)
         score = _safe_float(report.get("scenario_score"), 50.0)
         warning = str(report.get("scenario_warning") or "REVIEW").upper()
         data_mode = str(report.get("scenario_data_mode") or "INSUFFICIENT").upper()
@@ -1361,7 +1362,7 @@ def _attach_debate_fields(setup: Dict[str, Any], context: Dict[str, Any]) -> Dic
     Fail-open multi-agent debate annotation and bounded 5% ranking blend.
     Warning penalties are local to final_debate_rank.
     """
-    result = dict(setup)
+    result = deepcopy(setup)
     existing_rank = _pre_debate_rank_score(result)
 
     if build_multi_agent_debate_report is None:
@@ -1369,7 +1370,7 @@ def _attach_debate_fields(setup: Dict[str, Any], context: Dict[str, Any]) -> Dic
         return result
 
     try:
-        report = build_multi_agent_debate_report(setup=result, context=context or {})
+        report = build_multi_agent_debate_report(setup=deepcopy(result), context=context or {})
         score = _safe_float(report.get("debate_score"), 50.0)
         warning = str(report.get("debate_warning") or "REVIEW").upper()
         data_mode = str(report.get("debate_data_mode") or "INSUFFICIENT").upper()
@@ -1440,7 +1441,7 @@ def _attach_reflection_fields(setup: Dict[str, Any], context: Dict[str, Any]) ->
     Fail-open self-reflection annotation and bounded 5% ranking blend.
     Warning penalties are local to final_reflection_rank.
     """
-    result = dict(setup)
+    result = deepcopy(setup)
     existing_rank = _pre_reflection_rank_score(result)
 
     if build_self_reflection_report is None:
@@ -1449,7 +1450,7 @@ def _attach_reflection_fields(setup: Dict[str, Any], context: Dict[str, Any]) ->
 
     try:
         report = build_self_reflection_report(
-            setup=result,
+            setup=deepcopy(result),
             context=context or {},
             trade_result=_trade_result_for_setup(result, context or {}),
             trade_history=_trade_history_for_reflection(context or {}),
@@ -1517,7 +1518,7 @@ def _attach_calibration_fields(setup: Dict[str, Any], context: Dict[str, Any]) -
     Fail-open confidence-calibration annotation and bounded 5% ranking blend.
     Warning penalties are local to final_calibration_rank.
     """
-    result = dict(setup)
+    result = deepcopy(setup)
     existing_rank = _pre_calibration_rank_score(result)
 
     if build_confidence_calibration_report is None:
@@ -1526,7 +1527,7 @@ def _attach_calibration_fields(setup: Dict[str, Any], context: Dict[str, Any]) -
 
     try:
         report = build_confidence_calibration_report(
-            setup=result,
+            setup=deepcopy(result),
             prediction_history=_prediction_history_for_calibration(context or {}),
             outcome_history=_outcome_history_for_calibration(context or {}),
             context=context or {},

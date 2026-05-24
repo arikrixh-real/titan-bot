@@ -1107,6 +1107,20 @@ def refresh_phase25_smart_execution_safely(final_decisions=None, paper_result=No
         return {"error": str(e), "failed_open": True, "live_order_allowed": False}
 
 
+def _selected_sidecar_candidate(final_decisions=None):
+    """
+    Snapshot one selected candidate for Phase 26-34 report-only sidecars.
+    Sidecar report builders may annotate their local setup, but must not mutate
+    final selected/rejected pools or downstream alert/execution state.
+    """
+    if not isinstance(final_decisions, dict):
+        return {}
+    selected = final_decisions.get("selected")
+    if not isinstance(selected, list) or not selected or not isinstance(selected[0], dict):
+        return {}
+    return deepcopy(selected[0])
+
+
 def refresh_phase26_microstructure_safely(final_decisions=None, context=None):
     """
     Phase 26 microstructure sidecar report.
@@ -1119,11 +1133,7 @@ def refresh_phase26_microstructure_safely(final_decisions=None, context=None):
         return None
 
     try:
-        setup = {}
-        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
-            candidate = final_decisions.get("selected")[0]
-            if isinstance(candidate, dict):
-                setup = dict(candidate)
+        setup = _selected_sidecar_candidate(final_decisions)
         market_context = context if isinstance(context, dict) else {}
         depth_data = market_context.get("depth_data") or market_context.get("market_depth")
         tick_data = market_context.get("tick_data") or market_context.get("ticks")
@@ -1150,11 +1160,7 @@ def refresh_phase27_options_flow_safely(final_decisions=None, context=None):
         return None
 
     try:
-        setup = {}
-        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
-            candidate = final_decisions.get("selected")[0]
-            if isinstance(candidate, dict):
-                setup = dict(candidate)
+        setup = _selected_sidecar_candidate(final_decisions)
         market_context = context if isinstance(context, dict) else {}
         option_chain = setup.get("option_chain") or market_context.get("option_chain")
         symbol = str(setup.get("symbol") or setup.get("stock") or "").strip()
@@ -1184,11 +1190,7 @@ def refresh_phase28_news_intelligence_safely(final_decisions=None, context=None,
         return None
 
     try:
-        setup = {}
-        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
-            candidate = final_decisions.get("selected")[0]
-            if isinstance(candidate, dict):
-                setup = dict(candidate)
+        setup = _selected_sidecar_candidate(final_decisions)
         market_context = context if isinstance(context, dict) else {}
         candidate_news = setup.get("news_items") or news_items or market_context.get("news_items") or market_context.get("news")
         report = build_news_intelligence_report(setup=setup, news_items=candidate_news, context=market_context)
@@ -1214,11 +1216,7 @@ def refresh_phase29_economic_calendar_safely(final_decisions=None, context=None)
         return None
 
     try:
-        setup = {}
-        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
-            candidate = final_decisions.get("selected")[0]
-            if isinstance(candidate, dict):
-                setup = dict(candidate)
+        setup = _selected_sidecar_candidate(final_decisions)
         market_context = context if isinstance(context, dict) else {}
         calendar_events = setup.get("calendar_events") or market_context.get("calendar_events") or market_context.get("economic_calendar")
         report = build_economic_calendar_report(setup=setup, calendar_events=calendar_events, context=market_context)
@@ -1244,11 +1242,7 @@ def refresh_phase30_liquidity_map_safely(final_decisions=None, context=None):
         return None
 
     try:
-        setup = {}
-        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
-            candidate = final_decisions.get("selected")[0]
-            if isinstance(candidate, dict):
-                setup = dict(candidate)
+        setup = _selected_sidecar_candidate(final_decisions)
         market_context = context if isinstance(context, dict) else {}
         liquidity_data = (
             setup.get("liquidity_data")
@@ -1280,11 +1274,7 @@ def refresh_phase31_scenario_simulation_safely(final_decisions=None, context=Non
         return None
 
     try:
-        setup = {}
-        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
-            candidate = final_decisions.get("selected")[0]
-            if isinstance(candidate, dict):
-                setup = dict(candidate)
+        setup = _selected_sidecar_candidate(final_decisions)
         market_context = context if isinstance(context, dict) else {}
         market_data = (
             setup.get("market_data")
@@ -1316,11 +1306,7 @@ def refresh_phase32_multi_agent_debate_safely(final_decisions=None, context=None
         return None
 
     try:
-        setup = {}
-        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
-            candidate = final_decisions.get("selected")[0]
-            if isinstance(candidate, dict):
-                setup = dict(candidate)
+        setup = _selected_sidecar_candidate(final_decisions)
         market_context = context if isinstance(context, dict) else {}
         report = build_multi_agent_debate_report(setup=setup, context=market_context)
         print(
@@ -1345,11 +1331,7 @@ def refresh_phase33_self_reflection_safely(final_decisions=None, context=None):
         return None
 
     try:
-        setup = {}
-        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
-            candidate = final_decisions.get("selected")[0]
-            if isinstance(candidate, dict):
-                setup = dict(candidate)
+        setup = _selected_sidecar_candidate(final_decisions)
         market_context = context if isinstance(context, dict) else {}
         trade_result = (
             setup.get("trade_result")
@@ -1392,11 +1374,7 @@ def refresh_phase34_confidence_calibration_safely(final_decisions=None, context=
         return None
 
     try:
-        setup = {}
-        if isinstance(final_decisions, dict) and isinstance(final_decisions.get("selected"), list) and final_decisions.get("selected"):
-            candidate = final_decisions.get("selected")[0]
-            if isinstance(candidate, dict):
-                setup = dict(candidate)
+        setup = _selected_sidecar_candidate(final_decisions)
         market_context = context if isinstance(context, dict) else {}
         prediction_history = (
             market_context.get("prediction_history")
