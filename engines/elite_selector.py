@@ -1,3 +1,13 @@
+"""
+Legacy elite setup annotation.
+
+Phase 19 live elite selection is canonical only in
+titan_master_brain.final_decision_engine + engines.elite_trade_selection_filter.
+This module is kept for backward-compatible advisory diagnostics and must not
+change live rank fields, order candidates, or make pass/block decisions.
+"""
+
+
 def _safe_float(value, default=0.0):
     try:
         return float(value)
@@ -38,18 +48,14 @@ def apply_elite_selection(setup):
     setup = dict(setup)
     elite_score = calculate_elite_probability_score(setup)
 
+    # Advisory-only legacy metadata. Do not write rank_score or any live rank.
     setup["elite_probability_score"] = elite_score
-    setup["rank_score"] = elite_score
+    setup["advisory_elite_probability_score"] = elite_score
+    setup["elite_rank_role"] = "advisory_legacy_only"
 
     return setup
 
 
 def rank_elite_setups(setups):
-    ranked = [apply_elite_selection(s) for s in setups]
-
-    ranked.sort(
-        key=lambda x: _safe_float(x.get("elite_probability_score", 0)),
-        reverse=True,
-    )
-
-    return ranked
+    # Backward-compatible API name; this annotates only and preserves input order.
+    return [apply_elite_selection(s) for s in setups]
