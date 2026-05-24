@@ -201,7 +201,9 @@ def _probability_setup_payload(setup: Dict[str, Any]) -> Dict[str, Any]:
 
 def _attach_probability_fields(setup: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Fail-open probability annotation for final candidate ranking.
+    Canonical Phase 15 live probability ranking layer.
+    setup_engine may attach advisory probability diagnostics, but only this
+    function writes blended_rank_score for live master ranking.
     """
     result = dict(setup)
     existing_score = _existing_score(result)

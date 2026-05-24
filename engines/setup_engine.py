@@ -485,32 +485,37 @@ def _probability_context(market_status, data_advantage_context=None):
 
 def apply_probability_fields(setup, context):
     """
-    Fail-open probability annotation. It never blocks or rejects a setup.
+    Fail-open probability annotation. It never blocks, rejects, writes live
+    rank fields, or changes setup order. Phase 15 live probability ranking is
+    owned by titan_master_brain.final_decision_engine.
     """
     if not isinstance(setup, dict):
         return setup
 
     result = dict(setup)
-    existing_score = _existing_rank_score(result)
 
     if build_probability_report is None:
-        result["blended_rank_score"] = existing_score
+        result["probability_rank_role"] = "advisory_setup_only"
         return result
 
     try:
         report = build_probability_report(result, context if isinstance(context, dict) else {})
-        probability_score = _safe_float(report.get("final_probability_score"), existing_score)
+        probability_score = _safe_float(report.get("final_probability_score"), _existing_rank_score(result))
 
+        # Backward-compatible metadata only; final_decision_engine recomputes
+        # the canonical blended_rank_score from the original live score.
         result["probability_score"] = probability_score
+        result["advisory_probability_score"] = probability_score
         result["probability_recommendation"] = report.get("recommendation")
+        result["advisory_probability_recommendation"] = report.get("recommendation")
         result["probability_expected_value"] = report.get("expected_value")
         result["probability_confidence"] = report.get("probability_confidence_score")
         result["probability_uncertainty"] = report.get("uncertainty_score")
         result["probability_explanations"] = report.get("explanations", [])
-        result["blended_rank_score"] = round((0.70 * existing_score) + (0.30 * probability_score), 4)
+        result["probability_rank_role"] = "advisory_setup_only"
     except Exception as e:
-        result["blended_rank_score"] = existing_score
         result["probability_error"] = str(e)
+        result["probability_rank_role"] = "advisory_setup_only"
 
     return result
 
@@ -519,18 +524,9 @@ def apply_probability_ranking(setups, context):
     if not isinstance(setups, list):
         return []
 
-    if rank_setups_by_probability is not None:
-        try:
-            rank_setups_by_probability(setups, context if isinstance(context, dict) else {})
-        except Exception:
-            pass
-
-    ranked = [apply_probability_fields(setup, context) for setup in setups]
-    ranked.sort(
-        key=lambda setup: _safe_float(setup.get("blended_rank_score"), _existing_rank_score(setup)),
-        reverse=True,
-    )
-    return ranked
+    # Kept for compatibility with existing call sites, but intentionally no
+    # longer ranks. The canonical Phase 15 live ranking layer is final_decision_engine.
+    return [apply_probability_fields(setup, context) for setup in setups]
 
 
 def _base_rank_score(setup):
