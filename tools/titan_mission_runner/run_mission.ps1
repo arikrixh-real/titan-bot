@@ -202,6 +202,7 @@ function Invoke-CodexMission {
     Write-Host "Command: $processFile $($processArgs -join ' ')"
     Write-Host "Prompt: $PromptPath"
     Write-Host "Log: $logPath"
+    Write-Host "Safe-read auto-approval policy: active for explicit prompt whitelist only"
     Write-Host "Push: not performed by this runner"
 
     $promptText = Get-Content -LiteralPath $PromptPath -Raw
@@ -353,7 +354,8 @@ try {
     Write-Host "Live trading execution: blocked"
     Write-Host ".env changes: blocked"
     Write-Host "Supabase schema changes: blocked"
-    Write-Host "Auto approval: blocked"
+    Write-Host "Safe-read auto-approval: active for explicit prompt whitelist only"
+    Write-Host "Edit/test/push/deploy auto approval: blocked"
     Write-Host "Deployment: blocked"
 
     Write-Section "Git Status Before Execution"

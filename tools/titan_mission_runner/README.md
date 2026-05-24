@@ -4,6 +4,12 @@
 
 It does not start an internet server, open a public port, register a webhook, deploy, or push. It validates the request, requires the exact mission start approval token, logs bridge actions under `tools/titan_mission_runner/logs/`, and delegates to the existing `start_mission.ps1` / `run_mission.ps1` safety flow.
 
+## Safe-read auto-approval
+
+Mission runner Codex launches use an explicit prompt whitelist for safe read-only inspection commands. Codex may run only the listed safe reads without stopping for human approval: `git status`, `git diff --stat`, `git branch --show-current`, `Test-Path tools/titan_mission_runner/mission.lock`, and `Get-Content` of mission prompt or log files under `tools/titan_mission_runner/`.
+
+Everything outside that whitelist still requires explicit mission-specific human approval, including edits, tests, commits, pushes, deletes, installs, dependency changes, runtime execution, deployment, `.env`, Supabase, broker, Telegram, and live trading changes. Push approval remains separate through `push_after_approval.ps1`; the bridge and runner do not auto-push.
+
 ## Request file
 
 Place one request at:

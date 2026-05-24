@@ -1,25 +1,26 @@
-TITAN Mission Automation System
+﻿TITAN Mission Automation System
 
-Purpose
-- Run controlled, test-mode-only TITAN maintenance missions.
-- Preserve human review and explicit approval at every step.
-- Keep all live trading, secrets, Supabase schema, and deployment surfaces out of scope.
+Generated Mission
+- Created at UTC: 2026-05-24T07:45:35.3994170Z
+- Mission title: Safe Read Verification Final
+
+Mission Prompt
+No-edit verification mission. Do not edit files. Do not run tests. Do not commit or push. Do not install dependencies. Do not run Python or other scripts. Only use the safe-read whitelist commands needed to verify startup inspection: git status --short --branch, git branch --show-current, Test-Path tools/titan_mission_runner/mission.lock, and Get-Content tools/titan_mission_runner/mission_prompt.txt. Then report that edits, tests, commits, pushes, installs, deletes, runtime execution, deployment, .env, Supabase, broker, Telegram, and live trading changes still require explicit human approval, and that no auto-push was performed.
 
 Non-Negotiable Safety Rules
 - NEVER touch live trading execution.
 - NEVER modify .env or any .env.* file.
 - NEVER change Supabase schema or migration files.
-- NEVER auto-approve anything.
+- Auto-approve only the safe-read inspection commands listed in the Safe-Read Auto-Approval Policy below.
 - Use workspace-write sandbox only.
-- Require explicit human approval before edits or commands.
+- Require explicit human approval before edits, tests, commits, pushes, deletes, installs, dependency changes, runtime execution, deployment, .env changes, Supabase changes, broker/Telegram changes, live trading changes, or any command outside the safe-read whitelist.
 - Do not deploy automatically.
+- Do not push automatically.
 - Show all diffs before execution.
 - Test mode only.
 - Only one mission can run at a time.
-- Use tools/titan_mission_runner/mission.lock as the runtime mission lock.
-- If an active mission lock exists, abort safely.
-- If a stale mission lock remains after a crashed process, remove it only when the recorded PID is dead.
-- Remove the runtime mission lock after completion or failure.
+- The mission runner owns tools/titan_mission_runner/mission.lock while Codex is running.
+- Do not create, overwrite, or remove tools/titan_mission_runner/mission.lock from inside Codex.
 
 Blocked Paths and Surfaces
 - .env
@@ -29,27 +30,46 @@ Blocked Paths and Surfaces
 - **/migrations/**
 - **/schema.sql
 - **/*schema*.sql
-- Any file or command related to live order placement, broker execution, production trading, production deployment, or production secrets.
+- Any file or command related to live order placement, broker execution, production trading, production deployment, production secrets, or Telegram live alert sending behavior.
+
+Safe-Read Auto-Approval Policy
+- This policy is an explicit mission-runner prompt exception only; it is not broad Codex freedom.
+- You may run only these read-only inspection commands without asking the human first:
+  - git status
+  - git status --short
+  - git status --short --branch
+  - git diff --stat
+  - git branch --show-current
+  - Test-Path tools/titan_mission_runner/mission.lock
+  - Get-Content of mission prompt or log files under tools/titan_mission_runner/
+- Treat Get-Content as safe-read only when the target path is under tools/titan_mission_runner/ and is a prompt or log file.
+- Do not auto-approve tests or parser checks.
+- Do not auto-approve Python scripts or other scripts that may mutate state.
+- Do not auto-approve git add, commit, push, checkout, switch, reset, clean, stash, merge, rebase, tag, or any git command that changes local or remote state.
+- Do not auto-approve file writes, deletes, moves, formatting, code generation, package installs, dependency changes, environment changes, runtime execution, deployment, Supabase commands, broker commands, Telegram live alert changes, or live trading changes.
+- If a command is not listed as safe-read above, ask for explicit human approval before running it.
 
 Mission Workflow
 1. Read the mission request and classify risk.
 2. Refuse any mission that touches blocked paths or live trading execution.
-3. Acquire the runtime mission lock.
-4. Create a rollback-safe git branch before edits.
-5. Show current git status before work.
-6. Run only read-only inspection commands until the human approves edits.
+3. Confirm the mission runner already holds tools/titan_mission_runner/mission.lock.
+4. Show current git status before work.
+5. Create a rollback-safe git branch only after explicit approval.
+6. Run only safe-read inspection commands from the whitelist until the human approves edits.
 7. Make scoped edits only after explicit approval.
 8. Show the complete diff after edits.
 9. Run tests only after explicit approval.
-10. Remove the runtime mission lock after completion or failure.
+10. Leave runtime mission lock cleanup to the mission runner.
 11. Do not commit, push, merge, deploy, or approve anything automatically.
 12. Use push_after_approval.ps1 only after the human reviews the diff and explicitly approves push.
+13. The mission runner launches Codex with this prompt after I_APPROVE_TITAN_MISSION_START and logs output under tools/titan_mission_runner/logs/.
 
 Approval Rules
 - Approval must be explicit and mission-specific.
 - Silence is not approval.
 - Prior approval for one step does not approve later steps.
 - Pushing requires a separate approval after diff review.
+- No auto-push is allowed.
 - Any command that modifies files, git history, remote state, dependencies, environment, infrastructure, database schema, or deployment state requires approval first.
 
 Rollback-Safe Git Rules
@@ -60,15 +80,3 @@ Rollback-Safe Git Rules
 - Show diff before tests, commit, or push.
 - Never force-push.
 - Never reset, checkout, clean, or remove user changes unless explicitly requested.
-
-Test Mode
-- Scripts default to test mode.
-- Test mode validates guardrails, branch state, git status, and diffs.
-- Test mode does not execute deployment, live trading, Supabase schema changes, or secret changes.
-
-Mission Completion
-- Report changed files.
-- Report commands run.
-- Report tests run and results.
-- Report anything skipped because approval was missing.
-- Leave final commit and push decisions to the human.

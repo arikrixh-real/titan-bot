@@ -128,9 +128,9 @@ Non-Negotiable Safety Rules
 - NEVER touch live trading execution.
 - NEVER modify .env or any .env.* file.
 - NEVER change Supabase schema or migration files.
-- NEVER auto-approve anything.
+- Auto-approve only the safe-read inspection commands listed in the Safe-Read Auto-Approval Policy below.
 - Use workspace-write sandbox only.
-- Require explicit human approval before edits or commands.
+- Require explicit human approval before edits, tests, commits, pushes, deletes, installs, dependency changes, runtime execution, deployment, .env changes, Supabase changes, broker/Telegram changes, live trading changes, or any command outside the safe-read whitelist.
 - Do not deploy automatically.
 - Do not push automatically.
 - Show all diffs before execution.
@@ -149,13 +149,30 @@ Blocked Paths and Surfaces
 - **/*schema*.sql
 - Any file or command related to live order placement, broker execution, production trading, production deployment, production secrets, or Telegram live alert sending behavior.
 
+Safe-Read Auto-Approval Policy
+- This policy is an explicit mission-runner prompt exception only; it is not broad Codex freedom.
+- You may run only these read-only inspection commands without asking the human first:
+  - git status
+  - git status --short
+  - git status --short --branch
+  - git diff --stat
+  - git branch --show-current
+  - Test-Path tools/titan_mission_runner/mission.lock
+  - Get-Content of mission prompt or log files under tools/titan_mission_runner/
+- Treat Get-Content as safe-read only when the target path is under tools/titan_mission_runner/ and is a prompt or log file.
+- Do not auto-approve tests or parser checks.
+- Do not auto-approve Python scripts or other scripts that may mutate state.
+- Do not auto-approve git add, commit, push, checkout, switch, reset, clean, stash, merge, rebase, tag, or any git command that changes local or remote state.
+- Do not auto-approve file writes, deletes, moves, formatting, code generation, package installs, dependency changes, environment changes, runtime execution, deployment, Supabase commands, broker commands, Telegram live alert changes, or live trading changes.
+- If a command is not listed as safe-read above, ask for explicit human approval before running it.
+
 Mission Workflow
 1. Read the mission request and classify risk.
 2. Refuse any mission that touches blocked paths or live trading execution.
 3. Confirm the mission runner already holds tools/titan_mission_runner/mission.lock.
 4. Show current git status before work.
 5. Create a rollback-safe git branch only after explicit approval.
-6. Run only read-only inspection commands until the human approves edits.
+6. Run only safe-read inspection commands from the whitelist until the human approves edits.
 7. Make scoped edits only after explicit approval.
 8. Show the complete diff after edits.
 9. Run tests only after explicit approval.
@@ -169,6 +186,7 @@ Approval Rules
 - Silence is not approval.
 - Prior approval for one step does not approve later steps.
 - Pushing requires a separate approval after diff review.
+- No auto-push is allowed.
 - Any command that modifies files, git history, remote state, dependencies, environment, infrastructure, database schema, or deployment state requires approval first.
 
 Rollback-Safe Git Rules
