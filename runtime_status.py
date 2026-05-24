@@ -65,6 +65,20 @@ PHASE_STATUS_ARTIFACTS = {
         "mode": "diagnostic_only",
         "fields": ("repair_data_mode", "repair_status", "severity_score"),
     },
+    "phase40_accuracy_validation": {
+        "path": Path("data") / "runtime" / "accuracy_validation_status.json",
+        "fallback_path": Path("data") / "memory" / "accuracy_validation_state.json",
+        "placement": "master_controller_accuracy_validation_sidecar",
+        "mode": "advisory_only",
+        "fields": ("status", "run_count", "closed_records_this_run", "new_record_ids_this_run"),
+    },
+    "phase41_meta_learning": {
+        "path": Path("data") / "runtime" / "meta_learning_status.json",
+        "fallback_path": Path("data") / "memory" / "meta_learning_state.json",
+        "placement": "master_controller_meta_learning_sidecar",
+        "mode": "advisory_only",
+        "fields": ("status", "run_count", "priority_count", "phase40_run_count_seen"),
+    },
 }
 PHASE39_MEMORY_ARTIFACTS = {
     "adaptive_memory": {
@@ -437,8 +451,13 @@ def _phase_status_summaries():
             "safety": {
                 "live_order_allowed": bool(payload.get("live_order_allowed", False)),
                 "live_rank_mutation_allowed": bool(payload.get("live_rank_mutation_allowed", False)),
+                "affects_live_ranking": bool(payload.get("affects_live_ranking", False)),
+                "affects_execution": bool(payload.get("affects_execution", False)),
                 "broker_orders": bool(payload.get("broker_orders", False)),
+                "broker_mutation": bool(payload.get("broker_mutation", False)),
                 "telegram_changes": bool(payload.get("telegram_changes", False)),
+                "telegram_mutation": bool(payload.get("telegram_mutation", False)),
+                "supabase_mutation": bool(payload.get("supabase_mutation", False)),
                 "supabase_writes": bool(payload.get("supabase_writes", False)),
                 "auto_file_changes_allowed": bool(payload.get("auto_file_changes_allowed", False)),
             },

@@ -218,6 +218,18 @@ except Exception:
     write_phase38_runtime_status = None
 
 try:
+    from engines.accuracy_validation_framework import refresh_accuracy_validation
+    print("PHASE 40 ACCURACY VALIDATION FRAMEWORK CONNECTED")
+except Exception:
+    refresh_accuracy_validation = None
+
+try:
+    from engines.meta_learning_engine import refresh_meta_learning
+    print("PHASE 41 META-LEARNING ENGINE CONNECTED")
+except Exception:
+    refresh_meta_learning = None
+
+try:
     from intelligence.news_engine import run_news_engine
 except Exception:
     run_news_engine = None
@@ -1672,6 +1684,77 @@ def refresh_phase38_test_mode_guard_safely(context=None):
         }
 
 
+def refresh_phase40_accuracy_validation_safely(context=None):
+    """
+    Phase 40 accuracy validation sidecar.
+
+    Reads existing outcome/replay artifacts and writes advisory memory/status
+    only. It is not allowed to alter final_decision_engine ranking, alert
+    filtering, scanner output, broker state, Telegram, or Supabase.
+    """
+    if refresh_accuracy_validation is None:
+        print("[Phase40] Accuracy validation framework not connected.")
+        return None
+
+    try:
+        report = refresh_accuracy_validation(write_files=True)
+        print(
+            "[Phase40] Accuracy validation refreshed: data/memory/accuracy_validation_state.json | "
+            f"status={report.get('status')} | run_count={report.get('run_count')} | "
+            f"closed={report.get('closed_records_this_run')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase40 ERROR] Accuracy validation failed open: {e}")
+        return {
+            "error": str(e),
+            "failed_open": True,
+            "advisory_only": True,
+            "research_only": True,
+            "shadow_mode": True,
+            "affects_live_ranking": False,
+            "affects_execution": False,
+            "broker_mutation": False,
+            "telegram_mutation": False,
+            "supabase_mutation": False,
+        }
+
+
+def refresh_phase41_meta_learning_safely(accuracy_state=None, context=None):
+    """
+    Phase 41 meta-learning sidecar.
+
+    Consumes Phase 40 state plus existing memories to produce advisory learning
+    priorities. It never writes live weights or changes final decisions.
+    """
+    if refresh_meta_learning is None:
+        print("[Phase41] Meta-learning engine not connected.")
+        return None
+
+    try:
+        report = refresh_meta_learning(accuracy_state=accuracy_state, write_files=True)
+        print(
+            "[Phase41] Meta-learning refreshed: data/memory/meta_learning_state.json | "
+            f"status={report.get('status')} | run_count={report.get('run_count')} | "
+            f"priorities={report.get('priority_count')}"
+        )
+        return report
+    except Exception as e:
+        print(f"[Phase41 ERROR] Meta-learning failed open: {e}")
+        return {
+            "error": str(e),
+            "failed_open": True,
+            "advisory_only": True,
+            "research_only": True,
+            "shadow_mode": True,
+            "affects_live_ranking": False,
+            "affects_execution": False,
+            "broker_mutation": False,
+            "telegram_mutation": False,
+            "supabase_mutation": False,
+        }
+
+
 def refresh_adaptive_memory_safely():
     """
     Phase 3 cache refresh.
@@ -2091,6 +2174,11 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
     )
     if isinstance(phase38_runtime_guard, dict) and not phase38_runtime_guard.get("phase38_runtime_allowed", False):
         print("[Phase38] Unsafe runtime combination blocked before live-side effects.")
+        phase40_accuracy_validation_result = refresh_phase40_accuracy_validation_safely(context={})
+        phase41_meta_learning_result = refresh_phase41_meta_learning_safely(
+            accuracy_state=phase40_accuracy_validation_result,
+            context={},
+        )
         return {
             "mode": "BLOCKED_PHASE38_FAIL_CLOSED",
             "status": "BLOCKED",
@@ -2101,6 +2189,8 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
             "supabase_writes": False,
             "journal_writes": False,
             "phase38_runtime_guard": phase38_runtime_guard,
+            "phase40_accuracy_validation_result": phase40_accuracy_validation_result,
+            "phase41_meta_learning_result": phase41_meta_learning_result,
         }
 
     # Always keep market-close cleanup safe.
@@ -2233,6 +2323,11 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
         phase37_auto_repair_result = refresh_phase37_auto_repair_safely(
             context={},
         )
+        phase40_accuracy_validation_result = refresh_phase40_accuracy_validation_safely(context={})
+        phase41_meta_learning_result = refresh_phase41_meta_learning_safely(
+            accuracy_state=phase40_accuracy_validation_result,
+            context={},
+        )
 
         print("\n[MasterBrain] Cycle Complete\n")
 
@@ -2272,6 +2367,8 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
             "phase36_memory_consolidation_result": phase36_memory_consolidation_result,
             "phase37_auto_repair_result": phase37_auto_repair_result,
             "phase38_runtime_guard": phase38_runtime_guard,
+            "phase40_accuracy_validation_result": phase40_accuracy_validation_result,
+            "phase41_meta_learning_result": phase41_meta_learning_result,
         }
 
     master_input = build_master_input()
@@ -2497,6 +2594,11 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
         autonomous_research_report=phase21_autonomous_research_result,
         context=context,
     )
+    phase40_accuracy_validation_result = refresh_phase40_accuracy_validation_safely(context=context)
+    phase41_meta_learning_result = refresh_phase41_meta_learning_safely(
+        accuracy_state=phase40_accuracy_validation_result,
+        context=context,
+    )
 
     # Run market close cleanup again after outcome tracker
     auto_close_live_trades_after_market_close()
@@ -2541,6 +2643,8 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
         "phase36_memory_consolidation_result": phase36_memory_consolidation_result,
         "phase37_auto_repair_result": phase37_auto_repair_result,
         "phase38_runtime_guard": phase38_runtime_guard,
+        "phase40_accuracy_validation_result": phase40_accuracy_validation_result,
+        "phase41_meta_learning_result": phase41_meta_learning_result,
     }
 
 
