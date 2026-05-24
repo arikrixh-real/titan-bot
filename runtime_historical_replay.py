@@ -113,13 +113,16 @@ def _rebuild_historical_adaptive_memory(records: List[Dict[str, Any]]) -> Dict[s
     closed_rows = historical_adaptive_memory.synthetic_closed_trade_rows(records)
 
     with historical_adaptive_memory.patched_adaptive_inputs(closed_rows):
-        adaptive_state = historical_adaptive_memory.adaptive_memory_builder.build_adaptive_memory(write_files=True)
+        adaptive_state = historical_adaptive_memory.adaptive_memory_builder.build_adaptive_memory(write_files=False)
+    historical_adaptive_memory.tag_historical_state(adaptive_state)
 
     with historical_adaptive_memory.patched_evolution_inputs(closed_rows, dry_run=False):
         evolution_state = historical_adaptive_memory.evolution_engine.run_evolution_engine()
+    historical_adaptive_memory.tag_historical_state(evolution_state)
 
     historical_adaptive_memory.MEMORY_DIR.mkdir(parents=True, exist_ok=True)
     historical_adaptive_memory.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    historical_adaptive_memory.write_historical_adaptive_outputs(adaptive_state)
     historical_adaptive_memory.write_research_report(
         records_loaded=len(records),
         skipped_records=0,
@@ -137,6 +140,29 @@ def _rebuild_historical_adaptive_memory(records: List[Dict[str, Any]]) -> Dict[s
         "evolution_score_boost": evolution_state.get("score_boost"),
         "evolution_filter_strictness": evolution_state.get("filter_strictness"),
         "evolution_ranking_confidence": evolution_state.get("ranking_confidence"),
+    }
+
+
+def _refresh_reinforcement_learning_from_replay(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    from engines import reinforcement_learning_layer
+
+    memory = reinforcement_learning_layer.refresh_reinforcement_memory_from_replay(
+        records,
+        write_files=True,
+    )
+    return {
+        "status": "CONNECTED_SHADOW",
+        "research_only": memory.get("research_only", True),
+        "advisory_only": memory.get("advisory_only", True),
+        "shadow_mode": memory.get("shadow_mode", True),
+        "records_processed": memory.get("records_processed"),
+        "memory_priority": memory.get("memory_priority"),
+        "exploration_exploitation_score": memory.get("exploration_exploitation_score"),
+        "policy_stability": memory.get("policy_stability"),
+        "memory_path": str(reinforcement_learning_layer.REINFORCEMENT_MEMORY_PATH),
+        "report_path": str(reinforcement_learning_layer.REINFORCEMENT_REPORT_PATH),
+        "runtime_status_path": str(reinforcement_learning_layer.REINFORCEMENT_STATUS_PATH),
+        "safety": memory.get("safety"),
     }
 
 
@@ -485,10 +511,12 @@ def run_historical_replay(
         consolidation_report: Optional[Dict[str, Any]] = None
         adaptive_report: Optional[Dict[str, Any]] = None
         research_memory_report: Optional[Dict[str, Any]] = None
+        reinforcement_learning_report: Optional[Dict[str, Any]] = None
         if latest_records:
             consolidation_report = _consolidate_latest(latest_records)
             adaptive_report = _rebuild_historical_adaptive_memory(latest_records)
             research_memory_report = _refresh_research_memory_engines(latest_records)
+            reinforcement_learning_report = _refresh_reinforcement_learning_from_replay(latest_records)
 
         previous_batches = int(progress.get("batches_completed") or 0)
         previous_records = int(progress.get("total_records_generated") or 0)
@@ -501,6 +529,7 @@ def run_historical_replay(
                 "feeder": feeder_report,
                 "consolidation": consolidation_report,
                 "adaptive_memory": adaptive_report,
+                "reinforcement_learning": reinforcement_learning_report,
                 "volatility_memory": (research_memory_report or {}).get("volatility_memory"),
                 "trap_memory": (research_memory_report or {}).get("trap_memory"),
                 "advanced_regime_intelligence": (research_memory_report or {}).get("advanced_regime_intelligence"),
@@ -522,6 +551,7 @@ def run_historical_replay(
                 "total_records_generated": previous_records + generated,
                 "consolidation": consolidation_report,
                 "adaptive_memory": adaptive_report,
+                "reinforcement_learning": reinforcement_learning_report,
                 "research_memory_refresh": research_memory_report,
             }
         )

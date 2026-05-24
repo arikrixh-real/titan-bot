@@ -11,8 +11,19 @@ from __future__ import annotations
 
 import json
 import math
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+MEMORY_DIR = PROJECT_ROOT / "data" / "memory"
+REPORTS_DIR = PROJECT_ROOT / "reports"
+RUNTIME_DIR = PROJECT_ROOT / "data" / "runtime"
+REINFORCEMENT_MEMORY_PATH = MEMORY_DIR / "reinforcement_learning_memory.json"
+REINFORCEMENT_REPORT_PATH = REPORTS_DIR / "phase20_reinforcement_learning_report.txt"
+REINFORCEMENT_STATUS_PATH = RUNTIME_DIR / "reinforcement_learning_status.json"
+MAX_REPLAY_RECORDS = 500
 
 WIN_OUTCOMES = {
     "TP",
@@ -78,6 +89,25 @@ def _as_list(value: Any) -> List[Any]:
     if isinstance(value, tuple):
         return list(value)
     return []
+
+
+def _now_utc() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _read_json(path: Path) -> Dict[str, Any]:
+    try:
+        if not path.exists() or path.stat().st_size == 0:
+            return {}
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_json(path: Path, payload: Dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str), encoding="utf-8")
 
 
 def _raw(trade: Dict[str, Any]) -> Dict[str, Any]:
@@ -364,6 +394,198 @@ def calculate_exploration_exploitation_score(memory: Any = None, context: Any = 
     # Higher score means exploit known edges; lower means keep exploring.
     score = 50.0 + min(25.0, total_trades * 0.8) + ((stability - 50.0) * 0.25) - ((market_uncertainty - 50.0) * 0.20)
     return round(clamp(score, 0.0, 100.0), 2)
+
+
+def _normalize_replay_trade(record: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "symbol": record.get("symbol"),
+        "side": record.get("side"),
+        "strategy_family": record.get("setup_type") or record.get("strategy"),
+        "sector": record.get("sector") or record.get("sector_rotation_label"),
+        "entry": record.get("entry"),
+        "sl": record.get("sl"),
+        "target": record.get("target"),
+        "rr": record.get("rr"),
+        "score": record.get("score"),
+        "final_score": record.get("score"),
+        "confidence_score": record.get("replay_interpretation_confidence")
+        or record.get("replay_realism_confidence")
+        or record.get("semantic_label_confidence"),
+        "source_type": "HISTORICAL_REPLAY",
+        "trading_mode": "RESEARCH_ONLY",
+        "raw": record,
+    }
+
+
+def _normalize_replay_outcome(record: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "outcome": record.get("outcome"),
+        "pnl": safe_float(record.get("pnl_points"), 0.0),
+        "holding_hours": safe_float(record.get("holding_period_days"), 0.0) * 24.0,
+        "source_type": "HISTORICAL_REPLAY",
+    }
+
+
+def _normalize_replay_context(record: Dict[str, Any]) -> Dict[str, Any]:
+    regime = (
+        record.get("regime_label")
+        or record.get("market_context_label")
+        or record.get("trend")
+        or "HISTORICAL_REPLAY"
+    )
+    return {
+        "market_regime": regime,
+        "market_type": regime,
+        "uncertainty_score": 50.0,
+        "source_type": "HISTORICAL_REPLAY",
+        "research_only": True,
+        "advisory_only": True,
+        "shadow_mode": True,
+        "live_mutation": False,
+        "broker_mutation": False,
+        "telegram_mutation": False,
+        "supabase_mutation": False,
+        "affects_live_execution_directly": False,
+    }
+
+
+def build_reinforcement_memory_from_replay(
+    records: Any,
+    existing_memory: Any = None,
+    max_records: int = MAX_REPLAY_RECORDS,
+) -> Dict[str, Any]:
+    """
+    Build a bounded Phase 20 advisory memory snapshot from historical replay rows.
+
+    This is intentionally shadow-only. It returns local memory data and never
+    mutates live ranking, scanner output, broker state, Telegram, or Supabase.
+    """
+    source_records = [record for record in _as_list(records) if isinstance(record, dict)]
+    bounded_records = source_records[-max(1, min(int(safe_float(max_records, MAX_REPLAY_RECORDS)), MAX_REPLAY_RECORDS)) :]
+    prior = _as_dict(existing_memory)
+    regime_memory = dict(_as_dict(prior.get("regime_memory")))
+    reports: List[Dict[str, Any]] = []
+    wins = 0
+    losses = 0
+
+    for record in bounded_records:
+        outcome_label = _outcome_text(record.get("outcome"))
+        if outcome_label not in {"WIN", "LOSS"}:
+            continue
+
+        trade = _normalize_replay_trade(record)
+        outcome = _normalize_replay_outcome(record)
+        context = _normalize_replay_context(record)
+        regime_memory = update_regime_reward_memory(regime_memory, trade, outcome, context)
+        report = build_reinforcement_learning_report(
+            trade,
+            outcome,
+            context=context,
+            memory={"regime_memory": regime_memory, "total_trades": len(bounded_records)},
+        )
+        reports.append(report)
+        wins += 1 if outcome_label == "WIN" else 0
+        losses += 1 if outcome_label == "LOSS" else 0
+
+    policy_stability = check_policy_stability({"regime_memory": regime_memory})
+    return {
+        "version": "20.0",
+        "last_updated": _now_utc(),
+        "source_type": "HISTORICAL_REPLAY",
+        "research_only": True,
+        "advisory_only": True,
+        "shadow_mode": True,
+        "runtime_bounded": True,
+        "records_received": len(source_records),
+        "records_processed": len(reports),
+        "max_records_per_run": MAX_REPLAY_RECORDS,
+        "total_trades": sum(int(safe_float(bucket.get("trades"), 0.0)) for bucket in regime_memory.values()),
+        "total_wins": wins,
+        "total_losses": losses,
+        "regime_memory": regime_memory,
+        "policy_stability": policy_stability,
+        "memory_priority": prioritize_reinforcement_memory(regime_memory),
+        "exploration_exploitation_score": calculate_exploration_exploitation_score(
+            {"regime_memory": regime_memory, "total_trades": len(reports)},
+            {"market_uncertainty": 50.0},
+        ),
+        "sample_reports": reports[-10:],
+        "safety": {
+            "final_decision_engine_rank_mutation": False,
+            "scanner_mutation": False,
+            "execution_mutation": False,
+            "broker_mutation": False,
+            "telegram_mutation": False,
+            "supabase_mutation": False,
+            "autonomous_self_modifying_live_trading": False,
+        },
+    }
+
+
+def write_reinforcement_learning_report(memory: Dict[str, Any], path: Path = REINFORCEMENT_REPORT_PATH) -> None:
+    lines = [
+        "TITAN PHASE 20 REINFORCEMENT LEARNING REPORT",
+        "=" * 60,
+        f"Updated: {memory.get('last_updated')}",
+        f"Source: {memory.get('source_type')}",
+        f"Research only: {memory.get('research_only')}",
+        f"Advisory only: {memory.get('advisory_only')}",
+        f"Shadow mode: {memory.get('shadow_mode')}",
+        f"Records processed: {memory.get('records_processed')}",
+        f"Memory priority: {memory.get('memory_priority')}",
+        f"Exploration/exploitation score: {memory.get('exploration_exploitation_score')}",
+        f"Policy stability: {memory.get('policy_stability', {}).get('state')}",
+        "",
+        "SAFETY",
+        "-" * 60,
+    ]
+    for key, value in sorted(_as_dict(memory.get("safety")).items()):
+        lines.append(f"{key}: {str(value).lower()}")
+
+    lines.extend(["", "TOP REGIME REWARD MEMORY", "-" * 60])
+    buckets = list(_as_dict(memory.get("regime_memory")).items())
+    buckets.sort(key=lambda item: int(safe_float(_as_dict(item[1]).get("trades"), 0.0)), reverse=True)
+    for name, bucket in buckets[:12]:
+        row = _as_dict(bucket)
+        lines.append(
+            f"{name}: trades={row.get('trades')}, wins={row.get('wins')}, "
+            f"losses={row.get('losses')}, avg_reward={row.get('avg_reward')}"
+        )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def refresh_reinforcement_memory_from_replay(
+    records: Any,
+    write_files: bool = True,
+    memory_path: Path = REINFORCEMENT_MEMORY_PATH,
+    report_path: Path = REINFORCEMENT_REPORT_PATH,
+    status_path: Path = REINFORCEMENT_STATUS_PATH,
+) -> Dict[str, Any]:
+    existing_memory = _read_json(memory_path)
+    memory = build_reinforcement_memory_from_replay(records, existing_memory=existing_memory)
+    status = {
+        "timestamp_utc": memory.get("last_updated"),
+        "status": "CONNECTED_SHADOW" if memory.get("records_processed") else "CONNECTED_NO_REPLAY_RECORDS",
+        "phase": "PHASE_20_REINFORCEMENT_LEARNING",
+        "research_only": True,
+        "advisory_only": True,
+        "shadow_mode": True,
+        "memory_path": str(memory_path).replace("\\", "/"),
+        "report_path": str(report_path).replace("\\", "/"),
+        "records_processed": memory.get("records_processed"),
+        "policy_stability": memory.get("policy_stability"),
+        "safety": memory.get("safety"),
+    }
+    memory["runtime_status"] = status
+
+    if write_files:
+        _write_json(memory_path, memory)
+        write_reinforcement_learning_report(memory, report_path)
+        _write_json(status_path, status)
+
+    return memory
 
 
 def check_policy_stability(memory: Any = None) -> Dict[str, Any]:
