@@ -22,7 +22,10 @@ param(
     [string]$MissionDescription,
 
     [Parameter(Mandatory = $false)]
-    [switch]$InteractiveStart
+    [switch]$InteractiveStart,
+
+    [Parameter(Mandatory = $false)]
+    [string]$CodexCommand = "codex"
 )
 
 $ErrorActionPreference = "Stop"
@@ -129,13 +132,12 @@ Non-Negotiable Safety Rules
 - Use workspace-write sandbox only.
 - Require explicit human approval before edits or commands.
 - Do not deploy automatically.
+- Do not push automatically.
 - Show all diffs before execution.
 - Test mode only.
 - Only one mission can run at a time.
-- Use tools/titan_mission_runner/mission.lock as the runtime mission lock.
-- If an active mission lock exists, abort safely.
-- If a stale mission lock remains after a crashed process, remove it only when the recorded PID is dead.
-- Remove the runtime mission lock after completion or failure.
+- The mission runner owns tools/titan_mission_runner/mission.lock while Codex is running.
+- Do not create, overwrite, or remove tools/titan_mission_runner/mission.lock from inside Codex.
 
 Blocked Paths and Surfaces
 - .env
@@ -150,16 +152,17 @@ Blocked Paths and Surfaces
 Mission Workflow
 1. Read the mission request and classify risk.
 2. Refuse any mission that touches blocked paths or live trading execution.
-3. Acquire the runtime mission lock.
+3. Confirm the mission runner already holds tools/titan_mission_runner/mission.lock.
 4. Show current git status before work.
 5. Create a rollback-safe git branch only after explicit approval.
 6. Run only read-only inspection commands until the human approves edits.
 7. Make scoped edits only after explicit approval.
 8. Show the complete diff after edits.
 9. Run tests only after explicit approval.
-10. Remove the runtime mission lock after completion or failure.
+10. Leave runtime mission lock cleanup to the mission runner.
 11. Do not commit, push, merge, deploy, or approve anything automatically.
 12. Use push_after_approval.ps1 only after the human reviews the diff and explicitly approves push.
+13. The mission runner launches Codex with this prompt after I_APPROVE_TITAN_MISSION_START and logs output under tools/titan_mission_runner/logs/.
 
 Approval Rules
 - Approval must be explicit and mission-specific.
@@ -239,7 +242,8 @@ try {
     $runArgs = @(
         "-ExecutionPolicy", "Bypass",
         "-File", $RunMissionPath,
-        "-MissionName", $missionTitle
+        "-MissionName", $missionTitle,
+        "-CodexCommand", $CodexCommand
     )
 
     if (-not [string]::IsNullOrWhiteSpace($effectiveRunMissionApprovalToken)) {

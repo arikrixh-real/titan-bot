@@ -1,5 +1,8 @@
 [CmdletBinding()]
-param()
+param(
+    [Parameter(Mandatory = $false)]
+    [string]$CodexCommand = "codex"
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -44,4 +47,5 @@ if ([string]::IsNullOrWhiteSpace($missionDescription)) {
 & $StartMissionPath `
     -InteractiveStart `
     -Phase $phase `
-    -MissionDescription $missionDescription
+    -MissionDescription $missionDescription `
+    -CodexCommand $CodexCommand
