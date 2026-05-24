@@ -143,6 +143,12 @@ except Exception:
     run_roadmap_batch10_intelligence = None
 
 try:
+    from engines.roadmap_batch11_intelligence import run_roadmap_batch11_intelligence
+    print("PHASES 69-71 ROADMAP BATCH 11 INTELLIGENCE CONNECTED")
+except Exception:
+    run_roadmap_batch11_intelligence = None
+
+try:
     from engines.autonomous_research_brain import build_autonomous_research_report
     print("PHASE 21 AUTONOMOUS RESEARCH BRAIN ACTIVE")
 except Exception:
@@ -2249,6 +2255,58 @@ def refresh_roadmap_batch10_safely(master_input=None, context=None, final_decisi
         }
 
 
+def refresh_roadmap_batch11_safely(master_input=None, context=None, final_decisions=None):
+    """
+    Phases 69-71 advisory/research sidecars.
+
+    Runs portfolio consciousness, shadow capital allocation intelligence, and
+    the master AGI trading orchestrator in order so Phase 70 consumes Phase 69
+    and Phase 71 consumes both. This writes only local memory/runtime/report
+    artifacts and never changes live ranking, scanners, alert filtering,
+    execution, broker state, Telegram, Supabase, dashboards, code, or live
+    orders.
+    """
+    if run_roadmap_batch11_intelligence is None:
+        print("[Phases69-71] Roadmap Batch 11 intelligence not connected.")
+        return None
+
+    try:
+        result = run_roadmap_batch11_intelligence(
+            master_input=master_input,
+            context=context,
+            final_decisions=final_decisions,
+            write_files=True,
+        )
+        phase69 = result.get("phase69_portfolio_consciousness_engine", {}) if isinstance(result, dict) else {}
+        phase70 = result.get("phase70_autonomous_capital_allocation_intelligence", {}) if isinstance(result, dict) else {}
+        phase71 = result.get("phase71_master_agi_trading_orchestrator", {}) if isinstance(result, dict) else {}
+        print(
+            "[Phases69-71] Batch 11 refreshed: "
+            f"p69_run={phase69.get('run_count')} | "
+            f"p70_uses69={phase70.get('phase69_consumed')} | "
+            f"p71_uses69_70={phase71.get('phase69_consumed')}/{phase71.get('phase70_consumed')} | "
+            f"agi_orchestration={phase71.get('master_agi_orchestration_score')}"
+        )
+        return result
+    except Exception as e:
+        print(f"[Phases69-71 ERROR] Roadmap Batch 11 failed open: {e}")
+        return {
+            "error": str(e),
+            "failed_open": True,
+            "advisory_only": True,
+            "research_only": True,
+            "shadow_mode": True,
+            "affects_live_ranking": False,
+            "affects_execution": False,
+            "broker_mutation": False,
+            "telegram_mutation": False,
+            "supabase_mutation": False,
+            "live_order_behavior": False,
+            "recommended_live_weight": 0.0,
+            "rank_adjustment": 0.0,
+        }
+
+
 def refresh_adaptive_memory_safely():
     """
     Phase 3 cache refresh.
@@ -2780,6 +2838,11 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
             context={},
             final_decisions={},
         )
+        roadmap_batch11_result = refresh_roadmap_batch11_safely(
+            master_input={},
+            context={},
+            final_decisions={},
+        )
         phase14_meta_evolution_result = refresh_phase14_meta_evolution_safely(
             evaluated_setups=[],
             context={},
@@ -2798,6 +2861,7 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
                 "roadmap_batch8_result": roadmap_batch8_result,
                 "roadmap_batch9_result": roadmap_batch9_result,
                 "roadmap_batch10_result": roadmap_batch10_result,
+                "roadmap_batch11_result": roadmap_batch11_result,
             },
         )
         phase21_autonomous_research_result = refresh_phase21_autonomous_research_safely(
@@ -2904,6 +2968,7 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
             "roadmap_batch8_result": roadmap_batch8_result,
             "roadmap_batch9_result": roadmap_batch9_result,
             "roadmap_batch10_result": roadmap_batch10_result,
+            "roadmap_batch11_result": roadmap_batch11_result,
             "phase14_meta_evolution_result": phase14_meta_evolution_result,
             "phase21_autonomous_research_result": phase21_autonomous_research_result,
             "phase22_backtesting_validation_result": phase22_backtesting_validation_result,
@@ -3168,6 +3233,11 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
         context=context,
         final_decisions=final_decisions,
     )
+    roadmap_batch11_result = refresh_roadmap_batch11_safely(
+        master_input=master_input,
+        context=context,
+        final_decisions=final_decisions,
+    )
     phase14_meta_evolution_result = refresh_phase14_meta_evolution_safely(
         evaluated_setups=evaluated_setups,
         context=context,
@@ -3186,6 +3256,7 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
             "roadmap_batch8_result": roadmap_batch8_result,
             "roadmap_batch9_result": roadmap_batch9_result,
             "roadmap_batch10_result": roadmap_batch10_result,
+            "roadmap_batch11_result": roadmap_batch11_result,
             "phase5_memory_result": phase5_memory_result,
             "phase6_shadow_report_result": phase6_shadow_report_result,
             "phase8_market_narrative_result": phase8_market_narrative_result,
@@ -3242,6 +3313,7 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
         "roadmap_batch8_result": roadmap_batch8_result,
         "roadmap_batch9_result": roadmap_batch9_result,
         "roadmap_batch10_result": roadmap_batch10_result,
+        "roadmap_batch11_result": roadmap_batch11_result,
         "phase14_meta_evolution_result": phase14_meta_evolution_result,
         "phase21_autonomous_research_result": phase21_autonomous_research_result,
         "phase22_backtesting_validation_result": phase22_backtesting_validation_result,
