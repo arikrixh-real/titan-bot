@@ -95,6 +95,12 @@ except Exception:
     run_meta_regime_intelligence = None
 
 try:
+    from engines.roadmap_batch3_intelligence import run_roadmap_batch3_intelligence
+    print("PHASES 44-47 ROADMAP BATCH 3 INTELLIGENCE CONNECTED")
+except Exception:
+    run_roadmap_batch3_intelligence = None
+
+try:
     from engines.autonomous_research_brain import build_autonomous_research_report
     print("PHASE 21 AUTONOMOUS RESEARCH BRAIN ACTIVE")
 except Exception:
@@ -1798,6 +1804,56 @@ def refresh_phase43_meta_regime_safely(context=None):
         }
 
 
+def refresh_roadmap_batch3_safely(master_input=None, context=None, evaluated_setups=None, news_items=None):
+    """
+    Phases 44-47 advisory/research sidecars.
+
+    Runs temporal, breadth, crowd psychology, and persistent narrative memory in
+    order so each phase can consume earlier Batch 3 state. This writes only
+    local memory/runtime/report artifacts and never changes live ranking,
+    scanners, alert filtering, execution, broker state, Telegram, Supabase,
+    dashboards, or live orders.
+    """
+    if run_roadmap_batch3_intelligence is None:
+        print("[Phases44-47] Roadmap Batch 3 intelligence not connected.")
+        return None
+
+    try:
+        result = run_roadmap_batch3_intelligence(
+            master_input=master_input,
+            context=context,
+            evaluated_setups=evaluated_setups,
+            news_items=news_items,
+            write_files=True,
+        )
+        phase44 = result.get("phase44_temporal_intelligence", {}) if isinstance(result, dict) else {}
+        phase45 = result.get("phase45_market_breadth_intelligence", {}) if isinstance(result, dict) else {}
+        phase46 = result.get("phase46_crowd_psychology", {}) if isinstance(result, dict) else {}
+        phase47 = result.get("phase47_market_narrative_intelligence", {}) if isinstance(result, dict) else {}
+        print(
+            "[Phases44-47] Batch 3 refreshed: "
+            f"p44_run={phase44.get('run_count')} | "
+            f"p45_uses44={phase45.get('phase44_consumed')} | "
+            f"p46_uses44_45={phase46.get('phase44_consumed')}/{phase46.get('phase45_consumed')} | "
+            f"p47_uses45_46={phase47.get('phase45_consumed')}/{phase47.get('phase46_consumed')}"
+        )
+        return result
+    except Exception as e:
+        print(f"[Phases44-47 ERROR] Roadmap Batch 3 failed open: {e}")
+        return {
+            "error": str(e),
+            "failed_open": True,
+            "advisory_only": True,
+            "research_only": True,
+            "shadow_mode": True,
+            "affects_live_ranking": False,
+            "affects_execution": False,
+            "broker_mutation": False,
+            "telegram_mutation": False,
+            "supabase_mutation": False,
+        }
+
+
 def refresh_adaptive_memory_safely():
     """
     Phase 3 cache refresh.
@@ -2286,6 +2342,12 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
             },
         )
         phase43_meta_regime_result = refresh_phase43_meta_regime_safely(context={})
+        roadmap_batch3_result = refresh_roadmap_batch3_safely(
+            master_input={},
+            context={},
+            evaluated_setups=[],
+            news_items=news_items,
+        )
         phase14_meta_evolution_result = refresh_phase14_meta_evolution_safely(
             evaluated_setups=[],
             context={},
@@ -2296,6 +2358,7 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
                 "phase12_advanced_regime_result": phase12_advanced_regime_result,
                 "phase13_strategy_genome_result": phase13_strategy_genome_result,
                 "phase43_meta_regime_result": phase43_meta_regime_result,
+                "roadmap_batch3_result": roadmap_batch3_result,
             },
         )
         phase21_autonomous_research_result = refresh_phase21_autonomous_research_safely(
@@ -2394,6 +2457,7 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
             "phase12_advanced_regime_result": phase12_advanced_regime_result,
             "phase13_strategy_genome_result": phase13_strategy_genome_result,
             "phase43_meta_regime_result": phase43_meta_regime_result,
+            "roadmap_batch3_result": roadmap_batch3_result,
             "phase14_meta_evolution_result": phase14_meta_evolution_result,
             "phase21_autonomous_research_result": phase21_autonomous_research_result,
             "phase22_backtesting_validation_result": phase22_backtesting_validation_result,
@@ -2615,6 +2679,12 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
         },
     )
     phase43_meta_regime_result = refresh_phase43_meta_regime_safely(context=context)
+    roadmap_batch3_result = refresh_roadmap_batch3_safely(
+        master_input=master_input,
+        context=context,
+        evaluated_setups=evaluated_setups,
+        news_items=news_items,
+    )
     phase14_meta_evolution_result = refresh_phase14_meta_evolution_safely(
         evaluated_setups=evaluated_setups,
         context=context,
@@ -2625,6 +2695,7 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
             "phase12_advanced_regime_result": phase12_advanced_regime_result,
             "phase13_strategy_genome_result": phase13_strategy_genome_result,
             "phase43_meta_regime_result": phase43_meta_regime_result,
+            "roadmap_batch3_result": roadmap_batch3_result,
             "phase5_memory_result": phase5_memory_result,
             "phase6_shadow_report_result": phase6_shadow_report_result,
             "phase8_market_narrative_result": phase8_market_narrative_result,
@@ -2673,6 +2744,7 @@ def _run_master_brain_unlocked(send_telegram=True, run_outcome_tracker=True, hea
         "phase12_advanced_regime_result": phase12_advanced_regime_result,
         "phase13_strategy_genome_result": phase13_strategy_genome_result,
         "phase43_meta_regime_result": phase43_meta_regime_result,
+        "roadmap_batch3_result": roadmap_batch3_result,
         "phase14_meta_evolution_result": phase14_meta_evolution_result,
         "phase21_autonomous_research_result": phase21_autonomous_research_result,
         "phase22_backtesting_validation_result": phase22_backtesting_validation_result,
