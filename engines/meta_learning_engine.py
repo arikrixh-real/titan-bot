@@ -331,8 +331,19 @@ def refresh_meta_learning(accuracy_state: Dict[str, Any] | None = None, write_fi
     return state
 
 
+def run_meta_learning(accuracy_state: Dict[str, Any] | None = None, write_files: bool = True) -> Dict[str, Any]:
+    """
+    Stable public runtime callable for Phase 41.
+
+    Loads the previous persisted meta-learning state, continues from the latest
+    Phase 40 state when one is not supplied, writes state/status/report
+    artifacts, and returns the refreshed state.
+    """
+    return refresh_meta_learning(accuracy_state=accuracy_state, write_files=write_files)
+
+
 if __name__ == "__main__":
-    result = refresh_meta_learning(write_files=True)
+    result = run_meta_learning(write_files=True)
     print("TITAN Phase 41 Meta-Learning refreshed")
     print("Status:", result.get("status"))
     print("Run count:", result.get("run_count"))

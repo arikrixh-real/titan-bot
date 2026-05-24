@@ -12,6 +12,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from engines import accuracy_validation_framework as phase40
 from engines import meta_learning_engine as phase41
+import runtime_status
 
 
 class Phase40Phase41Tests(unittest.TestCase):
@@ -94,10 +95,40 @@ class Phase40Phase41Tests(unittest.TestCase):
             ), patch.object(phase41, "REPORT_PATH", phase41_report), patch.object(
                 phase41, "MEMORY_INPUTS", {"reinforcement_learning": rl_memory}
             ):
-                first40 = phase40.refresh_accuracy_validation(write_files=True)
-                first41 = phase41.refresh_meta_learning(accuracy_state=first40, write_files=True)
-                second40 = phase40.refresh_accuracy_validation(write_files=True)
-                second41 = phase41.refresh_meta_learning(accuracy_state=second40, write_files=True)
+                first40 = phase40.run_accuracy_validation(write_files=True)
+                first41 = phase41.run_meta_learning(accuracy_state=first40, write_files=True)
+                second40 = phase40.run_accuracy_validation(write_files=True)
+                second41 = phase41.run_meta_learning(accuracy_state=second40, write_files=True)
+
+                phase_specs = {
+                    "phase40_accuracy_validation": {
+                        "path": phase40_runtime,
+                        "fallback_path": phase40_memory,
+                        "placement": "master_controller_accuracy_validation_sidecar",
+                        "mode": "advisory_only",
+                        "fields": ("status", "run_count", "closed_records_this_run", "new_record_ids_this_run"),
+                    },
+                    "phase41_meta_learning": {
+                        "path": phase41_runtime,
+                        "fallback_path": phase41_memory,
+                        "placement": "master_controller_meta_learning_sidecar",
+                        "mode": "advisory_only",
+                        "fields": ("status", "run_count", "priority_count", "phase40_run_count_seen"),
+                    },
+                }
+                with patch.object(runtime_status, "PHASE_STATUS_ARTIFACTS", phase_specs):
+                    visibility = runtime_status._phase_status_summaries()
+                artifacts_written = all(
+                    path.exists()
+                    for path in (
+                        phase40_memory,
+                        phase40_runtime,
+                        phase40_report,
+                        phase41_memory,
+                        phase41_runtime,
+                        phase41_report,
+                    )
+                )
 
         self.assertEqual(first40["run_count"], 1)
         self.assertEqual(second40["run_count"], 2)
@@ -110,6 +141,16 @@ class Phase40Phase41Tests(unittest.TestCase):
         self.assertTrue(second41["learning_priorities"])
         self.assertFalse(second41["affects_live_ranking"])
         self.assertFalse(second41["affects_execution"])
+        self.assertTrue(callable(phase40.run_accuracy_validation))
+        self.assertTrue(callable(phase41.run_meta_learning))
+        self.assertTrue(artifacts_written)
+        self.assertTrue(visibility["phase40_accuracy_validation"]["connected"])
+        self.assertTrue(visibility["phase41_meta_learning"]["connected"])
+        self.assertEqual(visibility["phase40_accuracy_validation"]["values"]["run_count"], 2)
+        self.assertEqual(visibility["phase41_meta_learning"]["values"]["run_count"], 2)
+        self.assertEqual(visibility["phase41_meta_learning"]["values"]["phase40_run_count_seen"], 2)
+        self.assertTrue(visibility["phase40_accuracy_validation"]["values"])
+        self.assertTrue(visibility["phase41_meta_learning"]["values"])
 
 
 if __name__ == "__main__":

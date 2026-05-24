@@ -437,8 +437,19 @@ def refresh_accuracy_validation(write_files: bool = True) -> Dict[str, Any]:
     return state
 
 
+def run_accuracy_validation(write_files: bool = True) -> Dict[str, Any]:
+    """
+    Stable public runtime callable for Phase 40.
+
+    Loads the previous persisted state, increments run_count through the
+    existing refresh path, writes state/status/report artifacts, and returns the
+    refreshed state.
+    """
+    return refresh_accuracy_validation(write_files=write_files)
+
+
 if __name__ == "__main__":
-    result = refresh_accuracy_validation(write_files=True)
+    result = run_accuracy_validation(write_files=True)
     print("TITAN Phase 40 Accuracy Validation refreshed")
     print("Status:", result.get("status"))
     print("Run count:", result.get("run_count"))

@@ -218,16 +218,16 @@ except Exception:
     write_phase38_runtime_status = None
 
 try:
-    from engines.accuracy_validation_framework import refresh_accuracy_validation
+    from engines.accuracy_validation_framework import run_accuracy_validation
     print("PHASE 40 ACCURACY VALIDATION FRAMEWORK CONNECTED")
 except Exception:
-    refresh_accuracy_validation = None
+    run_accuracy_validation = None
 
 try:
-    from engines.meta_learning_engine import refresh_meta_learning
+    from engines.meta_learning_engine import run_meta_learning
     print("PHASE 41 META-LEARNING ENGINE CONNECTED")
 except Exception:
-    refresh_meta_learning = None
+    run_meta_learning = None
 
 try:
     from intelligence.news_engine import run_news_engine
@@ -1692,12 +1692,12 @@ def refresh_phase40_accuracy_validation_safely(context=None):
     only. It is not allowed to alter final_decision_engine ranking, alert
     filtering, scanner output, broker state, Telegram, or Supabase.
     """
-    if refresh_accuracy_validation is None:
+    if run_accuracy_validation is None:
         print("[Phase40] Accuracy validation framework not connected.")
         return None
 
     try:
-        report = refresh_accuracy_validation(write_files=True)
+        report = run_accuracy_validation(write_files=True)
         print(
             "[Phase40] Accuracy validation refreshed: data/memory/accuracy_validation_state.json | "
             f"status={report.get('status')} | run_count={report.get('run_count')} | "
@@ -1727,12 +1727,12 @@ def refresh_phase41_meta_learning_safely(accuracy_state=None, context=None):
     Consumes Phase 40 state plus existing memories to produce advisory learning
     priorities. It never writes live weights or changes final decisions.
     """
-    if refresh_meta_learning is None:
+    if run_meta_learning is None:
         print("[Phase41] Meta-learning engine not connected.")
         return None
 
     try:
-        report = refresh_meta_learning(accuracy_state=accuracy_state, write_files=True)
+        report = run_meta_learning(accuracy_state=accuracy_state, write_files=True)
         print(
             "[Phase41] Meta-learning refreshed: data/memory/meta_learning_state.json | "
             f"status={report.get('status')} | run_count={report.get('run_count')} | "
