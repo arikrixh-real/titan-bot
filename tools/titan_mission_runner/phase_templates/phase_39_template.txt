@@ -1,0 +1,36 @@
+TITAN Phase 39 Mission Template
+
+Mission Goal
+- Define the exact Phase 39 maintenance or test-mode objective here.
+- Keep scope limited to the requested mission.
+
+Non-Negotiable Safety Rules
+- Do not touch TITAN core unless the mission explicitly allows a scoped core change.
+- Do not modify .env or any .env.* file.
+- Do not change Supabase schema, migrations, or schema SQL files.
+- Do not touch broker, live execution, order placement, or production trading code.
+- Do not touch the Telegram send path or live alert sending behavior.
+- Do not deploy, restart daemons, push, merge, force-push, reset --hard, or clean files.
+- Do not modify runtime, data, log, or report files unless the mission explicitly targets files under tools/titan_mission_runner/.
+- Require explicit human approval before edits, tests that write files, commits, rollback, or push.
+
+Required Workflow
+1. Read the mission and classify risk.
+2. Show git status before work.
+3. Inspect with read-only commands first.
+4. Ask approval before editing.
+5. Keep edits scoped to approved paths.
+6. Run parser checks and relevant tests only after approval.
+7. Show final diff.
+8. Leave deploy, daemon restart, and push to explicit separate approval.
+
+Approval Tokens
+- Push token: I_APPROVE_TITAN_PUSH
+- Rollback token: I_APPROVE_TITAN_ROLLBACK
+
+Completion Report
+- Changed files:
+- Commands run:
+- Tests/checks run:
+- Skipped actions:
+- Final diff summary:

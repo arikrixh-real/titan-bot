@@ -1,0 +1,35 @@
+TITAN Generic Phase Mission Template
+
+Mission Goal
+- Describe the requested phase, expected outcome, and allowed files.
+- State anything explicitly out of scope.
+
+Non-Negotiable Safety Rules
+- Do not modify .env or any .env.* file.
+- Do not change Supabase schema, migrations, or schema SQL files.
+- Do not touch broker, live execution, order placement, or production trading code.
+- Do not touch the Telegram send path or live alert sending behavior.
+- Do not deploy, restart daemons, push, merge, force-push, reset --hard, or clean files.
+- Do not modify runtime, data, log, or report files unless explicitly approved for the mission.
+- Require explicit human approval before edits, tests that write files, commits, rollback, or push.
+
+Required Workflow
+1. Read the mission and classify risk.
+2. Show git status before work.
+3. Use read-only inspection before edits.
+4. Ask approval before editing.
+5. Keep edits scoped to approved paths.
+6. Run parser checks and relevant tests only after approval.
+7. Show final diff.
+8. Do not deploy, restart daemons, or push without separate explicit approval.
+
+Approval Tokens
+- Push token: I_APPROVE_TITAN_PUSH
+- Rollback token: I_APPROVE_TITAN_ROLLBACK
+
+Completion Report
+- Changed files:
+- Commands run:
+- Tests/checks run:
+- Skipped actions:
+- Final diff summary:

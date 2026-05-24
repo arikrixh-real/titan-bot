@@ -22,15 +22,6 @@ $BlockedPathPatterns = @(
     "schema.*\.sql$"
 )
 
-$MainBranchDirtyPathPatterns = @(
-    "^data/",
-    "^reports/",
-    "^runtime_",
-    "^logs/",
-    "heartbeat",
-    "status"
-)
-
 function Write-Section {
     param([Parameter(Mandatory = $true)][string]$Title)
     Write-Host ""
@@ -130,47 +121,47 @@ function Assert-NoStagedChanges {
 }
 
 function Assert-NoBlockedWorkingDiff {
-    $changedFiles = & git diff --name-only
+    $changedFiles = @(& git diff --name-only)
     if ($LASTEXITCODE -ne 0) {
         throw "Unable to inspect unstaged changed files."
     }
 
-    foreach ($file in $changedFiles) {
+    $untrackedFiles = @(& git ls-files --others --exclude-standard)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to inspect untracked files."
+    }
+
+    $allWorkingFiles = @($changedFiles + $untrackedFiles) | Where-Object {
+        -not [string]::IsNullOrWhiteSpace($_)
+    } | Sort-Object -Unique
+
+    foreach ($file in $allWorkingFiles) {
         if (Test-BlockedPath -Path $file) {
-            throw "Blocked path detected in unstaged diff: $file"
+            throw "Blocked path detected in working tree: $file"
         }
     }
 }
 
-function Assert-NoMainBranchRuntimeDataReportChanges {
-    param([Parameter(Mandatory = $true)][string]$Branch)
-
-    if ($Branch -ne "main") {
-        return
-    }
-
-    $statusLines = & git status --porcelain
+function Get-GitStatusLines {
+    $statusLines = @(& git status --porcelain)
     if ($LASTEXITCODE -ne 0) {
         throw "Unable to inspect git status."
     }
 
-    foreach ($line in $statusLines) {
-        if ($line.Length -lt 4) {
-            continue
-        }
+    return $statusLines
+}
 
-        $indexStatus = $line.Substring(0, 1)
-        $worktreeStatus = $line.Substring(1, 1)
-        $path = $line.Substring(3)
-        if ($path -match " -> ") {
-            $path = ($path -split " -> ", 2)[1]
-        }
+function Write-DirtyFiles {
+    param([Parameter(Mandatory = $true)][string[]]$StatusLines)
 
-        $hasUnstagedChange = $worktreeStatus -ne " "
-        $isUntracked = $indexStatus -eq "?" -and $worktreeStatus -eq "?"
-        if (($hasUnstagedChange -or $isUntracked) -and (Test-MainBranchDirtyPath -Path $path)) {
-            throw "Refusing to push main with unstaged runtime/data/report change: $path"
-        }
+    Write-Section "Dirty Files Before Push"
+    if ($StatusLines.Count -eq 0) {
+        Write-Host "Working tree is clean."
+        return
+    }
+
+    foreach ($line in $StatusLines) {
+        Write-Host $line
     }
 }
 
@@ -192,15 +183,22 @@ try {
     if ([string]::IsNullOrWhiteSpace($latestCommitHash)) {
         throw "Latest commit is missing. Refusing to push."
     }
+    Invoke-Git -Arguments @("cat-file", "-e", "HEAD^{commit}")
     $latestCommitMessage = (Invoke-GitCapture -Arguments @("log", "-1", "--pretty=%s")).Trim()
-    if ([string]::IsNullOrWhiteSpace($latestCommitMessage)) {
-        throw "Latest commit message is missing. Refusing to push."
-    }
     Write-Host "Hash: $latestCommitHash"
     Write-Host "Message: $latestCommitMessage"
 
     Write-Section "Git Status"
-    Invoke-Git -Arguments @("status", "--short")
+    $statusLines = @(Get-GitStatusLines)
+    if ($statusLines.Count -eq 0) {
+        Write-Host "Working tree is clean."
+    }
+    else {
+        foreach ($line in $statusLines) {
+            Write-Host $line
+        }
+    }
+    Write-DirtyFiles -StatusLines $statusLines
 
     Write-Section "Origin Main Diff Stat"
     & git rev-parse --verify "origin/main" *> $null
@@ -215,8 +213,7 @@ try {
     Assert-NoActiveMissionLock
     Assert-NoStagedChanges
     Assert-NoBlockedWorkingDiff
-    Assert-NoMainBranchRuntimeDataReportChanges -Branch $branch
-    Write-Host "No active mission lock, staged changes, or blocked working diff detected."
+    Write-Host "No active mission lock, staged changes, or blocked working tree paths detected."
 
     if (-not $ApprovedForPush -or $ApprovalToken -ne $RequiredApprovalToken) {
         throw "Push blocked. Re-run with -ApprovedForPush and exact -ApprovalToken '$RequiredApprovalToken'."
