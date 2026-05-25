@@ -9,6 +9,8 @@ from utils.market_hours import IST, as_ist_datetime, is_trade_window
 
 
 HEALTH_PATH = Path("data") / "runtime" / "titan_market_data_health.json"
+OHLC_FRESHNESS_STATUS_PATH = Path("data") / "runtime" / "ohlc_freshness_status.json"
+RUNTIME_LIVE_PRICE_CACHE_META_PATH = Path("data") / "runtime" / "live_price_cache_meta.json"
 OHLC_CACHE_DIR = Path("data") / "cache"
 LIVE_PRICE_CACHE_PATH = Path("data") / "live_price_cache.json"
 LIVE_PRICE_CACHE_META_PATH = Path("data") / "live_price_cache_meta.json"
@@ -43,6 +45,12 @@ def _read_json_safe(path):
     return payload if isinstance(payload, dict) else {}
 
 
+def _write_json_safe(path, payload):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+
 def _parse_timestamp(value):
     if value is None:
         return None
@@ -64,6 +72,13 @@ def _parse_timestamp(value):
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=IST)
     return parsed.astimezone(IST)
+
+
+def _file_mtime_ist(path):
+    try:
+        return datetime.fromtimestamp(os.path.getmtime(path), tz=timezone.utc).astimezone(IST)
+    except Exception:
+        return None
 
 
 def _age_seconds(value, now):
@@ -160,18 +175,84 @@ def inspect_ohlc_freshness(now=None, cache_dir=OHLC_CACHE_DIR):
     }
 
 
+def _cache_timestamp(meta_item):
+    if not isinstance(meta_item, dict):
+        return None
+    return (
+        meta_item.get("updated_at_ist")
+        or meta_item.get("updated_at")
+        or meta_item.get("timestamp_ist")
+        or meta_item.get("timestamp")
+        or meta_item.get("cache_last_updated")
+    )
+
+
+def _authoritative_live_price_meta(cache, meta, cache_path, now_ist):
+    if meta:
+        source = "live_price_cache_meta"
+        authoritative = dict(meta)
+    else:
+        source = "cache_file_mtime" if cache else "missing"
+        mtime = _file_mtime_ist(cache_path)
+        timestamp = mtime.isoformat() if mtime else None
+        authoritative = {}
+        for symbol, price in (cache or {}).items():
+            authoritative[str(symbol)] = {
+                "price": price,
+                "updated_at_ist": timestamp,
+                "source": source,
+                "status": "SYNTHESIZED_META_FROM_CACHE_FILE",
+            }
+
+    ages = []
+    stale_symbols = []
+    latest_timestamp = None
+    for symbol, item in authoritative.items():
+        parsed = _parse_timestamp(_cache_timestamp(item))
+        if parsed is not None and (latest_timestamp is None or parsed > latest_timestamp):
+            latest_timestamp = parsed
+        age = _age_seconds(_cache_timestamp(item), now_ist)
+        if age is None:
+            stale_symbols.append(str(symbol))
+            continue
+        ages.append(age)
+        if age > LIVE_PRICE_CACHE_MAX_AGE_SECONDS:
+            stale_symbols.append(str(symbol))
+
+    cache_age_seconds = min(ages) if ages else None
+    payload = {
+        "generated_at_ist": now_ist.isoformat(),
+        "cache_last_updated": latest_timestamp.isoformat() if latest_timestamp else None,
+        "cache_age_seconds": round(cache_age_seconds, 3) if cache_age_seconds is not None else None,
+        "cache_source": source,
+        "cache_present": bool(cache),
+        "root_meta_present": bool(meta),
+        "runtime_meta_generated": True,
+        "stale": bool(stale_symbols or (bool(cache) and not authoritative)),
+        "stale_symbol_count": len(stale_symbols),
+        "stale_symbols_sample": stale_symbols[:20],
+        "symbols_tracked": len(authoritative),
+        "metadata": authoritative,
+        "safety_flags": dict(SAFETY_FLAGS),
+    }
+    _write_json_safe(RUNTIME_LIVE_PRICE_CACHE_META_PATH, payload)
+    return payload
+
+
 def inspect_live_price_cache(now=None, cache_path=LIVE_PRICE_CACHE_PATH, meta_path=LIVE_PRICE_CACHE_META_PATH, status_path=LIVE_PRICE_STATUS_PATH):
     now_ist = as_ist_datetime(now)
     cache = _read_json_safe(cache_path)
     meta = _read_json_safe(meta_path)
     status_payload = _read_json_safe(status_path)
+    authoritative_meta = _authoritative_live_price_meta(cache, meta, cache_path, now_ist)
+    effective_meta = authoritative_meta.get("metadata") if isinstance(authoritative_meta.get("metadata"), dict) else {}
     timestamps = []
     stale_symbols = []
-    for symbol, item in meta.items():
+    for symbol, item in effective_meta.items():
         if not isinstance(item, dict):
             stale_symbols.append(str(symbol))
             continue
-        timestamp = item.get("updated_at_ist") or item.get("updated_at") or item.get("timestamp_ist") or item.get("timestamp")
+        timestamp = _cache_timestamp(item)
         age = _age_seconds(timestamp, now_ist)
         if age is None:
             stale_symbols.append(str(symbol))
@@ -181,28 +262,46 @@ def inspect_live_price_cache(now=None, cache_path=LIVE_PRICE_CACHE_PATH, meta_pa
             stale_symbols.append(str(symbol))
 
     cache_age_seconds = min(timestamps) if timestamps else None
-    meta_present = bool(meta)
+    root_meta_present = bool(meta)
+    meta_present = bool(effective_meta)
     cache_present = bool(cache)
     cache_stale = bool((cache_present and not meta_present) or stale_symbols)
     if cache_present and meta_present and cache_age_seconds is None:
         cache_stale = True
 
     source = status_payload.get("source") or status_payload.get("live_source_status") or "UNKNOWN"
+    live_source_status = status_payload.get("live_source_status") or status_payload.get("status")
+    cache_fallback_reason = status_payload.get("fallback_reason") or status_payload.get("reason")
+    authoritative_meta.update(
+        {
+            "live_fetch_available": str(live_source_status or source).upper() in {"ACTIVE", "UPSTOX"},
+            "fallback_active": bool(cache_fallback_reason or cache_stale),
+            "fallback_reason": cache_fallback_reason or ("CACHE_STALE" if cache_stale else None),
+            "cache_stale": cache_stale,
+            "cache_status": "WARNING" if cache_stale else "PASS",
+        }
+    )
+    _write_json_safe(RUNTIME_LIVE_PRICE_CACHE_META_PATH, authoritative_meta)
     return {
         "status": "WARNING" if cache_stale else "PASS",
         "cache_present": cache_present,
         "meta_present": meta_present,
+        "root_meta_present": root_meta_present,
+        "runtime_meta_path": str(RUNTIME_LIVE_PRICE_CACHE_META_PATH).replace("\\", "/"),
+        "runtime_meta_generated": bool(authoritative_meta.get("runtime_meta_generated")),
         "cache_age_seconds": round(cache_age_seconds, 3) if cache_age_seconds is not None else None,
         "cache_stale": cache_stale,
         "stale_symbol_count": len(stale_symbols),
         "stale_symbols_sample": stale_symbols[:20],
         "source": source,
+        "cache_source": authoritative_meta.get("cache_source"),
+        "cache_last_updated": authoritative_meta.get("cache_last_updated"),
         "status_payload_present": bool(status_payload),
         "token_type_visible": bool(status_payload.get("token_type_used")),
         "token_type_used": status_payload.get("token_type_used") or "UNKNOWN",
         "runtime_visible": bool(status_payload),
-        "live_source_status": status_payload.get("live_source_status") or status_payload.get("status"),
-        "fallback_reason": status_payload.get("fallback_reason") or status_payload.get("reason"),
+        "live_source_status": live_source_status,
+        "fallback_reason": cache_fallback_reason,
         "last_successful_live_fetch": status_payload.get("last_successful_live_fetch"),
         "stale_cache_detected": bool(status_payload.get("stale_cache_detected") or cache_stale),
     }
@@ -220,12 +319,104 @@ def _ohlc_refresh_visibility():
     }
 
 
+def _refresh_stale_ohlc_if_needed(ohlc, now_ist):
+    if not is_trade_window(now_ist) or not ohlc.get("stale_ohlc_detected"):
+        return {
+            "refresh_attempted": False,
+            "refresh_success": False,
+            "refresh_status": "NOT_REQUIRED",
+            "refresh_result": {},
+        }
+    try:
+        from runtime_ohlc_refresh import run_ohlc_refresh
+
+        result = run_ohlc_refresh()
+    except Exception as exc:
+        return {
+            "refresh_attempted": True,
+            "refresh_success": False,
+            "refresh_status": "FAILED",
+            "refresh_error": f"{type(exc).__name__}:{exc}",
+            "refresh_result": {},
+        }
+
+    refreshed_count = int(result.get("refreshed_count") or 0) if isinstance(result, dict) else 0
+    return {
+        "refresh_attempted": True,
+        "refresh_success": refreshed_count > 0,
+        "refresh_status": result.get("status") if isinstance(result, dict) else "UNKNOWN",
+        "refresh_result": result if isinstance(result, dict) else {},
+    }
+
+
+def _fallback_components(scanner, cache, ohlc, refresh):
+    components = []
+    scanner_reason = str(scanner.get("fallback_reason") or "")
+    if ohlc.get("stale_ohlc_detected") or "OHLC_STALE" in scanner_reason:
+        components.append("OHLC_STALE")
+    live_status = str(cache.get("live_source_status") or cache.get("source") or "").upper()
+    if live_status and live_status not in {"ACTIVE", "UPSTOX"}:
+        components.append(f"UPSTOX_{live_status}")
+    if "MASTER_BRAIN_UNAVAILABLE" in scanner_reason:
+        components.append("MASTER_BRAIN_UNAVAILABLE")
+    if "SETUP_ENGINE_UNAVAILABLE" in scanner_reason:
+        components.append("SETUP_ENGINE_UNAVAILABLE")
+    if cache.get("cache_stale"):
+        components.append("CACHE_STALE")
+    if refresh.get("refresh_attempted") and not refresh.get("refresh_success"):
+        components.append("OHLC_REFRESH_UNSUCCESSFUL")
+
+    deduped = []
+    for item in components:
+        if item and item not in deduped:
+            deduped.append(item)
+    return deduped
+
+
+def _write_ohlc_freshness_status(ohlc, cache, scanner, refresh_info, now_ist):
+    fallback_reasons = _fallback_components(scanner, cache, ohlc, refresh_info)
+    payload = {
+        "generated_at_ist": now_ist.isoformat(),
+        "latest_candle_timestamp": ohlc.get("latest_candle_timestamp"),
+        "latest_market_candle": ohlc.get("latest_candle_timestamp"),
+        "stale_symbol_count": int(ohlc.get("stale_symbol_count") or 0),
+        "fresh_symbol_count": max(
+            int(ohlc.get("symbols_checked") or 0) - int(ohlc.get("stale_symbol_count") or 0),
+            0,
+        ),
+        "stale": bool(ohlc.get("stale_ohlc_detected")),
+        "refresh_attempted": bool(refresh_info.get("refresh_attempted")),
+        "refresh_success": bool(refresh_info.get("refresh_success")),
+        "cache_last_updated": cache.get("cache_last_updated"),
+        "cache_age_seconds": cache.get("cache_age_seconds"),
+        "cache_source": cache.get("cache_source") or cache.get("source"),
+        "live_fetch_available": str(cache.get("live_source_status") or "").upper() == "ACTIVE",
+        "fallback_active": bool(fallback_reasons),
+        "fallback_reason": "|".join(fallback_reasons) if fallback_reasons else None,
+        "fallback_components": fallback_reasons,
+        "scanner_data_health": {
+            "scanner_status": scanner.get("scanner_status"),
+            "scanner_freshness_status": scanner.get("status"),
+            "ohlc_status": ohlc.get("status"),
+            "cache_status": cache.get("status"),
+        },
+        "safety_flags": dict(SAFETY_FLAGS),
+    }
+    _write_json_safe(OHLC_FRESHNESS_STATUS_PATH, payload)
+    return payload
+
+
 def build_market_data_health(now=None):
     now_ist = as_ist_datetime(now)
     scanner = inspect_scanner_freshness(now_ist)
     ohlc = inspect_ohlc_freshness(now_ist)
+    refresh_info = _refresh_stale_ohlc_if_needed(ohlc, now_ist)
+    if refresh_info.get("refresh_attempted"):
+        ohlc = inspect_ohlc_freshness(now_ist)
     cache = inspect_live_price_cache(now_ist)
     refresh = _ohlc_refresh_visibility()
+    refresh.update(refresh_info)
+    ohlc_status = _write_ohlc_freshness_status(ohlc, cache, scanner, refresh_info, now_ist)
 
     contradiction_flags = []
     if scanner.get("status") == "PASS" and ohlc.get("stale_ohlc_detected"):
@@ -237,7 +428,8 @@ def build_market_data_health(now=None):
     if scanner.get("scan_only") and not scanner.get("fallback_reason"):
         contradiction_flags.append("scan_only_without_fallback_reason")
 
-    fallback_reason = scanner.get("fallback_reason") or cache.get("fallback_reason") or refresh.get("skipped_reason")
+    fallback_components = _fallback_components(scanner, cache, ohlc, refresh_info)
+    fallback_reason = "|".join(fallback_components) if fallback_components else None
     fallback_active = bool(scanner.get("scan_only") or fallback_reason)
 
     stale_artifacts = []
@@ -272,6 +464,9 @@ def build_market_data_health(now=None):
         "market_data_mode": "MARKET_MODE" if is_trade_window(now_ist) else "OFF_MARKET_OR_RESEARCH",
         "scanner_mode": scanner.get("scanner_mode"),
         "scanner_status": scanner.get("scanner_status"),
+        "fresh_symbol_count": ohlc_status.get("fresh_symbol_count"),
+        "latest_market_candle": ohlc_status.get("latest_market_candle"),
+        "scanner_data_health": ohlc_status.get("scanner_data_health"),
         "stale_ohlc_detected": bool(ohlc.get("stale_ohlc_detected") or scanner.get("stale_ohlc_detected")),
         "stale_symbol_count": max(int(ohlc.get("stale_symbol_count") or 0), int(scanner.get("stale_symbol_count") or 0)),
         "live_price_cache_present": bool(cache.get("cache_present")),
@@ -283,8 +478,10 @@ def build_market_data_health(now=None):
         "live_price_source": cache.get("source"),
         "fallback_active": fallback_active,
         "fallback_reason": fallback_reason,
+        "fallback_components": fallback_components,
         "cache_freshness": cache,
         "ohlc_freshness": ohlc,
+        "ohlc_freshness_status_path": str(OHLC_FRESHNESS_STATUS_PATH).replace("\\", "/"),
         "scanner_freshness": scanner,
         "upstox_runtime": {
             "visible": bool(cache.get("runtime_visible")),
