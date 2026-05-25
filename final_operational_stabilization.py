@@ -317,6 +317,8 @@ def build_titan_final_operational_audit(path=None, now=None):
     master_runtime_health = build_master_brain_runtime_health(now=now_ist)
     setup_runtime_health = build_setup_engine_runtime_health(now=now_ist)
     fallback_resolution = run_runtime_fallback_resolution(now=now_ist)
+    master_runtime_health = fallback_resolution.get("master_brain_runtime_health") or master_runtime_health
+    setup_runtime_health = fallback_resolution.get("setup_engine_runtime_health") or setup_runtime_health
     graph = build_runtime_dependency_graph(now=now_ist)
     memory = run_memory_health_check(now=now_ist)
     ranking = build_ranking_integrity_status(now=now_ist)
@@ -380,7 +382,10 @@ def build_titan_final_operational_audit(path=None, now=None):
         "canonical_runtime_mode_source": canonical_runtime_mode.get("canonical_source"),
         "runtime_warning_resolution_status": runtime_warning_resolution.get("runtime_warning_resolution_status"),
         "master_brain_runtime_health": master_runtime_health.get("master_brain_runtime_health"),
+        "master_brain_research_freshness": master_runtime_health.get("master_brain_research_freshness"),
         "setup_runtime_health": setup_runtime_health.get("setup_runtime_health"),
+        "setup_engine_research_freshness": setup_runtime_health.get("setup_engine_research_freshness"),
+        "off_hours_runtime_continuity": fallback_resolution.get("off_hours_runtime_continuity"),
         "fallback_truthfulness": fallback_resolution.get("fallback_truthfulness"),
         "scanner_confidence": fallback_resolution.get("scanner_confidence"),
         "runtime_integrity_score": stability.get("runtime_integrity_score"),

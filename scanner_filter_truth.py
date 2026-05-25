@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from runtime_dependency_graph import SAFETY_FLAGS
-from utils.market_hours import IST, as_ist_datetime
+from utils.market_hours import IST, as_ist_datetime, is_trade_window
 
 
 RUNTIME_DIR = Path("data") / "runtime"
@@ -148,6 +148,8 @@ def _reconciled_counter_confidence(confidence, fallback_resolution, master_healt
     master_state = str(master_health.get("master_brain_runtime_health") or "").upper()
     setup_state = str(setup_health.get("setup_runtime_health") or "").upper()
 
+    if truthfulness == "OFF_HOURS_RESEARCH_STANDBY":
+        return "MEDIUM"
     if truthfulness in {"ENGINE_UNAVAILABLE", "DATA_DEGRADED", "REAL"} and fallback_resolution.get("fallback_active"):
         return "LOW"
     if resolver_confidence in {"HIGH", "MEDIUM", "LOW", "UNKNOWN"}:
@@ -176,11 +178,14 @@ def build_scanner_filter_truth_status(
     setup_runtime_health = _read_json_safe(SETUP_ENGINE_RUNTIME_HEALTH_PATH)
     fallback_resolution = _read_json_safe(RUNTIME_FALLBACK_RESOLUTION_PATH)
     diagnostics_counters, diagnostics_sources, diagnostics_latest = _latest_scan_diagnostics()
+    off_hours = not is_trade_window(now_ist)
+    off_hours_standby = str(fallback_resolution.get("fallback_truthfulness") or "").upper() == "OFF_HOURS_RESEARCH_STANDBY"
     fallback_mode = bool(scanner.get("scan_only") or scanner.get("fallback_reason") or scanner.get("ohlc_fallback_required"))
 
     scanner_timestamp_dt = _payload_timestamp(scanner)
     scanner_age = _age_seconds(scanner_timestamp_dt, now_ist)
     stale_snapshot_warning = scanner_age is None or scanner_age > FRESH_SECONDS
+    expected_off_hours_stale_snapshot = bool(off_hours_standby and stale_snapshot_warning)
 
     counters = {}
     counter_sources = {}
@@ -221,7 +226,8 @@ def build_scanner_filter_truth_status(
     if diagnostics_latest.get("scan_cycle_id") and scan_cycle_id and diagnostics_latest.get("scan_cycle_id") != scan_cycle_id:
         frozen_counter_warning = True
 
-    identical_warning = _identical_counter_warning(counters)
+    raw_identical_warning = _identical_counter_warning(counters)
+    identical_warning = False if off_hours_standby else raw_identical_warning
     setup_final = _int_or_none(setup.get("final_passed") or setup.get("final_passed_count"))
     final_passed_mismatch = bool(
         setup_final is not None
@@ -247,9 +253,11 @@ def build_scanner_filter_truth_status(
         or "stale_runtime_critical_dashboard_metric" in (dashboard_truth.get("warnings") or [])
     )
     recommended_display = "exact"
-    if confidence != "HIGH":
+    if off_hours_standby:
+        recommended_display = "off_hours_research_standby"
+    elif confidence != "HIGH":
         recommended_display = "low_confidence_fallback"
-    if stale_snapshot_warning:
+    if stale_snapshot_warning and not off_hours_standby:
         recommended_display = "stale_snapshot_with_timestamp"
 
     warnings = []
@@ -257,7 +265,7 @@ def build_scanner_filter_truth_status(
         warnings.append("identical_counter_warning")
     if frozen_counter_warning:
         warnings.append("frozen_counter_warning")
-    if stale_snapshot_warning:
+    if stale_snapshot_warning and not off_hours_standby:
         warnings.append("stale_snapshot_warning")
     if final_passed_mismatch:
         warnings.append("final_passed_mismatch")
@@ -265,7 +273,7 @@ def build_scanner_filter_truth_status(
         warnings.append("selected_symbols_mismatch")
     if dashboard_stale_read:
         warnings.append("dashboard_stale_read")
-    if fallback_mode:
+    if fallback_mode and not off_hours_standby:
         warnings.append("fallback_mode_counter_reliability_low")
 
     payload = {
@@ -280,6 +288,7 @@ def build_scanner_filter_truth_status(
         "raw_counter_confidence": raw_confidence,
         "counter_confidence": confidence,
         "scanner_confidence": confidence,
+        "off_hours_runtime_continuity": off_hours_standby,
         "runtime_fallback_resolution": {
             "fallback_truthfulness": fallback_resolution.get("fallback_truthfulness"),
             "scanner_confidence": fallback_resolution.get("scanner_confidence"),
@@ -294,8 +303,11 @@ def build_scanner_filter_truth_status(
             "setup_freshness_confidence": setup_runtime_health.get("setup_freshness_confidence"),
         },
         "identical_counter_warning": identical_warning,
+        "raw_identical_counter_warning": raw_identical_warning,
+        "identical_counter_warning_downgraded": bool(off_hours_standby and raw_identical_warning),
         "frozen_counter_warning": frozen_counter_warning,
         "stale_snapshot_warning": stale_snapshot_warning,
+        "expected_off_hours_stale_snapshot": expected_off_hours_stale_snapshot,
         "fallback_mode": fallback_mode,
         "fallback_reason": scanner.get("fallback_reason"),
         "dashboard_truth_status": dashboard_truth_status,

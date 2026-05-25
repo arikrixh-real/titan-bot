@@ -8,10 +8,12 @@ from runtime_engine_health import (
     build_master_brain_runtime_health,
     enrich_master_brain_payload,
 )
+from runtime_fallback_resolver import apply_off_hours_runtime_continuity
 from engines.risk_engine import calculate_rr
 from engines.phase38_test_mode_guard import evaluate_phase38_runtime_guard, write_phase38_runtime_status
 from engines.trade_levels import calculate_trade_levels
 from titan_master_brain.setup_reasoning_engine import evaluate_setups
+from utils.market_hours import as_ist_datetime, is_trade_window
 
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -49,8 +51,10 @@ def _base_payload(scanner_status=None):
     scanner_status = scanner_status if isinstance(scanner_status, dict) else {}
     runtime_contract = _runtime_contract(MODE_READ_ONLY)
     phase38_guard = evaluate_phase38_runtime_guard(runtime_contract)
+    now_ist = as_ist_datetime()
+    off_hours = not is_trade_window(now_ist)
     return {
-        "timestamp_ist": _timestamp_ist(),
+        "timestamp_ist": now_ist.isoformat(),
         "mode": scanner_status.get("mode", "READ_ONLY_MASTER_BRAIN"),
         "runtime_mode": runtime_contract["runtime_mode"],
         "execution_owner": runtime_contract["execution_owner"],
@@ -61,7 +65,11 @@ def _base_payload(scanner_status=None):
         "journal_writes_enabled": runtime_contract["journal_writes_enabled"],
         "outcome_tracking_enabled": runtime_contract["outcome_tracking_enabled"],
         "phase38_runtime_guard": phase38_guard,
-        "status": "MASTER_BRAIN_READ_ONLY_COMPLETE",
+        "status": "RESEARCH_ACTIVE" if off_hours else "MASTER_BRAIN_READ_ONLY_COMPLETE",
+        "off_hours_runtime_continuity": off_hours,
+        "master_brain_research_freshness": "RESEARCH_ACTIVE" if off_hours else None,
+        "affects_execution": False,
+        "affects_live_ranking": False,
         "scan_only": bool(scanner_status.get("scan_only")),
         "observe_only": True,
         "input_candidates": 0,
@@ -216,7 +224,8 @@ def _write_status(payload, path=None):
     path = Path(path or MASTER_BRAIN_STATUS_PATH)
     atomic_write_json(path, payload)
     if path == MASTER_BRAIN_STATUS_PATH and isinstance(payload, dict):
-        build_master_brain_runtime_health(status_payload=payload)
+        master_health = build_master_brain_runtime_health(status_payload=payload)
+        apply_off_hours_runtime_continuity(master_health, {}, write=True, require_daemon=False)
 
 
 def _runtime_mode():

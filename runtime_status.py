@@ -1291,6 +1291,8 @@ def build_runtime_status(value=None):
     master_brain_runtime_health = _master_brain_runtime_health_summary()
     setup_engine_runtime_health = _setup_engine_runtime_health_summary()
     runtime_fallback_resolution = _runtime_fallback_resolution_summary()
+    master_brain_runtime_health = runtime_fallback_resolution.get("master_brain_runtime_health") or master_brain_runtime_health
+    setup_engine_runtime_health = runtime_fallback_resolution.get("setup_engine_runtime_health") or setup_engine_runtime_health
     scanner_filter_truth = _scanner_filter_truth_summary()
     trade_lifecycle_health = _trade_lifecycle_health_summary()
     return {
@@ -1311,6 +1313,9 @@ def build_runtime_status(value=None):
         "runtime_fallback_resolution": runtime_fallback_resolution,
         "scanner_confidence": runtime_fallback_resolution.get("scanner_confidence") or scanner_filter_truth.get("counter_confidence"),
         "fallback_truthfulness": runtime_fallback_resolution.get("fallback_truthfulness"),
+        "off_hours_runtime_continuity": runtime_fallback_resolution.get("off_hours_runtime_continuity"),
+        "master_brain_research_freshness": runtime_fallback_resolution.get("master_brain_research_freshness"),
+        "setup_engine_research_freshness": runtime_fallback_resolution.get("setup_engine_research_freshness"),
         "scanner_filter_truth": scanner_filter_truth,
         "trade_lifecycle_health": trade_lifecycle_health,
         "outcome_tracker_status": _read_json_safe(Path("data") / "runtime" / "outcome_tracker_status.json"),
