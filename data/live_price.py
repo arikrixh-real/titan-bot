@@ -15,7 +15,7 @@ Fix included:
 import os
 import json
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
 # Load .env from project root
@@ -33,6 +33,29 @@ from utils.market_hours import is_trade_window
 
 STATUS_FILE = "data/live_price_status.json"
 _STATUS_LOGGED = set()
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def _cache_visibility(symbol, max_age_seconds=120):
+    try:
+        cache_result = get_cached_price_debug(normalize_symbol(symbol), max_age_seconds=max_age_seconds)
+    except Exception as exc:
+        return {
+            "cache_age_seconds": None,
+            "stale_cache_detected": True,
+            "cache_timestamp": None,
+            "cache_status": "CACHE_ERROR",
+            "cache_reason": str(exc),
+        }
+
+    age_seconds = cache_result.get("age_seconds")
+    return {
+        "cache_age_seconds": round(age_seconds, 3) if age_seconds is not None else None,
+        "stale_cache_detected": not bool(cache_result.get("fresh")),
+        "cache_timestamp": cache_result.get("timestamp"),
+        "cache_status": cache_result.get("status"),
+        "cache_reason": cache_result.get("reason"),
+    }
 
 
 def _log_status_once(symbol, status, message="", source="UNKNOWN"):
@@ -46,17 +69,49 @@ def _log_status_once(symbol, status, message="", source="UNKNOWN"):
     )
 
 
-def _write_status(symbol, status, message="", price=None, source="UNKNOWN", token_type_used="MISSING"):
+def _write_status(
+    symbol,
+    status,
+    message="",
+    price=None,
+    source="UNKNOWN",
+    token_type_used="MISSING",
+    cache_age_seconds=None,
+    fallback_reason=None,
+    live_source_status=None,
+    last_successful_live_fetch=None,
+    stale_cache_detected=None,
+):
     try:
         os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
+        normalized = normalize_symbol(symbol)
+        cache_visibility = _cache_visibility(normalized)
+        if cache_age_seconds is None:
+            cache_age_seconds = cache_visibility.get("cache_age_seconds")
+        if stale_cache_detected is None:
+            stale_cache_detected = cache_visibility.get("stale_cache_detected")
+        if fallback_reason is None and str(source).upper() in {"CACHE", "LIVE_PRICE_CACHE", "UNKNOWN", "NONE"}:
+            fallback_reason = message or None
+        if live_source_status is None:
+            live_source_status = status
+        if last_successful_live_fetch is None and str(source).upper() == "UPSTOX" and str(status).upper() == "ACTIVE":
+            last_successful_live_fetch = datetime.now(IST).isoformat()
         payload = {
-            "symbol": normalize_symbol(symbol),
+            "symbol": normalized,
             "status": status,
             "last_price": price,
             "source": source,
             "token_type_used": token_type_used,
             "timestamp": datetime.now().isoformat(),
+            "timestamp_ist": datetime.now(IST).isoformat(),
             "reason": message,
+            "cache_age_seconds": cache_age_seconds,
+            "fallback_reason": fallback_reason,
+            "live_source_status": live_source_status,
+            "last_successful_live_fetch": last_successful_live_fetch,
+            "stale_cache_detected": bool(stale_cache_detected),
+            "cache_status": cache_visibility.get("cache_status"),
+            "cache_timestamp": cache_visibility.get("cache_timestamp"),
         }
         with open(STATUS_FILE, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
@@ -149,7 +204,7 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
     # No spam. Cached data fallback will be used.
     if not instrument_key:
         reason = "Instrument key missing"
-        _write_status(symbol, "UNMAPPED", reason, None, "NONE", token_type_used)
+        _write_status(symbol, "UNMAPPED", reason, None, "NONE", token_type_used, live_source_status="UNMAPPED")
         _log_status_once(symbol, "UNMAPPED", reason, "UNKNOWN")
         return {
             "price": None,
@@ -157,6 +212,11 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
             "status": "UNMAPPED",
             "reason": reason,
             "token_type_used": token_type_used,
+            "cache_age_seconds": _cache_visibility(symbol).get("cache_age_seconds"),
+            "fallback_reason": reason,
+            "live_source_status": "UNMAPPED",
+            "last_successful_live_fetch": None,
+            "stale_cache_detected": _cache_visibility(symbol).get("stale_cache_detected"),
         }
 
     cached_price = safe_float(get_cached_price(symbol)) if use_cache else None
@@ -164,7 +224,8 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
     if not is_trade_window():
         reason = "Market closed; using cache if available"
         source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
-        _write_status(symbol, "MARKET_CLOSED", reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used)
+        cache_visibility = _cache_visibility(symbol)
+        _write_status(symbol, "MARKET_CLOSED", reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used, fallback_reason=reason, live_source_status="MARKET_CLOSED")
         _log_status_once(symbol, "MARKET_CLOSED", reason, source)
         return {
             "price": cached_price,
@@ -172,6 +233,11 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
             "status": "MARKET_CLOSED",
             "reason": reason,
             "token_type_used": token_type_used,
+            "cache_age_seconds": cache_visibility.get("cache_age_seconds"),
+            "fallback_reason": reason,
+            "live_source_status": "MARKET_CLOSED",
+            "last_successful_live_fetch": None,
+            "stale_cache_detected": cache_visibility.get("stale_cache_detected"),
         }
 
     if not access_token:
@@ -179,7 +245,8 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
             print("Upstox skipped: Upstox token missing")
         reason = "Upstox token missing; using cache if available"
         source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
-        _write_status(symbol, "TOKEN_MISSING", reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used)
+        cache_visibility = _cache_visibility(symbol)
+        _write_status(symbol, "TOKEN_MISSING", reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used, fallback_reason=reason, live_source_status="TOKEN_MISSING")
         _log_status_once(symbol, "TOKEN_MISSING", reason, source)
         return {
             "price": cached_price,
@@ -187,6 +254,11 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
             "status": "TOKEN_MISSING",
             "reason": reason,
             "token_type_used": token_type_used,
+            "cache_age_seconds": cache_visibility.get("cache_age_seconds"),
+            "fallback_reason": reason,
+            "live_source_status": "TOKEN_MISSING",
+            "last_successful_live_fetch": None,
+            "stale_cache_detected": cache_visibility.get("stale_cache_detected"),
         }
 
     try:
@@ -210,7 +282,8 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
                 print("Upstox error: response was not valid JSON")
             reason = "Response was not valid JSON; using cache if available"
             source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
-            _write_status(symbol, "BAD_RESPONSE", reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used)
+            cache_visibility = _cache_visibility(symbol)
+            _write_status(symbol, "BAD_RESPONSE", reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used, fallback_reason=reason, live_source_status="BAD_RESPONSE")
             _log_status_once(symbol, "BAD_RESPONSE", reason, source)
             return {
                 "price": cached_price,
@@ -218,6 +291,11 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
                 "status": "BAD_RESPONSE",
                 "reason": reason,
                 "token_type_used": token_type_used,
+                "cache_age_seconds": cache_visibility.get("cache_age_seconds"),
+                "fallback_reason": reason,
+                "live_source_status": "BAD_RESPONSE",
+                "last_successful_live_fetch": None,
+                "stale_cache_detected": cache_visibility.get("stale_cache_detected"),
             }
 
         if response.status_code != 200:
@@ -235,7 +313,8 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
                 reason = f"HTTP {response.status_code}; using cache if available"
 
             source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
-            _write_status(symbol, status, reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used)
+            cache_visibility = _cache_visibility(symbol)
+            _write_status(symbol, status, reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used, fallback_reason=reason, live_source_status=status)
             _log_status_once(symbol, status, reason, source)
 
             return {
@@ -244,23 +323,35 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
                 "status": status,
                 "reason": reason,
                 "token_type_used": token_type_used,
+                "cache_age_seconds": cache_visibility.get("cache_age_seconds"),
+                "fallback_reason": reason,
+                "live_source_status": status,
+                "last_successful_live_fetch": None,
+                "stale_cache_detected": cache_visibility.get("stale_cache_detected"),
             }
 
         ltp = _extract_ltp(data, instrument_key)
         price = safe_float(ltp)
         if price is not None:
             update_cached_price(symbol, price, source="UPSTOX")
-            _write_status(symbol, "ACTIVE", "Live price fetched", price, "UPSTOX", token_type_used)
+            successful_fetch_at = datetime.now(IST).isoformat()
+            _write_status(symbol, "ACTIVE", "Live price fetched", price, "UPSTOX", token_type_used, cache_age_seconds=0, fallback_reason=None, live_source_status="ACTIVE", last_successful_live_fetch=successful_fetch_at, stale_cache_detected=False)
             return {
                 "price": price,
                 "source": "UPSTOX",
                 "status": "ACTIVE",
                 "reason": "Live price fetched",
                 "token_type_used": token_type_used,
+                "cache_age_seconds": 0,
+                "fallback_reason": None,
+                "live_source_status": "ACTIVE",
+                "last_successful_live_fetch": successful_fetch_at,
+                "stale_cache_detected": False,
             }
         reason = "Upstox response had no price; using cache if available"
         source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
-        _write_status(symbol, "NO_PRICE", reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used)
+        cache_visibility = _cache_visibility(symbol)
+        _write_status(symbol, "NO_PRICE", reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used, fallback_reason=reason, live_source_status="NO_PRICE")
         _log_status_once(symbol, "NO_PRICE", reason, source)
         return {
             "price": cached_price,
@@ -268,6 +359,11 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
             "status": "NO_PRICE",
             "reason": reason,
             "token_type_used": token_type_used,
+            "cache_age_seconds": cache_visibility.get("cache_age_seconds"),
+            "fallback_reason": reason,
+            "live_source_status": "NO_PRICE",
+            "last_successful_live_fetch": None,
+            "stale_cache_detected": cache_visibility.get("stale_cache_detected"),
         }
 
     except Exception as e:
@@ -284,7 +380,8 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
             status = "API_ERROR"
             reason = f"{error_text}; using cache if available"
         source = "LIVE_PRICE_CACHE" if cached_price is not None else "UNKNOWN"
-        _write_status(symbol, status, reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used)
+        cache_visibility = _cache_visibility(symbol)
+        _write_status(symbol, status, reason, cached_price, "CACHE" if cached_price is not None else "NONE", token_type_used, fallback_reason=reason, live_source_status=status)
         _log_status_once(symbol, status, reason, source)
         return {
             "price": cached_price,
@@ -292,6 +389,11 @@ def fetch_price_from_upstox_debug(symbol, use_cache=True, debug=False):
             "status": status,
             "reason": reason,
             "token_type_used": token_type_used,
+            "cache_age_seconds": cache_visibility.get("cache_age_seconds"),
+            "fallback_reason": reason,
+            "live_source_status": status,
+            "last_successful_live_fetch": None,
+            "stale_cache_detected": cache_visibility.get("stale_cache_detected"),
         }
 
 
