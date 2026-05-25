@@ -166,12 +166,14 @@ def _node_status(name, spec, now_ist):
     payload = _read_json_safe(path)
     artifact_path = path
     primary_connected = bool(payload)
+    fallback_memory_connected = False
     if not payload and spec.get("fallback_path"):
         fallback = Path(spec["fallback_path"])
         fallback_payload = _read_json_safe(fallback)
         if fallback_payload:
             payload = fallback_payload
             artifact_path = fallback
+            fallback_memory_connected = True
     module_visible = _module_visible(spec.get("fallback_import"))
     if not payload and module_visible:
         payload = {
@@ -186,6 +188,16 @@ def _node_status(name, spec, now_ist):
     connected = bool(payload)
     stale = (not connected) or age is None or age > fresh_seconds
     status = payload.get("overall_status") or payload.get("status") or ("CONNECTED" if connected else "MISSING")
+    if primary_connected and stale:
+        visibility_class = "STALE_RUNTIME"
+    elif primary_connected:
+        visibility_class = "ACTIVE_RUNTIME" if spec.get("mode") == "live_runtime" else "ADVISORY_CONNECTED"
+    elif fallback_memory_connected:
+        visibility_class = "MEMORY_ONLY"
+    elif module_visible:
+        visibility_class = "VISIBLE_IMPORT_ONLY"
+    else:
+        visibility_class = "MISSING"
     return {
         "name": name,
         "artifact_path": str(artifact_path).replace("\\", "/"),
@@ -197,6 +209,7 @@ def _node_status(name, spec, now_ist):
         "fresh_seconds": fresh_seconds,
         "connected_visibility_only": bool(connected and not primary_connected),
         "active_runtime_worker": bool(primary_connected and spec.get("mode") == "live_runtime"),
+        "visibility_classification": visibility_class,
         "module_visible": module_visible,
         "advisory": spec.get("mode") != "live_runtime",
         "mode": spec.get("mode"),

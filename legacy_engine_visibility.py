@@ -145,14 +145,20 @@ def _engine_visibility(name, spec, now_ist):
     connected = bool(module_visible or present_paths)
     stale = bool(not connected or age is None or age > STALE_SECONDS)
 
+    status_present = bool(spec.get("status") and Path(spec["status"]).exists())
+    memory_present = bool(spec.get("memory") and Path(spec["memory"]).exists())
     if not connected:
         status = "MISSING"
-    elif stale:
-        status = "LEGACY_VISIBLE_STALE"
-    elif spec.get("status") and Path(spec["status"]).exists():
-        status = "VISIBLE_STATUS"
+    elif status_present and stale:
+        status = "STALE_RUNTIME"
+    elif status_present:
+        status = "ADVISORY_CONNECTED"
+    elif memory_present:
+        status = "MEMORY_ONLY"
+    elif module_visible:
+        status = "VISIBLE_IMPORT_ONLY"
     else:
-        status = "VISIBLE_ARTIFACT_ONLY"
+        status = "LEGACY_VISIBLE_STALE"
 
     return {
         "engine": name,
@@ -160,6 +166,7 @@ def _engine_visibility(name, spec, now_ist):
         "connected_visibility_only": connected,
         "active_runtime_worker": False,
         "status": status,
+        "visibility_classification": status,
         "stale": stale,
         "latest_timestamp_ist": latest.isoformat() if latest else None,
         "age_seconds": round(age, 3) if age is not None else None,

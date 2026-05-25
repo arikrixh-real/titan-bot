@@ -271,6 +271,7 @@ def build_runtime_topology(path=TOPOLOGY_PATH, now=None):
                 "mode": node.get("mode"),
                 "connected_visibility_only": node.get("connected_visibility_only", False),
                 "stale": node.get("stale", False),
+                "visibility_classification": node.get("visibility_classification"),
             }
             for name, node in (dependency_graph.get("nodes") or {}).items()
         },
@@ -303,7 +304,13 @@ def build_runtime_topology(path=TOPOLOGY_PATH, now=None):
             "memory_freshness_score": memory_health.get("memory_freshness_score"),
             "memory_integrity_score": memory_health.get("memory_integrity_score"),
             "legacy_visibility_score": memory_health.get("legacy_visibility_score"),
+            "archive_candidate_count": memory_health.get("archive_candidate_count"),
+            "stale_legacy_memory_count": memory_health.get("stale_legacy_memory_count"),
+            "lineage_integrity_score": memory_health.get("lineage_integrity_score"),
             "missing_visibility_summary": memory_health.get("missing_visibility_summary") or [],
+            "memory_cleanup_summary": memory_health.get("memory_cleanup_summary") or {},
+            "memory_lineage_summary": memory_health.get("memory_lineage_summary") or {},
+            "memory_contribution_summary": memory_health.get("memory_contribution_summary") or {},
         },
         "observability_score": scores["observability_score"],
         "runtime_integrity_score": scores["runtime_integrity_score"],

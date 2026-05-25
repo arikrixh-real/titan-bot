@@ -123,6 +123,8 @@ def _classification_for(path, payload, error, now_ist, source_type):
         if "memory_consolidation" in stem or stem in KNOWN_LEGACY_REPORT_STEMS:
             return "ADVISORY_ONLY"
         return "ORPHAN"
+    if payload.get("generated_baseline") and payload.get("status") == "GENERATED_BASELINE":
+        return "LEGACY_VISIBLE"
     if stem not in EXPECTED_MEMORY_ARTIFACTS:
         return "ORPHAN"
     if age is None or age > STALE_SECONDS:

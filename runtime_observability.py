@@ -23,6 +23,12 @@ def build_runtime_observability(now=None):
         "stale_memory_count": memory_health.get("stale_memory_files"),
         "orphan_memory_count": memory_health.get("orphan_memory_files"),
         "corrupted_memory_count": memory_health.get("corrupted_memory_files"),
+        "archive_candidate_count": memory_health.get("archive_candidate_count"),
+        "stale_legacy_memory_count": memory_health.get("stale_legacy_memory_count"),
+        "memory_cleanup_summary": memory_health.get("memory_cleanup_summary") or {},
+        "memory_lineage_summary": memory_health.get("memory_lineage_summary") or {},
+        "memory_contribution_summary": memory_health.get("memory_contribution_summary") or {},
+        "lineage_integrity_score": memory_health.get("lineage_integrity_score"),
         "missing_visibility_count": len(memory_health.get("missing_visibility_summary") or []),
         "safety_flags": topology.get("safety_flags") or {},
     }
