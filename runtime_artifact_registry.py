@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from runtime_dependency_graph import SAFETY_FLAGS, build_runtime_dependency_graph
+from runtime_mode_resolver import build_canonical_runtime_mode
 from utils.market_hours import IST, as_ist_datetime
 
 
@@ -16,6 +17,7 @@ RUNTIME_ARTIFACT_REGISTRY_PATH = RUNTIME_DIR / "runtime_artifact_registry.json"
 DEAD_CHAIN_ISOLATION_PATH = RUNTIME_DIR / "dead_chain_isolation_status.json"
 DUPLICATE_ARTIFACT_ROLES_PATH = RUNTIME_DIR / "duplicate_artifact_roles.json"
 RUNTIME_CRITICAL_CHAIN_PATH = RUNTIME_DIR / "runtime_critical_chain_status.json"
+RUNTIME_CRITICAL_CHAIN_CLEANLINESS_PATH = RUNTIME_DIR / "runtime_critical_chain_cleanliness.json"
 
 ADVISORY_FRESH_SECONDS = 24 * 60 * 60
 RUNTIME_FRESH_SECONDS = 15 * 60
@@ -286,10 +288,15 @@ def build_runtime_artifact_registry(now=None):
 def build_runtime_critical_chain_status(now=None, graph=None):
     now_ist = as_ist_datetime(now)
     graph = graph or build_runtime_dependency_graph(now=now_ist)
+    canonical = build_canonical_runtime_mode(now=now_ist)
+    canonical_mode = canonical.get("canonical_mode")
     graph_nodes = graph.get("nodes") or {}
     chain = {}
     missing_required = []
     stale_required = []
+    dangerous_stale_critical = []
+    harmless_stale_advisory = []
+    expected_mode_transition_lag = []
     for name, spec in RUNTIME_CRITICAL_CHAIN.items():
         path = spec["path"]
         payload = _read_json_safe(path)
@@ -312,11 +319,19 @@ def build_runtime_critical_chain_status(now=None, graph=None):
             missing_required.append(name)
         if spec["required"] and record["stale"]:
             stale_required.append(name)
+            if name == "scanner" and canonical_mode in {"RESEARCH_MODE", "WEEKEND_MODE"}:
+                expected_mode_transition_lag.append(name)
+            elif record["advisory_visibility_only"]:
+                harmless_stale_advisory.append(name)
+            else:
+                dangerous_stale_critical.append(name)
+        elif record["stale"] and record["advisory_visibility_only"]:
+            harmless_stale_advisory.append(name)
 
     status = "PASS"
     if missing_required:
         status = "FAIL"
-    elif stale_required:
+    elif dangerous_stale_critical:
         status = "WARNING"
 
     payload = {
@@ -328,10 +343,46 @@ def build_runtime_critical_chain_status(now=None, graph=None):
         "scanner_selection_mutated": False,
         "missing_required_nodes": missing_required,
         "stale_required_nodes": stale_required,
+        "dangerous_stale_critical_nodes": dangerous_stale_critical,
+        "harmless_stale_advisory_nodes": harmless_stale_advisory,
+        "expected_mode_transition_lag_nodes": expected_mode_transition_lag,
+        "canonical_runtime_mode": canonical_mode,
         "chain": chain,
         "safety_flags": dict(SAFETY_FLAGS),
     }
     RUNTIME_CRITICAL_CHAIN_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    build_runtime_critical_chain_cleanliness(payload, now=now_ist)
+    return payload
+
+
+def build_runtime_critical_chain_cleanliness(critical=None, path=RUNTIME_CRITICAL_CHAIN_CLEANLINESS_PATH, now=None):
+    now_ist = as_ist_datetime(now)
+    critical = critical if isinstance(critical, dict) else build_runtime_critical_chain_status(now=now_ist)
+    dangerous = critical.get("dangerous_stale_critical_nodes") or []
+    expected_lag = critical.get("expected_mode_transition_lag_nodes") or []
+    advisory = critical.get("harmless_stale_advisory_nodes") or []
+    payload = {
+        "generated_at_ist": now_ist.isoformat(),
+        "runtime_critical_chain_cleanliness_status": "WARNING" if dangerous else "PASS",
+        "runtime_critical_chain_status": critical.get("runtime_critical_chain_status"),
+        "canonical_runtime_mode": critical.get("canonical_runtime_mode"),
+        "dangerous_stale_critical_count": len(dangerous),
+        "harmless_stale_advisory_count": len(advisory),
+        "expected_mode_transition_lag_count": len(expected_lag),
+        "dangerous_stale_critical_nodes": dangerous,
+        "harmless_stale_advisory_nodes": advisory,
+        "expected_mode_transition_lag_nodes": expected_lag,
+        "classification_policy": {
+            "missing_required_nodes_fail": True,
+            "dangerous_stale_live_signal_nodes_warn": True,
+            "stale_advisory_visibility_nodes_do_not_warn": True,
+            "off_market_scanner_lag_is_expected_transition_lag": True,
+        },
+        "safety_flags": dict(SAFETY_FLAGS),
+    }
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     return payload
 
 
@@ -460,6 +511,7 @@ def run_batch7_artifact_isolation(now=None):
             "dead_chain_isolation_status": _path_key(DEAD_CHAIN_ISOLATION_PATH),
             "duplicate_artifact_roles": _path_key(DUPLICATE_ARTIFACT_ROLES_PATH),
             "runtime_critical_chain_status": _path_key(RUNTIME_CRITICAL_CHAIN_PATH),
+            "runtime_critical_chain_cleanliness": _path_key(RUNTIME_CRITICAL_CHAIN_CLEANLINESS_PATH),
         },
         "summary": {
             "registered_artifacts": registry.get("artifact_count"),
@@ -467,6 +519,9 @@ def run_batch7_artifact_isolation(now=None):
             "isolated_advisory_dead_chains": dead.get("isolated_advisory_dead_chain_count"),
             "duplicate_groups": duplicate.get("duplicate_group_count"),
             "runtime_critical_chain_status": critical.get("runtime_critical_chain_status"),
+            "dangerous_stale_critical_nodes": critical.get("dangerous_stale_critical_nodes") or [],
+            "expected_mode_transition_lag_nodes": critical.get("expected_mode_transition_lag_nodes") or [],
+            "harmless_stale_advisory_nodes": critical.get("harmless_stale_advisory_nodes") or [],
         },
         "safety_flags": dict(SAFETY_FLAGS),
     }

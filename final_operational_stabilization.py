@@ -9,6 +9,7 @@ from memory_health import run_memory_health_check
 from ranking_integrity import build_ranking_integrity_status
 from runtime_artifact_registry import run_batch7_artifact_isolation
 from runtime_dependency_graph import SAFETY_FLAGS, build_runtime_dependency_graph
+from runtime_mode_resolver import build_canonical_runtime_mode, build_runtime_warning_resolution_status
 from runtime_topology import build_runtime_topology
 from runtime_watchdog import run_batch8_runtime_watchdog
 from utils.market_hours import IST, as_ist_datetime
@@ -306,6 +307,11 @@ def build_titan_final_operational_audit(path=None, now=None):
     path = path or TITAN_FINAL_OPERATIONAL_AUDIT_PATH
     now_ist = as_ist_datetime(now)
     topology = build_runtime_topology(now=now_ist)
+    canonical_runtime_mode = build_canonical_runtime_mode(now=now_ist)
+    runtime_warning_resolution = build_runtime_warning_resolution_status(
+        canonical=canonical_runtime_mode,
+        now=now_ist,
+    )
     graph = build_runtime_dependency_graph(now=now_ist)
     memory = run_memory_health_check(now=now_ist)
     ranking = build_ranking_integrity_status(now=now_ist)
@@ -365,6 +371,9 @@ def build_titan_final_operational_audit(path=None, now=None):
         "titan_final_operational_audit_status": _status_from_issues(failures, warnings),
         "audit_mode": "advisory_visibility_only",
         "component_statuses": component_statuses,
+        "canonical_runtime_mode": canonical_runtime_mode.get("canonical_mode"),
+        "canonical_runtime_mode_source": canonical_runtime_mode.get("canonical_source"),
+        "runtime_warning_resolution_status": runtime_warning_resolution.get("runtime_warning_resolution_status"),
         "runtime_integrity_score": stability.get("runtime_integrity_score"),
         "topology_health": stability.get("topology_health"),
         "stability_score": stability.get("stability_score"),
@@ -383,6 +392,9 @@ def build_titan_final_operational_audit(path=None, now=None):
             "owner_confidence": runtime_cert.get("owner_confidence"),
             "stale_runtime_sources": runtime_cert.get("stale_runtime_sources"),
             "runtime_conflicts": runtime_cert.get("runtime_conflicts"),
+            "downgraded_runtime_conflicts": topology.get("downgraded_runtime_conflicts") or [],
+            "raw_runtime_mode_conflicts": topology.get("raw_runtime_mode_conflicts") or [],
+            "runtime_warning_resolution": runtime_warning_resolution.get("conflicting_runtime_modes") or {},
         },
         "final_dependency_audit": {
             "connected_engine_count": dependency_cert.get("connected_engine_count"),
@@ -415,11 +427,17 @@ def build_titan_final_operational_audit(path=None, now=None):
             "status": (artifact_isolation.get("summary") or {}).get("runtime_critical_chain_status"),
             "dead_chains": (artifact_isolation.get("summary") or {}).get("dead_chains"),
             "isolated_advisory_dead_chains": (artifact_isolation.get("summary") or {}).get("isolated_advisory_dead_chains"),
+            "dangerous_stale_critical_nodes": (artifact_isolation.get("summary") or {}).get("dangerous_stale_critical_nodes") or [],
+            "expected_mode_transition_lag_nodes": (artifact_isolation.get("summary") or {}).get("expected_mode_transition_lag_nodes") or [],
+            "harmless_stale_advisory_nodes": (artifact_isolation.get("summary") or {}).get("harmless_stale_advisory_nodes") or [],
         },
         "certification_artifacts": {
             "titan_stability_score": _path_key(TITAN_STABILITY_SCORE_PATH),
             "titan_dependency_certification": _path_key(TITAN_DEPENDENCY_CERTIFICATION_PATH),
             "titan_runtime_certification": _path_key(TITAN_RUNTIME_CERTIFICATION_PATH),
+            "canonical_runtime_mode": _path_key(RUNTIME_DIR / "canonical_runtime_mode.json"),
+            "runtime_warning_resolution_status": _path_key(RUNTIME_DIR / "runtime_warning_resolution_status.json"),
+            "runtime_critical_chain_cleanliness": _path_key(RUNTIME_DIR / "runtime_critical_chain_cleanliness.json"),
         },
         "warnings": warnings,
         "failures": failures,
@@ -442,6 +460,9 @@ def run_batch12_final_operational_stabilization(now=None):
             "titan_stability_score": _path_key(TITAN_STABILITY_SCORE_PATH),
             "titan_dependency_certification": _path_key(TITAN_DEPENDENCY_CERTIFICATION_PATH),
             "titan_runtime_certification": _path_key(TITAN_RUNTIME_CERTIFICATION_PATH),
+            "canonical_runtime_mode": _path_key(RUNTIME_DIR / "canonical_runtime_mode.json"),
+            "runtime_warning_resolution_status": _path_key(RUNTIME_DIR / "runtime_warning_resolution_status.json"),
+            "runtime_critical_chain_cleanliness": _path_key(RUNTIME_DIR / "runtime_critical_chain_cleanliness.json"),
         },
         "summary": {
             "runtime_integrity_score": audit.get("runtime_integrity_score"),
@@ -457,6 +478,8 @@ def run_batch12_final_operational_stabilization(now=None):
             "clock_skew_warning": audit.get("clock_skew_warning"),
             "freshness_certification_reliable": audit.get("freshness_certification_reliable"),
             "component_statuses": audit.get("component_statuses"),
+            "canonical_runtime_mode": audit.get("canonical_runtime_mode"),
+            "runtime_warning_resolution_status": audit.get("runtime_warning_resolution_status"),
         },
         "warnings": audit.get("warnings") or [],
         "failures": audit.get("failures") or [],

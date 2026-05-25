@@ -5,6 +5,7 @@ from pathlib import Path
 from memory_health import run_memory_health_check
 from ranking_integrity import build_ranking_integrity_status
 from runtime_dependency_graph import SAFETY_FLAGS, build_runtime_dependency_graph
+from runtime_mode_resolver import build_canonical_runtime_mode, build_runtime_warning_resolution_status
 from utils.market_hours import IST, as_ist_datetime
 
 
@@ -128,8 +129,9 @@ def _memory_visibility(now_ist):
     return memory
 
 
-def detect_runtime_conflicts(runtime_sources):
+def detect_runtime_conflicts(runtime_sources, canonical_runtime_mode=None):
     conflicts = []
+    downgraded_conflicts = []
     heartbeat = runtime_sources.get("heartbeat", {})
     daemon = runtime_sources.get("daemon_health", {})
     runtime_health = runtime_sources.get("runtime_health", {})
@@ -146,11 +148,14 @@ def detect_runtime_conflicts(runtime_sources):
         if source.get("mode") and name in {"runtime_status", "scanner_status", "daemon_health", "heartbeat"}
     }
     if len(set(modes.values())) > 1:
-        conflicts.append("conflicting_runtime_modes")
+        if (canonical_runtime_mode or {}).get("topology_warning_reduction_allowed"):
+            downgraded_conflicts.append("conflicting_runtime_modes")
+        else:
+            conflicts.append("conflicting_runtime_modes")
     if scanner.get("fresh") and market.get("fresh") and scanner.get("timestamp_ist") and market.get("timestamp_ist"):
         if scanner["timestamp_ist"] > market["timestamp_ist"]:
             conflicts.append("scanner_newer_than_market_data_health")
-    return conflicts
+    return conflicts, downgraded_conflicts
 
 
 def _duplicate_source_detection(runtime_sources):
@@ -199,7 +204,8 @@ def _visibility_audit(dependency_graph, runtime_sources, memory_visibility, now_
     return payload
 
 
-def _score(runtime_sources, dependency_graph, conflicts, visibility_audit):
+def _score(runtime_sources, dependency_graph, conflicts, visibility_audit, downgraded_conflicts=None):
+    downgraded_conflicts = downgraded_conflicts or []
     total_sources = len(runtime_sources) or 1
     fresh_sources = sum(1 for source in runtime_sources.values() if source.get("fresh"))
     runtime_consistency_score = max(0.0, 100.0 - (len(conflicts) * 15.0))
@@ -215,6 +221,7 @@ def _score(runtime_sources, dependency_graph, conflicts, visibility_audit):
         "runtime_integrity_score": round(runtime_integrity_score, 2),
         "dependency_integrity_score": round(dependency_integrity_score, 2),
         "runtime_consistency_score": round(runtime_consistency_score, 2),
+        "downgraded_conflict_count": len(downgraded_conflicts),
         "observability_score": round(observability_score, 2),
     }
 
@@ -248,12 +255,26 @@ def build_runtime_topology(path=TOPOLOGY_PATH, now=None):
             "ranking_chain_valid": False,
             "safety_flags": dict(SAFETY_FLAGS),
         }
-    runtime_conflicts = detect_runtime_conflicts(runtime_sources)
+    canonical_runtime_mode = build_canonical_runtime_mode(now=now_ist)
+    runtime_warning_resolution = build_runtime_warning_resolution_status(
+        canonical=canonical_runtime_mode,
+        now=now_ist,
+    )
+    runtime_conflicts, downgraded_runtime_conflicts = detect_runtime_conflicts(
+        runtime_sources,
+        canonical_runtime_mode=canonical_runtime_mode,
+    )
     stale_runtime_sources = [
         name for name, source in runtime_sources.items() if source.get("stale")
     ]
     visibility_audit = _visibility_audit(dependency_graph, runtime_sources, memory_visibility, now_ist)
-    scores = _score(runtime_sources, dependency_graph, runtime_conflicts, visibility_audit)
+    scores = _score(
+        runtime_sources,
+        dependency_graph,
+        runtime_conflicts,
+        visibility_audit,
+        downgraded_conflicts=downgraded_runtime_conflicts,
+    )
 
     topology_health = "PASS"
     if any(not runtime_sources.get(name, {}).get("present") for name in ("runtime_health", "market_data_health", "scanner_status")):
@@ -297,7 +318,11 @@ def build_runtime_topology(path=TOPOLOGY_PATH, now=None):
             "stale_engines": dependency_graph.get("stale_engines") or [],
         },
         "runtime_sources": runtime_sources,
+        "canonical_runtime_mode": canonical_runtime_mode,
+        "runtime_warning_resolution": runtime_warning_resolution,
         "runtime_conflicts": runtime_conflicts,
+        "downgraded_runtime_conflicts": downgraded_runtime_conflicts,
+        "raw_runtime_mode_conflicts": canonical_runtime_mode.get("raw_conflicts_visible") or [],
         "stale_runtime_sources": stale_runtime_sources,
         "runtime_priority_order": list(RUNTIME_PRIORITY_ORDER),
         "engine_visibility": visibility_audit,

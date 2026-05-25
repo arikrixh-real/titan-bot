@@ -6,6 +6,7 @@ from engines.time_filter import get_mode_permissions
 from engines.phase38_test_mode_guard import evaluate_phase38_runtime_guard, write_phase38_runtime_status
 from market_data_health import run_market_data_health_check
 from runtime_health import run_authoritative_runtime_health_check
+from runtime_mode_resolver import build_canonical_runtime_mode, build_runtime_warning_resolution_status
 from runtime_mode_router import runtime_mode_snapshot
 from runtime_topology import build_runtime_topology
 from utils.market_hours import IST, as_ist_datetime
@@ -1218,6 +1219,8 @@ def build_runtime_status(value=None):
     authoritative_runtime_health = _authoritative_runtime_health_summary()
     market_data_health = _market_data_health_summary()
     runtime_topology = _runtime_topology_summary()
+    canonical_runtime_mode = build_canonical_runtime_mode(now=now)
+    runtime_warning_resolution = build_runtime_warning_resolution_status(canonical=canonical_runtime_mode, now=now)
     return {
         "timestamp_ist": now.astimezone(IST).isoformat(),
         "mode": permissions["mode"],
@@ -1229,6 +1232,8 @@ def build_runtime_status(value=None):
         "authoritative_runtime_health": authoritative_runtime_health,
         "market_data_health": market_data_health,
         "runtime_topology": runtime_topology,
+        "canonical_runtime_mode": canonical_runtime_mode,
+        "runtime_warning_resolution": runtime_warning_resolution,
         "dependency_graph_summary": runtime_topology.get("dependency_graph_summary"),
         "runtime_visibility_summary": runtime_topology.get("runtime_visibility_summary"),
         "memory_health": runtime_topology.get("memory_health"),

@@ -215,6 +215,25 @@ def _discover_visible_daemon_processes():
     return sorted(processes, key=lambda item: item["pid"])
 
 
+def _process_command(pid):
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return ""
+    proc_cmdline = Path("/proc") / str(pid) / "cmdline"
+    if proc_cmdline.exists():
+        try:
+            return proc_cmdline.read_bytes().replace(b"\x00", b" ").decode("utf-8", errors="ignore").strip()
+        except OSError:
+            return ""
+    return ""
+
+
+def _benign_child_process_command(command):
+    text = str(command or "").lower()
+    return "resource_tracker" in text or "forkserver" in text
+
+
 def _collect_sources(now_ist):
     return {
         name: _source_record(name, spec, now_ist)
@@ -319,6 +338,13 @@ def _pid_reconciliation(sources, visible_daemon_processes=None):
         item["process_source"] = process.get("source")
         item["statuses"]["visible_process_pid"] = "RUNNING"
 
+    for item in by_pid.values():
+        if item.get("command"):
+            continue
+        command = _process_command(item.get("pid"))
+        if command:
+            item["command"] = command
+
     visible = []
     stale = []
     ghost = []
@@ -356,6 +382,28 @@ def _pid_reconciliation(sources, visible_daemon_processes=None):
         )
         authoritative = visible[0]["pid"]
 
+    daemon_pid = sources.get("daemon_health", {}).get("pid")
+    heartbeat_pid = sources.get("heartbeat", {}).get("pid")
+    benign_child_pid_mismatches = []
+    if daemon_pid and heartbeat_pid and daemon_pid != heartbeat_pid:
+        heartbeat_item = by_pid.get(str(heartbeat_pid)) or {}
+        heartbeat_command = heartbeat_item.get("command") or _process_command(heartbeat_pid)
+        daemon_confirmed = authoritative is not None and int(authoritative) == int(daemon_pid)
+        if daemon_confirmed and _benign_child_process_command(heartbeat_command):
+            heartbeat_item["classification"] = "benign_child_pid_mismatch"
+            heartbeat_item["benign_child_pid_mismatch"] = True
+            heartbeat_item["command"] = heartbeat_command
+            benign_child_pid_mismatches.append(
+                {
+                    "daemon_pid": daemon_pid,
+                    "child_pid": heartbeat_pid,
+                    "child_role": "heartbeat_pid",
+                    "classification": "benign_child_pid_mismatch",
+                    "reason": "daemon_owner_confirmed_and_child_process_is_forkserver_or_resource_tracker",
+                    "command": heartbeat_command,
+                }
+            )
+
     return {
         "authoritative_pid": authoritative,
         "visible_process_pids": [item["pid"] for item in visible],
@@ -365,6 +413,7 @@ def _pid_reconciliation(sources, visible_daemon_processes=None):
         "pids": sorted(by_pid.values(), key=lambda item: str(item["pid"])),
         "stale_pid_flags": stale_pid_flags,
         "ghost_pid_flags": ghost_pid_flags,
+        "benign_child_pid_mismatches": benign_child_pid_mismatches,
     }
 
 
@@ -416,7 +465,7 @@ def _reconcile_owner(sources):
     }
 
 
-def _detect_inconsistencies(sources):
+def _detect_inconsistencies(sources, reconciliation=None):
     inconsistencies = []
     daemon = sources.get("daemon_health", {})
     heartbeat = sources.get("heartbeat", {})
@@ -431,7 +480,8 @@ def _detect_inconsistencies(sources):
         inconsistencies.append("daemon_lock_stale_or_owner_missing")
     if runtime_health.get("runtime_owner") == "stale_lock_only" and heartbeat.get("status") in RUNNING_STATUSES:
         inconsistencies.append("runtime_health_reports_stale_lock_while_heartbeat_alive")
-    if daemon.get("pid") and heartbeat.get("pid") and daemon.get("pid") != heartbeat.get("pid"):
+    benign = (reconciliation or {}).get("pid_reconciliation", {}).get("benign_child_pid_mismatches") or []
+    if daemon.get("pid") and heartbeat.get("pid") and daemon.get("pid") != heartbeat.get("pid") and not benign:
         inconsistencies.append("daemon_health_heartbeat_pid_mismatch")
     return inconsistencies
 
@@ -533,7 +583,7 @@ def build_runtime_reconciliation_status(now=None, sources=None):
     now_ist = as_ist_datetime(now)
     sources = sources or _collect_sources(now_ist)
     reconciliation = _reconcile_owner(sources)
-    inconsistencies = _detect_inconsistencies(sources)
+    inconsistencies = _detect_inconsistencies(sources, reconciliation=reconciliation)
     if inconsistencies and reconciliation["reconciliation_status"] == "PASS":
         reconciliation_status = "WARNING"
     else:
@@ -548,6 +598,7 @@ def build_runtime_reconciliation_status(now=None, sources=None):
         "reconciliation_reason": reconciliation["reconciliation_reason"],
         "ownership_candidates": reconciliation["ownership_candidates"],
         "heartbeat_daemon_inconsistencies": inconsistencies,
+        "benign_pid_mismatches": (reconciliation.get("pid_reconciliation") or {}).get("benign_child_pid_mismatches") or [],
         "stale_pid_flags": (reconciliation.get("pid_reconciliation") or {}).get("stale_pid_flags") or [],
         "ghost_pid_flags": (reconciliation.get("pid_reconciliation") or {}).get("ghost_pid_flags") or [],
         "remaining_contradictions": inconsistencies,
@@ -589,6 +640,7 @@ def build_titan_runtime_watchdog(now=None):
         "runtime_ownership_deterministic": reconciliation.get("runtime_ownership_deterministic"),
         "stale_writer_count": stale_audit.get("stale_writer_count"),
         "heartbeat_daemon_inconsistencies": inconsistencies,
+        "benign_pid_mismatches": reconciliation.get("benign_pid_mismatches") or [],
         "recovery_policy_path": _path_key(RUNTIME_RECOVERY_POLICY_PATH),
         "stale_writer_audit_path": _path_key(STALE_WRITER_AUDIT_PATH),
         "runtime_reconciliation_status_path": _path_key(RUNTIME_RECONCILIATION_STATUS_PATH),
@@ -621,6 +673,7 @@ def run_batch8_runtime_watchdog(now=None):
             "runtime_ownership_deterministic": watchdog.get("runtime_ownership_deterministic"),
             "stale_writer_count": watchdog.get("stale_writer_count"),
             "heartbeat_daemon_inconsistencies": watchdog.get("heartbeat_daemon_inconsistencies"),
+            "benign_pid_mismatches": watchdog.get("benign_pid_mismatches") or [],
             "automatic_restart_allowed": watchdog.get("automatic_restart_allowed"),
             "automatic_process_kill_allowed": watchdog.get("automatic_process_kill_allowed"),
             "auto_healing_mutation_allowed": watchdog.get("auto_healing_mutation_allowed"),
