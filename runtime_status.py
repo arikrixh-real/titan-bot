@@ -7,6 +7,7 @@ from engines.phase38_test_mode_guard import evaluate_phase38_runtime_guard, writ
 from market_data_health import run_market_data_health_check
 from runtime_health import run_authoritative_runtime_health_check
 from runtime_mode_router import runtime_mode_snapshot
+from runtime_topology import build_runtime_topology
 from utils.market_hours import IST, as_ist_datetime
 
 
@@ -1093,6 +1094,50 @@ def _market_data_health_summary():
         }
 
 
+def _runtime_topology_summary():
+    try:
+        topology = build_runtime_topology()
+    except Exception as exc:
+        return {
+            "topology_health": "FAIL",
+            "error": str(exc),
+            "safety_flags": {
+                "advisory_only": True,
+                "affects_live_ranking": False,
+                "affects_execution": False,
+                "broker_mutation": False,
+                "telegram_mutation": False,
+                "supabase_mutation": False,
+                "live_order_behavior": False,
+                "recommended_live_weight": 0.0,
+                "rank_adjustment": 0.0,
+            },
+        }
+    graph = topology.get("dependency_graph") or {}
+    visibility = topology.get("engine_visibility") or {}
+    return {
+        "topology_health": topology.get("topology_health"),
+        "authoritative_runtime_owner": topology.get("authoritative_runtime_owner"),
+        "authoritative_heartbeat": topology.get("authoritative_heartbeat"),
+        "runtime_priority_order": topology.get("runtime_priority_order"),
+        "runtime_integrity_score": topology.get("runtime_integrity_score"),
+        "dependency_integrity_score": topology.get("dependency_integrity_score"),
+        "observability_score": topology.get("observability_score"),
+        "runtime_consistency_score": topology.get("runtime_consistency_score"),
+        "runtime_conflicts": topology.get("runtime_conflicts") or [],
+        "stale_runtime_sources": topology.get("stale_runtime_sources") or [],
+        "dependency_graph_summary": graph,
+        "runtime_visibility_summary": {
+            "engines_not_reporting_status": visibility.get("engines_not_reporting_status") or [],
+            "engines_disconnected_from_runtime_chain": visibility.get("engines_disconnected_from_runtime_chain") or [],
+            "phases_contributing_nothing": visibility.get("phases_contributing_nothing") or [],
+            "duplicated_runtime_visibility_paths": visibility.get("duplicated_runtime_visibility_paths") or [],
+            "stale_memory_count": len(visibility.get("engines_with_stale_memory") or []),
+        },
+        "safety_flags": topology.get("safety_flags") or {},
+    }
+
+
 def _phase_status_summaries():
     summaries = {}
     for phase, spec in PHASE_STATUS_ARTIFACTS.items():
@@ -1147,6 +1192,9 @@ def build_runtime_status(value=None):
         }
     )
 
+    authoritative_runtime_health = _authoritative_runtime_health_summary()
+    market_data_health = _market_data_health_summary()
+    runtime_topology = _runtime_topology_summary()
     return {
         "timestamp_ist": now.astimezone(IST).isoformat(),
         "mode": permissions["mode"],
@@ -1155,8 +1203,13 @@ def build_runtime_status(value=None):
         "blocked_engines": permissions["blocked_engines"],
         "reason": permissions["reason"],
         "phase38_runtime_guard": phase38_guard,
-        "authoritative_runtime_health": _authoritative_runtime_health_summary(),
-        "market_data_health": _market_data_health_summary(),
+        "authoritative_runtime_health": authoritative_runtime_health,
+        "market_data_health": market_data_health,
+        "runtime_topology": runtime_topology,
+        "dependency_graph_summary": runtime_topology.get("dependency_graph_summary"),
+        "runtime_visibility_summary": runtime_topology.get("runtime_visibility_summary"),
+        "runtime_integrity_score": runtime_topology.get("runtime_integrity_score"),
+        "topology_health": runtime_topology.get("topology_health"),
         "historical_replay": _historical_replay_status_summary(),
         "phase39_research_memory_observatory": _phase39_research_memory_observatory(now),
         "phase_sidecar_status": _phase_status_summaries(),
