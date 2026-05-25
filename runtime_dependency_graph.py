@@ -1,7 +1,9 @@
 import json
+import importlib.util
 from datetime import datetime, timezone
 from pathlib import Path
 
+from legacy_engine_visibility import build_legacy_engine_visibility
 from utils.market_hours import IST, as_ist_datetime
 
 
@@ -60,6 +62,7 @@ CORE_NODES = {
     },
     "execution_engine": {
         "path": Path("data") / "runtime" / "execution_engine_status.json",
+        "fallback_import": "titan_master_brain.execution_engine",
         "mode": "execution_visibility_only",
         "upstream": ["master_brain", "setup_engine"],
         "downstream": [],
@@ -74,6 +77,7 @@ CORE_NODES = {
     "reinforcement_learning": {
         "path": Path("data") / "runtime" / "reinforcement_learning_status.json",
         "fallback_path": Path("data") / "memory" / "reinforcement_learning_memory.json",
+        "fallback_import": "engines.reinforcement_learning_layer",
         "mode": "research_only",
         "upstream": ["replay"],
         "downstream": ["runtime_status"],
@@ -148,16 +152,34 @@ def _file_timestamp(path):
         return None
 
 
+def _module_visible(module_name):
+    if not module_name:
+        return False
+    try:
+        return importlib.util.find_spec(module_name) is not None
+    except Exception:
+        return False
+
+
 def _node_status(name, spec, now_ist):
     path = Path(spec["path"])
     payload = _read_json_safe(path)
     artifact_path = path
+    primary_connected = bool(payload)
     if not payload and spec.get("fallback_path"):
         fallback = Path(spec["fallback_path"])
         fallback_payload = _read_json_safe(fallback)
         if fallback_payload:
             payload = fallback_payload
             artifact_path = fallback
+    module_visible = _module_visible(spec.get("fallback_import"))
+    if not payload and module_visible:
+        payload = {
+            "status": "VISIBLE_IMPORT_ONLY",
+            "visibility_source": spec.get("fallback_import"),
+            "advisory_only": True,
+        }
+        artifact_path = Path(spec.get("fallback_import", name).replace(".", "/"))
     timestamp = _payload_timestamp(payload) or _file_timestamp(artifact_path)
     age = max(0.0, (now_ist - timestamp).total_seconds()) if timestamp else None
     fresh_seconds = int(spec.get("fresh_seconds") or FRESH_SECONDS)
@@ -173,6 +195,9 @@ def _node_status(name, spec, now_ist):
         "stale": stale,
         "age_seconds": round(age, 3) if age is not None else None,
         "fresh_seconds": fresh_seconds,
+        "connected_visibility_only": bool(connected and not primary_connected),
+        "active_runtime_worker": bool(primary_connected and spec.get("mode") == "live_runtime"),
+        "module_visible": module_visible,
         "advisory": spec.get("mode") != "live_runtime",
         "mode": spec.get("mode"),
         "upstream": list(spec.get("upstream") or []),
@@ -213,6 +238,10 @@ def _discover_roadmap_phase_nodes():
 
 def build_runtime_dependency_graph(path=GRAPH_PATH, now=None):
     now_ist = as_ist_datetime(now)
+    try:
+        build_legacy_engine_visibility(now=now_ist)
+    except Exception:
+        pass
     node_specs = {}
     node_specs.update(CORE_NODES)
     node_specs.update(_discover_roadmap_phase_nodes())

@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from memory_health import run_memory_health_check
 from runtime_dependency_graph import SAFETY_FLAGS, build_runtime_dependency_graph
 from utils.market_hours import IST, as_ist_datetime
 
@@ -185,6 +186,9 @@ def _visibility_audit(dependency_graph, runtime_sources, memory_visibility, now_
         "engines_not_reporting_status": engines_not_reporting,
         "engines_with_stale_memory": stale_memory[:100],
         "engines_disconnected_from_runtime_chain": disconnected,
+        "visibility_only_connected_engines": [
+            name for name, node in nodes.items() if node.get("connected_visibility_only")
+        ],
         "phases_contributing_nothing": phases_contributing_nothing,
         "duplicated_runtime_visibility_paths": duplicated,
         "safety_flags": dict(SAFETY_FLAGS),
@@ -223,6 +227,14 @@ def build_runtime_topology(path=TOPOLOGY_PATH, now=None):
     roadmap_sources = _roadmap_sidecar_sources(now_ist)
     memory_visibility = _memory_visibility(now_ist)
     dependency_graph = build_runtime_dependency_graph(now=now_ist)
+    try:
+        memory_health = run_memory_health_check(now=now_ist)
+    except Exception as exc:
+        memory_health = {
+            "overall_status": "FAIL",
+            "error": str(exc),
+            "safety_flags": dict(SAFETY_FLAGS),
+        }
     runtime_conflicts = detect_runtime_conflicts(runtime_sources)
     stale_runtime_sources = [
         name for name, source in runtime_sources.items() if source.get("stale")
@@ -257,6 +269,8 @@ def build_runtime_topology(path=TOPOLOGY_PATH, now=None):
                 "fresh": node.get("fresh"),
                 "status": node.get("status"),
                 "mode": node.get("mode"),
+                "connected_visibility_only": node.get("connected_visibility_only", False),
+                "stale": node.get("stale", False),
             }
             for name, node in (dependency_graph.get("nodes") or {}).items()
         },
@@ -277,6 +291,19 @@ def build_runtime_topology(path=TOPOLOGY_PATH, now=None):
             "total_memory_artifacts": len(memory_visibility),
             "stale_memory_count": len(visibility_audit.get("engines_with_stale_memory") or []),
             "sample": dict(list(memory_visibility.items())[:20]),
+        },
+        "memory_health": {
+            "path": "data/runtime/titan_memory_health.json",
+            "overall_status": memory_health.get("overall_status"),
+            "total_memory_files": memory_health.get("total_memory_files"),
+            "stale_memory_files": memory_health.get("stale_memory_files"),
+            "orphan_memory_files": memory_health.get("orphan_memory_files"),
+            "corrupted_memory_files": memory_health.get("corrupted_memory_files"),
+            "missing_expected_memory_files": memory_health.get("missing_expected_memory_files"),
+            "memory_freshness_score": memory_health.get("memory_freshness_score"),
+            "memory_integrity_score": memory_health.get("memory_integrity_score"),
+            "legacy_visibility_score": memory_health.get("legacy_visibility_score"),
+            "missing_visibility_summary": memory_health.get("missing_visibility_summary") or [],
         },
         "observability_score": scores["observability_score"],
         "runtime_integrity_score": scores["runtime_integrity_score"],

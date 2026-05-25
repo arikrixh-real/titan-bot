@@ -1115,6 +1115,7 @@ def _runtime_topology_summary():
         }
     graph = topology.get("dependency_graph") or {}
     visibility = topology.get("engine_visibility") or {}
+    memory_health = topology.get("memory_health") or {}
     return {
         "topology_health": topology.get("topology_health"),
         "authoritative_runtime_owner": topology.get("authoritative_runtime_owner"),
@@ -1130,10 +1131,19 @@ def _runtime_topology_summary():
         "runtime_visibility_summary": {
             "engines_not_reporting_status": visibility.get("engines_not_reporting_status") or [],
             "engines_disconnected_from_runtime_chain": visibility.get("engines_disconnected_from_runtime_chain") or [],
+            "visibility_only_connected_engines": visibility.get("visibility_only_connected_engines") or [],
             "phases_contributing_nothing": visibility.get("phases_contributing_nothing") or [],
             "duplicated_runtime_visibility_paths": visibility.get("duplicated_runtime_visibility_paths") or [],
             "stale_memory_count": len(visibility.get("engines_with_stale_memory") or []),
         },
+        "memory_health": memory_health,
+        "legacy_engine_visibility": memory_health.get("legacy_engine_visibility") or {},
+        "memory_freshness_score": memory_health.get("memory_freshness_score"),
+        "memory_integrity_score": memory_health.get("memory_integrity_score"),
+        "stale_memory_count": memory_health.get("stale_memory_files"),
+        "orphan_memory_count": memory_health.get("orphan_memory_files"),
+        "corrupted_memory_count": memory_health.get("corrupted_memory_files"),
+        "missing_visibility_count": len(memory_health.get("missing_visibility_summary") or []),
         "safety_flags": topology.get("safety_flags") or {},
     }
 
@@ -1208,6 +1218,14 @@ def build_runtime_status(value=None):
         "runtime_topology": runtime_topology,
         "dependency_graph_summary": runtime_topology.get("dependency_graph_summary"),
         "runtime_visibility_summary": runtime_topology.get("runtime_visibility_summary"),
+        "memory_health": runtime_topology.get("memory_health"),
+        "legacy_engine_visibility": runtime_topology.get("legacy_engine_visibility"),
+        "memory_freshness_score": runtime_topology.get("memory_freshness_score"),
+        "memory_integrity_score": runtime_topology.get("memory_integrity_score"),
+        "stale_memory_count": runtime_topology.get("stale_memory_count"),
+        "orphan_memory_count": runtime_topology.get("orphan_memory_count"),
+        "corrupted_memory_count": runtime_topology.get("corrupted_memory_count"),
+        "missing_visibility_count": runtime_topology.get("missing_visibility_count"),
         "runtime_integrity_score": runtime_topology.get("runtime_integrity_score"),
         "topology_health": runtime_topology.get("topology_health"),
         "historical_replay": _historical_replay_status_summary(),
