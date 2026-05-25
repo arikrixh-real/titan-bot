@@ -104,6 +104,27 @@ def _task_available(task, status_path):
     return payload, bool(payload_ok or _worker_health_task_ok(task))
 
 
+def _task_availability_state(task, status_path):
+    payload = _read_json(status_path)
+    worker_ok = _worker_health_task_ok(task)
+    fresh = _payload_fresh(payload)
+    active = _payload_active(payload)
+    present = bool(payload)
+    truly_unavailable = bool((not present and not worker_ok) or (present and not active and not worker_ok))
+    return {
+        "payload": payload,
+        "ok": bool((fresh and active) or worker_ok),
+        "present": present,
+        "fresh": fresh,
+        "active": active,
+        "worker_ok": worker_ok,
+        "truly_unavailable": truly_unavailable,
+        "advisory_stale": bool(present and active and not fresh and not worker_ok),
+        "status": payload.get("status") if isinstance(payload, dict) else None,
+        "timestamp": _final_count_timestamp(payload),
+    }
+
+
 def _fresh_int(payload, key):
     if not _payload_fresh(payload):
         return None
@@ -646,6 +667,9 @@ def _status_payload(
     pipeline_health,
     final_count_source,
     ohlc_refresh_diagnostics,
+    degraded_but_operational=False,
+    advisory_reason=None,
+    advisory_components=None,
     run_count=None,
 ):
     status = "FULL_RUNTIME_PIPELINE_COMPLETE"
@@ -685,6 +709,9 @@ def _status_payload(
         "scan_only": scan_only,
         "fallback_reason": fallback_reason,
         "fallback_components": fallback_components,
+        "advisory_reason": advisory_reason,
+        "advisory_components": advisory_components or [],
+        "degraded_but_operational": bool(degraded_but_operational),
         "pipeline_health": pipeline_health,
         "ohlc_refresh_diagnostics": ohlc_refresh_diagnostics,
         "partial_stale_tolerated": partial_stale_tolerated,
@@ -749,6 +776,7 @@ def _status_payload(
             "stale_policy": stale_policy,
             "refresh_attempted": bool((ohlc_refresh_diagnostics or {}).get("attempted")),
             "refresh_status": (ohlc_refresh_diagnostics or {}).get("status"),
+            "degraded_but_operational": bool(degraded_but_operational),
         },
         "errors": errors,
     }
@@ -758,29 +786,45 @@ def _status_payload(
 
 
 def _full_pipeline_health(ohlc_fallback_required, partial_stale_tolerated, stale_symbol_ratio, stale_policy):
-    master_payload, master_ok = _task_available("master_brain", MASTER_BRAIN_STATUS_PATH)
-    setup_payload, setup_ok = _task_available("setup_engine", SETUP_ENGINE_STATUS_PATH)
+    master_state = _task_availability_state("master_brain", MASTER_BRAIN_STATUS_PATH)
+    setup_state = _task_availability_state("setup_engine", SETUP_ENGINE_STATUS_PATH)
+    master_payload = master_state["payload"]
+    setup_payload = setup_state["payload"]
+    master_ok = master_state["ok"]
+    setup_ok = setup_state["ok"]
 
     final_debug = _read_json(FINAL_REJECTION_DEBUG_PATH)
     final_count = _resolve_final_count(master_payload, setup_payload, final_debug)
 
     fallback_reasons = []
+    advisory_reasons = []
     if ohlc_fallback_required:
         fallback_reasons.append("OHLC_STALE")
-    if not master_ok:
+    if master_state["truly_unavailable"] and not final_count["available"]:
         fallback_reasons.append("MASTER_BRAIN_UNAVAILABLE")
-    if not setup_ok:
+    elif not master_ok:
+        advisory_reasons.append("MASTER_BRAIN_STALE_ADVISORY")
+    if setup_state["truly_unavailable"] and not final_count["available"]:
         fallback_reasons.append("SETUP_ENGINE_UNAVAILABLE")
+    elif not setup_ok:
+        advisory_reasons.append("SETUP_ENGINE_STALE_ADVISORY")
 
     scan_only = bool(fallback_reasons)
     return {
         "scan_only": scan_only,
         "fallback_reason": "|".join(fallback_reasons) if fallback_reasons else None,
         "fallback_components": fallback_reasons,
+        "advisory_reason": "|".join(advisory_reasons) if advisory_reasons else None,
+        "advisory_components": advisory_reasons,
+        "degraded_but_operational": bool(partial_stale_tolerated or advisory_reasons),
         "pipeline_health": {
             "scanner_ok": True,
             "master_brain_ok": master_ok,
             "setup_engine_ok": setup_ok,
+            "master_brain_truly_unavailable": master_state["truly_unavailable"],
+            "setup_engine_truly_unavailable": setup_state["truly_unavailable"],
+            "master_brain_advisory_stale": master_state["advisory_stale"],
+            "setup_engine_advisory_stale": setup_state["advisory_stale"],
             "ohlc_refresh_ok": not ohlc_fallback_required,
             "ohlc_stale": ohlc_fallback_required,
             "partial_stale_tolerated": partial_stale_tolerated,
@@ -796,6 +840,8 @@ def _full_pipeline_health(ohlc_fallback_required, partial_stale_tolerated, stale
         "entry_stage_available": final_count["entry_stage_available"],
         "master_status": master_payload.get("status"),
         "setup_status": setup_payload.get("status"),
+        "master_brain_state": {k: v for k, v in master_state.items() if k != "payload"},
+        "setup_engine_state": {k: v for k, v in setup_state.items() if k != "payload"},
         "final_debug": final_debug,
     }
 
@@ -816,6 +862,8 @@ def _market_filter_diagnostics(pipeline, stale_policy_result):
         "runtime_filters": {
             "scan_only": bool(pipeline.get("scan_only")),
             "fallback_reason": pipeline.get("fallback_reason"),
+            "advisory_reason": pipeline.get("advisory_reason"),
+            "degraded_but_operational": bool(pipeline.get("degraded_but_operational")),
             "master_brain_ok": bool(health.get("master_brain_ok")),
             "setup_engine_ok": bool(health.get("setup_engine_ok")),
         },
@@ -1101,6 +1149,9 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         pipeline_health=pipeline["pipeline_health"],
         final_count_source=pipeline["final_count_source"],
         ohlc_refresh_diagnostics=ohlc_refresh_diagnostics,
+        degraded_but_operational=pipeline["degraded_but_operational"],
+        advisory_reason=pipeline["advisory_reason"],
+        advisory_components=pipeline["advisory_components"],
         run_count=run_count,
     )
 

@@ -59,7 +59,6 @@ def inspect_scanner_freshness(now=None, scanner_status_path=SCANNER_STATUS_PATH,
     scan_only = bool(scanner.get("scan_only"))
     stale_ohlc = bool(
         scanner.get("ohlc_fallback_required")
-        or scanner.get("stale_data_warning")
         or str(scanner.get("status") or "").upper() == "SCAN_ONLY_STALE_OHLC"
         or (scanner.get("pipeline_health") or {}).get("ohlc_stale")
     )
@@ -95,6 +94,12 @@ def inspect_scanner_freshness(now=None, scanner_status_path=SCANNER_STATUS_PATH,
         "scanner_cycle_id": scanner.get("scanner_cycle_id"),
         "scan_only": scan_only,
         "fallback_reason": scanner.get("fallback_reason"),
+        "fallback_components": scanner.get("fallback_components") or [],
+        "advisory_reason": scanner.get("advisory_reason"),
+        "advisory_components": scanner.get("advisory_components") or [],
+        "degraded_but_operational": bool(scanner.get("degraded_but_operational")),
+        "pipeline_health": scanner.get("pipeline_health") or {},
+        "scanner_data_health": scanner.get("scanner_data_health") or {},
         "stale_ohlc_detected": stale_ohlc,
         "stale_symbol_count": int(scanner.get("stale_symbol_count") or 0),
         "latest_candle_timestamp": scanner.get("latest_candle_timestamp"),

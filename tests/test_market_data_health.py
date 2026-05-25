@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import market_data_health
+import runtime_scanner
 from data import live_price
 from utils.market_hours import IST
 
@@ -241,6 +242,183 @@ class MarketDataHealthTests(unittest.TestCase):
         self.assertFalse(market_data_health.SAFETY_FLAGS["live_order_behavior"])
         self.assertEqual(market_data_health.SAFETY_FLAGS["recommended_live_weight"], 0.0)
         self.assertEqual(market_data_health.SAFETY_FLAGS["rank_adjustment"], 0.0)
+
+    def test_partial_stale_symbols_do_not_poison_entire_scanner(self):
+        with patch.object(
+            runtime_scanner,
+            "_task_availability_state",
+            side_effect=[
+                {
+                    "payload": {"status": "MASTER_BRAIN_READ_ONLY_COMPLETE"},
+                    "ok": False,
+                    "present": True,
+                    "fresh": False,
+                    "active": True,
+                    "worker_ok": False,
+                    "truly_unavailable": False,
+                    "advisory_stale": True,
+                    "status": "MASTER_BRAIN_READ_ONLY_COMPLETE",
+                    "timestamp": "2026-05-22T09:13:42+05:30",
+                },
+                {
+                    "payload": {"status": "SETUP_ENGINE_MARKER_UPDATED"},
+                    "ok": False,
+                    "present": True,
+                    "fresh": False,
+                    "active": True,
+                    "worker_ok": False,
+                    "truly_unavailable": False,
+                    "advisory_stale": True,
+                    "status": "SETUP_ENGINE_MARKER_UPDATED",
+                    "timestamp": "2026-05-17T11:30:48+05:30",
+                },
+            ],
+        ), patch.object(
+            runtime_scanner,
+            "_read_json",
+            return_value={"final_passed": 7, "entry_passed": 23, "timestamp": "2026-05-25T10:00:00+05:30"},
+        ):
+            result = runtime_scanner._full_pipeline_health(
+                ohlc_fallback_required=False,
+                partial_stale_tolerated=True,
+                stale_symbol_ratio=0.04,
+                stale_policy="PARTIAL_STALE_TOLERATED_15_PERCENT",
+            )
+
+        self.assertFalse(result["scan_only"])
+        self.assertIsNone(result["fallback_reason"])
+        self.assertTrue(result["degraded_but_operational"])
+        self.assertIn("MASTER_BRAIN_STALE_ADVISORY", result["advisory_components"])
+        self.assertIn("SETUP_ENGINE_STALE_ADVISORY", result["advisory_components"])
+
+    def test_false_master_and_setup_unavailable_removed_from_market_data_fallback(self):
+        scanner = {
+            "scanner_status": "SCAN_ONLY_FALLBACK",
+            "fallback_reason": "MASTER_BRAIN_UNAVAILABLE|SETUP_ENGINE_UNAVAILABLE",
+            "fallback_components": ["MASTER_BRAIN_UNAVAILABLE", "SETUP_ENGINE_UNAVAILABLE"],
+            "pipeline_health": {
+                "master_brain_truly_unavailable": False,
+                "setup_engine_truly_unavailable": False,
+                "ohlc_stale": False,
+            },
+        }
+        cache = {"cache_stale": False, "live_source_status": "ACTIVE", "source": "UPSTOX"}
+        ohlc = {"stale_ohlc_detected": False}
+
+        components = market_data_health._fallback_components(scanner, cache, ohlc, {"refresh_attempted": False})
+
+        self.assertNotIn("MASTER_BRAIN_UNAVAILABLE", components)
+        self.assertNotIn("SETUP_ENGINE_UNAVAILABLE", components)
+        self.assertEqual(components, [])
+
+    def test_stale_diagnostics_generated_correctly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = Path(tmp) / "cache"
+            cache_dir.mkdir()
+            diagnostics_path = Path(tmp) / "stale_symbol_diagnostics.json"
+            old_ts = datetime(2026, 5, 20, 15, 15, tzinfo=IST)
+            (cache_dir / "ABC.csv").write_text(
+                "Datetime,Open,High,Low,Close,Volume\n"
+                f"{old_ts.isoformat()},1,2,1,1.5,100\n",
+                encoding="utf-8",
+            )
+            selection_path = Path(tmp) / "scan_selection_state.json"
+            selection_path.write_text(json.dumps({"selected_symbols": []}), encoding="utf-8")
+            with patch.object(market_data_health, "STALE_SYMBOL_DIAGNOSTICS_PATH", diagnostics_path), patch.object(
+                market_data_health, "SCAN_SELECTION_STATE_PATH", selection_path
+            ):
+                result = market_data_health.diagnose_stale_symbols(
+                    {"latest_candle_timestamp": old_ts.isoformat()},
+                    {},
+                    {"refresh_result": {}},
+                    now=datetime(2026, 5, 25, 10, 0, tzinfo=IST),
+                    cache_dir=cache_dir,
+                )
+
+            payload = json.loads(diagnostics_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(result["stale_symbol_count"], 1)
+        self.assertEqual(payload["symbols"][0]["symbol"], "ABC")
+        self.assertEqual(payload["symbols"][0]["stale_reason"], "outside_current_scan_selection_not_refreshed")
+        self.assertTrue(payload["symbols"][0]["cache_present"])
+
+    def test_degraded_state_classified_correctly(self):
+        scanner = {
+            "status": "WARNING",
+            "scanner_status": "SCAN_ONLY_FALLBACK",
+            "scanner_mode": "SCAN_ONLY_CACHED_50",
+            "scan_only": True,
+            "fallback_reason": "MASTER_BRAIN_UNAVAILABLE|SETUP_ENGINE_UNAVAILABLE",
+            "fallback_components": ["MASTER_BRAIN_UNAVAILABLE", "SETUP_ENGINE_UNAVAILABLE"],
+            "advisory_components": ["MASTER_BRAIN_STALE_ADVISORY", "SETUP_ENGINE_STALE_ADVISORY"],
+            "degraded_but_operational": True,
+            "pipeline_health": {
+                "master_brain_truly_unavailable": False,
+                "setup_engine_truly_unavailable": False,
+                "ohlc_stale": False,
+            },
+            "stale_ohlc_detected": False,
+            "stale_symbol_count": 2,
+        }
+        ohlc = {
+            "status": "PASS",
+            "symbols_checked": 50,
+            "latest_candle_timestamp": "2026-05-25T11:15:00+05:30",
+            "stale_ohlc_detected": False,
+            "stale_symbol_count": 0,
+        }
+        cache = {
+            "status": "PASS",
+            "cache_present": True,
+            "meta_present": True,
+            "cache_stale": False,
+            "source": "UPSTOX",
+            "cache_source": "live_price_cache_meta",
+            "runtime_visible": True,
+            "token_type_visible": True,
+            "token_type_used": "ACCESS_TOKEN",
+            "live_source_status": "ACTIVE",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            ohlc_status_path = Path(tmp) / "ohlc_freshness_status.json"
+            diagnostics_path = Path(tmp) / "stale_symbol_diagnostics.json"
+            with patch.object(market_data_health, "OHLC_FRESHNESS_STATUS_PATH", ohlc_status_path), patch.object(
+                market_data_health, "STALE_SYMBOL_DIAGNOSTICS_PATH", diagnostics_path
+            ), patch.object(market_data_health, "inspect_scanner_freshness", return_value=scanner), patch.object(
+                market_data_health, "inspect_ohlc_freshness", return_value=ohlc
+            ), patch.object(
+                market_data_health, "inspect_live_price_cache", return_value=cache
+            ), patch.object(
+                market_data_health,
+                "_refresh_stale_ohlc_if_needed",
+                return_value={"refresh_attempted": False, "refresh_success": False, "refresh_status": "NOT_REQUIRED"},
+            ), patch.object(
+                market_data_health,
+                "diagnose_stale_symbols",
+                return_value={"summary": {}, "stale_symbol_count": 0, "symbols": []},
+            ):
+                result = market_data_health.build_market_data_health(now=datetime(2026, 5, 25, 10, 0, tzinfo=IST))
+
+        self.assertTrue(result["degraded_but_operational"])
+        self.assertFalse(result["fallback_active"])
+        self.assertIsNone(result["fallback_reason"])
+
+    def test_upstox_runtime_health_no_secrets_exposed(self):
+        health = market_data_health._upstox_runtime_health(
+            {
+                "live_source_status": "NETWORK_BLOCKED",
+                "token_type_used": "ACCESS_TOKEN",
+                "fallback_reason": "Socket blocked while calling Upstox; using cache if available",
+                "cache_stale": True,
+            }
+        )
+        payload_text = json.dumps(health)
+
+        self.assertTrue(health["network_blocked"])
+        self.assertFalse(health["api_reachable"])
+        self.assertTrue(health["token_present"])
+        self.assertNotIn("Bearer", payload_text)
+        self.assertNotIn("Authorization", payload_text)
 
 
 if __name__ == "__main__":
