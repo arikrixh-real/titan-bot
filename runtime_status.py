@@ -4,6 +4,7 @@ from pathlib import Path
 
 from engines.time_filter import get_mode_permissions
 from engines.phase38_test_mode_guard import evaluate_phase38_runtime_guard, write_phase38_runtime_status
+from runtime_health import run_authoritative_runtime_health_check
 from runtime_mode_router import runtime_mode_snapshot
 from utils.market_hours import IST, as_ist_datetime
 
@@ -1048,6 +1049,28 @@ def _historical_replay_status_summary():
     }
 
 
+def _authoritative_runtime_health_summary():
+    try:
+        return run_authoritative_runtime_health_check()
+    except Exception as exc:
+        return {
+            "overall_status": "FAIL",
+            "error": str(exc),
+            "safety_flags": {
+                "advisory_only": True,
+                "research_only": True,
+                "affects_live_ranking": False,
+                "affects_execution": False,
+                "broker_mutation": False,
+                "telegram_mutation": False,
+                "supabase_mutation": False,
+                "live_order_behavior": False,
+                "recommended_live_weight": 0.0,
+                "rank_adjustment": 0.0,
+            },
+        }
+
+
 def _phase_status_summaries():
     summaries = {}
     for phase, spec in PHASE_STATUS_ARTIFACTS.items():
@@ -1110,6 +1133,7 @@ def build_runtime_status(value=None):
         "blocked_engines": permissions["blocked_engines"],
         "reason": permissions["reason"],
         "phase38_runtime_guard": phase38_guard,
+        "authoritative_runtime_health": _authoritative_runtime_health_summary(),
         "historical_replay": _historical_replay_status_summary(),
         "phase39_research_memory_observatory": _phase39_research_memory_observatory(now),
         "phase_sidecar_status": _phase_status_summaries(),
