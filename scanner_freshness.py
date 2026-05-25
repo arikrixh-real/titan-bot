@@ -6,6 +6,7 @@ from utils.market_hours import IST, as_ist_datetime
 
 
 SCANNER_STATUS_PATH = Path("data") / "runtime" / "scanner_status.json"
+SCANNER_FILTER_TRUTH_STATUS_PATH = Path("data") / "runtime" / "scanner_filter_truth_status.json"
 SCAN_SELECTION_STATE_PATH = Path("data") / "scan_selection_state.json"
 SCANNER_FRESH_SECONDS = 15 * 60
 
@@ -46,6 +47,7 @@ def _age_seconds(value, now):
 def inspect_scanner_freshness(now=None, scanner_status_path=SCANNER_STATUS_PATH, selection_state_path=SCAN_SELECTION_STATE_PATH):
     now_ist = as_ist_datetime(now)
     scanner = _read_json_safe(scanner_status_path)
+    scanner_truth = _read_json_safe(SCANNER_FILTER_TRUTH_STATUS_PATH)
     selection_state = _read_json_safe(selection_state_path)
     scanner_timestamp = (
         scanner.get("timestamp_ist")
@@ -110,4 +112,7 @@ def inspect_scanner_freshness(now=None, scanner_status_path=SCANNER_STATUS_PATH,
         "selection_timestamp": selection_timestamp,
         "selected_symbols_count": selection_state.get("selected_symbols_count"),
         "warnings": warnings,
+        "scanner_filter_truth_status": scanner_truth.get("overall_status"),
+        "counter_confidence": scanner_truth.get("counter_confidence"),
+        "recommended_dashboard_display_mode": scanner_truth.get("recommended_dashboard_display_mode"),
     }

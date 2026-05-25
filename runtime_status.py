@@ -9,6 +9,8 @@ from runtime_health import run_authoritative_runtime_health_check
 from runtime_mode_resolver import build_canonical_runtime_mode, build_runtime_warning_resolution_status
 from runtime_mode_router import runtime_mode_snapshot
 from runtime_topology import build_runtime_topology
+from scanner_filter_truth import run_scanner_filter_truth_audit
+from trade_lifecycle_health import run_trade_lifecycle_health_check
 from utils.market_hours import IST, as_ist_datetime
 
 
@@ -1162,6 +1164,48 @@ def _runtime_topology_summary():
     }
 
 
+def _scanner_filter_truth_summary():
+    try:
+        return run_scanner_filter_truth_audit()
+    except Exception as exc:
+        return {
+            "overall_status": "FAIL",
+            "error": str(exc),
+            "safety_flags": {
+                "advisory_only": True,
+                "affects_live_ranking": False,
+                "affects_execution": False,
+                "broker_mutation": False,
+                "telegram_mutation": False,
+                "supabase_mutation": False,
+                "live_order_behavior": False,
+                "recommended_live_weight": 0.0,
+                "rank_adjustment": 0.0,
+            },
+        }
+
+
+def _trade_lifecycle_health_summary():
+    try:
+        return run_trade_lifecycle_health_check()
+    except Exception as exc:
+        return {
+            "overall_status": "FAIL",
+            "error": str(exc),
+            "safety_flags": {
+                "advisory_only": True,
+                "affects_live_ranking": False,
+                "affects_execution": False,
+                "broker_mutation": False,
+                "telegram_mutation": False,
+                "supabase_mutation": False,
+                "live_order_behavior": False,
+                "recommended_live_weight": 0.0,
+                "rank_adjustment": 0.0,
+            },
+        }
+
+
 def _phase_status_summaries():
     summaries = {}
     for phase, spec in PHASE_STATUS_ARTIFACTS.items():
@@ -1221,6 +1265,8 @@ def build_runtime_status(value=None):
     runtime_topology = _runtime_topology_summary()
     canonical_runtime_mode = build_canonical_runtime_mode(now=now)
     runtime_warning_resolution = build_runtime_warning_resolution_status(canonical=canonical_runtime_mode, now=now)
+    scanner_filter_truth = _scanner_filter_truth_summary()
+    trade_lifecycle_health = _trade_lifecycle_health_summary()
     return {
         "timestamp_ist": now.astimezone(IST).isoformat(),
         "mode": permissions["mode"],
@@ -1234,6 +1280,21 @@ def build_runtime_status(value=None):
         "runtime_topology": runtime_topology,
         "canonical_runtime_mode": canonical_runtime_mode,
         "runtime_warning_resolution": runtime_warning_resolution,
+        "scanner_filter_truth": scanner_filter_truth,
+        "trade_lifecycle_health": trade_lifecycle_health,
+        "outcome_tracker_status": _read_json_safe(Path("data") / "runtime" / "outcome_tracker_status.json"),
+        "dashboard_scan_truth": {
+            "counter_confidence": scanner_filter_truth.get("counter_confidence"),
+            "recommended_display_mode": scanner_filter_truth.get("recommended_dashboard_display_mode"),
+            "identical_counter_warning": scanner_filter_truth.get("identical_counter_warning"),
+            "frozen_counter_warning": scanner_filter_truth.get("frozen_counter_warning"),
+            "stale_snapshot_warning": scanner_filter_truth.get("stale_snapshot_warning"),
+        },
+        "dashboard_trade_truth": {
+            "live_trades_count": trade_lifecycle_health.get("open_trades_count"),
+            "dashboard_mismatch": trade_lifecycle_health.get("dashboard_mismatch"),
+            "unresolved_eod_trades_count": trade_lifecycle_health.get("unresolved_eod_trades_count"),
+        },
         "dependency_graph_summary": runtime_topology.get("dependency_graph_summary"),
         "runtime_visibility_summary": runtime_topology.get("runtime_visibility_summary"),
         "memory_health": runtime_topology.get("memory_health"),

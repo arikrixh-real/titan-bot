@@ -38,6 +38,8 @@ PAPER_ACCOUNT_PATH = "/".join(["data", "paper_trading", "paper_account.json"])
 DASHBOARD_SYNC_STATUS_PATH = "/".join(["data", "runtime", "dashboard_sync_status.json"])
 PAPER_ENGINE_STATUS_PATH = "/".join(["data", "runtime", "paper_engine_status.json"])
 SCANNER_STATUS_PATH = "/".join(["data", "runtime", "scanner_status.json"])
+SCANNER_FILTER_TRUTH_STATUS_PATH = "/".join(["data", "runtime", "scanner_filter_truth_status.json"])
+TRADE_LIFECYCLE_HEALTH_PATH = "/".join(["data", "runtime", "trade_lifecycle_health.json"])
 REJECTION_HEATMAP_PATH = "/".join(["data", "runtime", "rejection_heatmap.json"])
 SIDEWAYS_ANALYSIS_PATH = "/".join(["data", "runtime", "sideways_analysis.json"])
 LIVE_PRICE_MONITOR_STATUS_PATH = "/".join(["data", "runtime", "live_price_monitor_status.json"])
@@ -1826,6 +1828,44 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         "repeated_data_warning": None,
     }
 
+    scanner_truth = safe_read_json(SCANNER_FILTER_TRUTH_STATUS_PATH, {})
+    counters = scanner_truth.get("counters") if isinstance(scanner_truth.get("counters"), dict) else {}
+    if counters and scanner_truth.get("scanner_timestamp"):
+        confidence = scanner_truth.get("counter_confidence") or "LOW"
+        return {
+            "stocks_checked": int(first_number(counters.get("stocks_checked"), default=0)),
+            "trend_passed": int(first_number(counters.get("trend_passed"), default=0)),
+            "strict_trend_passed": int(first_number(counters.get("strict_trend_passed"), counters.get("trend_passed"), default=0)),
+            "adaptive_trend_passed": int(first_number(counters.get("adaptive_trend_passed"), default=0)),
+            "momentum_passed": int(first_number(counters.get("momentum_passed"), default=0)),
+            "structure_passed": int(first_number(counters.get("structure_passed"), default=0)),
+            "entry_passed": int(first_number(counters.get("breakout_ready"), default=0)),
+            "breakout_ready_count": int(first_number(counters.get("breakout_ready"), default=0)),
+            "entry_stage_available": confidence == "HIGH",
+            "final_passed": optional_int_number(counters.get("final_passed")),
+            "alerts_this_scan": int(first_number(counters.get("alerts_this_scan"), default=0)),
+            "source": "SCANNER_FILTER_TRUTH",
+            "timestamp": parse_dt(scanner_truth.get("scanner_timestamp")),
+            "is_fresh": not bool(scanner_truth.get("stale_snapshot_warning")),
+            "has_data": True,
+            "limited_runtime": confidence != "HIGH",
+            "scanner_cycle_id": scanner_truth.get("scan_cycle_id"),
+            "scan_finished_at_ist": scanner_truth.get("scanner_timestamp"),
+            "scan_duration_seconds": None,
+            "scan_only": bool(scanner_truth.get("fallback_mode")),
+            "partial_stale_tolerated": False,
+            "stale_symbol_ratio": None,
+            "stale_policy": None,
+            "pipeline_health": {},
+            "fallback_reason": scanner_truth.get("fallback_reason"),
+            "final_count_source": (scanner_truth.get("counter_sources") or {}).get("final_passed") or "scanner_filter_truth",
+            "dashboard_status_message": scanner_truth.get("recommended_dashboard_display_mode"),
+            "repeated_data_signature": bool(scanner_truth.get("frozen_counter_warning")),
+            "repeated_data_warning": "Scanner truth reports frozen/repeated counters" if scanner_truth.get("frozen_counter_warning") else None,
+            "counter_confidence": confidence,
+            "recommended_dashboard_display_mode": scanner_truth.get("recommended_dashboard_display_mode"),
+        }
+
     supabase_scanner_payload = get_supabase_scanner_status_payload()
     supabase_stocks_checked = int(first_number(supabase_scanner_payload.get("stocks_checked"), default=0))
     if supabase_stocks_checked > 0:
@@ -2556,7 +2596,7 @@ def _is_live_trade_row(row):
     outcome = normalize_outcome(row.get("outcome"))
     result = normalize_outcome(row.get("result"))
 
-    if status == "CLOSED":
+    if status in {"CLOSED", "EOD_UNRESOLVED", "STALE_OPEN", "CLOSED_MANUAL_RECONCILIATION_REQUIRED"}:
         return False
     if _has_value(row.get("closed_at")):
         return False
@@ -2632,6 +2672,16 @@ def get_live_trades_count():
         "journal/active_trades.csv",
         "trades/active_trades.csv",
     ]
+
+    lifecycle = safe_read_json(TRADE_LIFECYCLE_HEALTH_PATH, {})
+    if isinstance(lifecycle, dict) and lifecycle.get("overall_status"):
+        normal_open = sum(
+            1
+            for item in lifecycle.get("unresolved_trades") or []
+            if isinstance(item, dict) and item.get("lifecycle_status") == "OPEN_PENDING"
+        )
+        if lifecycle.get("open_trades_count") is not None:
+            return int(normal_open)
 
     supabase_count = get_supabase_live_trades_count(fallback_reason="primary_source")
     if supabase_count > 0:
@@ -3190,6 +3240,8 @@ scanner_refresh_proof = (
 )
 if scanner_cycle_suffix_text:
     scanner_refresh_proof = f"{scanner_refresh_proof} | Cycle: ...{scanner_cycle_suffix_text}"
+if scan_breakdown.get("counter_confidence") and scan_breakdown.get("counter_confidence") != "HIGH":
+    scanner_refresh_proof = f"{scanner_refresh_proof} | Counter confidence: {scan_breakdown.get('counter_confidence')}"
 final_passed_subtitle = (
     scan_breakdown.get("dashboard_status_message")
     or (

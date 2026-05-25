@@ -63,9 +63,11 @@ IST = ZoneInfo("Asia/Kolkata")
 JOURNAL_DIR = Path("data/journals")
 LEARNING_DIR = Path("data/learning")
 MEMORY_DIR = Path("data/memory")
+RUNTIME_DIR = Path("data/runtime")
 ACTIVE_TRADES_CSV = JOURNAL_DIR / "active_trades.csv"
 OUTCOMES_CSV = JOURNAL_DIR / "trade_outcomes.csv"
 OUTCOMES_JSONL = JOURNAL_DIR / "trade_outcomes.jsonl"
+OUTCOME_TRACKER_STATUS_PATH = RUNTIME_DIR / "outcome_tracker_status.json"
 REINFORCEMENT_REPORTS_JSONL = LEARNING_DIR / "reinforcement_learning_reports.jsonl"
 REINFORCEMENT_MEMORY_JSON = MEMORY_DIR / "reinforcement_learning_memory.json"
 MAX_TP_SL_PRICE_AGE_SECONDS = 120
@@ -361,6 +363,34 @@ def _ensure_csv_columns(path, required_fields):
         pass
 
 
+def _write_outcome_tracker_status(result):
+    payload = dict(result or {})
+    payload.setdefault("generated_at_ist", datetime.now(IST).isoformat())
+    payload.setdefault("timestamp_ist", payload["generated_at_ist"])
+    payload.setdefault("status", "OUTCOME_TRACKER_STATUS_UPDATED")
+    payload.setdefault("mode", "visibility_only")
+    payload["broker_orders"] = False
+    payload["telegram_alerts"] = False
+    payload["supabase_destructive_cleanup"] = False
+    payload["live_execution_mutation"] = False
+    payload["safety_flags"] = {
+        "advisory_only": True,
+        "affects_live_ranking": False,
+        "affects_execution": False,
+        "broker_mutation": False,
+        "telegram_mutation": False,
+        "supabase_mutation": False,
+        "live_order_behavior": False,
+        "recommended_live_weight": 0.0,
+        "rank_adjustment": 0.0,
+    }
+    OUTCOME_TRACKER_STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = OUTCOME_TRACKER_STATUS_PATH.with_suffix(f"{OUTCOME_TRACKER_STATUS_PATH.suffix}.tmp")
+    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    tmp.replace(OUTCOME_TRACKER_STATUS_PATH)
+    return payload
+
+
 def _parse_opened_at_date(value):
     text = str(value or "").strip()
     if not text:
@@ -423,11 +453,11 @@ def _expire_previous_day_open_trades():
                 updated_rows.append(row)
                 continue
 
-            row["status"] = "CLOSED"
-            row["outcome"] = "MARKET_CLOSED"
-            row["result"] = "MARKET_CLOSED"
+            row["status"] = "EOD_UNRESOLVED"
+            row["outcome"] = ""
+            row["result"] = ""
             row["last_checked_at"] = checked_at
-            row["result_reason"] = "Expired because trade was opened on a previous trading date"
+            row["result_reason"] = "EOD_UNRESOLVED: previous trading date open without TP/SL confirmation"
 
             symbol = str(row.get("symbol", "")).upper().strip()
             if symbol:
@@ -833,13 +863,13 @@ def track_trade_outcomes(limit=None):
 
     if not is_trade_window():
         print(f"[OutcomeTracker] Skipped outside trade window ({trade_window_text()}).")
-        return {
+        return _write_outcome_tracker_status({
             "checked": 0,
             "closed": 0,
             "open": 0,
             "skipped": "OUTSIDE_TRADE_WINDOW",
             "expired_previous_day_open": expiry_result,
-        }
+        })
 
     _ensure_files()
 
@@ -850,7 +880,7 @@ def track_trade_outcomes(limit=None):
 
     if not rows:
         print("[OutcomeTracker] No active trades found.")
-        return {"checked": 0, "closed": 0, "open": 0}
+        return _write_outcome_tracker_status({"checked": 0, "closed": 0, "open": 0})
 
     checked = 0
     closed = 0
@@ -1001,7 +1031,7 @@ def track_trade_outcomes(limit=None):
     )
     print(f"[OutcomeTracker] Checked: {checked} | Closed: {closed} | Still open: {still_open}")
 
-    return {
+    return _write_outcome_tracker_status({
         "checked": checked,
         "closed": closed,
         "open": still_open,
@@ -1010,7 +1040,7 @@ def track_trade_outcomes(limit=None):
         "deferred_open": deferred_open,
         "expired_previous_day_open": expiry_result,
         "lifecycle_shadow_result": lifecycle_result,
-    }
+    })
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 import json
 import hashlib
+import tempfile
 import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -316,6 +317,31 @@ def _write_previous_data_signature(signature, scanner_cycle_id, timestamp_ist, p
         tmp_path.replace(path)
     except Exception:
         pass
+
+
+def _atomic_write_json(path, payload):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=path.parent,
+            delete=False,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+        ) as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            temp_path = Path(handle.name)
+        temp_path.replace(path)
+    finally:
+        if temp_path and temp_path.exists():
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
 
 
 def _scan_mode(load_debug, scan_only):
@@ -699,6 +725,7 @@ def _status_payload(
 
     payload = {
         "timestamp_ist": scan_finished_at_ist,
+        "scanner_timestamp": scan_finished_at_ist,
         "scanner_cycle_id": scanner_cycle_id,
         "scan_started_at_ist": scan_started_at_ist,
         "scan_finished_at_ist": scan_finished_at_ist,
@@ -726,11 +753,15 @@ def _status_payload(
         "journal_writes": False,
         "stocks_checked": stocks_checked,
         "trend_passed": trend_passed,
+        "trend_passed_count": trend_passed,
         "strict_trend_passed": strict_trend_passed,
         "adaptive_trend_passed": adaptive_trend_passed,
         "momentum_passed": momentum_passed,
+        "momentum_passed_count": momentum_passed,
         "structure_passed": structure_passed,
+        "structure_passed_count": structure_passed,
         "entry_passed": entry_passed,
+        "entry_passed_count": entry_passed,
         "entry_stage_available": entry_stage_available,
         "entry_passed_note": (
             "Full setup engine entry count unavailable."
@@ -742,6 +773,7 @@ def _status_payload(
             )
         ),
         "final_passed": final_passed,
+        "final_passed_count": final_passed,
         "final_passed_note": (
             final_passed_note
             or (
@@ -751,7 +783,20 @@ def _status_payload(
             )
         ),
         "alerts_sent": 0,
+        "alerts_this_scan": 0,
         "breakout_ready_count": breakout_ready_count,
+        "selected_symbols_count": stocks_checked,
+        "counter_confidence": "LOW" if scan_only or final_passed is None else "HIGH",
+        "counter_source": "runtime_scanner_independent_stage_counters",
+        "counter_sources": {
+            "stocks_checked": "runtime_scanner.loop.stocks_checked",
+            "trend_passed": "runtime_scanner.loop.trend_direction",
+            "momentum_passed": "runtime_scanner.loop.strong_momentum",
+            "structure_passed": "runtime_scanner.loop.structure_ok",
+            "breakout_ready": "runtime_scanner.loop.breakout_ready",
+            "final_passed": final_count_source,
+            "alerts_this_scan": "runtime_scanner.alerts_disabled_readonly_status",
+        },
         "passed_setups": passed_setups,
         "missing_fields": missing_fields,
         "candidate_symbols": candidate_symbols[:5],
@@ -1192,8 +1237,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         regime_diagnostics=regime_diagnostics,
     )
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    _atomic_write_json(path, payload)
     _write_previous_data_signature(data_signature, scanner_cycle_id, scan_finished_at_ist)
     return payload
 
