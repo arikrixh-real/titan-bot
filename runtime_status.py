@@ -5,6 +5,8 @@ from pathlib import Path
 from engines.time_filter import get_mode_permissions
 from engines.phase38_test_mode_guard import evaluate_phase38_runtime_guard, write_phase38_runtime_status
 from market_data_health import run_market_data_health_check
+from runtime_engine_health import build_master_brain_runtime_health, build_setup_engine_runtime_health
+from runtime_fallback_resolver import run_runtime_fallback_resolution
 from runtime_health import run_authoritative_runtime_health_check
 from runtime_mode_resolver import build_canonical_runtime_mode, build_runtime_warning_resolution_status
 from runtime_mode_router import runtime_mode_snapshot
@@ -1185,6 +1187,27 @@ def _scanner_filter_truth_summary():
         }
 
 
+def _master_brain_runtime_health_summary():
+    try:
+        return build_master_brain_runtime_health()
+    except Exception as exc:
+        return {"overall_status": "FAIL", "master_brain_runtime_health": "UNAVAILABLE", "error": str(exc)}
+
+
+def _setup_engine_runtime_health_summary():
+    try:
+        return build_setup_engine_runtime_health()
+    except Exception as exc:
+        return {"overall_status": "FAIL", "setup_runtime_health": "UNAVAILABLE", "error": str(exc)}
+
+
+def _runtime_fallback_resolution_summary():
+    try:
+        return run_runtime_fallback_resolution()
+    except Exception as exc:
+        return {"overall_status": "FAIL", "fallback_truthfulness": "ENGINE_UNAVAILABLE", "scanner_confidence": "LOW", "error": str(exc)}
+
+
 def _trade_lifecycle_health_summary():
     try:
         return run_trade_lifecycle_health_check()
@@ -1265,6 +1288,9 @@ def build_runtime_status(value=None):
     runtime_topology = _runtime_topology_summary()
     canonical_runtime_mode = build_canonical_runtime_mode(now=now)
     runtime_warning_resolution = build_runtime_warning_resolution_status(canonical=canonical_runtime_mode, now=now)
+    master_brain_runtime_health = _master_brain_runtime_health_summary()
+    setup_engine_runtime_health = _setup_engine_runtime_health_summary()
+    runtime_fallback_resolution = _runtime_fallback_resolution_summary()
     scanner_filter_truth = _scanner_filter_truth_summary()
     trade_lifecycle_health = _trade_lifecycle_health_summary()
     return {
@@ -1280,6 +1306,11 @@ def build_runtime_status(value=None):
         "runtime_topology": runtime_topology,
         "canonical_runtime_mode": canonical_runtime_mode,
         "runtime_warning_resolution": runtime_warning_resolution,
+        "master_brain_runtime_health": master_brain_runtime_health,
+        "setup_engine_runtime_health": setup_engine_runtime_health,
+        "runtime_fallback_resolution": runtime_fallback_resolution,
+        "scanner_confidence": runtime_fallback_resolution.get("scanner_confidence") or scanner_filter_truth.get("counter_confidence"),
+        "fallback_truthfulness": runtime_fallback_resolution.get("fallback_truthfulness"),
         "scanner_filter_truth": scanner_filter_truth,
         "trade_lifecycle_health": trade_lifecycle_health,
         "outcome_tracker_status": _read_json_safe(Path("data") / "runtime" / "outcome_tracker_status.json"),

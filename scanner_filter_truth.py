@@ -15,6 +15,9 @@ SIGNAL_PATH_DIAGNOSTICS_PATH = RUNTIME_DIR / "signal_path_diagnostics.json"
 DASHBOARD_TRUTH_REGISTRY_PATH = RUNTIME_DIR / "dashboard_truth_registry.json"
 TRADE_LIFECYCLE_HEALTH_PATH = RUNTIME_DIR / "trade_lifecycle_health.json"
 SCANNER_FILTER_TRUTH_STATUS_PATH = RUNTIME_DIR / "scanner_filter_truth_status.json"
+MASTER_BRAIN_RUNTIME_HEALTH_PATH = RUNTIME_DIR / "master_brain_runtime_health.json"
+SETUP_ENGINE_RUNTIME_HEALTH_PATH = RUNTIME_DIR / "setup_engine_runtime_health.json"
+RUNTIME_FALLBACK_RESOLUTION_PATH = RUNTIME_DIR / "runtime_fallback_resolution.json"
 FRESH_SECONDS = 15 * 60
 
 
@@ -139,6 +142,23 @@ def _counter_confidence(scanner, counters, stale_snapshot_warning, identical_cou
     return "HIGH"
 
 
+def _reconciled_counter_confidence(confidence, fallback_resolution, master_health, setup_health, stale_snapshot_warning):
+    truthfulness = str(fallback_resolution.get("fallback_truthfulness") or "").upper()
+    resolver_confidence = str(fallback_resolution.get("scanner_confidence") or "").upper()
+    master_state = str(master_health.get("master_brain_runtime_health") or "").upper()
+    setup_state = str(setup_health.get("setup_runtime_health") or "").upper()
+
+    if truthfulness in {"ENGINE_UNAVAILABLE", "DATA_DEGRADED", "REAL"} and fallback_resolution.get("fallback_active"):
+        return "LOW"
+    if resolver_confidence in {"HIGH", "MEDIUM", "LOW", "UNKNOWN"}:
+        if confidence == "LOW" and resolver_confidence in {"HIGH", "MEDIUM"}:
+            return "MEDIUM" if stale_snapshot_warning else resolver_confidence
+        return resolver_confidence if confidence == "UNKNOWN" else confidence
+    if confidence == "LOW" and master_state == "ACTIVE" and setup_state == "ACTIVE":
+        return "MEDIUM" if stale_snapshot_warning else "HIGH"
+    return confidence
+
+
 def build_scanner_filter_truth_status(
     now=None,
     scanner_status_path=SCANNER_STATUS_PATH,
@@ -152,6 +172,9 @@ def build_scanner_filter_truth_status(
     setup = _read_json_safe(setup_engine_status_path)
     dashboard_truth = _read_json_safe(DASHBOARD_TRUTH_REGISTRY_PATH)
     lifecycle = _read_json_safe(TRADE_LIFECYCLE_HEALTH_PATH)
+    master_runtime_health = _read_json_safe(MASTER_BRAIN_RUNTIME_HEALTH_PATH)
+    setup_runtime_health = _read_json_safe(SETUP_ENGINE_RUNTIME_HEALTH_PATH)
+    fallback_resolution = _read_json_safe(RUNTIME_FALLBACK_RESOLUTION_PATH)
     diagnostics_counters, diagnostics_sources, diagnostics_latest = _latest_scan_diagnostics()
     fallback_mode = bool(scanner.get("scan_only") or scanner.get("fallback_reason") or scanner.get("ohlc_fallback_required"))
 
@@ -210,7 +233,14 @@ def build_scanner_filter_truth_status(
         and counters.get("stocks_checked") is not None
         and abs(int(selected_symbols_count) - int(counters.get("stocks_checked"))) > 0
     )
-    confidence = _counter_confidence(scanner, counters, stale_snapshot_warning, identical_warning, final_passed_mismatch)
+    raw_confidence = _counter_confidence(scanner, counters, stale_snapshot_warning, identical_warning, final_passed_mismatch)
+    confidence = _reconciled_counter_confidence(
+        raw_confidence,
+        fallback_resolution,
+        master_runtime_health,
+        setup_runtime_health,
+        stale_snapshot_warning,
+    )
     dashboard_truth_status = dashboard_truth.get("dashboard_truth_registry_status") or "UNKNOWN"
     dashboard_stale_read = bool(
         dashboard_truth_status == "WARNING"
@@ -247,7 +277,22 @@ def build_scanner_filter_truth_status(
         "selected_symbols_count": selected_symbols_count,
         "counters": counters,
         "counter_sources": counter_sources,
+        "raw_counter_confidence": raw_confidence,
         "counter_confidence": confidence,
+        "scanner_confidence": confidence,
+        "runtime_fallback_resolution": {
+            "fallback_truthfulness": fallback_resolution.get("fallback_truthfulness"),
+            "scanner_confidence": fallback_resolution.get("scanner_confidence"),
+            "fallback_reason": fallback_resolution.get("fallback_reason"),
+        },
+        "master_brain_runtime_health": {
+            "master_brain_runtime_health": master_runtime_health.get("master_brain_runtime_health"),
+            "master_brain_freshness_confidence": master_runtime_health.get("master_brain_freshness_confidence"),
+        },
+        "setup_engine_runtime_health": {
+            "setup_runtime_health": setup_runtime_health.get("setup_runtime_health"),
+            "setup_freshness_confidence": setup_runtime_health.get("setup_freshness_confidence"),
+        },
         "identical_counter_warning": identical_warning,
         "frozen_counter_warning": frozen_counter_warning,
         "stale_snapshot_warning": stale_snapshot_warning,

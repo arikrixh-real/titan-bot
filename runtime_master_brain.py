@@ -3,6 +3,11 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from runtime_engine_health import (
+    atomic_write_json,
+    build_master_brain_runtime_health,
+    enrich_master_brain_payload,
+)
 from engines.risk_engine import calculate_rr
 from engines.phase38_test_mode_guard import evaluate_phase38_runtime_guard, write_phase38_runtime_status
 from engines.trade_levels import calculate_trade_levels
@@ -204,12 +209,14 @@ def _sanitized_setups(candidate_details):
 
 def _write_status(payload, path=None):
     if isinstance(payload, dict):
+        payload = enrich_master_brain_payload(payload)
         phase38_guard = evaluate_phase38_runtime_guard(payload)
         payload["phase38_runtime_guard"] = phase38_guard
         write_phase38_runtime_status(payload)
     path = Path(path or MASTER_BRAIN_STATUS_PATH)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    atomic_write_json(path, payload)
+    if path == MASTER_BRAIN_STATUS_PATH and isinstance(payload, dict):
+        build_master_brain_runtime_health(status_payload=payload)
 
 
 def _runtime_mode():

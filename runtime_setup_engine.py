@@ -1,6 +1,11 @@
 import json
 from pathlib import Path
 
+from runtime_engine_health import (
+    atomic_write_json,
+    build_setup_engine_runtime_health,
+    enrich_setup_engine_payload,
+)
 from engines.time_filter import current_bot_mode
 from utils.market_hours import as_ist_datetime
 
@@ -15,12 +20,10 @@ def run_setup_engine():
         "mode": current_bot_mode(now_ist),
         "status": "SETUP_ENGINE_MARKER_UPDATED",
     }
+    payload = enrich_setup_engine_payload(payload, now=now_ist)
 
-    SETUP_ENGINE_STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SETUP_ENGINE_STATUS_PATH.write_text(
-        json.dumps(payload, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
+    atomic_write_json(SETUP_ENGINE_STATUS_PATH, payload)
+    build_setup_engine_runtime_health(status_payload=payload)
     return payload
 
 

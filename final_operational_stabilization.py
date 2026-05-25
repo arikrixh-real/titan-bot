@@ -9,6 +9,8 @@ from memory_health import run_memory_health_check
 from ranking_integrity import build_ranking_integrity_status
 from runtime_artifact_registry import run_batch7_artifact_isolation
 from runtime_dependency_graph import SAFETY_FLAGS, build_runtime_dependency_graph
+from runtime_engine_health import build_master_brain_runtime_health, build_setup_engine_runtime_health
+from runtime_fallback_resolver import run_runtime_fallback_resolution
 from runtime_mode_resolver import build_canonical_runtime_mode, build_runtime_warning_resolution_status
 from runtime_topology import build_runtime_topology
 from runtime_watchdog import run_batch8_runtime_watchdog
@@ -312,6 +314,9 @@ def build_titan_final_operational_audit(path=None, now=None):
         canonical=canonical_runtime_mode,
         now=now_ist,
     )
+    master_runtime_health = build_master_brain_runtime_health(now=now_ist)
+    setup_runtime_health = build_setup_engine_runtime_health(now=now_ist)
+    fallback_resolution = run_runtime_fallback_resolution(now=now_ist)
     graph = build_runtime_dependency_graph(now=now_ist)
     memory = run_memory_health_check(now=now_ist)
     ranking = build_ranking_integrity_status(now=now_ist)
@@ -374,6 +379,10 @@ def build_titan_final_operational_audit(path=None, now=None):
         "canonical_runtime_mode": canonical_runtime_mode.get("canonical_mode"),
         "canonical_runtime_mode_source": canonical_runtime_mode.get("canonical_source"),
         "runtime_warning_resolution_status": runtime_warning_resolution.get("runtime_warning_resolution_status"),
+        "master_brain_runtime_health": master_runtime_health.get("master_brain_runtime_health"),
+        "setup_runtime_health": setup_runtime_health.get("setup_runtime_health"),
+        "fallback_truthfulness": fallback_resolution.get("fallback_truthfulness"),
+        "scanner_confidence": fallback_resolution.get("scanner_confidence"),
         "runtime_integrity_score": stability.get("runtime_integrity_score"),
         "topology_health": stability.get("topology_health"),
         "stability_score": stability.get("stability_score"),
@@ -395,6 +404,9 @@ def build_titan_final_operational_audit(path=None, now=None):
             "downgraded_runtime_conflicts": topology.get("downgraded_runtime_conflicts") or [],
             "raw_runtime_mode_conflicts": topology.get("raw_runtime_mode_conflicts") or [],
             "runtime_warning_resolution": runtime_warning_resolution.get("conflicting_runtime_modes") or {},
+            "master_brain_runtime_health": master_runtime_health,
+            "setup_engine_runtime_health": setup_runtime_health,
+            "runtime_fallback_resolution": fallback_resolution,
         },
         "final_dependency_audit": {
             "connected_engine_count": dependency_cert.get("connected_engine_count"),

@@ -5,6 +5,8 @@ from pathlib import Path
 from memory_health import run_memory_health_check
 from ranking_integrity import build_ranking_integrity_status
 from runtime_dependency_graph import SAFETY_FLAGS, build_runtime_dependency_graph
+from runtime_engine_health import build_master_brain_runtime_health, build_setup_engine_runtime_health
+from runtime_fallback_resolver import run_runtime_fallback_resolution
 from runtime_mode_resolver import build_canonical_runtime_mode, build_runtime_warning_resolution_status
 from utils.market_hours import IST, as_ist_datetime
 
@@ -15,6 +17,9 @@ RUNTIME_PRIORITY_ORDER = [
     "runtime_health",
     "market_data_health",
     "scanner_status",
+    "runtime_fallback_resolution",
+    "master_brain_runtime_health",
+    "setup_engine_runtime_health",
     "master_brain_status",
     "dashboard_sync_status",
     "roadmap_sidecars",
@@ -26,6 +31,9 @@ RUNTIME_SOURCES = {
     "runtime_health": Path("data") / "runtime" / "titan_authoritative_runtime_health.json",
     "market_data_health": Path("data") / "runtime" / "titan_market_data_health.json",
     "scanner_status": Path("data") / "runtime" / "scanner_status.json",
+    "master_brain_runtime_health": Path("data") / "runtime" / "master_brain_runtime_health.json",
+    "setup_engine_runtime_health": Path("data") / "runtime" / "setup_engine_runtime_health.json",
+    "runtime_fallback_resolution": Path("data") / "runtime" / "runtime_fallback_resolution.json",
     "master_brain_status": Path("data") / "runtime" / "master_brain_status.json",
     "setup_engine_status": Path("data") / "runtime" / "setup_engine_status.json",
     "dashboard_sync_status": Path("data") / "runtime" / "dashboard_sync_status.json",
@@ -228,6 +236,12 @@ def _score(runtime_sources, dependency_graph, conflicts, visibility_audit, downg
 
 def build_runtime_topology(path=TOPOLOGY_PATH, now=None):
     now_ist = as_ist_datetime(now)
+    try:
+        build_master_brain_runtime_health(now=now_ist)
+        build_setup_engine_runtime_health(now=now_ist)
+        runtime_fallback_resolution = run_runtime_fallback_resolution(now=now_ist)
+    except Exception as exc:
+        runtime_fallback_resolution = {"overall_status": "FAIL", "error": str(exc)}
     runtime_sources = {
         name: _source_record(name, source_path, now_ist)
         for name, source_path in RUNTIME_SOURCES.items()
@@ -292,8 +306,13 @@ def build_runtime_topology(path=TOPOLOGY_PATH, now=None):
         "authoritative_heartbeat": authoritative_heartbeat,
         "runtime_layers": {
             "authority": ["runtime_health"],
-            "market_data": ["market_data_health", "scanner_status"],
-            "decision_visibility": ["master_brain_status", "setup_engine_status"],
+            "market_data": ["market_data_health", "scanner_status", "runtime_fallback_resolution"],
+            "decision_visibility": [
+                "master_brain_runtime_health",
+                "setup_engine_runtime_health",
+                "master_brain_status",
+                "setup_engine_status",
+            ],
             "delivery_visibility": ["dashboard_sync_status", "runtime_status"],
             "sidecars": sorted(roadmap_sources.keys()),
         },
@@ -318,6 +337,11 @@ def build_runtime_topology(path=TOPOLOGY_PATH, now=None):
             "stale_engines": dependency_graph.get("stale_engines") or [],
         },
         "runtime_sources": runtime_sources,
+        "master_brain_runtime_health": _read_json_safe(RUNTIME_SOURCES["master_brain_runtime_health"]),
+        "setup_engine_runtime_health": _read_json_safe(RUNTIME_SOURCES["setup_engine_runtime_health"]),
+        "runtime_fallback_resolution": runtime_fallback_resolution,
+        "scanner_confidence": runtime_fallback_resolution.get("scanner_confidence"),
+        "fallback_truthfulness": runtime_fallback_resolution.get("fallback_truthfulness"),
         "canonical_runtime_mode": canonical_runtime_mode,
         "runtime_warning_resolution": runtime_warning_resolution,
         "runtime_conflicts": runtime_conflicts,

@@ -5,6 +5,8 @@ from memory_health import run_memory_health_check
 from ranking_integrity import build_ranking_integrity_status
 from runtime_artifact_registry import build_runtime_artifact_registry
 from runtime_dependency_graph import SAFETY_FLAGS, build_runtime_dependency_graph
+from runtime_engine_health import build_master_brain_runtime_health, build_setup_engine_runtime_health
+from runtime_fallback_resolver import run_runtime_fallback_resolution
 from runtime_watchdog import build_titan_runtime_watchdog
 from utils.market_hours import as_ist_datetime
 
@@ -268,6 +270,9 @@ def build_titan_integrity_monitor(now=None):
     registry = build_runtime_artifact_registry(now=now_ist)
     ranking = build_ranking_integrity_status(now=now_ist)
     memory = run_memory_health_check(now=now_ist)
+    master_runtime_health = build_master_brain_runtime_health(now=now_ist)
+    setup_runtime_health = build_setup_engine_runtime_health(now=now_ist)
+    fallback_resolution = run_runtime_fallback_resolution(now=now_ist)
 
     runtime_regression = build_runtime_regression_audit(watchdog=watchdog, registry=registry, now=now_ist)
     dependency_regression = build_dependency_regression_status(graph=graph, now=now_ist)
@@ -304,6 +309,10 @@ def build_titan_integrity_monitor(now=None):
             "runtime_owner": runtime_regression.get("runtime_owner"),
             "stale_runtime_artifact_count": runtime_regression.get("stale_runtime_artifact_count"),
             "stale_runtime_critical_artifact_count": runtime_regression.get("stale_runtime_critical_artifact_count"),
+            "master_brain_runtime_health": master_runtime_health.get("master_brain_runtime_health"),
+            "setup_runtime_health": setup_runtime_health.get("setup_runtime_health"),
+            "fallback_truthfulness": fallback_resolution.get("fallback_truthfulness"),
+            "scanner_confidence": fallback_resolution.get("scanner_confidence"),
         },
         "dependency_graph_integrity": {
             "dependency_integrity_score": dependency_regression.get("dependency_integrity_score"),

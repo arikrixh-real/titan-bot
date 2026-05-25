@@ -151,7 +151,11 @@ class Batch7ArtifactIsolationTests(unittest.TestCase):
                 {"status": "OK", "timestamp_ist": timestamp.isoformat()},
             )
 
-        with self._patch_paths():
+        with self._patch_paths(), patch.object(
+            runtime_artifact_registry,
+            "build_canonical_runtime_mode",
+            return_value={"canonical_mode": "MARKET_MODE"},
+        ):
             status = runtime_artifact_registry.build_runtime_critical_chain_status(now=self.now, graph={"nodes": {}})
 
         self.assertEqual(status["runtime_critical_chain_status"], "WARNING")
