@@ -1116,6 +1116,7 @@ def _runtime_topology_summary():
     graph = topology.get("dependency_graph") or {}
     visibility = topology.get("engine_visibility") or {}
     memory_health = topology.get("memory_health") or {}
+    ranking_integrity = topology.get("ranking_integrity") or {}
     return {
         "topology_health": topology.get("topology_health"),
         "authoritative_runtime_owner": topology.get("authoritative_runtime_owner"),
@@ -1150,6 +1151,12 @@ def _runtime_topology_summary():
         "memory_contribution_summary": memory_health.get("memory_contribution_summary") or {},
         "lineage_integrity_score": memory_health.get("lineage_integrity_score"),
         "missing_visibility_count": len(memory_health.get("missing_visibility_summary") or []),
+        "ranking_integrity": ranking_integrity,
+        "authoritative_ranking_owner": ranking_integrity.get("authoritative_owner"),
+        "conflicting_rank_mutators": ranking_integrity.get("conflicting_mutators") or [],
+        "duplicate_rank_writers": ranking_integrity.get("duplicate_rank_writers") or {},
+        "dangerous_live_overrides": ranking_integrity.get("dangerous_live_overrides") or [],
+        "ranking_chain_valid": ranking_integrity.get("ranking_chain_valid"),
         "safety_flags": topology.get("safety_flags") or {},
     }
 
@@ -1238,6 +1245,12 @@ def build_runtime_status(value=None):
         "memory_contribution_summary": runtime_topology.get("memory_contribution_summary"),
         "lineage_integrity_score": runtime_topology.get("lineage_integrity_score"),
         "missing_visibility_count": runtime_topology.get("missing_visibility_count"),
+        "ranking_integrity": runtime_topology.get("ranking_integrity"),
+        "authoritative_ranking_owner": runtime_topology.get("authoritative_ranking_owner"),
+        "conflicting_rank_mutators": runtime_topology.get("conflicting_rank_mutators"),
+        "duplicate_rank_writers": runtime_topology.get("duplicate_rank_writers"),
+        "dangerous_live_overrides": runtime_topology.get("dangerous_live_overrides"),
+        "ranking_chain_valid": runtime_topology.get("ranking_chain_valid"),
         "runtime_integrity_score": runtime_topology.get("runtime_integrity_score"),
         "topology_health": runtime_topology.get("topology_health"),
         "historical_replay": _historical_replay_status_summary(),

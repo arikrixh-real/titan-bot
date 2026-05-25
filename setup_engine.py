@@ -106,6 +106,15 @@ OHLCV_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 DYNAMIC_SCAN_SIZE = 50
 DYNAMIC_ROTATION_BUCKET_MINUTES = 5
 
+RANKING_OWNERSHIP = {
+    "component": "setup_engine",
+    "contributes_to_ranking": True,
+    "authoritative_live_owner": False,
+    "advisory_rank_role": "setup_generation_and_annotation",
+    "authoritative_live_ranking_owner": "final_decision_engine",
+    "may_directly_override_live_ranking": False,
+}
+
 
 # =========================================================
 # SUPABASE

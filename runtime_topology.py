@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from memory_health import run_memory_health_check
+from ranking_integrity import build_ranking_integrity_status
 from runtime_dependency_graph import SAFETY_FLAGS, build_runtime_dependency_graph
 from utils.market_hours import IST, as_ist_datetime
 
@@ -235,6 +236,18 @@ def build_runtime_topology(path=TOPOLOGY_PATH, now=None):
             "error": str(exc),
             "safety_flags": dict(SAFETY_FLAGS),
         }
+    try:
+        ranking_integrity = build_ranking_integrity_status(now=now_ist)
+    except Exception as exc:
+        ranking_integrity = {
+            "ranking_integrity_score": 0.0,
+            "authoritative_owner": "final_decision_engine",
+            "conflicting_mutators": [],
+            "duplicate_rank_writers": {},
+            "dangerous_live_overrides": [{"error": str(exc)}],
+            "ranking_chain_valid": False,
+            "safety_flags": dict(SAFETY_FLAGS),
+        }
     runtime_conflicts = detect_runtime_conflicts(runtime_sources)
     stale_runtime_sources = [
         name for name, source in runtime_sources.items() if source.get("stale")
@@ -311,6 +324,16 @@ def build_runtime_topology(path=TOPOLOGY_PATH, now=None):
             "memory_cleanup_summary": memory_health.get("memory_cleanup_summary") or {},
             "memory_lineage_summary": memory_health.get("memory_lineage_summary") or {},
             "memory_contribution_summary": memory_health.get("memory_contribution_summary") or {},
+        },
+        "ranking_integrity": {
+            "path": "data/runtime/ranking_integrity_status.json",
+            "ranking_integrity_score": ranking_integrity.get("ranking_integrity_score"),
+            "authoritative_owner": ranking_integrity.get("authoritative_owner"),
+            "conflicting_mutators": ranking_integrity.get("conflicting_mutators") or [],
+            "duplicate_rank_writers": ranking_integrity.get("duplicate_rank_writers") or {},
+            "advisory_only_mutators": ranking_integrity.get("advisory_only_mutators") or [],
+            "dangerous_live_overrides": ranking_integrity.get("dangerous_live_overrides") or [],
+            "ranking_chain_valid": ranking_integrity.get("ranking_chain_valid"),
         },
         "observability_score": scores["observability_score"],
         "runtime_integrity_score": scores["runtime_integrity_score"],

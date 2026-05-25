@@ -92,8 +92,15 @@ CORE_NODES = {
     "runtime_status": {
         "path": Path("data") / "runtime" / "titan_runtime_status.json",
         "mode": "advisory",
-        "upstream": ["runtime_health", "market_data_health"],
+        "upstream": ["runtime_health", "market_data_health", "ranking_integrity"],
         "downstream": ["dashboard_sync"],
+    },
+    "ranking_integrity": {
+        "path": Path("data") / "runtime" / "ranking_integrity_status.json",
+        "mode": "advisory",
+        "upstream": [],
+        "downstream": ["runtime_status"],
+        "fresh_seconds": ADVISORY_FRESH_SECONDS,
     },
 }
 
