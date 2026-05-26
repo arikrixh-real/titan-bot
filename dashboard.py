@@ -40,6 +40,7 @@ PAPER_ENGINE_STATUS_PATH = "/".join(["data", "runtime", "paper_engine_status.jso
 SCANNER_STATUS_PATH = "/".join(["data", "runtime", "scanner_status.json"])
 SCANNER_FILTER_TRUTH_STATUS_PATH = "/".join(["data", "runtime", "scanner_filter_truth_status.json"])
 TRADE_LIFECYCLE_HEALTH_PATH = "/".join(["data", "runtime", "trade_lifecycle_health.json"])
+TRADE_LIFECYCLE_RECONCILIATION_PATH = "/".join(["data", "runtime", "trade_lifecycle_reconciliation.json"])
 REJECTION_HEATMAP_PATH = "/".join(["data", "runtime", "rejection_heatmap.json"])
 SIDEWAYS_ANALYSIS_PATH = "/".join(["data", "runtime", "sideways_analysis.json"])
 LIVE_PRICE_MONITOR_STATUS_PATH = "/".join(["data", "runtime", "live_price_monitor_status.json"])
@@ -1830,6 +1831,25 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
 
     scanner_truth = safe_read_json(SCANNER_FILTER_TRUTH_STATUS_PATH, {})
     counters = scanner_truth.get("counters") if isinstance(scanner_truth.get("counters"), dict) else {}
+    if scanner_truth.get("dashboard_scan_sync_status") == "SCAN_PIPELINE_UNAVAILABLE":
+        unavailable = dict(zero)
+        unavailable.update(
+            {
+                "source": "SCANNER_FILTER_TRUTH",
+                "timestamp": parse_dt(scanner_truth.get("authoritative_scan_timestamp") or scanner_truth.get("scanner_timestamp")),
+                "is_fresh": False,
+                "has_data": False,
+                "limited_runtime": True,
+                "scanner_cycle_id": scanner_truth.get("authoritative_scan_cycle_id") or scanner_truth.get("scan_cycle_id"),
+                "scan_finished_at_ist": scanner_truth.get("authoritative_scan_timestamp") or scanner_truth.get("scanner_timestamp"),
+                "dashboard_status_message": "SCAN_PIPELINE_UNAVAILABLE",
+                "counter_confidence": scanner_truth.get("counter_confidence") or "UNKNOWN",
+                "recommended_dashboard_display_mode": "SCAN_PIPELINE_UNAVAILABLE",
+                "dashboard_scan_sync_status": scanner_truth.get("dashboard_scan_sync_status"),
+                "scanner_publication_health": scanner_truth.get("scanner_publication_health"),
+            }
+        )
+        return unavailable
     if counters and scanner_truth.get("scanner_timestamp"):
         confidence = scanner_truth.get("counter_confidence") or "LOW"
         return {
@@ -1845,12 +1865,12 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "final_passed": optional_int_number(counters.get("final_passed")),
             "alerts_this_scan": int(first_number(counters.get("alerts_this_scan"), default=0)),
             "source": "SCANNER_FILTER_TRUTH",
-            "timestamp": parse_dt(scanner_truth.get("scanner_timestamp")),
+            "timestamp": parse_dt(scanner_truth.get("authoritative_scan_timestamp") or scanner_truth.get("scanner_timestamp")),
             "is_fresh": not bool(scanner_truth.get("stale_snapshot_warning")),
             "has_data": True,
-            "limited_runtime": confidence != "HIGH",
-            "scanner_cycle_id": scanner_truth.get("scan_cycle_id"),
-            "scan_finished_at_ist": scanner_truth.get("scanner_timestamp"),
+            "limited_runtime": confidence != "HIGH" or scanner_truth.get("dashboard_scan_sync_status") != "SYNCHRONIZED",
+            "scanner_cycle_id": scanner_truth.get("authoritative_scan_cycle_id") or scanner_truth.get("scan_cycle_id"),
+            "scan_finished_at_ist": scanner_truth.get("authoritative_scan_timestamp") or scanner_truth.get("scanner_timestamp"),
             "scan_duration_seconds": None,
             "scan_only": bool(scanner_truth.get("fallback_mode")),
             "partial_stale_tolerated": False,
@@ -1864,6 +1884,8 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "repeated_data_warning": "Scanner truth reports frozen/repeated counters" if scanner_truth.get("frozen_counter_warning") else None,
             "counter_confidence": confidence,
             "recommended_dashboard_display_mode": scanner_truth.get("recommended_dashboard_display_mode"),
+            "dashboard_scan_sync_status": scanner_truth.get("dashboard_scan_sync_status"),
+            "scanner_publication_health": scanner_truth.get("scanner_publication_health"),
         }
 
     supabase_scanner_payload = get_supabase_scanner_status_payload()
@@ -2206,6 +2228,7 @@ def get_dashboard_runtime_status():
     governance_status, _ = get_runtime_payload("pyramid_governance_status", PYRAMID_GOVERNANCE_STATUS_PATH)
     weekend_research_status, _ = get_runtime_payload("weekend_research_mode_status", WEEKEND_RESEARCH_MODE_STATUS_PATH)
     scanner_status, _ = get_runtime_payload("scanner_status", SCANNER_STATUS_PATH)
+    scanner_truth = safe_read_json(SCANNER_FILTER_TRUTH_STATUS_PATH, {})
     master_brain_status, _ = get_runtime_payload("master_brain_status", "/".join(["data", "runtime", "master_brain_status.json"]))
     paper_engine_status, _ = get_runtime_payload("paper_engine_status", PAPER_ENGINE_STATUS_PATH)
     live_price_monitor_status, _ = get_runtime_payload("live_price_monitor_status", LIVE_PRICE_MONITOR_STATUS_PATH)
@@ -2315,6 +2338,14 @@ def get_dashboard_runtime_status():
         "daemon_status": daemon_status,
         "runtime_mode": normalized_runtime_mode,
         "normalized_runtime_mode": normalized_runtime_mode,
+        "canonical_runtime_timestamp": runtime_status.get("canonical_runtime_timestamp") or heartbeat_timestamp,
+        "canonical_scan_cycle": runtime_status.get("canonical_scan_cycle") or scanner_truth.get("authoritative_scan_cycle_id") or scanner_truth.get("scan_cycle_id"),
+        "dashboard_runtime_sync_health": runtime_status.get("dashboard_runtime_sync_health") or scanner_truth.get("dashboard_scan_sync_status") or "UNKNOWN",
+        "market_hours_runtime_sync": runtime_status.get("market_hours_runtime_sync") or scanner_truth.get("market_hours_runtime_sync"),
+        "scanner_publication_health": runtime_status.get("scanner_publication_health") or scanner_truth.get("scanner_publication_health"),
+        "dashboard_trade_sync_health": runtime_status.get("dashboard_trade_sync_health"),
+        "lifecycle_sync_status": runtime_status.get("lifecycle_sync_status"),
+        "performance_sync_status": runtime_status.get("performance_sync_status"),
         "heartbeat_age": heartbeat_age,
         "heartbeat_timestamp": format_runtime_timestamp(heartbeat_timestamp),
         "ticks_completed": ticks_text,
@@ -2330,6 +2361,7 @@ def get_dashboard_runtime_status():
 
 def get_scanner_runtime_status():
     data, source = get_runtime_payload("scanner_status", SCANNER_STATUS_PATH)
+    scanner_truth = safe_read_json(SCANNER_FILTER_TRUTH_STATUS_PATH, {})
     daemon_health, _ = get_runtime_payload("daemon_health", "/".join(["data", "runtime", "daemon_health.json"]))
     heartbeat, _ = get_runtime_payload("heartbeat", "/".join(["data", "runtime", "titan_heartbeat.json"]))
     runtime_status, _ = get_runtime_payload("runtime_status", "/".join(["data", "runtime", "titan_runtime_status.json"]))
@@ -2344,6 +2376,8 @@ def get_scanner_runtime_status():
     )
     if runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"}:
         status = "MARKET CLOSED / STANDBY"
+    elif scanner_truth.get("dashboard_scan_sync_status") == "SCAN_PIPELINE_UNAVAILABLE":
+        status = "SCAN_PIPELINE_UNAVAILABLE"
     elif isinstance(data, dict) and data and not scanner_fresh:
         status = "STALE"
     elif scanner_fresh and runtime_payload_active(data):
@@ -2357,6 +2391,10 @@ def get_scanner_runtime_status():
         "status": status,
         "is_fresh": scanner_fresh,
         "runtime_mode": runtime_mode,
+        "canonical_scan_cycle": scanner_truth.get("authoritative_scan_cycle_id") or scanner_truth.get("scan_cycle_id"),
+        "canonical_runtime_timestamp": scanner_truth.get("authoritative_scan_timestamp"),
+        "dashboard_scan_sync_status": scanner_truth.get("dashboard_scan_sync_status"),
+        "scanner_publication_health": scanner_truth.get("scanner_publication_health"),
         "stocks_checked": int(first_number(payload.get("stocks_checked"), default=0)),
         "trend_passed": int(first_number(payload.get("trend_passed"), default=0)),
         "momentum_passed": int(first_number(payload.get("momentum_passed"), default=0)),
@@ -2580,6 +2618,21 @@ def _has_value(value):
     return str(value or "").strip() != ""
 
 
+def _is_current_day_trade_row(row):
+    opened = parse_dt(row.get("opened_at") or row.get("created_at") or row.get("timestamp"))
+    return bool(opened and opened.astimezone(IST).date() == datetime.now(IST).date())
+
+
+def _is_learning_or_paper_trade_row(row):
+    if str(row.get("is_paper_trade") or "").strip().lower() in {"1", "true", "yes", "y"}:
+        return True
+    if str(row.get("paper_trade_id") or "").strip():
+        return True
+    if str(row.get("alert_sent") or row.get("telegram_alerted") or "").strip().upper() == "NO":
+        return True
+    return str(row.get("status") or "").strip().upper() in {"WATCHLIST", "LEARNING", "PAPER_OPEN"}
+
+
 def _is_live_trade_row(row):
     if not isinstance(row, dict):
         return False
@@ -2603,6 +2656,10 @@ def _is_live_trade_row(row):
     if outcome in {"WIN", "LOSS"} or str(row.get("outcome") or "").strip().upper() in {"TP", "SL"}:
         return False
     if result in {"WIN", "LOSS"}:
+        return False
+    if _is_learning_or_paper_trade_row(row):
+        return False
+    if not _is_current_day_trade_row(row):
         return False
 
     return status in {"OPEN", "ACTIVE", "LIVE"}
@@ -2675,13 +2732,8 @@ def get_live_trades_count():
 
     lifecycle = safe_read_json(TRADE_LIFECYCLE_HEALTH_PATH, {})
     if isinstance(lifecycle, dict) and lifecycle.get("overall_status"):
-        normal_open = sum(
-            1
-            for item in lifecycle.get("unresolved_trades") or []
-            if isinstance(item, dict) and item.get("lifecycle_status") == "OPEN_PENDING"
-        )
-        if lifecycle.get("open_trades_count") is not None:
-            return int(normal_open)
+        if lifecycle.get("active_live_trades_count") is not None:
+            return int(first_number(lifecycle.get("active_live_trades_count"), default=0))
 
     supabase_count = get_supabase_live_trades_count(fallback_reason="primary_source")
     if supabase_count > 0:
@@ -2698,6 +2750,29 @@ def get_live_trades_count():
     return supabase_count
 
 
+def get_trade_lifecycle_reconciliation():
+    reconciliation = safe_read_json(TRADE_LIFECYCLE_RECONCILIATION_PATH, {})
+    if isinstance(reconciliation, dict) and reconciliation:
+        return reconciliation
+    lifecycle = safe_read_json(TRADE_LIFECYCLE_HEALTH_PATH, {})
+    if not isinstance(lifecycle, dict):
+        lifecycle = {}
+    return {
+        "active_live_trades": {"count": int(first_number(lifecycle.get("active_live_trades_count"), default=0))},
+        "learning_open_trades": {"count": int(first_number(lifecycle.get("learning_open_trades_count"), default=0))},
+        "stale_open_trades": {"count": int(first_number(lifecycle.get("stale_open_trades_count"), default=0))},
+        "eod_unresolved_trades": {"count": int(first_number(lifecycle.get("unresolved_eod_trades_count"), default=0))},
+        "closed_tp_sl_trades": {"count": int(first_number(lifecycle.get("closed_tp_sl_trades_count"), default=0))},
+    }
+
+
+def _reconciliation_count(reconciliation, key):
+    value = reconciliation.get(key) if isinstance(reconciliation, dict) else None
+    if isinstance(value, dict):
+        return int(first_number(value.get("count"), default=0))
+    return int(first_number(value, default=0))
+
+
 
 def get_supabase_live_trades_count(fallback_reason="local_active_trades_unavailable"):
     """
@@ -2712,7 +2787,7 @@ def get_supabase_live_trades_count(fallback_reason="local_active_trades_unavaila
     try:
         result = (
             supabase.table("trades")
-            .select("symbol,status,trade_status,state,outcome,result,closed_at")
+            .select("symbol,status,trade_status,state,outcome,result,closed_at,opened_at,created_at,is_paper_trade,paper_trade_id,alert_sent")
             .limit(5000)
             .execute()
         )
@@ -3128,6 +3203,12 @@ if stocks_passed == 0:
     stocks_passed = telegram_alerts
 
 live_trades_count = get_live_trades_count()
+trade_lifecycle_reconciliation = get_trade_lifecycle_reconciliation()
+active_live_trades_count = _reconciliation_count(trade_lifecycle_reconciliation, "active_live_trades")
+learning_open_trades_count = _reconciliation_count(trade_lifecycle_reconciliation, "learning_open_trades")
+stale_open_trades_count = _reconciliation_count(trade_lifecycle_reconciliation, "stale_open_trades")
+eod_unresolved_trades_count = _reconciliation_count(trade_lifecycle_reconciliation, "eod_unresolved_trades")
+live_trades_count = active_live_trades_count
 
 # Performance stats and account PnL use the same closed trade rows.
 # Priority: Supabase trade_results, local trade results, paper closed positions.
@@ -3627,7 +3708,19 @@ elif scan_breakdown.get("has_data"):
         metric_card("Alerts This Scan", f"{latest_health_alerts:,}", "Real alerts only")
 
     with h3:
-        metric_card("Live Trades Count", f"{live_trades_count:,}", "Open trades only")
+        if live_trades_count > 0:
+            trade_count_label = "Active Live Trades"
+            trade_count_value = live_trades_count
+            trade_count_subtitle = "Current-day OPEN_PENDING only"
+        elif learning_open_trades_count > 0:
+            trade_count_label = "Learning Watchlist Trades"
+            trade_count_value = learning_open_trades_count
+            trade_count_subtitle = "Paper/learning only; not live"
+        else:
+            trade_count_label = "Active Live Trades"
+            trade_count_value = 0
+            trade_count_subtitle = f"Stale/EOD unresolved: {stale_open_trades_count + eod_unresolved_trades_count}"
+        metric_card(trade_count_label, f"{trade_count_value:,}", trade_count_subtitle)
 
     rejection_counts = rejection_heatmap_data.get("rejection_counts") if isinstance(rejection_heatmap_data, dict) else {}
     if isinstance(rejection_counts, dict) and rejection_counts:

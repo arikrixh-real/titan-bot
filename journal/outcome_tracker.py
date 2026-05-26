@@ -68,6 +68,7 @@ ACTIVE_TRADES_CSV = JOURNAL_DIR / "active_trades.csv"
 OUTCOMES_CSV = JOURNAL_DIR / "trade_outcomes.csv"
 OUTCOMES_JSONL = JOURNAL_DIR / "trade_outcomes.jsonl"
 OUTCOME_TRACKER_STATUS_PATH = RUNTIME_DIR / "outcome_tracker_status.json"
+TRADE_LIFECYCLE_RECONCILIATION_PATH = RUNTIME_DIR / "trade_lifecycle_reconciliation.json"
 REINFORCEMENT_REPORTS_JSONL = LEARNING_DIR / "reinforcement_learning_reports.jsonl"
 REINFORCEMENT_MEMORY_JSON = MEMORY_DIR / "reinforcement_learning_memory.json"
 MAX_TP_SL_PRICE_AGE_SECONDS = 120
@@ -384,6 +385,24 @@ def _write_outcome_tracker_status(result):
         "recommended_live_weight": 0.0,
         "rank_adjustment": 0.0,
     }
+    try:
+        reconciliation = json.loads(TRADE_LIFECYCLE_RECONCILIATION_PATH.read_text(encoding="utf-8"))
+        if isinstance(reconciliation, dict):
+            stale_count = int((reconciliation.get("stale_open_trades") or {}).get("count") or 0)
+            eod_count = int((reconciliation.get("eod_unresolved_trades") or {}).get("count") or 0)
+            learning_count = int((reconciliation.get("learning_open_trades") or {}).get("count") or 0)
+            payload["lifecycle_reconciliation_status"] = {
+                "status": "MANUAL_RECONCILIATION_REQUIRED" if stale_count or eod_count else "CLEAR",
+                "stale_open_trades": stale_count,
+                "eod_unresolved_trades": eod_count,
+                "learning_open_trades": learning_count,
+                "message": "Stale/EOD unresolved trades are visibility-only and were not fake closed.",
+            }
+    except Exception:
+        payload["lifecycle_reconciliation_status"] = {
+            "status": "UNKNOWN",
+            "message": "Trade lifecycle reconciliation artifact unavailable.",
+        }
     OUTCOME_TRACKER_STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
     tmp = OUTCOME_TRACKER_STATUS_PATH.with_suffix(f"{OUTCOME_TRACKER_STATUS_PATH.suffix}.tmp")
     tmp.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")

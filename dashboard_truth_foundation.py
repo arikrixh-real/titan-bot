@@ -142,7 +142,7 @@ DASHBOARD_METRIC_SPECS = {
     "live_trades_count": {
         "owner": "trade_lifecycle_health",
         "artifact_path": RUNTIME_DIR / "trade_lifecycle_health.json",
-        "field": "open_trades_count",
+        "field": "active_live_trades_count",
         "classification": "runtime_critical",
         "fresh_seconds": EXTERNAL_READONLY_FRESH_SECONDS,
         "dependencies": ["trade_journal", "outcome_tracker", "live_price_status"],

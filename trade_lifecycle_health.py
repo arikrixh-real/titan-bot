@@ -15,6 +15,13 @@ OUTCOME_TRACKER_STATUS_PATH = RUNTIME_DIR / "outcome_tracker_status.json"
 LIVE_PRICE_STATUS_PATH = Path("data") / "live_price_status.json"
 LIVE_PRICE_CACHE_META_PATH = RUNTIME_DIR / "live_price_cache_meta.json"
 TRADE_LIFECYCLE_HEALTH_PATH = RUNTIME_DIR / "trade_lifecycle_health.json"
+TRADE_LIFECYCLE_RECONCILIATION_PATH = RUNTIME_DIR / "trade_lifecycle_reconciliation.json"
+LEGACY_OPEN_TRADE_PATHS = [
+    JOURNAL_DIR / "open_trades.csv",
+    JOURNAL_DIR / "active_trades.backup.csv",
+    JOURNAL_DIR / "active_trades_old.csv",
+    Path("data") / "trade_journal.csv",
+]
 OPEN_STALE_SECONDS = 6 * 60 * 60
 OUTCOME_FRESH_SECONDS = 15 * 60
 
@@ -82,6 +89,34 @@ def _open_status(row):
     return False
 
 
+def _closed_tp_sl_status(row):
+    status = str(row.get("status") or "").upper().strip()
+    outcome = str(row.get("outcome") or "").upper().strip()
+    result = str(row.get("result") or "").upper().strip()
+    return (
+        outcome in {"TP", "SL"}
+        or result in {"WIN", "LOSS"}
+        or status in {"CLOSED_TP", "CLOSED_SL"}
+    )
+
+
+def _truthy(value):
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _is_learning_trade(row):
+    status = str(row.get("status") or "").upper().strip()
+    alert_sent = str(row.get("alert_sent") or row.get("telegram_alerted") or "").upper().strip()
+    source = str(row.get("_source") or "").lower()
+    if _truthy(row.get("is_paper_trade")) or str(row.get("paper_trade_id") or "").strip():
+        return True
+    if "learning" in source or "paper" in source or "watchlist" in source:
+        return True
+    if status in {"WATCHLIST", "LEARNING", "PAPER_OPEN"}:
+        return True
+    return alert_sent == "NO"
+
+
 def _has_levels(row):
     for field in ("entry", "sl", "target"):
         try:
@@ -120,6 +155,9 @@ def _classified_open_trade(row, now_ist):
     if missing_levels:
         lifecycle_status = "CLOSED_MANUAL_RECONCILIATION_REQUIRED"
         reason = "MISSING_ENTRY_SL_OR_TARGET"
+    elif _is_learning_trade(row):
+        lifecycle_status = "LEARNING_OPEN"
+        reason = "PAPER_OR_LEARNING_WATCHLIST_TRADE"
     elif eod_unresolved:
         lifecycle_status = "EOD_UNRESOLVED"
         reason = "OPEN_TRADE_PAST_EOD_WITHOUT_TP_SL_OUTCOME"
@@ -140,9 +178,99 @@ def _classified_open_trade(row, now_ist):
         "entry": row.get("entry"),
         "sl": row.get("sl"),
         "target": row.get("target"),
+        "is_learning_trade": _is_learning_trade(row),
+        "source": row.get("_source"),
         "lifecycle_status": lifecycle_status,
         "unresolved_outcome_reason": reason,
     }
+
+
+def _source_rows(path, source_name):
+    rows = []
+    for row in _read_csv_rows(path):
+        enriched = dict(row)
+        enriched["_source"] = source_name
+        rows.append(enriched)
+    return rows
+
+
+def _dedupe_trade_rows(rows):
+    deduped = []
+    seen = set()
+    for row in rows:
+        key = _outcome_key(row)
+        if not key:
+            key = "|".join(str(row.get(field) or "").strip().upper() for field in ("_source", "symbol", "opened_at", "status"))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(row)
+    return deduped
+
+
+def _count_closed_tp_sl(rows):
+    return sum(1 for row in rows if _closed_tp_sl_status(row))
+
+
+def _build_trade_lifecycle_reconciliation(
+    now_ist,
+    active_rows,
+    outcome_rows,
+    unresolved,
+    dashboard_live_trade_count,
+    output_path=TRADE_LIFECYCLE_RECONCILIATION_PATH,
+):
+    legacy_rows = []
+    for path in LEGACY_OPEN_TRADE_PATHS:
+        legacy_rows.extend(_source_rows(path, str(path).replace("\\", "/")))
+
+    all_open_rows = _dedupe_trade_rows(
+        [dict(row, _source=row.get("_source") or str(ACTIVE_TRADES_CSV).replace("\\", "/")) for row in active_rows if _open_status(row)]
+        + [row for row in legacy_rows if _open_status(row)]
+    )
+    all_unresolved = [_classified_open_trade(row, now_ist) for row in all_open_rows]
+
+    active_live = [row for row in unresolved if row["lifecycle_status"] == "OPEN_PENDING"]
+    learning_open = [row for row in all_unresolved if row["lifecycle_status"] == "LEARNING_OPEN"]
+    stale_open = [row for row in all_unresolved if row["lifecycle_status"] == "STALE_OPEN"]
+    eod_unresolved = [row for row in all_unresolved if row["lifecycle_status"] == "EOD_UNRESOLVED"]
+    manual_required = [row for row in all_unresolved if row["lifecycle_status"] == "CLOSED_MANUAL_RECONCILIATION_REQUIRED"]
+    closed_tp_sl = _count_closed_tp_sl(outcome_rows)
+
+    dashboard_source = "trade_lifecycle_health.active_live_trades"
+    performance_source = "data/journals/trade_outcomes.csv:CLOSED_TP_CLOSED_SL_ONLY"
+    if dashboard_live_trade_count is not None and dashboard_live_trade_count != len(active_live):
+        explanation = (
+            f"Dashboard live count source reported {dashboard_live_trade_count}; "
+            f"truth classification found {len(active_live)} current-day active live trades, "
+            f"{len(learning_open)} learning/watchlist open trades, "
+            f"{len(stale_open)} stale open trades, and {len(eod_unresolved)} EOD unresolved trades."
+        )
+    else:
+        explanation = (
+            f"Dashboard live count uses current-day active live trades only; "
+            f"performance uses {closed_tp_sl} closed TP/SL trades only."
+        )
+
+    payload = {
+        "generated_at_ist": now_ist.isoformat(),
+        "active_live_trades": {"count": len(active_live), "trades": active_live},
+        "learning_open_trades": {"count": len(learning_open), "trades": learning_open},
+        "stale_open_trades": {"count": len(stale_open), "trades": stale_open},
+        "eod_unresolved_trades": {"count": len(eod_unresolved), "trades": eod_unresolved},
+        "closed_tp_sl_trades": {"count": closed_tp_sl},
+        "manual_reconciliation_required": {
+            "count": len(manual_required),
+            "required": bool(manual_required or stale_open or eod_unresolved),
+            "trades": manual_required,
+        },
+        "dashboard_live_trade_count_source": dashboard_source,
+        "performance_trade_count_source": performance_source,
+        "mismatch_explanation": explanation,
+        "safety_flags": dict(SAFETY_FLAGS),
+    }
+    _write_json(output_path, payload)
+    return payload
 
 
 def _outcome_key(row):
@@ -196,6 +324,8 @@ def build_trade_lifecycle_health(
     outcome_status = _read_json_safe(OUTCOME_TRACKER_STATUS_PATH)
     open_rows = [row for row in active_rows if _open_status(row)]
     unresolved = [_classified_open_trade(row, now_ist) for row in open_rows]
+    active_live = [row for row in unresolved if row["lifecycle_status"] == "OPEN_PENDING"]
+    learning_open = [row for row in unresolved if row["lifecycle_status"] == "LEARNING_OPEN"]
     stale_open = [row for row in unresolved if row["lifecycle_status"] in {"STALE_OPEN", "EOD_UNRESOLVED"}]
     eod = [row for row in unresolved if row["lifecycle_status"] == "EOD_UNRESOLVED"]
     missing_levels = [row for row in unresolved if row["lifecycle_status"] == "CLOSED_MANUAL_RECONCILIATION_REQUIRED"]
@@ -217,8 +347,16 @@ def build_trade_lifecycle_health(
         except (TypeError, ValueError):
             dashboard_live_trade_count = None
     if dashboard_live_trade_count is not None:
-        normal_open_count = sum(1 for row in unresolved if row["lifecycle_status"] == "OPEN_PENDING")
-        dashboard_mismatch = dashboard_live_trade_count != normal_open_count
+        dashboard_mismatch = dashboard_live_trade_count != len(active_live)
+
+    reconciliation = _build_trade_lifecycle_reconciliation(
+        now_ist,
+        active_rows,
+        outcome_rows,
+        unresolved,
+        dashboard_live_trade_count,
+        Path(output_path).with_name("trade_lifecycle_reconciliation.json"),
+    )
 
     warnings = []
     if stale_open:
@@ -235,11 +373,15 @@ def build_trade_lifecycle_health(
         warnings.append("dashboard_live_trade_count_mismatch")
     if trade_results_mismatch:
         warnings.append("trade_results_vs_active_trade_mismatch")
+    if reconciliation["manual_reconciliation_required"]["required"]:
+        warnings.append("manual_reconciliation_required")
 
     payload = {
         "generated_at_ist": now_ist.isoformat(),
         "overall_status": "WARNING" if warnings else "PASS",
         "open_trades_count": len(open_rows),
+        "active_live_trades_count": len(active_live),
+        "learning_open_trades_count": len(learning_open),
         "stale_open_trades_count": len(stale_open),
         "unresolved_eod_trades_count": len(eod),
         "missing_levels_count": len(missing_levels),
@@ -250,6 +392,9 @@ def build_trade_lifecycle_health(
         "dashboard_live_trade_count": dashboard_live_trade_count,
         "dashboard_mismatch": dashboard_mismatch,
         "trade_results_vs_journal_mismatch": trade_results_mismatch,
+        "closed_tp_sl_trades_count": reconciliation["closed_tp_sl_trades"]["count"],
+        "manual_reconciliation_required": reconciliation["manual_reconciliation_required"]["required"],
+        "trade_lifecycle_reconciliation_path": str(Path(output_path).with_name("trade_lifecycle_reconciliation.json")).replace("\\", "/"),
         "unresolved_trades": unresolved,
         "recommended_action": "MANUAL_REVIEW_UNRESOLVED_TRADES" if unresolved else "NO_OPEN_TRADE_ACTION_REQUIRED",
         "warnings": warnings,
