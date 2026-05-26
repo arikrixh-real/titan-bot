@@ -15,10 +15,14 @@ SIGNAL_PATH_DIAGNOSTICS_PATH = RUNTIME_DIR / "signal_path_diagnostics.json"
 DASHBOARD_TRUTH_REGISTRY_PATH = RUNTIME_DIR / "dashboard_truth_registry.json"
 TRADE_LIFECYCLE_HEALTH_PATH = RUNTIME_DIR / "trade_lifecycle_health.json"
 SCANNER_FILTER_TRUTH_STATUS_PATH = RUNTIME_DIR / "scanner_filter_truth_status.json"
+LIVE_SCANNER_SYNC_AUDIT_PATH = RUNTIME_DIR / "live_scanner_sync_audit.json"
 MASTER_BRAIN_RUNTIME_HEALTH_PATH = RUNTIME_DIR / "master_brain_runtime_health.json"
 SETUP_ENGINE_RUNTIME_HEALTH_PATH = RUNTIME_DIR / "setup_engine_runtime_health.json"
 RUNTIME_FALLBACK_RESOLUTION_PATH = RUNTIME_DIR / "runtime_fallback_resolution.json"
+SCANNER_PUBLICATION_HEALTH_PATH = RUNTIME_DIR / "scanner_publication_health.json"
 FRESH_SECONDS = 15 * 60
+BRIEF_REFRESH_GAP_SECONDS = 2 * 60
+SCAN_COUNTER_KEYS = ("trend_passed", "momentum_passed", "structure_passed", "breakout_ready")
 
 
 def _read_json_safe(path):
@@ -142,6 +146,99 @@ def _counter_confidence(scanner, counters, stale_snapshot_warning, identical_cou
     return "HIGH"
 
 
+def _has_nonzero_scan_gates(counters):
+    return any(_int_or_none(counters.get(key)) not in (None, 0) for key in SCAN_COUNTER_KEYS)
+
+
+def _has_counter_payload(counters):
+    if not isinstance(counters, dict):
+        return False
+    if _int_or_none(counters.get("stocks_checked")) is not None:
+        return True
+    return any(_int_or_none(counters.get(key)) is not None for key in SCAN_COUNTER_KEYS)
+
+
+def _counter_snapshot(counters):
+    return {key: counters.get(key) for key in ("stocks_checked", *SCAN_COUNTER_KEYS, "final_passed", "alerts_this_scan")}
+
+
+def _previous_authoritative_snapshot(previous):
+    if not isinstance(previous, dict):
+        return None
+    counters = previous.get("authoritative_counters") if isinstance(previous.get("authoritative_counters"), dict) else previous.get("counters")
+    if not _has_counter_payload(counters):
+        return None
+    timestamp = previous.get("authoritative_scan_timestamp") or previous.get("scanner_timestamp")
+    parsed = _parse_timestamp(timestamp)
+    if parsed is None:
+        return None
+    return {
+        "counters": dict(counters),
+        "timestamp": parsed,
+        "scan_cycle_id": previous.get("authoritative_scan_cycle_id") or previous.get("scan_cycle_id"),
+        "scanner_publication_health": previous.get("scanner_publication_health"),
+    }
+
+
+def _build_live_scanner_sync_audit(
+    *,
+    now_ist,
+    scanner,
+    scanner_timestamp_dt,
+    scanner_age,
+    scan_cycle_id,
+    previous_truth,
+    counters,
+    dashboard_truth_status,
+    fallback_resolution,
+    off_hours,
+    stale_snapshot_warning,
+    frozen_counter_warning,
+    zero_overwrite,
+    atomic_publish_race,
+    dashboard_snapshot_age,
+    scanner_publication_health,
+    dashboard_scan_sync_status,
+):
+    previous_cycle = previous_truth.get("authoritative_scan_cycle_id") or previous_truth.get("scan_cycle_id")
+    previous_timestamp = _parse_timestamp(previous_truth.get("authoritative_scan_timestamp") or previous_truth.get("scanner_timestamp"))
+    timestamp_drift = None
+    if scanner_timestamp_dt and previous_timestamp:
+        timestamp_drift = abs((scanner_timestamp_dt - previous_timestamp).total_seconds())
+    audit = {
+        "generated_at_ist": now_ist.isoformat(),
+        "market_hours": not off_hours,
+        "scanner_status_present": bool(scanner),
+        "scanner_status_timestamp": scanner_timestamp_dt.isoformat() if scanner_timestamp_dt else None,
+        "scanner_status_age_seconds": round(scanner_age, 3) if scanner_age is not None else None,
+        "scan_cycle_id": scan_cycle_id,
+        "previous_authoritative_scan_cycle_id": previous_cycle,
+        "scanner_counters": _counter_snapshot(counters),
+        "stale_scan_publication": bool(stale_snapshot_warning and not off_hours),
+        "frozen_scan_cycle_id": bool(previous_cycle and previous_cycle == scan_cycle_id and stale_snapshot_warning),
+        "zero_overwrite": bool(zero_overwrite),
+        "stale_dashboard_snapshot": bool(dashboard_truth_status == "WARNING"),
+        "fallback_override_during_market_hours": bool((not off_hours) and fallback_resolution.get("fallback_active")),
+        "atomic_publish_race": bool(atomic_publish_race),
+        "scanner_dashboard_timestamp_drift_seconds": round(timestamp_drift, 3) if timestamp_drift is not None else None,
+        "dashboard_scan_snapshot_age": dashboard_snapshot_age,
+        "dashboard_scan_sync_status": dashboard_scan_sync_status,
+        "scanner_publication_health": scanner_publication_health,
+        "detected_conditions": {
+            "stale_scan_publication": bool(stale_snapshot_warning and not off_hours),
+            "frozen_scan_cycle_id": bool(frozen_counter_warning),
+            "zero_overwrite": bool(zero_overwrite),
+            "stale_dashboard_snapshot": bool(dashboard_truth_status == "WARNING"),
+            "fallback_override_during_market_hours": bool((not off_hours) and fallback_resolution.get("fallback_active")),
+            "atomic_publish_race": bool(atomic_publish_race),
+            "scanner_dashboard_timestamp_drift": bool(timestamp_drift is not None and timestamp_drift > FRESH_SECONDS),
+        },
+        "safety_flags": dict(SAFETY_FLAGS),
+    }
+    _write_json(LIVE_SCANNER_SYNC_AUDIT_PATH, audit)
+    return audit
+
+
 def _reconciled_counter_confidence(confidence, fallback_resolution, master_health, setup_health, stale_snapshot_warning):
     truthfulness = str(fallback_resolution.get("fallback_truthfulness") or "").upper()
     resolver_confidence = str(fallback_resolution.get("scanner_confidence") or "").upper()
@@ -177,14 +274,20 @@ def build_scanner_filter_truth_status(
     master_runtime_health = _read_json_safe(MASTER_BRAIN_RUNTIME_HEALTH_PATH)
     setup_runtime_health = _read_json_safe(SETUP_ENGINE_RUNTIME_HEALTH_PATH)
     fallback_resolution = _read_json_safe(RUNTIME_FALLBACK_RESOLUTION_PATH)
+    scanner_publication = _read_json_safe(SCANNER_PUBLICATION_HEALTH_PATH)
+    previous_truth = _read_json_safe(output_path)
     diagnostics_counters, diagnostics_sources, diagnostics_latest = _latest_scan_diagnostics()
     off_hours = not is_trade_window(now_ist)
-    off_hours_standby = str(fallback_resolution.get("fallback_truthfulness") or "").upper() == "OFF_HOURS_RESEARCH_STANDBY"
+    off_hours_standby = bool(
+        off_hours
+        and str(fallback_resolution.get("fallback_truthfulness") or "").upper() == "OFF_HOURS_RESEARCH_STANDBY"
+    )
     fallback_mode = bool(scanner.get("scan_only") or scanner.get("fallback_reason") or scanner.get("ohlc_fallback_required"))
 
     scanner_timestamp_dt = _payload_timestamp(scanner)
     scanner_age = _age_seconds(scanner_timestamp_dt, now_ist)
     stale_snapshot_warning = scanner_age is None or scanner_age > FRESH_SECONDS
+    dashboard_snapshot_age = round(scanner_age, 3) if scanner_age is not None else None
     expected_off_hours_stale_snapshot = bool(off_hours_standby and stale_snapshot_warning)
 
     counters = {}
@@ -225,6 +328,28 @@ def build_scanner_filter_truth_status(
         frozen_counter_warning = True
     if diagnostics_latest.get("scan_cycle_id") and scan_cycle_id and diagnostics_latest.get("scan_cycle_id") != scan_cycle_id:
         frozen_counter_warning = True
+    atomic_publish_race = bool(scanner and scanner_timestamp_dt is None)
+    previous_authoritative = _previous_authoritative_snapshot(previous_truth)
+    zero_overwrite = bool(
+        not off_hours
+        and _has_counter_payload(counters)
+        and not _has_nonzero_scan_gates(counters)
+        and previous_authoritative
+        and _has_nonzero_scan_gates(previous_authoritative.get("counters") or {})
+        and scanner_age is not None
+        and scanner_age <= BRIEF_REFRESH_GAP_SECONDS
+    )
+    preserve_previous_cycle = bool(zero_overwrite)
+    if preserve_previous_cycle:
+        preserved_counter_cycle_id = previous_authoritative.get("scan_cycle_id")
+        counters.update(previous_authoritative["counters"])
+        for counter in previous_authoritative["counters"]:
+            counter_sources[counter] = "scanner_filter_truth.previous_authoritative_cycle_preserved"
+        scanner_age = _age_seconds(scanner_timestamp_dt, now_ist)
+        dashboard_snapshot_age = round(scanner_age, 3) if scanner_age is not None else None
+        stale_snapshot_warning = scanner_age is None or scanner_age > FRESH_SECONDS
+    else:
+        preserved_counter_cycle_id = None
 
     raw_identical_warning = _identical_counter_warning(counters)
     identical_warning = False if off_hours_standby else raw_identical_warning
@@ -247,6 +372,13 @@ def build_scanner_filter_truth_status(
         setup_runtime_health,
         stale_snapshot_warning,
     )
+    no_valid_counters = bool(
+        not off_hours
+        and not _has_counter_payload(counters)
+        and not previous_authoritative
+    )
+    if no_valid_counters:
+        confidence = "UNKNOWN"
     dashboard_truth_status = dashboard_truth.get("dashboard_truth_registry_status") or "UNKNOWN"
     dashboard_stale_read = bool(
         dashboard_truth_status == "WARNING"
@@ -275,11 +407,55 @@ def build_scanner_filter_truth_status(
         warnings.append("dashboard_stale_read")
     if fallback_mode and not off_hours_standby:
         warnings.append("fallback_mode_counter_reliability_low")
+    if preserve_previous_cycle:
+        warnings.append("brief_refresh_gap_previous_cycle_preserved")
+    if no_valid_counters:
+        warnings.append("scan_pipeline_unavailable")
+
+    scanner_publication_health = "HEALTHY"
+    dashboard_scan_sync_status = "SYNCHRONIZED"
+    if no_valid_counters:
+        scanner_publication_health = "UNAVAILABLE"
+        dashboard_scan_sync_status = "SCAN_PIPELINE_UNAVAILABLE"
+        recommended_display = "SCAN_PIPELINE_UNAVAILABLE"
+    elif preserve_previous_cycle:
+        scanner_publication_health = "PRESERVED_PREVIOUS_VALID_CYCLE"
+        dashboard_scan_sync_status = "PRESERVED_DURING_REFRESH_GAP"
+    elif stale_snapshot_warning and not off_hours_standby:
+        scanner_publication_health = "STALE"
+        dashboard_scan_sync_status = "STALE"
+    elif frozen_counter_warning:
+        scanner_publication_health = "FROZEN_CYCLE_WARNING"
+        dashboard_scan_sync_status = "WARNING"
+    elif fallback_mode and not off_hours_standby:
+        scanner_publication_health = "FALLBACK_ACTIVE"
+        dashboard_scan_sync_status = "FALLBACK_VISIBLE"
+
+    market_hours_runtime_sync = "OFF_HOURS" if off_hours else (
+        "PASS" if dashboard_scan_sync_status == "SYNCHRONIZED" else "WARNING"
+    )
+    authoritative_scan_timestamp = scanner_timestamp_dt.isoformat() if scanner_timestamp_dt else None
+    authoritative_scan_cycle_id = scan_cycle_id
 
     payload = {
         "generated_at_ist": now_ist.isoformat(),
         "overall_status": "FAIL" if not scanner else ("WARNING" if warnings else "PASS"),
         "scan_cycle_id": scan_cycle_id,
+        "authoritative_scan_cycle_id": authoritative_scan_cycle_id,
+        "authoritative_scan_timestamp": authoritative_scan_timestamp,
+        "authoritative_counters": dict(counters),
+        "dashboard_scan_snapshot_age": dashboard_snapshot_age,
+        "dashboard_scan_sync_status": dashboard_scan_sync_status,
+        "market_hours_runtime_sync": market_hours_runtime_sync,
+        "scanner_publication_health": scanner_publication_health,
+        "scanner_loop_health": scanner_publication.get("runtime_scheduler_health"),
+        "publish_cadence_seconds": scanner_publication.get("publish_cadence_seconds"),
+        "scanner_writer_heartbeat": scanner_publication.get("scanner_writer_heartbeat"),
+        "stale_cycle_detected": scanner_publication.get("stale_cycle_detected"),
+        "preserved_previous_valid_cycle": preserve_previous_cycle,
+        "preserved_counter_cycle_id": preserved_counter_cycle_id,
+        "zero_overwrite_detected": zero_overwrite,
+        "scan_pipeline_unavailable": no_valid_counters,
         "scanner_timestamp": scanner_timestamp_dt.isoformat() if scanner_timestamp_dt else None,
         "scanner_age_seconds": round(scanner_age, 3) if scanner_age is not None else None,
         "selected_symbols_count": selected_symbols_count,
@@ -318,6 +494,27 @@ def build_scanner_filter_truth_status(
         "warnings": warnings,
         "safety_flags": dict(SAFETY_FLAGS),
     }
+    audit = _build_live_scanner_sync_audit(
+        now_ist=now_ist,
+        scanner=scanner,
+        scanner_timestamp_dt=scanner_timestamp_dt,
+        scanner_age=scanner_age,
+        scan_cycle_id=scan_cycle_id,
+        previous_truth=previous_truth,
+        counters=counters,
+        dashboard_truth_status=dashboard_truth_status,
+        fallback_resolution=fallback_resolution,
+        off_hours=off_hours,
+        stale_snapshot_warning=stale_snapshot_warning,
+        frozen_counter_warning=frozen_counter_warning,
+        zero_overwrite=zero_overwrite,
+        atomic_publish_race=atomic_publish_race,
+        dashboard_snapshot_age=dashboard_snapshot_age,
+        scanner_publication_health=scanner_publication_health,
+        dashboard_scan_sync_status=dashboard_scan_sync_status,
+    )
+    payload["live_scanner_sync_audit_path"] = str(LIVE_SCANNER_SYNC_AUDIT_PATH).replace("\\", "/")
+    payload["live_scanner_sync_audit_status"] = "WARNING" if any(audit["detected_conditions"].values()) else "PASS"
     _write_json(output_path, payload)
     return payload
 

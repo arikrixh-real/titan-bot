@@ -7,6 +7,7 @@ from runtime_artifact_registry import build_runtime_artifact_registry
 from runtime_dependency_graph import SAFETY_FLAGS, build_runtime_dependency_graph
 from runtime_engine_health import build_master_brain_runtime_health, build_setup_engine_runtime_health
 from runtime_fallback_resolver import run_runtime_fallback_resolution
+from scanner_publication_health import run_scanner_publication_health_check
 from runtime_watchdog import build_titan_runtime_watchdog
 from utils.market_hours import as_ist_datetime
 
@@ -273,6 +274,7 @@ def build_titan_integrity_monitor(now=None):
     master_runtime_health = build_master_brain_runtime_health(now=now_ist)
     setup_runtime_health = build_setup_engine_runtime_health(now=now_ist)
     fallback_resolution = run_runtime_fallback_resolution(now=now_ist)
+    scanner_publication_health = run_scanner_publication_health_check(now=now_ist)
     master_runtime_health = fallback_resolution.get("master_brain_runtime_health") or master_runtime_health
     setup_runtime_health = fallback_resolution.get("setup_engine_runtime_health") or setup_runtime_health
 
@@ -318,6 +320,13 @@ def build_titan_integrity_monitor(now=None):
             "off_hours_runtime_continuity": fallback_resolution.get("off_hours_runtime_continuity"),
             "fallback_truthfulness": fallback_resolution.get("fallback_truthfulness"),
             "scanner_confidence": fallback_resolution.get("scanner_confidence"),
+            "scanner_publication_health": scanner_publication_health.get("publish_health"),
+            "scanner_loop_health": scanner_publication_health.get("runtime_scheduler_health"),
+            "publish_cadence_seconds": scanner_publication_health.get("publish_cadence_seconds"),
+            "scan_age_seconds": scanner_publication_health.get("scan_age_seconds"),
+            "scanner_writer_heartbeat": scanner_publication_health.get("scanner_writer_heartbeat"),
+            "scanner_scheduler_status": scanner_publication_health.get("scanner_scheduler_status"),
+            "stale_cycle_detected": scanner_publication_health.get("stale_cycle_detected"),
         },
         "dependency_graph_integrity": {
             "dependency_integrity_score": dependency_regression.get("dependency_integrity_score"),

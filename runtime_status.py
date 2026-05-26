@@ -10,6 +10,7 @@ from runtime_fallback_resolver import run_runtime_fallback_resolution
 from runtime_health import run_authoritative_runtime_health_check
 from runtime_mode_resolver import build_canonical_runtime_mode, build_runtime_warning_resolution_status
 from runtime_mode_router import runtime_mode_snapshot
+from scanner_publication_health import run_scanner_publication_health_check
 from runtime_topology import build_runtime_topology
 from scanner_filter_truth import run_scanner_filter_truth_audit
 from trade_lifecycle_health import run_trade_lifecycle_health_check
@@ -1133,6 +1134,12 @@ def _runtime_topology_summary():
         "runtime_consistency_score": topology.get("runtime_consistency_score"),
         "runtime_conflicts": topology.get("runtime_conflicts") or [],
         "stale_runtime_sources": topology.get("stale_runtime_sources") or [],
+        "scanner_publication_health": topology.get("scanner_publication_health") or {},
+        "scanner_loop_health": topology.get("scanner_loop_health"),
+        "publish_cadence_seconds": topology.get("publish_cadence_seconds"),
+        "scan_age_seconds": topology.get("scan_age_seconds"),
+        "scanner_writer_heartbeat": topology.get("scanner_writer_heartbeat"),
+        "stale_cycle_detected": topology.get("stale_cycle_detected"),
         "dependency_graph_summary": graph,
         "runtime_visibility_summary": {
             "engines_not_reporting_status": visibility.get("engines_not_reporting_status") or [],
@@ -1172,6 +1179,31 @@ def _scanner_filter_truth_summary():
     except Exception as exc:
         return {
             "overall_status": "FAIL",
+            "error": str(exc),
+            "safety_flags": {
+                "advisory_only": True,
+                "affects_live_ranking": False,
+                "affects_execution": False,
+                "broker_mutation": False,
+                "telegram_mutation": False,
+                "supabase_mutation": False,
+                "live_order_behavior": False,
+                "recommended_live_weight": 0.0,
+                "rank_adjustment": 0.0,
+            },
+        }
+
+
+def _scanner_publication_health_summary():
+    try:
+        return run_scanner_publication_health_check()
+    except Exception as exc:
+        return {
+            "overall_status": "FAIL",
+            "publish_health": "UNAVAILABLE",
+            "runtime_scheduler_health": "UNKNOWN",
+            "scanner_loop_active": False,
+            "scanner_publish_active": False,
             "error": str(exc),
             "safety_flags": {
                 "advisory_only": True,
@@ -1294,9 +1326,34 @@ def build_runtime_status(value=None):
     master_brain_runtime_health = runtime_fallback_resolution.get("master_brain_runtime_health") or master_brain_runtime_health
     setup_engine_runtime_health = runtime_fallback_resolution.get("setup_engine_runtime_health") or setup_engine_runtime_health
     scanner_filter_truth = _scanner_filter_truth_summary()
+    scanner_publication_health = _scanner_publication_health_summary()
     trade_lifecycle_health = _trade_lifecycle_health_summary()
+    canonical_runtime_timestamp = now.astimezone(IST).isoformat()
+    canonical_scan_cycle = scanner_filter_truth.get("authoritative_scan_cycle_id") or scanner_filter_truth.get("scan_cycle_id")
+    dashboard_runtime_sync_health = scanner_filter_truth.get("dashboard_scan_sync_status") or scanner_publication_health.get("publish_health") or "UNKNOWN"
+    dashboard_trade_sync_health = "WARNING" if trade_lifecycle_health.get("dashboard_mismatch") else (
+        "PASS" if trade_lifecycle_health.get("overall_status") in {"PASS", "WARNING"} else "UNKNOWN"
+    )
+    lifecycle_sync_status = "MISMATCH" if trade_lifecycle_health.get("dashboard_mismatch") else (
+        "SYNCHRONIZED" if trade_lifecycle_health else "UNKNOWN"
+    )
+    performance_sync_status = "SYNCHRONIZED" if trade_lifecycle_health.get("overall_status") in {"PASS", "WARNING"} else "UNKNOWN"
     return {
-        "timestamp_ist": now.astimezone(IST).isoformat(),
+        "timestamp_ist": canonical_runtime_timestamp,
+        "canonical_runtime_timestamp": canonical_runtime_timestamp,
+        "canonical_scan_cycle": canonical_scan_cycle,
+        "dashboard_runtime_sync_health": dashboard_runtime_sync_health,
+        "market_hours_runtime_sync": scanner_filter_truth.get("market_hours_runtime_sync"),
+        "scanner_publication_health": scanner_publication_health.get("publish_health") or scanner_filter_truth.get("scanner_publication_health"),
+        "scanner_loop_health": scanner_publication_health.get("runtime_scheduler_health") or scanner_filter_truth.get("scanner_loop_health"),
+        "publish_cadence_seconds": scanner_publication_health.get("publish_cadence_seconds"),
+        "scan_age_seconds": scanner_publication_health.get("scan_age_seconds") or scanner_filter_truth.get("dashboard_scan_snapshot_age"),
+        "scanner_writer_heartbeat": scanner_publication_health.get("scanner_writer_heartbeat"),
+        "scanner_scheduler_status": scanner_publication_health.get("scanner_scheduler_status"),
+        "stale_cycle_detected": scanner_publication_health.get("stale_cycle_detected"),
+        "dashboard_trade_sync_health": dashboard_trade_sync_health,
+        "lifecycle_sync_status": lifecycle_sync_status,
+        "performance_sync_status": performance_sync_status,
         "mode": permissions["mode"],
         "live_allowed_engines": permissions["live_allowed_engines"],
         "research_allowed_engines": permissions["research_allowed_engines"],
@@ -1317,6 +1374,7 @@ def build_runtime_status(value=None):
         "master_brain_research_freshness": runtime_fallback_resolution.get("master_brain_research_freshness"),
         "setup_engine_research_freshness": runtime_fallback_resolution.get("setup_engine_research_freshness"),
         "scanner_filter_truth": scanner_filter_truth,
+        "scanner_publication_health_status": scanner_publication_health,
         "trade_lifecycle_health": trade_lifecycle_health,
         "outcome_tracker_status": _read_json_safe(Path("data") / "runtime" / "outcome_tracker_status.json"),
         "dashboard_scan_truth": {
@@ -1325,11 +1383,25 @@ def build_runtime_status(value=None):
             "identical_counter_warning": scanner_filter_truth.get("identical_counter_warning"),
             "frozen_counter_warning": scanner_filter_truth.get("frozen_counter_warning"),
             "stale_snapshot_warning": scanner_filter_truth.get("stale_snapshot_warning"),
+            "authoritative_scan_cycle_id": scanner_filter_truth.get("authoritative_scan_cycle_id"),
+            "authoritative_scan_timestamp": scanner_filter_truth.get("authoritative_scan_timestamp"),
+            "dashboard_scan_snapshot_age": scanner_filter_truth.get("dashboard_scan_snapshot_age"),
+            "dashboard_scan_sync_status": scanner_filter_truth.get("dashboard_scan_sync_status"),
+            "scanner_publication_health": scanner_filter_truth.get("scanner_publication_health"),
+            "scanner_loop_health": scanner_publication_health.get("runtime_scheduler_health"),
+            "publish_cadence_seconds": scanner_publication_health.get("publish_cadence_seconds"),
+            "scan_age_seconds": scanner_publication_health.get("scan_age_seconds"),
+            "scanner_writer_heartbeat": scanner_publication_health.get("scanner_writer_heartbeat"),
+            "scanner_scheduler_status": scanner_publication_health.get("scanner_scheduler_status"),
+            "stale_cycle_detected": scanner_publication_health.get("stale_cycle_detected"),
         },
         "dashboard_trade_truth": {
             "live_trades_count": trade_lifecycle_health.get("open_trades_count"),
             "dashboard_mismatch": trade_lifecycle_health.get("dashboard_mismatch"),
             "unresolved_eod_trades_count": trade_lifecycle_health.get("unresolved_eod_trades_count"),
+            "dashboard_trade_sync_health": dashboard_trade_sync_health,
+            "lifecycle_sync_status": lifecycle_sync_status,
+            "performance_sync_status": performance_sync_status,
         },
         "dependency_graph_summary": runtime_topology.get("dependency_graph_summary"),
         "runtime_visibility_summary": runtime_topology.get("runtime_visibility_summary"),

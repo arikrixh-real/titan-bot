@@ -2,6 +2,7 @@ import json
 import os
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from runtime_lock import acquire_lock, refresh_lock, release_lock
@@ -15,14 +16,204 @@ from runtime_resilience_status import (
     update_existing_status_outputs,
     write_runtime_resilience_status,
 )
+from runtime_safe_json import safe_atomic_write_json
+from utils.market_hours import IST, as_ist_datetime, is_trade_window
 
 
 LOCK_NAME = "titan_daemon"
 PRINT_INTERVAL_SECONDS = 30
 TICK_SECONDS = 1
 DAEMON_HEALTH_PATH = Path("data") / "runtime" / "daemon_health.json"
+SCANNER_SCHEDULER_STATUS_PATH = Path("data") / "runtime" / "scanner_scheduler_status.json"
 RUNTIME_MODE_ENV = "TITAN_RUNTIME_MASTER_BRAIN_MODE"
 CONTINUOUS_WORKERS_ENV = "TITAN_CONTINUOUS_WORKERS"
+SCANNER_SCHEDULER_ENABLED_ENV = "TITAN_SCANNER_SCHEDULER_ENABLED"
+SCANNER_INVOCATION_INTERVAL_SECONDS = 300
+
+SAFETY_FLAGS = {
+    "advisory_only": True,
+    "affects_live_ranking": False,
+    "affects_execution": False,
+    "broker_mutation": False,
+    "telegram_mutation": False,
+    "supabase_mutation": False,
+    "live_order_behavior": False,
+    "recommended_live_weight": 0.0,
+    "rank_adjustment": 0.0,
+}
+
+
+def _now_ist():
+    return datetime.now(IST)
+
+
+def _parse_timestamp(value):
+    if value in (None, ""):
+        return None
+    try:
+        text = str(value).replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=IST)
+        return parsed.astimezone(IST)
+    except Exception:
+        return None
+
+
+def _read_json_safe(path):
+    try:
+        path = Path(path)
+        if not path.exists():
+            return {}
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_scanner_scheduler_status(path=SCANNER_SCHEDULER_STATUS_PATH, **updates):
+    now_ist = as_ist_datetime(updates.pop("now", None))
+    previous = _read_json_safe(path)
+    payload = {
+        "generated_at_ist": now_ist.isoformat(),
+        "scheduler_active": bool(updates.get("scheduler_active", previous.get("scheduler_active", False))),
+        "scanner_invocation_enabled": bool(updates.get("scanner_invocation_enabled", previous.get("scanner_invocation_enabled", False))),
+        "last_scanner_invocation": updates.get("last_scanner_invocation", previous.get("last_scanner_invocation")),
+        "last_scanner_success": updates.get("last_scanner_success", previous.get("last_scanner_success")),
+        "last_scanner_exception": updates.get("last_scanner_exception", previous.get("last_scanner_exception")),
+        "invocation_count": int(updates.get("invocation_count", previous.get("invocation_count", 0) or 0)),
+        "failed_invocation_count": int(updates.get("failed_invocation_count", previous.get("failed_invocation_count", 0) or 0)),
+        "next_expected_invocation": updates.get("next_expected_invocation", previous.get("next_expected_invocation")),
+        "scheduler_mode": updates.get("scheduler_mode", previous.get("scheduler_mode", "UNKNOWN")),
+        "trade_window": bool(updates.get("trade_window", previous.get("trade_window", False))),
+        "research_mode": bool(updates.get("research_mode", previous.get("research_mode", False))),
+        "last_skip_reason": updates.get("last_skip_reason", previous.get("last_skip_reason")),
+        "safety_flags": dict(SAFETY_FLAGS),
+    }
+    safe_atomic_write_json(path, payload)
+    return payload
+
+
+def _scanner_scheduler_enabled():
+    return str(os.getenv(SCANNER_SCHEDULER_ENABLED_ENV, "1")).strip() not in {"0", "false", "False", "NO", "no"}
+
+
+def _next_expected_from(now_ist):
+    return (now_ist + timedelta(seconds=SCANNER_INVOCATION_INTERVAL_SECONDS)).isoformat()
+
+
+def run_scanner_scheduler_tick(
+    *,
+    now=None,
+    scanner_runner=None,
+    status_path=SCANNER_SCHEDULER_STATUS_PATH,
+    scheduler_mode="DAEMON_LOOP",
+    force=False,
+):
+    now_ist = as_ist_datetime(now)
+    trade_window = is_trade_window(now_ist)
+    research_mode = not trade_window
+    enabled = _scanner_scheduler_enabled()
+    previous = _read_json_safe(status_path)
+    invocation_count = int(previous.get("invocation_count") or 0)
+    failed_count = int(previous.get("failed_invocation_count") or 0)
+    last_success_dt = _parse_timestamp(previous.get("last_scanner_success"))
+
+    base = {
+        "now": now_ist,
+        "scheduler_active": True,
+        "scanner_invocation_enabled": enabled,
+        "scheduler_mode": scheduler_mode,
+        "trade_window": trade_window,
+        "research_mode": research_mode,
+    }
+
+    if not enabled:
+        return _write_scanner_scheduler_status(
+            status_path,
+            **base,
+            last_scanner_exception=None,
+            last_skip_reason="scanner_scheduler_disabled_by_env",
+            next_expected_invocation=_next_expected_from(now_ist),
+        )
+
+    if not trade_window and not force:
+        return _write_scanner_scheduler_status(
+            status_path,
+            **base,
+            last_scanner_exception=None,
+            last_skip_reason="outside_trade_window_standby",
+            next_expected_invocation=_next_expected_from(now_ist),
+        )
+
+    due = force or last_success_dt is None or (now_ist - last_success_dt).total_seconds() >= SCANNER_INVOCATION_INTERVAL_SECONDS
+    if not due:
+        return _write_scanner_scheduler_status(
+            status_path,
+            **base,
+            last_scanner_exception=None,
+            last_skip_reason="cadence_wait",
+            next_expected_invocation=(last_success_dt + timedelta(seconds=SCANNER_INVOCATION_INTERVAL_SECONDS)).isoformat(),
+        )
+
+    invocation_time = now_ist.isoformat()
+    invocation_count += 1
+    lock_name = "task_scanner"
+    lock_acquired = acquire_lock(lock_name, stale_after_seconds=420)
+    if not lock_acquired:
+        return _write_scanner_scheduler_status(
+            status_path,
+            **base,
+            last_scanner_invocation=invocation_time,
+            invocation_count=invocation_count,
+            failed_invocation_count=failed_count,
+            last_scanner_exception=None,
+            last_skip_reason="scanner_task_lock_active",
+            next_expected_invocation=_next_expected_from(now_ist),
+        )
+    _write_scanner_scheduler_status(
+        status_path,
+        **base,
+        last_scanner_invocation=invocation_time,
+        invocation_count=invocation_count,
+        failed_invocation_count=failed_count,
+        last_scanner_exception=None,
+        last_skip_reason=None,
+        next_expected_invocation=_next_expected_from(now_ist),
+    )
+    try:
+        if scanner_runner is None:
+            from runtime_scanner import run_scanner
+
+            scanner_runner = run_scanner
+        scanner_runner()
+    except Exception as exc:
+        failed_count += 1
+        log_runtime_error(source="titan_daemon_scanner_scheduler", error=exc, mode=scheduler_mode)
+        return _write_scanner_scheduler_status(
+            status_path,
+            **base,
+            last_scanner_invocation=invocation_time,
+            invocation_count=invocation_count,
+            failed_invocation_count=failed_count,
+            last_scanner_exception=f"{type(exc).__name__}:{exc}",
+            last_skip_reason=None,
+            next_expected_invocation=_next_expected_from(now_ist),
+        )
+    finally:
+        release_lock(lock_name)
+
+    return _write_scanner_scheduler_status(
+        status_path,
+        **base,
+        last_scanner_invocation=invocation_time,
+        last_scanner_success=as_ist_datetime(None).isoformat(),
+        invocation_count=invocation_count,
+        failed_invocation_count=failed_count,
+        last_scanner_exception=None,
+        last_skip_reason=None,
+        next_expected_invocation=_next_expected_from(now_ist),
+    )
 
 
 def _runtime_intent():
@@ -200,6 +391,10 @@ def main():
                     latest_mode = dispatch_result["mode"]
                     last_dispatch_count = len(dispatch_result["dispatch_preview"])
 
+                run_scanner_scheduler_tick(
+                    scheduler_mode=latest_mode,
+                    force=False,
+                )
                 _write_daemon_health(
                     mode=latest_mode,
                     ticks_completed=ticks_completed,
