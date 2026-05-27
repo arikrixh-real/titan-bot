@@ -348,3 +348,87 @@ def remove_matching_trades(predicate):
         errors=[],
     )
     return removed
+
+
+def remove_test_trades(symbol=None, source="SYNTHETIC_PIPELINE_TEST"):
+    """
+    Remove only OPEN synthetic test rows from the canonical active trade store.
+
+    Supabase cleanup is disabled by default. To allow it for this synthetic-only
+    cleanup, set TITAN_ACTIVE_STORE_ENABLE_SUPABASE_TEST_CLEANUP=true.
+    """
+    wanted_symbol = _symbol(symbol)
+    wanted_source = str(source or "SYNTHETIC_PIPELINE_TEST").strip().upper()
+    errors = []
+
+    def is_target(row):
+        if not _is_open(row):
+            return False
+        if wanted_symbol and _symbol(row.get("symbol")) != wanted_symbol:
+            return False
+        if not _truthy(row.get("test_trade")):
+            return False
+        row_source = str(row.get("source") or "").strip().upper()
+        if wanted_source and row_source != wanted_source:
+            return False
+        return True
+
+    fieldnames, rows = _read_csv_rows()
+    kept = []
+    local_removed = 0
+    for row in rows:
+        if is_target(row):
+            local_removed += 1
+            continue
+        kept.append(row)
+
+    schema_fields = _write_csv_rows(kept, fieldnames)
+
+    supabase_removed = 0
+    supabase_cleanup_enabled = str(
+        os.getenv("TITAN_ACTIVE_STORE_ENABLE_SUPABASE_TEST_CLEANUP", "")
+    ).strip().lower() in {"1", "true", "yes", "y"}
+    if supabase_cleanup_enabled:
+        client, client_error = _get_supabase_client()
+        if client is None:
+            if client_error:
+                errors.append(client_error)
+        else:
+            try:
+                query = (
+                    client.table("trades")
+                    .update(
+                        {
+                            "status": "SYNTHETIC_TEST_REMOVED",
+                            "updated_at": _timestamp_ist(),
+                        }
+                    )
+                    .eq("source", wanted_source)
+                    .eq("test_trade", True)
+                    .in_("status", list(OPEN_STATUSES))
+                )
+                if wanted_symbol:
+                    query = query.eq("symbol", wanted_symbol)
+                result = query.execute()
+                supabase_removed = len(result.data or []) if hasattr(result, "data") else 0
+            except Exception as exc:
+                errors.append(f"SUPABASE_TEST_CLEANUP_FAILED:{exc}")
+
+    open_rows = [row for row in kept if _is_open(row)]
+    _write_debug(
+        write_destination="LOCAL_ACTIVE_TRADES_CSV"
+        + ("+SUPABASE_TRADES" if supabase_cleanup_enabled else ""),
+        read_sources_checked=[str(ACTIVE_TRADES_CSV)]
+        + (["SUPABASE_TRADES"] if supabase_cleanup_enabled else []),
+        open_trades=open_rows,
+        synthetic_trade_found=any(is_target(row) for row in open_rows),
+        schema_fields=schema_fields,
+        errors=errors,
+    )
+    return {
+        "removed": local_removed + supabase_removed,
+        "local_removed": local_removed,
+        "supabase_removed": supabase_removed,
+        "supabase_cleanup_enabled": supabase_cleanup_enabled,
+        "errors": errors,
+    }

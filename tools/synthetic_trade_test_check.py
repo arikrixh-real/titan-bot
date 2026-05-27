@@ -14,7 +14,7 @@ from data.live_price import get_live_price_debug  # noqa: E402
 from data.active_trade_store import (  # noqa: E402
     find_open_trade,
     load_open_trades,
-    remove_matching_trades,
+    remove_test_trades,
 )
 from data.paper_journal import (  # noqa: E402
     FINAL_VALIDATED_SETUPS_PATH,
@@ -142,13 +142,8 @@ def _non_synthetic_open_rows(rows):
 
 
 def _remove_previous_synthetic_active_rows():
-    return remove_matching_trades(
-        lambda row: (
-            str(row.get("trade_id") or "").startswith(SOURCE)
-            or _bool_text(row.get("test_trade"))
-            or str(row.get("source") or "").upper() == SOURCE
-        )
-    )
+    result = remove_test_trades(symbol=SYMBOL, source=SOURCE)
+    return int(result.get("removed") or 0)
 
 
 def _latest_synthetic_outcome(trade_id):
@@ -304,6 +299,12 @@ def main():
     try:
         os.environ["TITAN_ACTIVE_STORE_DISABLE_SUPABASE"] = "true"
         diagnostics["previous_synthetic_active_rows_removed"] = _remove_previous_synthetic_active_rows()
+        stale_synthetic = find_open_trade(SYMBOL, source=SOURCE, test_trade=True)
+        if stale_synthetic:
+            diagnostics["errors"].append("SYNTHETIC_OPEN_TRADE_STILL_PRESENT_AFTER_CLEANUP")
+            _write_json(DIAGNOSTICS_PATH, diagnostics)
+            print(json.dumps(diagnostics, indent=2, sort_keys=True))
+            return 1
         diagnostics["previous_synthetic_outcome_rows_removed"] = _remove_previous_synthetic_outcome_rows()
         existing_open = _non_synthetic_open_rows(_active_rows())
         if existing_open:
