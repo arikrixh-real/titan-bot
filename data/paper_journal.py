@@ -23,6 +23,12 @@ try:
 except Exception:
     ACTIVE_TRADE_FIELDS = []
 
+from data.active_trade_store import (
+    append_open_trade,
+    find_open_trade,
+    load_open_trades,
+)
+
 IST = ZoneInfo("Asia/Kolkata")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_DIR = PROJECT_ROOT / "data" / "runtime"
@@ -184,18 +190,8 @@ def _local_side(value):
 
 
 def _open_trade_exists_local(symbol, side):
-    _, rows = _read_csv_rows(ACTIVE_TRADES_CSV)
-    wanted_symbol = str(symbol or "").strip().upper()
-    wanted_side = _side(side)
-    for row in rows:
-        status = str(row.get("status") or "").strip().upper()
-        if status not in {"OPEN", "ACTIVE", "LIVE"}:
-            continue
-        if str(row.get("symbol") or "").strip().upper() != wanted_symbol:
-            continue
-        if _side(row.get("side")) == wanted_side:
-            return True
-    return False
+    trade = find_open_trade(symbol)
+    return bool(trade and _side(trade.get("side")) == _side(side))
 
 
 def _get_supabase():
@@ -393,8 +389,7 @@ def latest_contract_payload(refresh=False):
 def _base_status(contract_payload=None):
     contract_payload = contract_payload or latest_contract_payload(refresh=False)
     valid = _valid_setups(contract_payload)
-    _, active_rows = _read_csv_rows(ACTIVE_TRADES_CSV)
-    open_count = sum(1 for row in active_rows if str(row.get("status") or "").upper() in {"OPEN", "ACTIVE", "LIVE"})
+    open_count = len(load_open_trades())
     return {
         "timestamp_ist": timestamp_ist(),
         "enabled": paper_journal_enabled(),
@@ -494,7 +489,7 @@ def maybe_write_paper_journal(
         symbol = str(setup.get("symbol") or "").strip().upper()
         side = _side(setup.get("side"))
 
-        if _open_trade_exists_local(symbol, side):
+        if find_open_trade(symbol):
             payload["duplicate_skipped"] += 1
             continue
 
@@ -516,26 +511,22 @@ def maybe_write_paper_journal(
         )
 
         written = False
-        if client is not None:
-            ok, removed_cols, error = _safe_supabase_insert(client, "trades", _supabase_payload(row))
-            if ok:
-                written = True
-                destinations.add("SUPABASE_TRADES")
-            else:
-                errors.append(f"{symbol}:{side}:SUPABASE_WRITE_FAILED:{error}")
-                if removed_cols:
-                    errors.append(f"{symbol}:{side}:SUPABASE_COLUMNS_REMOVED:{','.join(removed_cols)}")
-
-        if not written:
-            try:
-                _append_local_trade(row)
-                written = True
-                destinations.add("LOCAL_ACTIVE_TRADES_CSV")
-            except Exception as exc:
-                errors.append(f"{symbol}:{side}:LOCAL_FALLBACK_WRITE_FAILED:{exc}")
+        try:
+            store_result = append_open_trade(row, client=client, prefer_supabase=True)
+            written = bool(store_result.get("written"))
+            if store_result.get("destination"):
+                destinations.add(store_result.get("destination"))
+            errors.extend(store_result.get("errors") or [])
+        except Exception as exc:
+            errors.append(f"{symbol}:{side}:ACTIVE_TRADE_STORE_WRITE_FAILED:{exc}")
 
         if written:
-            payload["written"] += 1
+            readable = find_open_trade(symbol, source=row.get("source"), test_trade=row.get("test_trade") if row.get("test_trade") else None)
+            if readable:
+                payload["written"] += 1
+            else:
+                payload["failed"] += 1
+                errors.append(f"{symbol}:{side}:ACTIVE_TRADE_STORE_VERIFY_FAILED")
         else:
             payload["failed"] += 1
 

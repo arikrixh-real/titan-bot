@@ -11,8 +11,12 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from core.truth_gate import validate_trade_setup  # noqa: E402
 from data.live_price import get_live_price_debug  # noqa: E402
+from data.active_trade_store import (  # noqa: E402
+    find_open_trade,
+    load_open_trades,
+    remove_matching_trades,
+)
 from data.paper_journal import (  # noqa: E402
-    ACTIVE_TRADES_CSV,
     FINAL_VALIDATED_SETUPS_PATH,
     PAPER_FLAG,
     maybe_write_paper_journal,
@@ -96,7 +100,7 @@ def _csv_fieldnames(path):
 
 
 def _active_rows():
-    return _read_csv(ACTIVE_TRADES_CSV)
+    return load_open_trades()
 
 
 def _outcome_rows():
@@ -138,19 +142,13 @@ def _non_synthetic_open_rows(rows):
 
 
 def _remove_previous_synthetic_active_rows():
-    rows = _active_rows()
-    kept = [
-        row
-        for row in rows
-        if not (
+    return remove_matching_trades(
+        lambda row: (
             str(row.get("trade_id") or "").startswith(SOURCE)
             or _bool_text(row.get("test_trade"))
             or str(row.get("source") or "").upper() == SOURCE
         )
-    ]
-    if len(kept) != len(rows):
-        _write_csv(ACTIVE_TRADES_CSV, kept, fieldnames=_csv_fieldnames(ACTIVE_TRADES_CSV))
-    return len(rows) - len(kept)
+    )
 
 
 def _latest_synthetic_outcome(trade_id):
@@ -301,8 +299,10 @@ def main():
     final_setup_backup = _backup_file(FINAL_VALIDATED_SETUPS_PATH)
     price_cache_backup = _backup_file(PRICE_CACHE_PATH)
     price_cache_meta_backup = _backup_file(PRICE_CACHE_META_PATH)
+    previous_store_supabase_flag = os.environ.get("TITAN_ACTIVE_STORE_DISABLE_SUPABASE")
 
     try:
+        os.environ["TITAN_ACTIVE_STORE_DISABLE_SUPABASE"] = "true"
         diagnostics["previous_synthetic_active_rows_removed"] = _remove_previous_synthetic_active_rows()
         diagnostics["previous_synthetic_outcome_rows_removed"] = _remove_previous_synthetic_outcome_rows()
         existing_open = _non_synthetic_open_rows(_active_rows())
@@ -343,7 +343,8 @@ def main():
         diagnostics["paper_journal_written"] = journal_payload.get("written")
         diagnostics["paper_journal_duplicate_skipped"] = journal_payload.get("duplicate_skipped")
 
-        synthetic_rows = _synthetic_open_rows(_active_rows())
+        synthetic_trade = find_open_trade(SYMBOL, source=SOURCE, test_trade=True)
+        synthetic_rows = [synthetic_trade] if synthetic_trade else []
         diagnostics["trade_written"] = int(journal_payload.get("written") or 0) == 1 or bool(synthetic_rows)
         diagnostics["open_trade_detected"] = bool(synthetic_rows)
         if not synthetic_rows:
@@ -388,6 +389,10 @@ def main():
     except Exception as exc:
         diagnostics["errors"].append(f"{type(exc).__name__}:{exc}")
     finally:
+        if previous_store_supabase_flag is None:
+            os.environ.pop("TITAN_ACTIVE_STORE_DISABLE_SUPABASE", None)
+        else:
+            os.environ["TITAN_ACTIVE_STORE_DISABLE_SUPABASE"] = previous_store_supabase_flag
         _restore_file(FINAL_VALIDATED_SETUPS_PATH, final_setup_backup)
         _restore_file(PRICE_CACHE_PATH, price_cache_backup)
         _restore_file(PRICE_CACHE_META_PATH, price_cache_meta_backup)

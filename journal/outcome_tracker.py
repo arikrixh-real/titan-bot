@@ -33,6 +33,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from data.live_price import get_strict_fresh_price_debug
+from data.active_trade_store import close_open_trade, load_open_trades
 from journal.trade_id import build_setup_signature
 from journal.trade_journal import ACTIVE_FIELDS, _ensure_csv as _ensure_active_csv_schema
 from core.truth_gate import validate_outcome_check, write_status as write_truth_gate_status
@@ -916,10 +917,7 @@ def track_trade_outcomes(limit=None):
 
     _ensure_files()
 
-    with open(ACTIVE_TRADES_CSV, "r", newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
-        fields = reader.fieldnames or []
+    rows = load_open_trades()
 
     if not rows:
         print("[OutcomeTracker] No active trades found.")
@@ -930,7 +928,6 @@ def track_trade_outcomes(limit=None):
     still_open = 0
     price_stale_skipped = 0
     deferred_open = 0
-    updated_rows = []
     lifecycle_observations = []
     max_checks = None
 
@@ -940,11 +937,7 @@ def track_trade_outcomes(limit=None):
     except Exception:
         max_checks = None
 
-    backlog_size = 0
-    for row in rows:
-        status_text = str(row.get("status", "")).upper().strip()
-        if status_text in {"OPEN", "TP", "SL"}:
-            backlog_size += 1
+    backlog_size = len(rows)
 
     limit_text = "ALL" if max_checks is None else str(max_checks)
     print(f"[OutcomeTracker DEBUG] Backlog eligible rows: {backlog_size} | limit={limit_text}")
@@ -953,11 +946,9 @@ def track_trade_outcomes(limit=None):
         status, _ = _normalize_active_trade_lifecycle(row)
 
         if status != "OPEN":
-            updated_rows.append(row)
             continue
 
         if max_checks is not None and checked >= max_checks:
-            updated_rows.append(row)
             still_open += 1
             deferred_open += 1
             continue
@@ -998,7 +989,6 @@ def track_trade_outcomes(limit=None):
                 price_stale_skipped += 1
                 still_open += 1
                 print(f"[TruthGate] Outcome check skipped for {symbol}: {outcome_gate.get('reason')}")
-                updated_rows.append(row)
                 continue
 
             strict_price_ok = (
@@ -1019,7 +1009,6 @@ def track_trade_outcomes(limit=None):
                     f"[OutcomeTracker] {symbol} PRICE_STALE: "
                     f"{price_result.get('reason')}"
                 )
-                updated_rows.append(row)
                 continue
 
             outcome, exit_price, pnl_points, reason = _check_outcome(row, live_price)
@@ -1047,6 +1036,7 @@ def track_trade_outcomes(limit=None):
                 row["outcome"] = outcome
                 row["result"] = result
                 _append_outcome(row, outcome, exit_price, pnl_points, reason)
+                close_open_trade(row, row)
                 closed += 1
                 print(
                     f"[OutcomeTracker NORMALIZE] {symbol}: "
@@ -1061,14 +1051,6 @@ def track_trade_outcomes(limit=None):
             row["result_reason"] = f"Outcome check error: {e}"
             still_open += 1
             print(f"[OutcomeTracker ERROR] {symbol}: {e}")
-
-        updated_rows.append(row)
-
-    with open(ACTIVE_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=ACTIVE_FIELDS, extrasaction="ignore")
-        writer.writeheader()
-        for row in updated_rows:
-            writer.writerow({field: row.get(field, "") for field in ACTIVE_FIELDS})
 
     lifecycle_result = None
     if update_lifecycle_memory_safely is not None:
