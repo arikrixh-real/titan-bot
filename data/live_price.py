@@ -401,8 +401,83 @@ def get_live_price(symbol, use_cache=True, debug=False):
     return fetch_price_from_upstox(symbol, use_cache=use_cache, debug=debug)
 
 
+def _debug_source(raw_result):
+    source = str(raw_result.get("source") or "").strip().upper()
+    status = str(raw_result.get("status") or raw_result.get("live_source_status") or "").strip().upper()
+    price = safe_float(raw_result.get("price"))
+
+    if source == "UPSTOX" and status == "ACTIVE" and price is not None:
+        return "UPSTOX_LIVE"
+    if status == "MARKET_CLOSED":
+        return "MARKET_CLOSED"
+    if source in {"LIVE_PRICE_CACHE", "CACHE"} and price is not None:
+        return "LIVE_PRICE_CACHE"
+    if price is not None:
+        return "FALLBACK"
+    return "ERROR"
+
+
+def _normalize_debug_result(original_symbol, raw_result):
+    normalized = normalize_symbol(original_symbol)
+    raw_result = raw_result if isinstance(raw_result, dict) else {}
+    ltp = safe_float(raw_result.get("price"))
+    source = _debug_source(raw_result)
+    error = raw_result.get("reason") or raw_result.get("error")
+    fetch_status = "OK" if ltp is not None and source != "ERROR" else "FAILED"
+    status = str(raw_result.get("status") or raw_result.get("live_source_status") or "").strip().upper()
+    legacy_source = raw_result.get("source")
+    legacy_status = status
+    if source == "MARKET_CLOSED" and ltp is None:
+        fetch_status = "FAILED"
+
+    proof = {
+        "symbol": original_symbol,
+        "normalized_symbol": normalized,
+        "instrument_key": get_instrument_key(normalized),
+        "ltp": ltp,
+        "source": source,
+        "fetch_status": fetch_status,
+        "token_type_used": raw_result.get("token_type_used") or "UNKNOWN",
+        "timestamp_ist": datetime.now(IST).isoformat(),
+        "error": None if fetch_status == "OK" and source == "UPSTOX_LIVE" else error,
+        # Backward-compatible aliases for existing debug callers.
+        "price": ltp,
+        "status": "ACTIVE" if source == "UPSTOX_LIVE" else status,
+        "reason": raw_result.get("reason"),
+        "legacy_source": legacy_source,
+        "legacy_status": legacy_status,
+        "live_source_status": raw_result.get("live_source_status") or status,
+        "cache_age_seconds": raw_result.get("cache_age_seconds"),
+        "fallback_reason": raw_result.get("fallback_reason"),
+        "last_successful_live_fetch": raw_result.get("last_successful_live_fetch"),
+        "stale_cache_detected": raw_result.get("stale_cache_detected"),
+    }
+    return proof
+
+
 def get_live_price_debug(symbol, use_cache=True, debug=False):
-    return fetch_price_from_upstox_debug(symbol, use_cache=use_cache, debug=debug)
+    try:
+        raw_result = fetch_price_from_upstox_debug(symbol, use_cache=use_cache, debug=debug)
+        return _normalize_debug_result(symbol, raw_result)
+    except Exception as exc:
+        normalized = normalize_symbol(symbol)
+        return {
+            "symbol": symbol,
+            "normalized_symbol": normalized,
+            "instrument_key": get_instrument_key(normalized),
+            "ltp": None,
+            "source": "ERROR",
+            "fetch_status": "FAILED",
+            "token_type_used": "UNKNOWN",
+            "timestamp_ist": datetime.now(IST).isoformat(),
+            "error": str(exc),
+            "price": None,
+            "status": "ERROR",
+            "reason": str(exc),
+            "legacy_source": "UNKNOWN",
+            "legacy_status": "ERROR",
+            "live_source_status": "ERROR",
+        }
 
 
 def get_strict_fresh_price_debug(symbol, max_age_seconds=120, debug=False):

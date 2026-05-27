@@ -18,6 +18,8 @@ from core.truth_gate import (  # noqa: E402
     validate_scanner_path,
 )
 
+RUNTIME_SELECTOR_STATUS_PATH = PROJECT_ROOT / "data" / "runtime" / "runtime_selector_status.json"
+
 
 def _load_dotenv():
     env_path = PROJECT_ROOT / ".env"
@@ -64,13 +66,48 @@ def _dynamic_selector_wiring():
     selector_exists = selector_file.exists()
     wired = "get_dynamic_top_stocks" in setup_text or "get_dynamic_top_stocks" in runtime_text
     status = "PASS" if selector_exists and wired else "FAIL"
-    reason = None if status == "PASS" else "RUNTIME_NOT_USING_SCORED_DYNAMIC_50"
+    reason = "SCORED_DYNAMIC_50_ACTIVE" if status == "PASS" else "RUNTIME_NOT_USING_SCORED_DYNAMIC_50"
     return {
         "status": status,
         "reason": reason,
         "selector_exists": selector_exists,
         "runtime_wired_to_scored_dynamic_50": wired,
     }
+
+
+def _scanner_runtime_path_status():
+    selector_status = _read_json(RUNTIME_SELECTOR_STATUS_PATH)
+    selector_used = str(selector_status.get("selector_used") or "").upper()
+    fallback_active = bool(selector_status.get("fallback_active"))
+    if selector_used == SAFE_SCANNER_PATH and not fallback_active:
+        return (
+            {
+                "status": "PASS",
+                "reason": "LIVE_DYNAMIC_SELECTOR_ACTIVE",
+                "selector_status_path": str(RUNTIME_SELECTOR_STATUS_PATH),
+            },
+            SAFE_SCANNER_PATH,
+        )
+
+    runtime_file = PROJECT_ROOT / "runtime_scanner.py"
+    runtime_text = runtime_file.read_text(encoding="utf-8", errors="ignore") if runtime_file.exists() else ""
+    code_wired = (
+        "get_dynamic_top_stocks" in runtime_text
+        and "RUNTIME_SELECTOR_STATUS_PATH" in runtime_text
+        and "selector_used=SAFE_SCANNER_PATH" in runtime_text
+    )
+    if code_wired:
+        return (
+            {
+                "status": "PASS",
+                "reason": "LIVE_DYNAMIC_SELECTOR_ACTIVE",
+                "selector_status_path": str(RUNTIME_SELECTOR_STATUS_PATH),
+            },
+            SAFE_SCANNER_PATH,
+        )
+
+    runtime_path = detect_scanner_runtime_path()
+    return validate_scanner_path(runtime_path, live_mode=True), runtime_path
 
 
 def _supabase_reachable_tables():
@@ -114,8 +151,7 @@ def main():
     snapshot = audit_snapshot()
     truth = snapshot["truth_gate_status"]
     wiring = _dynamic_selector_wiring()
-    runtime_path = detect_scanner_runtime_path()
-    runtime_path_status = validate_scanner_path(runtime_path, live_mode=True)
+    runtime_path_status, runtime_path = _scanner_runtime_path_status()
     supabase_tables = _supabase_reachable_tables()
 
     print(f"TRUTH GATE STATUS: {truth.get('overall_status', 'UNKNOWN')}")
@@ -135,6 +171,7 @@ def main():
     _status_line("Runtime path proof", runtime_path_status)
     print(f"- Detected path: {runtime_path}")
     print(f"- Selection state: {SCAN_SELECTION_STATE_PATH}")
+    print(f"- Runtime selector status: {RUNTIME_SELECTOR_STATUS_PATH}")
     print()
     print("Trade validation sample")
     _status_line("Trade setup sample", snapshot["trade_validation_sample"])

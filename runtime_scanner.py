@@ -19,7 +19,14 @@ from engines.setup_engine import (
 )
 from engines.market_filter import market_regime_status
 from engines.time_filter import current_bot_mode
-from core.truth_gate import UNSAFE_SCANNER_PATH, scanner_gate_status
+from core.truth_gate import SAFE_SCANNER_PATH, UNSAFE_SCANNER_PATH, scanner_gate_status
+
+try:
+    from intelligence.dynamic_stock_selector import get_dynamic_top_stocks
+except Exception:
+    get_dynamic_top_stocks = None
+
+from data.ohlc_health import ensure_fresh_ohlc
 
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -33,9 +40,12 @@ WORKER_HEALTH_PATH = Path("data") / "runtime" / "worker_health.json"
 FINAL_REJECTION_DEBUG_PATH = Path("data") / "debug" / "final_rejection_breakdown.json"
 LIVE_PRICE_CACHE_PATH = Path("data") / "live_price_cache.json"
 OHLC_REFRESH_STATUS_PATH = Path("data") / "runtime" / "ohlc_refresh_status.json"
+RUNTIME_SELECTOR_STATUS_PATH = Path("data") / "runtime" / "runtime_selector_status.json"
+SCAN_SELECTION_STATE_PATH = Path("data") / "scan_selection_state.json"
 RUNTIME_FRESH_SECONDS = 15 * 60
 MARKET_CANDLE_STALE_MINUTES = 45
 PARTIAL_STALE_TOLERANCE_RATIO = 0.15
+SCORED_DYNAMIC_LIMIT = 50
 
 
 def _timestamp_ist():
@@ -394,6 +404,162 @@ def _atomic_write_json(path, payload):
                 temp_path.unlink()
             except OSError:
                 pass
+
+
+def _clean_selector_symbol(symbol):
+    return str(symbol or "").strip().upper().replace(".NS", "")
+
+
+def _dedupe_symbols(symbols):
+    selected = []
+    seen = set()
+    for symbol in symbols or []:
+        clean = _clean_selector_symbol(symbol)
+        if clean and clean not in seen:
+            selected.append(clean)
+            seen.add(clean)
+    return selected
+
+
+def _write_runtime_selector_status(
+    *,
+    selector_used,
+    fallback_active,
+    fallback_reason,
+    symbols,
+    selection_source,
+    truth_gate_status="UNKNOWN",
+):
+    payload = {
+        "timestamp_ist": _timestamp_ist(),
+        "selector_used": selector_used,
+        "fallback_active": bool(fallback_active),
+        "fallback_reason": fallback_reason,
+        "selected_count": len(symbols or []),
+        "symbols": list(symbols or []),
+        "selection_source": selection_source,
+        "truth_gate_status": truth_gate_status,
+    }
+    try:
+        _atomic_write_json(RUNTIME_SELECTOR_STATUS_PATH, payload)
+    except Exception:
+        pass
+    return payload
+
+
+def _write_scan_selection_state_from_selector(selector_payload):
+    try:
+        previous = _read_json(SCAN_SELECTION_STATE_PATH)
+        payload = dict(previous)
+        symbols = selector_payload.get("symbols") or []
+        payload.update(
+            {
+                "timestamp": selector_payload.get("timestamp_ist"),
+                "selector": selector_payload.get("selector_used"),
+                "runtime_path": selector_payload.get("selector_used"),
+                "fallback_active": bool(selector_payload.get("fallback_active")),
+                "fallback_reason": selector_payload.get("fallback_reason"),
+                "selected_symbols_count": len(symbols),
+                "selected_symbols": symbols,
+                "selection_source": selector_payload.get("selection_source"),
+            }
+        )
+        _atomic_write_json(SCAN_SELECTION_STATE_PATH, payload)
+    except Exception:
+        pass
+
+
+def _print_selector_banner(selector_payload):
+    print("[TITAN SELECTOR]")
+    if selector_payload.get("fallback_active"):
+        print("MODE=FALLBACK")
+        print(f"SELECTOR={UNSAFE_SCANNER_PATH}")
+        print(f"REASON={selector_payload.get('fallback_reason')}")
+        return
+    print("MODE=LIVE_DYNAMIC")
+    print(f"SELECTOR={SAFE_SCANNER_PATH}")
+    print(f"COUNT={selector_payload.get('selected_count')}")
+
+
+def _load_scored_dynamic_symbols_with_debug():
+    if get_dynamic_top_stocks is None:
+        raise RuntimeError("dynamic selector import unavailable")
+
+    selected_symbols = _dedupe_symbols(get_dynamic_top_stocks(limit=SCORED_DYNAMIC_LIMIT))
+    if not selected_symbols:
+        raise RuntimeError("dynamic selector returned no symbols")
+
+    ohlc_health = ensure_fresh_ohlc(selected_symbols, max_age_hours=24)
+    valid_symbol_set = set(ohlc_health.get("valid_symbols") or [])
+    invalid_symbols = list(ohlc_health.get("invalid_symbols") or [])
+
+    cached_symbols = {}
+    missing_symbols = []
+    stale_symbols = []
+    cache_debug = {}
+
+    for symbol in selected_symbols:
+        if symbol not in valid_symbol_set:
+            continue
+        data = load_cached_stock_data(symbol)
+        if data is None or getattr(data, "empty", False):
+            missing_symbols.append(symbol)
+            continue
+        cached_symbols[symbol] = data
+        cache_debug[symbol] = {"selector": SAFE_SCANNER_PATH}
+
+    for symbol, data in cached_symbols.items():
+        if _last_candle_timestamp(data) is None:
+            stale_symbols.append(symbol)
+
+    load_debug = {
+        "selector": SAFE_SCANNER_PATH,
+        "runtime_path": SAFE_SCANNER_PATH,
+        "selected_symbols_count": len(selected_symbols),
+        "loaded_symbols_count": len(cached_symbols),
+        "missing_symbols_count": len(missing_symbols),
+        "missing_symbols": missing_symbols,
+        "stale_cache_count": len(stale_symbols) + len(invalid_symbols),
+        "stale_cache_symbols": stale_symbols + invalid_symbols,
+        "invalid_ohlc_symbols_count": len(invalid_symbols),
+        "invalid_ohlc_symbols": invalid_symbols,
+        "ohlc_health_status": ohlc_health.get("status"),
+        "ohlc_health_reason": ohlc_health.get("reason"),
+        "ohlc_health_path": "data/runtime/ohlc_health.json",
+        "selected_symbols": selected_symbols,
+        "scan_symbols": list(cached_symbols.keys()),
+        "cache_debug": cache_debug,
+    }
+    return cached_symbols, load_debug, selected_symbols
+
+
+def _load_runtime_symbols_with_selector():
+    try:
+        cached_symbols, load_debug, selected_symbols = _load_scored_dynamic_symbols_with_debug()
+        selector_payload = _write_runtime_selector_status(
+            selector_used=SAFE_SCANNER_PATH,
+            fallback_active=False,
+            fallback_reason=None,
+            symbols=selected_symbols,
+            selection_source="intelligence.dynamic_stock_selector.get_dynamic_top_stocks",
+        )
+        _write_scan_selection_state_from_selector(selector_payload)
+        _print_selector_banner(selector_payload)
+        return cached_symbols, load_debug, selector_payload
+    except Exception as exc:
+        cached_symbols, load_debug = _load_cached_symbols_with_debug()
+        selected_symbols = list((cached_symbols or {}).keys())
+        reason = f"SELECTOR_CRASH:{type(exc).__name__}:{exc}"
+        selector_payload = _write_runtime_selector_status(
+            selector_used=UNSAFE_SCANNER_PATH,
+            fallback_active=True,
+            fallback_reason=reason,
+            symbols=selected_symbols,
+            selection_source="data.loader.load_cached_stock_data",
+        )
+        _write_scan_selection_state_from_selector(selector_payload)
+        _print_selector_banner(selector_payload)
+        return cached_symbols, load_debug, selector_payload
 
 
 def _scan_mode(load_debug, scan_only):
@@ -1123,9 +1289,17 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     trend_diagnostic_symbols = []
     regime_diagnostics = _regime_diagnostics()
     live_price_cache = _read_json(LIVE_PRICE_CACHE_PATH)
+    selector_payload = _write_runtime_selector_status(
+        selector_used=SAFE_SCANNER_PATH,
+        fallback_active=False,
+        fallback_reason=None,
+        symbols=[],
+        selection_source="runtime_scanner.starting",
+        truth_gate_status="UNKNOWN",
+    )
 
     try:
-        cached_symbols, load_debug = _load_cached_symbols_with_debug()
+        cached_symbols, load_debug, selector_payload = _load_runtime_symbols_with_selector()
         cached_symbols, load_debug, ohlc_refresh_diagnostics = _refresh_ohlc_for_market_scan(
             cached_symbols,
             load_debug,
@@ -1140,8 +1314,28 @@ def run_scanner(path=SCANNER_STATUS_PATH):
             "fake_trend_forced": False,
         }
 
-    truth_gate_payload = scanner_gate_status(runtime_path=UNSAFE_SCANNER_PATH)
+    ohlc_market_status = None
+    if load_debug.get("ohlc_health_status") and load_debug.get("ohlc_health_status") != "PASS":
+        ohlc_market_status = {
+            "status": "FAIL",
+            "ok": False,
+            "reason": load_debug.get("ohlc_health_reason") or "OHLC_CACHE_INVALID",
+            "stale_data_detected": True,
+            "unsafe_sources_detected": [],
+        }
+    truth_gate_payload = scanner_gate_status(
+        runtime_path=selector_payload.get("selector_used") or UNSAFE_SCANNER_PATH,
+        market_status=ohlc_market_status,
+    )
     truth_gate_blocked = truth_gate_payload.get("overall_status") == "FAIL"
+    selector_payload = _write_runtime_selector_status(
+        selector_used=selector_payload.get("selector_used") or UNSAFE_SCANNER_PATH,
+        fallback_active=selector_payload.get("fallback_active"),
+        fallback_reason=selector_payload.get("fallback_reason"),
+        symbols=selector_payload.get("symbols") or list((cached_symbols or {}).keys()),
+        selection_source=selector_payload.get("selection_source") or "UNKNOWN",
+        truth_gate_status=truth_gate_payload.get("overall_status") or "UNKNOWN",
+    )
     if truth_gate_blocked:
         print(f"[TruthGate] Scanner real setup generation blocked: {truth_gate_payload.get('blocked_reason')}")
 
@@ -1321,9 +1515,16 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     payload["truth_gate"] = {
         "overall_status": truth_gate_payload.get("overall_status"),
         "blocked_reason": truth_gate_payload.get("blocked_reason"),
-        "runtime_path": UNSAFE_SCANNER_PATH,
+        "runtime_path": selector_payload.get("selector_used") or UNSAFE_SCANNER_PATH,
         "real_setup_generation_allowed": not truth_gate_blocked,
         "status_path": "data/runtime/truth_gate_status.json",
+    }
+    payload["runtime_selector"] = {
+        "selector_used": selector_payload.get("selector_used"),
+        "fallback_active": selector_payload.get("fallback_active"),
+        "fallback_reason": selector_payload.get("fallback_reason"),
+        "selected_count": selector_payload.get("selected_count"),
+        "status_path": "data/runtime/runtime_selector_status.json",
     }
 
     setup_reasons, setup_examples, setup_rejected = _setup_engine_rejections_from_debug(

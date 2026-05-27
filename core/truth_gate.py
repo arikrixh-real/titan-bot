@@ -24,6 +24,7 @@ SCAN_SELECTION_STATE_PATH = PROJECT_ROOT / "data" / "scan_selection_state.json"
 LIVE_PRICE_STATUS_PATH = PROJECT_ROOT / "data" / "live_price_status.json"
 SCANNER_STATUS_PATH = RUNTIME_DIR / "scanner_status.json"
 OHLC_REFRESH_STATUS_PATH = RUNTIME_DIR / "ohlc_refresh_status.json"
+OHLC_HEALTH_PATH = RUNTIME_DIR / "ohlc_health.json"
 OHLC_CACHE_DIR = PROJECT_ROOT / "data" / "cache"
 ACTIVE_TRADES_CSV = PROJECT_ROOT / "data" / "journals" / "active_trades.csv"
 TRADE_JOURNAL_CSV = PROJECT_ROOT / "data" / "journals" / "trade_journal.csv"
@@ -256,12 +257,29 @@ def validate_ohlc(symbol=None, df=None, path=None, now=None):
 
 def validate_market_data(symbol=None, df=None, price_result=None, ltp_source=None, ltp_status=None, path=None, now=None):
     now = now or now_ist()
+    if price_result is None and symbol:
+        try:
+            from data.live_price import get_live_price_debug
+
+            price_result = get_live_price_debug(symbol)
+        except Exception as exc:
+            price_result = {
+                "source": "ERROR",
+                "fetch_status": "FAILED",
+                "error": str(exc),
+            }
+    if isinstance(price_result, dict) and not symbol:
+        symbol = price_result.get("normalized_symbol") or price_result.get("symbol")
     symbol = _clean_symbol(symbol)
     market_open = _market_open(now)
     reasons = []
     unsafe_sources = []
 
-    instrument_key = _instrument_key(symbol) if symbol else None
+    instrument_key = None
+    if isinstance(price_result, dict):
+        instrument_key = price_result.get("instrument_key")
+    if not instrument_key:
+        instrument_key = _instrument_key(symbol) if symbol else None
     if symbol and not instrument_key:
         reasons.append("INVALID_INSTRUMENT_KEY")
 
@@ -269,8 +287,22 @@ def validate_market_data(symbol=None, df=None, price_result=None, ltp_source=Non
         price_result = {}
     if isinstance(price_result, dict):
         source = str(ltp_source or price_result.get("source") or "").strip().upper()
-        status = str(ltp_status or price_result.get("status") or price_result.get("live_source_status") or "").strip().upper()
-        price = _safe_float(price_result.get("price"))
+        status = str(
+            ltp_status
+            or price_result.get("fetch_status")
+            or price_result.get("status")
+            or price_result.get("live_source_status")
+            or ""
+        ).strip().upper()
+        price = _safe_float(
+            price_result.get("ltp")
+            if price_result.get("ltp") is not None
+            else (
+                price_result.get("price")
+                if price_result.get("price") is not None
+                else price_result.get("last_price")
+            )
+        )
     else:
         source = str(ltp_source or "").strip().upper()
         status = str(ltp_status or "").strip().upper()
@@ -281,17 +313,17 @@ def validate_market_data(symbol=None, df=None, price_result=None, ltp_source=Non
     if not status:
         status = "UNKNOWN"
 
-    normalized_source = "UPSTOX_LIVE" if source == "UPSTOX" and status == "ACTIVE" else source
+    normalized_source = "UPSTOX_LIVE" if source in {"UPSTOX_LIVE", "UPSTOX"} and status in {"OK", "ACTIVE"} else source
     if source in UNSAFE_SOURCES or "FALLBACK" in source or "CACHE" in source:
         unsafe_sources.append(source)
 
     if market_open:
-        if not (source == "UPSTOX" and status == "ACTIVE" and price is not None and price > 0):
+        if not (normalized_source == "UPSTOX_LIVE" and status in {"OK", "ACTIVE"} and price is not None and price > 0):
             reasons.append("LTP_NOT_UPSTOX_LIVE_DURING_MARKET")
     else:
-        if status == "MARKET_CLOSED":
+        if status == "MARKET_CLOSED" or source == "MARKET_CLOSED":
             reasons.append("MARKET_CLOSED_NOT_LIVE_SAFE")
-        elif source in {"CACHE", "UNKNOWN", "NONE"}:
+        elif source in {"CACHE", "LIVE_PRICE_CACHE", "UNKNOWN", "NONE"}:
             reasons.append("NON_LIVE_LTP_OUTSIDE_MARKET")
 
     ohlc = validate_ohlc(symbol=symbol, df=df, path=path, now=now) if (df is not None or path is not None) else _status("DEGRADED", "OHLC_NOT_PROVIDED", stale=False)
@@ -548,20 +580,47 @@ def scanner_gate_status(runtime_path=None, market_status=None):
 
 def audit_snapshot():
     scanner_path_status = validate_scanner_path(detect_scanner_runtime_path(), live_mode=True)
-    live_price_status = _read_json(LIVE_PRICE_STATUS_PATH)
+    live_price_status = {}
+    try:
+        from data.live_price import get_live_price_debug
+
+        live_price_status = get_live_price_debug("RELIANCE")
+    except Exception:
+        live_price_status = _read_json(LIVE_PRICE_STATUS_PATH)
     market_data_status = validate_market_data(
-        symbol=live_price_status.get("symbol"),
+        symbol=live_price_status.get("normalized_symbol") or live_price_status.get("symbol"),
         price_result=live_price_status,
     )
 
-    ohlc_files = sorted(OHLC_CACHE_DIR.glob("*.csv"))[:5]
-    ohlc_samples = [validate_ohlc(symbol=path.stem, path=path) for path in ohlc_files]
-    if not ohlc_samples:
-        ohlc_status = _status("FAIL", "NO_OHLC_CACHE_FILES", samples=[])
-    elif any(sample.get("status") == "FAIL" for sample in ohlc_samples):
-        ohlc_status = _status("FAIL", "ONE_OR_MORE_OHLC_SAMPLES_INVALID", samples=ohlc_samples)
+    ohlc_health = _read_json(OHLC_HEALTH_PATH)
+    if not ohlc_health:
+        try:
+            from data.ohlc_health import ensure_fresh_ohlc
+
+            ohlc_health = ensure_fresh_ohlc(
+                ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK"],
+                max_age_hours=24,
+            )
+        except Exception as exc:
+            ohlc_health = {
+                "status": "FAIL",
+                "reason": f"OHLC_HEALTH_UNAVAILABLE:{type(exc).__name__}:{exc}",
+            }
+    if ohlc_health.get("status") == "PASS":
+        ohlc_status = _status("PASS", "OHLC_CACHE_FRESH", health=ohlc_health)
     else:
-        ohlc_status = _status("PASS", None, samples=ohlc_samples)
+        ohlc_status = _status(
+            "FAIL",
+            ohlc_health.get("reason") or "OHLC_CACHE_INVALID",
+            health=ohlc_health,
+        )
+        market_data_status = dict(market_data_status)
+        existing_reason = market_data_status.get("reason")
+        ohlc_reason = ohlc_status.get("reason") or "OHLC_CACHE_INVALID"
+        market_data_status["status"] = "FAIL"
+        market_data_status["ok"] = False
+        market_data_status["reason"] = f"{existing_reason};{ohlc_reason}" if existing_reason else ohlc_reason
+        market_data_status["stale_data_detected"] = True
 
     trade_sample = _read_csv_sample(TRADE_JOURNAL_CSV) or _read_csv_sample(ACTIVE_TRADES_CSV)
     trade_validation_status = validate_trade_setup(trade_sample) if trade_sample else _status("DEGRADED", "NO_TRADE_SAMPLE")
