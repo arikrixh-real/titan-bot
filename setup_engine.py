@@ -28,7 +28,13 @@ from supabase import create_client
 from signal_path_diagnostics import add_example, build_scan_report, save_scan_report
 from config.universe import NSE_STOCKS
 from data.loader import load_cached_stock_data
-from data.live_price import get_live_price
+from data.live_price import get_live_price, get_live_price_debug
+from core.truth_gate import (
+    UNSAFE_SCANNER_PATH,
+    block_reason_for_setup_engine,
+    validate_market_data,
+    write_status as write_truth_gate_status,
+)
 
 from scanners.volume_scanner import volume_anomaly_score
 from scanners.strength_scanner import price_strength_score
@@ -624,6 +630,13 @@ def scan_for_setups():
 
     scan_id = datetime.now(IST).strftime("%Y%m%d_%H%M%S")
 
+    truth_gate_blocked, truth_gate_reason, _truth_gate_payload = block_reason_for_setup_engine(
+        scan_path=UNSAFE_SCANNER_PATH,
+    )
+    if truth_gate_blocked:
+        print(f"[TruthGate] Real setup generation blocked: {truth_gate_reason}")
+        return []
+
     market_status = market_regime_status()
     print(f"📊 Market Status: {market_status}")
 
@@ -692,7 +705,29 @@ def scan_for_setups():
 
             scanned_count += 1
 
-            live_price = safe_float(get_live_price(symbol))
+            try:
+                price_debug = get_live_price_debug(symbol, use_cache=True, debug=False)
+            except Exception:
+                price_debug = {
+                    "price": None,
+                    "source": "UNKNOWN",
+                    "status": "ERROR",
+                    "reason": "get_live_price_debug failed",
+                }
+
+            market_gate = validate_market_data(
+                symbol=symbol,
+                df=df,
+                price_result=price_debug,
+            )
+            write_truth_gate_status(market_data_status=market_gate)
+            if market_gate.get("status") != "PASS":
+                setup_rejection_breakdown["TRUTH_GATE_MARKET_DATA"] = setup_rejection_breakdown.get("TRUTH_GATE_MARKET_DATA", 0) + 1
+                add_example(setup_rejection_symbols, "TRUTH_GATE_MARKET_DATA", symbol)
+                print(f"[TruthGate] {symbol} blocked: {market_gate.get('reason')}")
+                continue
+
+            live_price = safe_float(price_debug.get("price"))
 
             if live_price is None:
                 live_price = safe_float(df["Close"].iloc[-1])
@@ -819,6 +854,7 @@ def scan_for_setups():
                 "target": round(target, 2),
                 "rr": round(rr, 2),
                 "score": round(score, 2),
+                "final_score": round(score, 2),
                 "rank_score": round(score + (rr * 10), 2),
                 "confirmations": [],
                 "reason": reason,

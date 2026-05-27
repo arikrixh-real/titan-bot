@@ -37,6 +37,7 @@ except Exception:
     get_live_price = None
 
 from journal.trade_id import build_canonical_trade_id, build_setup_signature
+from core.truth_gate import validate_trade_setup, write_status as write_truth_gate_status
 from utils.market_hours import is_trade_window, trade_window_text
 
 
@@ -552,6 +553,12 @@ def add_good_setups_as_live_trades(
             setup = prepare_paper_trade_fields(setup if isinstance(setup, dict) else {})
         except Exception:
             setup = setup if isinstance(setup, dict) else {}
+
+        trade_gate = validate_trade_setup(setup)
+        write_truth_gate_status(trade_validation_status=trade_gate)
+        if trade_gate.get("status") != "PASS":
+            print(f"[TruthGate] Trade execution skipped invalid setup: {trade_gate.get('reason')}")
+            continue
 
         symbol = str(setup.get("symbol", "")).strip().upper()
         side = str(setup.get("side", "")).strip().upper()

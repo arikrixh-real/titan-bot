@@ -20,6 +20,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from journal.trade_id import build_canonical_trade_id
+from core.truth_gate import validate_trade_setup, write_status as write_truth_gate_status
 from utils.market_hours import is_trade_window, trade_window_text
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -505,6 +506,12 @@ def journal_eligible_setups(
     existing_open_keys = _load_existing_open_keys()
 
     for setup in eligible_setups:
+        trade_gate = validate_trade_setup(setup)
+        write_truth_gate_status(trade_validation_status=trade_gate)
+        if trade_gate.get("status") != "PASS":
+            print(f"[TruthGate] Trade journal skipped invalid setup: {trade_gate.get('reason')}")
+            continue
+
         symbol = _symbol(_safe_get(setup, "symbol", "stock", "ticker"))
         alert_sent = symbol in {_symbol(s) for s in alerted_symbols}
 
@@ -590,6 +597,12 @@ def log_trade(trade_data, scan_id=None, alert_sent=False, market_status=""):
             alert_sent=alert_sent,
             market_status=market_status,
         )
+
+        trade_gate = validate_trade_setup(trade_data)
+        write_truth_gate_status(trade_validation_status=trade_gate)
+        if trade_gate.get("status") != "PASS":
+            print(f"[TruthGate] log_trade skipped invalid setup: {trade_gate.get('reason')}")
+            return ""
 
         if not _valid_trade(active_row):
             return ""

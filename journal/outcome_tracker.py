@@ -35,6 +35,7 @@ from zoneinfo import ZoneInfo
 from data.live_price import get_strict_fresh_price_debug
 from journal.trade_id import build_setup_signature
 from journal.trade_journal import ACTIVE_FIELDS, _ensure_csv as _ensure_active_csv_schema
+from core.truth_gate import validate_outcome_check, write_status as write_truth_gate_status
 from utils.market_hours import is_trade_window, trade_window_text
 
 try:
@@ -961,6 +962,21 @@ def track_trade_outcomes(limit=None):
             price_source = str(price_result.get("source") or "").upper()
             price_status = str(price_result.get("status") or "").upper()
             price_fresh = bool(price_result.get("fresh"))
+
+            outcome_gate = validate_outcome_check(
+                row,
+                price_result=price_result,
+                source_table="active_trades",
+            )
+            write_truth_gate_status(outcome_validation_status=outcome_gate)
+            if outcome_gate.get("status") != "PASS":
+                row["last_checked_at"] = _now()
+                row["result_reason"] = f"TRUTH_GATE_BLOCKED:{outcome_gate.get('reason')}"
+                price_stale_skipped += 1
+                still_open += 1
+                print(f"[TruthGate] Outcome check skipped for {symbol}: {outcome_gate.get('reason')}")
+                updated_rows.append(row)
+                continue
 
             strict_price_ok = (
                 live_price is not None

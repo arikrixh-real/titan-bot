@@ -1,0 +1,61 @@
+{
+  "result": "FAIL",
+  "files_changed": [
+    "core/truth_gate.py",
+    "tools/truth_gate_check.py",
+    "data/runtime/truth_gate_status.json",
+    "runtime_scanner.py",
+    "setup_engine.py",
+    "journal/trade_journal.py",
+    "journal/trade_execution_layer.py",
+    "journal/outcome_tracker.py",
+    "reports/truth_gate_phase1_report.md",
+    "reports/truth_gate_phase1_report.json"
+  ],
+  "exact_gates_added": [
+    "Market data gate requires Upstox live LTP during market hours, marks cache/fallback unsafe, validates instrument key, validates OHLC columns, and detects stale OHLC.",
+    "Scanner path gate requires SCORED_DYNAMIC_50 and fails CACHED_RANDOM_FALLBACK in live mode with RUNTIME_NOT_USING_SCORED_DYNAMIC_50.",
+    "Trade setup gate validates symbol, side, entry, stop_loss, target, level order, RR near 2.0, final_score, and reason before journal/save paths.",
+    "Outcome gate validates OPEN trade fields, known source table, and real live current price before TP/SL closure.",
+    "Status writer emits data/runtime/truth_gate_status.json with PASS/FAIL/DEGRADED and blocking details."
+  ],
+  "now_blocked": [
+    "Real setup generation when runtime path is CACHED_RANDOM_FALLBACK.",
+    "Real setup generation when live LTP is not proven as Upstox live during market hours.",
+    "Setup journaling and active trade insertion when setup structure is invalid.",
+    "TP/SL closure when current price is stale, cached, fallback, not live, or the trade row is malformed."
+  ],
+  "still_needs_fixing_next": [
+    "Wire runtime scanner/setup selection to the real scored dynamic selector path and stamp SCORED_DYNAMIC_50.",
+    "Renew/fix Upstox token so market-hours LTP returns live UPSTOX/ACTIVE.",
+    "Refresh or rebuild OHLC cache with valid fresh Open, High, Low, Close, Volume data.",
+    "Backfill or migrate older journal samples that do not have final_score.",
+    "Create or map missing Supabase tables if the dashboard still expects trade_journal, signals, and alerts."
+  ],
+  "proof_outputs": {
+    "python -m py_compile core/truth_gate.py": {
+      "exit_code": 0,
+      "output": ""
+    },
+    "python -m py_compile tools/truth_gate_check.py": {
+      "exit_code": 0,
+      "output": ""
+    },
+    "python tools/truth_gate_check.py": {
+      "exit_code": 0,
+      "output": "TRUTH GATE STATUS: FAIL\n\nMarket data\n- LTP and instrument source: FAIL | LTP_NOT_UPSTOX_LIVE_DURING_MARKET\n\nOHLC freshness\n- OHLC sample freshness: FAIL | ONE_OR_MORE_OHLC_SAMPLES_INVALID\n- Cache dir: D:\\TITAN\\data\\cache\n\nDynamic selector wiring\n- SCORED_DYNAMIC_50 wiring: FAIL | RUNTIME_NOT_USING_SCORED_DYNAMIC_50\n- Safe selector required: SCORED_DYNAMIC_50\n\nScanner runtime path\n- Runtime path proof: FAIL | RUNTIME_NOT_USING_SCORED_DYNAMIC_50\n- Detected path: CACHED_RANDOM_FALLBACK\n- Selection state: D:\\TITAN\\data\\scan_selection_state.json\n\nTrade validation sample\n- Trade setup sample: FAIL | FINAL_SCORE_MISSING\n\nOutcome validation sample\n- Outcome sample: DEGRADED | NO_OUTCOME_SAMPLE\n\nSupabase reachable tables\n- Supabase read-only table check: DEGRADED | ONE_OR_MORE_TABLES_UNREACHABLE\n- trades: REACHABLE\n- trade_results: REACHABLE\n- scan_health_logs: REACHABLE\n- scans: REACHABLE\n- trade_journal: UNREACHABLE:APIError:{'message': \"Could not find the table 'public.trade_journal' in the schema cache\", 'code': 'PGRST205', 'hint': \"Perhaps you meant the table 'public.trade_results'\", 'details': None}\n- signals: UNREACHABLE:APIError:{'message': \"Could not find the table 'public.signals' in the schema cache\", 'code': 'PGRST205', 'hint': \"Perhaps you meant the table 'public.scan_symbols'\", 'details': None}\n- alerts: UNREACHABLE:APIError:{'message': \"Could not find the table 'public.alerts' in the schema cache\", 'code': 'PGRST205', 'hint': \"Perhaps you meant the table 'public.trade_results'\", 'details': None}\n\nStatus file: D:\\TITAN\\data\\runtime\\truth_gate_status.json"
+    },
+    "python tools/audit_titan_clean_pipeline.py": {
+      "exit_code": 1,
+      "output": "[UpstoxStatus] symbol=RELIANCE | status=TOKEN_INVALID | source=LIVE_PRICE_CACHE | reason=Upstox token invalid/expired; using cache if available\nTITAN CLEAN PIPELINE AUDIT\nOverall: FAIL\nA_environment_and_tokens: PASS\nB_upstox_live_price: FAIL\nC_ohlc_history: FAIL\nD_dynamic_50_stock_selection: PASS\nE_scanner_filter_engines: PASS\nF_final_setups_trade_creation: FAIL\nG_duplicate_open_trade_protection: PASS\nH_trade_journaling: PASS\nI_outcome_tracker: PASS\nJ_closed_trades_saving: PASS\nSupabase_read_only_schema: FAIL\nK_dashboard_reading: PASS\nReports: reports\\titan_clean_pipeline_audit.md | reports\\titan_clean_pipeline_audit.json"
+    }
+  },
+  "scope_confirmation": {
+    "broker_execution_touched": false,
+    "telegram_touched": false,
+    "supabase_cleanup_delete_touched": false,
+    "dashboard_layout_theme_touched": false,
+    "learning_evolution_reset_touched": false,
+    "fallback_code_deleted": false
+  }
+}

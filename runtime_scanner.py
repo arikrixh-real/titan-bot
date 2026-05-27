@@ -19,11 +19,14 @@ from engines.setup_engine import (
 )
 from engines.market_filter import market_regime_status
 from engines.time_filter import current_bot_mode
+from core.truth_gate import UNSAFE_SCANNER_PATH, scanner_gate_status
 
 
 IST = timezone(timedelta(hours=5, minutes=30))
 SCANNER_STATUS_PATH = Path("data") / "runtime" / "scanner_status.json"
+SCANNER_FILTER_TRUTH_STATUS_PATH = Path("data") / "runtime" / "scanner_filter_truth_status.json"
 SCANNER_PREVIOUS_SIGNATURE_PATH = Path("data") / "runtime" / "scanner_previous_signature.json"
+SCANNER_RUNTIME_HEARTBEAT_PATH = Path("data") / "runtime" / "scanner_runtime_heartbeat.json"
 MASTER_BRAIN_STATUS_PATH = Path("data") / "runtime" / "master_brain_status.json"
 SETUP_ENGINE_STATUS_PATH = Path("data") / "runtime" / "setup_engine_status.json"
 WORKER_HEALTH_PATH = Path("data") / "runtime" / "worker_health.json"
@@ -48,6 +51,55 @@ def _read_json(path):
         return payload if isinstance(payload, dict) else {}
     except Exception:
         return {}
+
+
+def _heartbeat_payload(
+    *,
+    latest_cycle=None,
+    publish_status,
+    scanner_runtime_mode=None,
+    scanner_loop_health,
+    last_publish_exception=None,
+):
+    previous = _read_json(SCANNER_RUNTIME_HEARTBEAT_PATH)
+    publish_count = _optional_int(previous.get("publish_count")) or 0
+    failed_publish_count = _optional_int(previous.get("failed_publish_count")) or 0
+    previous_publish_time = previous.get("latest_publish_time")
+    if publish_status in {"PUBLISHED", "PARTIAL"}:
+        publish_count += 1
+    if publish_status == "PUBLISHED":
+        last_publish_exception = None
+    elif publish_status == "FAILED":
+        failed_publish_count += 1
+    return {
+        "latest_cycle": latest_cycle or previous.get("latest_cycle"),
+        "latest_publish_time": _timestamp_ist(),
+        "previous_publish_time": previous_publish_time,
+        "publish_status": publish_status,
+        "publish_count": publish_count,
+        "failed_publish_count": failed_publish_count,
+        "last_publish_exception": last_publish_exception,
+        "scanner_runtime_mode": scanner_runtime_mode or previous.get("scanner_runtime_mode") or "UNKNOWN",
+        "scanner_loop_health": scanner_loop_health,
+        "safety_flags": {
+            "advisory_only": True,
+            "affects_live_ranking": False,
+            "affects_execution": False,
+            "broker_mutation": False,
+            "telegram_mutation": False,
+            "supabase_mutation": False,
+            "live_order_behavior": False,
+            "recommended_live_weight": 0.0,
+            "rank_adjustment": 0.0,
+        },
+    }
+
+
+def _write_scanner_heartbeat(**kwargs):
+    try:
+        _atomic_write_json(SCANNER_RUNTIME_HEARTBEAT_PATH, _heartbeat_payload(**kwargs))
+    except Exception:
+        pass
 
 
 def _payload_dt(payload):
@@ -969,11 +1021,73 @@ def _regime_diagnostics():
     }
 
 
+def _publish_scanner_outputs(path, payload, data_signature, scanner_cycle_id, scan_finished_at_ist):
+    publish_errors = []
+    scanner_status_published = False
+    scanner_truth_published = False
+
+    try:
+        _atomic_write_json(path, payload)
+        scanner_status_published = True
+    except Exception as exc:
+        publish_errors.append(f"scanner_status:{type(exc).__name__}:{exc}")
+
+    if scanner_status_published:
+        try:
+            from scanner_filter_truth import build_scanner_filter_truth_status
+
+            build_scanner_filter_truth_status(
+                scanner_status_path=path,
+                output_path=SCANNER_FILTER_TRUTH_STATUS_PATH,
+            )
+            scanner_truth_published = True
+        except Exception as exc:
+            publish_errors.append(f"scanner_filter_truth:{type(exc).__name__}:{exc}")
+
+    if scanner_status_published:
+        try:
+            _write_previous_data_signature(data_signature, scanner_cycle_id, scan_finished_at_ist)
+        except Exception as exc:
+            publish_errors.append(f"previous_signature:{type(exc).__name__}:{exc}")
+
+    if publish_errors:
+        status = "PARTIAL" if scanner_status_published else "FAILED"
+        _write_scanner_heartbeat(
+            latest_cycle=scanner_cycle_id,
+            publish_status=status,
+            scanner_runtime_mode=payload.get("mode"),
+            scanner_loop_health="DEGRADED" if scanner_status_published else "PUBLISH_FAILED",
+            last_publish_exception="|".join(publish_errors),
+        )
+        payload["publish_status"] = status
+        payload["publish_errors"] = publish_errors
+        payload["scanner_status_published"] = scanner_status_published
+        payload["scanner_truth_published"] = scanner_truth_published
+        return payload
+
+    _write_scanner_heartbeat(
+        latest_cycle=scanner_cycle_id,
+        publish_status="PUBLISHED",
+        scanner_runtime_mode=payload.get("mode"),
+        scanner_loop_health="ACTIVE",
+    )
+    payload["publish_status"] = "PUBLISHED"
+    payload["scanner_status_published"] = True
+    payload["scanner_truth_published"] = True
+    return payload
+
+
 def run_scanner(path=SCANNER_STATUS_PATH):
     path = Path(path)
     started_monotonic = time.monotonic()
     scan_started_at_ist = _timestamp_ist()
     scanner_cycle_id = f"{scan_started_at_ist}-{uuid4()}"
+    _write_scanner_heartbeat(
+        latest_cycle=scanner_cycle_id,
+        publish_status="STARTED",
+        scanner_runtime_mode="SCANNING",
+        scanner_loop_health="RUNNING",
+    )
     previous_run_count = _read_previous_run_count(path)
     run_count = previous_run_count + 1 if previous_run_count is not None else None
     previous_data_signature = _read_previous_data_signature()
@@ -1025,6 +1139,11 @@ def run_scanner(path=SCANNER_STATUS_PATH):
             "attempted": False,
             "fake_trend_forced": False,
         }
+
+    truth_gate_payload = scanner_gate_status(runtime_path=UNSAFE_SCANNER_PATH)
+    truth_gate_blocked = truth_gate_payload.get("overall_status") == "FAIL"
+    if truth_gate_blocked:
+        print(f"[TruthGate] Scanner real setup generation blocked: {truth_gate_payload.get('blocked_reason')}")
 
     for symbol, data in cached_symbols.items():
         stocks_checked += 1
@@ -1199,6 +1318,13 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         advisory_components=pipeline["advisory_components"],
         run_count=run_count,
     )
+    payload["truth_gate"] = {
+        "overall_status": truth_gate_payload.get("overall_status"),
+        "blocked_reason": truth_gate_payload.get("blocked_reason"),
+        "runtime_path": UNSAFE_SCANNER_PATH,
+        "real_setup_generation_allowed": not truth_gate_blocked,
+        "status_path": "data/runtime/truth_gate_status.json",
+    }
 
     setup_reasons, setup_examples, setup_rejected = _setup_engine_rejections_from_debug(
         pipeline.get("final_debug"),
@@ -1237,9 +1363,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         regime_diagnostics=regime_diagnostics,
     )
 
-    _atomic_write_json(path, payload)
-    _write_previous_data_signature(data_signature, scanner_cycle_id, scan_finished_at_ist)
-    return payload
+    return _publish_scanner_outputs(path, payload, data_signature, scanner_cycle_id, scan_finished_at_ist)
 
 
 if __name__ == "__main__":
