@@ -3,6 +3,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -31,7 +32,8 @@ from journal.outcome_tracker import LOCAL_TRADE_RESULTS_CSV  # noqa: E402
 DIAGNOSTICS_PATH = PROJECT_ROOT / "data" / "runtime" / "synthetic_trade_test.json"
 PRICE_CACHE_PATH = PROJECT_ROOT / "data" / "live_price_cache.json"
 PRICE_CACHE_META_PATH = PROJECT_ROOT / "data" / "live_price_cache_meta.json"
-SOURCE = "SYNTHETIC_PIPELINE_TEST"
+BASE_SOURCE = "SYNTHETIC_PIPELINE_TEST"
+SOURCE = f"{BASE_SOURCE}_{uuid4().hex[:12]}"
 SYMBOL = "RELIANCE"
 SIDE = "LONG"
 
@@ -276,6 +278,9 @@ def _dashboard_visibility_ok(trade_id):
 
 def main():
     diagnostics = {
+        "test_run_id": SOURCE,
+        "duplicate_scope_symbol": SYMBOL,
+        "duplicate_scope_source": SOURCE,
         "trade_written": False,
         "open_trade_detected": False,
         "outcome_tracker_detected": False,

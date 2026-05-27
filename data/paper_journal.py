@@ -488,13 +488,20 @@ def maybe_write_paper_journal(
     for setup in valid_setups:
         symbol = str(setup.get("symbol") or "").strip().upper()
         side = _side(setup.get("side"))
+        setup_source = str(setup.get("source") or "").strip()
+        setup_is_test = bool(setup.get("test_trade"))
 
-        if find_open_trade(symbol):
+        if setup_is_test and setup_source:
+            duplicate_trade = find_open_trade(symbol, source=setup_source, test_trade=True)
+        else:
+            duplicate_trade = find_open_trade(symbol)
+
+        if duplicate_trade:
             payload["duplicate_skipped"] += 1
             continue
 
         supabase_duplicate = False
-        if client is not None:
+        if client is not None and not setup_is_test:
             supabase_duplicate, duplicate_error = _supabase_open_trade_exists(client, symbol, side)
             if duplicate_error:
                 errors.append(f"{symbol}:{side}:SUPABASE_DUPLICATE_CHECK_FAILED:{duplicate_error}")
