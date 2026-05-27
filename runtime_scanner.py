@@ -2,6 +2,7 @@ import json
 import hashlib
 import tempfile
 import time
+import traceback
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -20,6 +21,19 @@ from engines.setup_engine import (
 from engines.market_filter import market_regime_status
 from engines.time_filter import current_bot_mode
 from core.truth_gate import SAFE_SCANNER_PATH, UNSAFE_SCANNER_PATH, scanner_gate_status
+from data.paper_journal import maybe_write_paper_journal
+from utils.market_hours import is_trade_window
+
+try:
+    from scanners.volume_scanner import volume_anomaly_score
+    from scanners.strength_scanner import price_strength_score
+    from scanners.compression_scanner import compression_score
+    from engines.score_engine import final_signal_score
+except Exception:
+    volume_anomaly_score = None
+    price_strength_score = None
+    compression_score = None
+    final_signal_score = None
 
 try:
     from intelligence.dynamic_stock_selector import get_dynamic_top_stocks
@@ -42,6 +56,8 @@ LIVE_PRICE_CACHE_PATH = Path("data") / "live_price_cache.json"
 OHLC_REFRESH_STATUS_PATH = Path("data") / "runtime" / "ohlc_refresh_status.json"
 RUNTIME_SELECTOR_STATUS_PATH = Path("data") / "runtime" / "runtime_selector_status.json"
 SCAN_SELECTION_STATE_PATH = Path("data") / "scan_selection_state.json"
+FILTER_ENGINE_DIAGNOSTICS_PATH = Path("data") / "runtime" / "filter_engine_diagnostics.json"
+NEAR_PASS_SETUPS_PATH = Path("data") / "runtime" / "near_pass_setups.json"
 RUNTIME_FRESH_SECONDS = 15 * 60
 MARKET_CANDLE_STALE_MINUTES = 45
 PARTIAL_STALE_TOLERANCE_RATIO = 0.15
@@ -668,6 +684,360 @@ def _live_price_check(live_price_cache, symbol, close):
     }
 
 
+def _series(data, column):
+    try:
+        if data is None or column not in data.columns:
+            return None
+        return data[column].astype(float).dropna()
+    except Exception:
+        return None
+
+
+def _round(value, places=4):
+    try:
+        if value is None:
+            return None
+        return round(float(value), places)
+    except Exception:
+        return None
+
+
+def _rsi(close, period=14):
+    try:
+        if close is None or len(close) < period + 1:
+            return None
+        delta = close.diff()
+        gain = delta.where(delta > 0, 0.0).rolling(period).mean()
+        loss = (-delta.where(delta < 0, 0.0)).rolling(period).mean()
+        rs = gain / loss.replace(0, float("nan"))
+        return _round(100 - (100 / (1 + rs.iloc[-1])))
+    except Exception:
+        return None
+
+
+def _atr(data, period=14):
+    try:
+        high = _series(data, "High")
+        low = _series(data, "Low")
+        close = _series(data, "Close")
+        if high is None or low is None or close is None or len(close) < period + 1:
+            return None
+        previous_close = close.shift(1)
+        true_range = (high - low).to_frame("hl")
+        true_range["hc"] = (high - previous_close).abs()
+        true_range["lc"] = (low - previous_close).abs()
+        return _round(true_range.max(axis=1).rolling(period).mean().iloc[-1])
+    except Exception:
+        return None
+
+
+def _support_resistance(data, lookback=8):
+    try:
+        if data is None or len(data) < lookback:
+            return None, None
+        recent = data.iloc[-lookback:]
+        support = float(recent["Low"].iloc[:-1].min())
+        resistance = float(recent["High"].iloc[:-1].max())
+        return support, resistance
+    except Exception:
+        return None, None
+
+
+def _engine_error(name, exc):
+    return {
+        "status": "ERROR",
+        "reason": f"{name}_EXCEPTION:{type(exc).__name__}:{exc}",
+        "values": {},
+        "exception": traceback.format_exc(),
+    }
+
+
+def _diagnose_trend_engine(data):
+    try:
+        close = _series(data, "Close")
+        if close is None or len(close) == 0:
+            return {"status": "FAIL", "reason": "CLOSE_SERIES_MISSING", "values": {}}
+        ema20 = close.ewm(span=20, adjust=False).mean() if len(close) >= 20 else None
+        ema50 = close.ewm(span=50, adjust=False).mean() if len(close) >= 50 else None
+        direction = trend_direction(data)
+        side = _side_from_trend(direction)
+        slope = None
+        if ema20 is not None and len(ema20) >= 5:
+            slope = float(ema20.iloc[-1]) - float(ema20.iloc[-5])
+        values = {
+            "EMA20": _round(ema20.iloc[-1]) if ema20 is not None else None,
+            "EMA50": _round(ema50.iloc[-1]) if ema50 is not None else None,
+            "ema20_available": ema20 is not None,
+            "ema50_available": ema50 is not None,
+            "direction": direction,
+            "slope": _round(slope),
+            "close": _round(close.iloc[-1]),
+            "rows": len(close),
+            "row_count": len(close),
+            "history_depth_status": (
+                "PASS" if len(close) >= 100 else (
+                    "DEGRADED" if len(close) >= 60 else "FAIL"
+                )
+            ),
+            "side": side,
+        }
+        return {
+            "status": "PASS" if side else "FAIL",
+            "reason": None if side else str(direction or "NO_VALID_TREND"),
+            "values": values,
+        }
+    except Exception as exc:
+        return _engine_error("TREND_ENGINE", exc)
+
+
+def _diagnose_momentum_engine(data, side):
+    try:
+        close = _series(data, "Close")
+        volume = _series(data, "Volume")
+        last = data.iloc[-1] if data is not None and len(data) else None
+        previous = data.iloc[-2] if data is not None and len(data) > 1 else None
+        body_ratio = None
+        breakout_strength = None
+        if last is not None:
+            candle_range = float(last["High"] - last["Low"])
+            body_ratio = abs(float(last["Close"] - last["Open"])) / candle_range if candle_range else None
+        support, resistance = _support_resistance(data)
+        last_close = float(close.iloc[-1]) if close is not None and len(close) else None
+        if last_close and resistance and side == "LONG":
+            breakout_strength = (last_close / resistance) - 1
+        elif last_close and support and side == "SHORT":
+            breakout_strength = (support / last_close) - 1
+        volume_ratio = None
+        if volume is not None and len(volume) >= 2:
+            avg_volume = float(volume.tail(min(20, len(volume))).mean())
+            volume_ratio = float(volume.iloc[-1]) / avg_volume if avg_volume else None
+        passed = bool(side and strong_momentum(data, side=side))
+        values = {
+            "RSI": _rsi(close),
+            "volume_ratio": _round(volume_ratio),
+            "breakout_strength": _round(breakout_strength),
+            "ATR": _atr(data),
+            "momentum_score": _round((body_ratio or 0) * 100),
+            "body_ratio": _round(body_ratio),
+            "last_close": _round(last_close),
+            "previous_close": _round(previous["Close"]) if previous is not None else None,
+        }
+        return {"status": "PASS" if passed else "FAIL", "reason": None if passed else "MOMENTUM_FAIL", "values": values}
+    except Exception as exc:
+        return _engine_error("MOMENTUM_ENGINE", exc)
+
+
+def _diagnose_structure_engine(data, side):
+    try:
+        support, resistance = _support_resistance(data)
+        close = _series(data, "Close")
+        last_close = float(close.iloc[-1]) if close is not None and len(close) else None
+        passed = bool(side and structure_ok(data, side=side))
+        breakout_status = None
+        if last_close is not None and support is not None and resistance is not None:
+            if side == "LONG":
+                breakout_status = last_close > resistance
+            elif side == "SHORT":
+                breakout_status = last_close < support
+        compression_status = None
+        if last_close and support is not None and resistance is not None:
+            compression_status = ((resistance - support) / last_close) <= 0.02
+        values = {
+            "support": _round(support),
+            "resistance": _round(resistance),
+            "breakout_status": breakout_status,
+            "compression_status": compression_status,
+            "close": _round(last_close),
+        }
+        return {"status": "PASS" if passed else "FAIL", "reason": None if passed else "STRUCTURE_FAIL", "values": values}
+    except Exception as exc:
+        return _engine_error("STRUCTURE_ENGINE", exc)
+
+
+def _diagnose_entry_engine(data, side):
+    try:
+        close = _series(data, "Close")
+        entry_price = float(close.iloc[-1]) if close is not None and len(close) else None
+        support, resistance = _support_resistance(data)
+        passed = bool(side and breakout_ready(data, side=side))
+        sl_distance = None
+        rr = None
+        reward = None
+        if entry_price is not None and support is not None and resistance is not None:
+            if side == "LONG":
+                sl_distance = max(entry_price - support, 0)
+                reward = max(resistance - entry_price, 0)
+            elif side == "SHORT":
+                sl_distance = max(resistance - entry_price, 0)
+                reward = max(entry_price - support, 0)
+            rr = reward / sl_distance if sl_distance and reward is not None else None
+        values = {
+            "entry_price": _round(entry_price),
+            "trigger_state": "READY" if passed else "NOT_READY",
+            "RR": _round(rr),
+            "SL_distance": _round(sl_distance),
+        }
+        return {"status": "PASS" if passed else "FAIL", "reason": None if passed else "NOT_READY", "values": values}
+    except Exception as exc:
+        return _engine_error("ENTRY_ENGINE", exc)
+
+
+def _diagnose_market_filter():
+    try:
+        status = market_regime_status()
+        return {"status": "PASS", "reason": None, "values": {"market_status": status}}
+    except Exception as exc:
+        return _engine_error("MARKET_FILTER", exc)
+
+
+def _diagnose_final_score_engine(data, momentum_diag, structure_diag, entry_diag):
+    try:
+        if final_signal_score is None:
+            return {"status": "ERROR", "reason": "FINAL_SCORE_ENGINE_IMPORT_FAILED", "values": {}}
+        volume_value = volume_anomaly_score(data) if volume_anomaly_score else 0
+        strength_value = price_strength_score(data) if price_strength_score else 0
+        compression_value = compression_score(data) if compression_score else 0
+        score = final_signal_score(
+            volume_score=volume_value,
+            strength_score=strength_value,
+            compression_score=compression_value,
+            momentum_ok=momentum_diag.get("status") == "PASS",
+            structure_ok=structure_diag.get("status") == "PASS",
+            entry_ok=entry_diag.get("status") == "PASS",
+        )
+        return {
+            "status": "PASS",
+            "reason": None,
+            "values": {
+                "volume_score": _round(volume_value),
+                "strength_score": _round(strength_value),
+                "compression_score": _round(compression_value),
+                "final_score": _round(score),
+            },
+        }
+    except Exception as exc:
+        return _engine_error("FINAL_SCORE_ENGINE", exc)
+
+
+def _symbol_filter_diagnostics(symbol, data):
+    trend_diag = _diagnose_trend_engine(data)
+    side = (trend_diag.get("values") or {}).get("side")
+    momentum_diag = _diagnose_momentum_engine(data, side)
+    structure_diag = _diagnose_structure_engine(data, side)
+    entry_diag = _diagnose_entry_engine(data, side)
+    market_diag = _diagnose_market_filter()
+    final_score_diag = _diagnose_final_score_engine(data, momentum_diag, structure_diag, entry_diag)
+    return {
+        "symbol": str(symbol),
+        "trend_engine": trend_diag,
+        "momentum_engine": momentum_diag,
+        "structure_engine": structure_diag,
+        "entry_engine": entry_diag,
+        "market_filter": market_diag,
+        "final_score_engine": final_score_diag,
+    }
+
+
+def _near_pass_candidate(diag):
+    engines = ["trend_engine", "momentum_engine", "structure_engine", "entry_engine"]
+    passed = sum(1 for engine in engines if diag.get(engine, {}).get("status") == "PASS")
+    failed_conditions = [
+        f"{engine}:{diag.get(engine, {}).get('reason') or diag.get(engine, {}).get('status')}"
+        for engine in engines
+        if diag.get(engine, {}).get("status") != "PASS"
+    ]
+    final_values = diag.get("final_score_engine", {}).get("values") or {}
+    score = passed * 25 + float(final_values.get("final_score") or 0)
+    return {
+        "symbol": diag.get("symbol"),
+        "score": _round(score),
+        "passed_filter_count": passed,
+        "failed_conditions": failed_conditions,
+        "missing_confirmations": failed_conditions,
+        "final_score": final_values.get("final_score"),
+    }
+
+
+def _write_filter_diagnostics(symbol_diagnostics, scanner_cycle_id):
+    engine_names = [
+        "trend_engine",
+        "momentum_engine",
+        "structure_engine",
+        "entry_engine",
+        "market_filter",
+        "final_score_engine",
+    ]
+    engine_counts = {}
+    rejection_reasons = {}
+    exceptions = []
+    for engine in engine_names:
+        counts = Counter()
+        reasons = Counter()
+        for item in symbol_diagnostics:
+            result = item.get(engine, {})
+            status = result.get("status") or "UNKNOWN"
+            counts[status] += 1
+            reason = result.get("reason")
+            if reason:
+                reasons[reason] += 1
+            if status == "ERROR":
+                exceptions.append(
+                    {
+                        "symbol": item.get("symbol"),
+                        "engine": engine,
+                        "reason": reason,
+                        "exception": result.get("exception"),
+                    }
+                )
+        engine_counts[engine] = dict(counts)
+        rejection_reasons[engine] = dict(reasons.most_common(10))
+
+    near_pass = sorted(
+        (_near_pass_candidate(item) for item in symbol_diagnostics),
+        key=lambda item: item.get("score") or 0,
+        reverse=True,
+    )[:10]
+    final_setup_count = sum(
+        1
+        for item in symbol_diagnostics
+        if all(item.get(engine, {}).get("status") == "PASS" for engine in ["trend_engine", "momentum_engine", "structure_engine", "entry_engine"])
+    )
+    payload = {
+        "timestamp_ist": _timestamp_ist(),
+        "scanner_cycle_id": scanner_cycle_id,
+        "symbols_scanned": len(symbol_diagnostics),
+        "engine_counts": engine_counts,
+        "rejection_reasons": rejection_reasons,
+        "exceptions": exceptions,
+        "near_pass_setups": near_pass,
+        "final_setup_count": final_setup_count,
+        "symbols": symbol_diagnostics,
+    }
+    _atomic_write_json(FILTER_ENGINE_DIAGNOSTICS_PATH, payload)
+    _atomic_write_json(
+        NEAR_PASS_SETUPS_PATH,
+        {
+            "timestamp_ist": payload["timestamp_ist"],
+            "scanner_cycle_id": scanner_cycle_id,
+            "near_pass_setups": near_pass,
+        },
+    )
+    return payload
+
+
+def _print_filter_diagnostics_summary(payload):
+    print("[FILTER DIAGNOSTICS]")
+    for engine, counts in (payload.get("engine_counts") or {}).items():
+        print(f"{engine}: {counts}")
+    print(f"final_setup_count={payload.get('final_setup_count')}")
+    for engine, engine_reasons in (payload.get("rejection_reasons") or {}).items():
+        if engine_reasons:
+            print(f"{engine} top_rejections={engine_reasons}")
+    exceptions = payload.get("exceptions") or []
+    if exceptions:
+        print(f"engine_exceptions={len(exceptions)}")
+
+
 def _parse_candle_timestamp(value):
     try:
         if value is None:
@@ -781,6 +1151,15 @@ def _load_cached_symbols_with_debug():
     return cached_symbols, (get_last_load_debug() or {})
 
 
+def _reload_cached_symbol_frames(symbols):
+    reloaded = {}
+    for symbol in symbols or []:
+        data = load_cached_stock_data(symbol)
+        if data is not None and not getattr(data, "empty", False):
+            reloaded[str(symbol)] = data
+    return reloaded
+
+
 def _market_mode_stale_symbols(cached_symbols, now_ist):
     today_ist = now_ist.date()
     stale = []
@@ -851,7 +1230,8 @@ def _refresh_ohlc_for_market_scan(cached_symbols, load_debug, market_mode):
         diagnostics["refreshed_count"] = refresh_result.get("refreshed_count") if isinstance(refresh_result, dict) else None
         diagnostics["failed_count"] = refresh_result.get("failed_count") if isinstance(refresh_result, dict) else None
         diagnostics["skipped_count"] = refresh_result.get("skipped_count") if isinstance(refresh_result, dict) else None
-        cached_symbols, load_debug = _load_cached_symbols_with_debug()
+        same_symbols = list((cached_symbols or {}).keys())
+        cached_symbols = _reload_cached_symbol_frames(same_symbols)
         after_stale, after_latest_dt, after_age = _market_mode_stale_symbols(
             cached_symbols,
             datetime.now(IST),
@@ -1287,6 +1667,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     momentum_examples = {}
     entry_examples = {}
     trend_diagnostic_symbols = []
+    filter_symbol_diagnostics = []
     regime_diagnostics = _regime_diagnostics()
     live_price_cache = _read_json(LIVE_PRICE_CACHE_PATH)
     selector_payload = _write_runtime_selector_status(
@@ -1315,12 +1696,20 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         }
 
     ohlc_market_status = None
-    if load_debug.get("ohlc_health_status") and load_debug.get("ohlc_health_status") != "PASS":
+    if load_debug.get("ohlc_health_status") == "FAIL":
         ohlc_market_status = {
             "status": "FAIL",
             "ok": False,
             "reason": load_debug.get("ohlc_health_reason") or "OHLC_CACHE_INVALID",
             "stale_data_detected": True,
+            "unsafe_sources_detected": [],
+        }
+    elif load_debug.get("ohlc_health_status") == "DEGRADED":
+        ohlc_market_status = {
+            "status": "DEGRADED",
+            "ok": False,
+            "reason": load_debug.get("ohlc_health_reason") or "BELOW_IDEAL_HISTORY_ROWS",
+            "stale_data_detected": False,
             "unsafe_sources_detected": [],
         }
     truth_gate_payload = scanner_gate_status(
@@ -1341,6 +1730,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
 
     for symbol, data in cached_symbols.items():
         stocks_checked += 1
+        filter_symbol_diagnostics.append(_symbol_filter_diagnostics(symbol, data))
         candle_dt = _last_candle_timestamp(data)
         latest_candle_dt = _latest_timestamp(latest_candle_dt, candle_dt)
         signature_rows.append(
@@ -1430,6 +1820,24 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         except Exception:
             errors += 1
             continue
+
+    filter_diagnostics_payload = _write_filter_diagnostics(filter_symbol_diagnostics, scanner_cycle_id)
+    _print_filter_diagnostics_summary(filter_diagnostics_payload)
+    paper_journal_payload = maybe_write_paper_journal(
+        truth_gate_payload=truth_gate_payload,
+        selector_payload=selector_payload,
+        ohlc_status=load_debug.get("ohlc_health_status"),
+        scan_id=scanner_cycle_id,
+        within_trading_window=is_trade_window(),
+        refresh_contract=True,
+    )
+    print(
+        "[PaperJournal] "
+        f"enabled={paper_journal_payload.get('enabled')} "
+        f"status={paper_journal_payload.get('last_write_status')} "
+        f"written={paper_journal_payload.get('written')} "
+        f"duplicates={paper_journal_payload.get('duplicate_skipped')}"
+    )
 
     scan_finished_at_ist = _timestamp_ist()
     finished_dt = datetime.now(IST)
@@ -1525,6 +1933,18 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         "fallback_reason": selector_payload.get("fallback_reason"),
         "selected_count": selector_payload.get("selected_count"),
         "status_path": "data/runtime/runtime_selector_status.json",
+    }
+    payload["paper_journal"] = {
+        "enabled": paper_journal_payload.get("enabled"),
+        "last_write_status": paper_journal_payload.get("last_write_status"),
+        "attempted": paper_journal_payload.get("attempted"),
+        "written": paper_journal_payload.get("written"),
+        "duplicate_skipped": paper_journal_payload.get("duplicate_skipped"),
+        "failed": paper_journal_payload.get("failed"),
+        "destination": paper_journal_payload.get("destination"),
+        "broker_execution_disabled": True,
+        "telegram_sent": False,
+        "status_path": "data/runtime/paper_journal_status.json",
     }
 
     setup_reasons, setup_examples, setup_rejected = _setup_engine_rejections_from_debug(
