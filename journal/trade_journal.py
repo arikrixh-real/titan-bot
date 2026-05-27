@@ -82,6 +82,8 @@ ACTIVE_FIELDS = [
     "skip_reason",
     "paper_trade_id",
     "is_paper_trade",
+    "test_trade",
+    "source",
     "alert_sent",
     "market_status",
     "status",

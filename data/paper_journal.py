@@ -19,16 +19,16 @@ except Exception:
     build_setup_signature = None
 
 try:
-    from tools.trade_pipeline_check import build_trade_contract_diagnostics
+    from journal.trade_journal import ACTIVE_FIELDS as ACTIVE_TRADE_FIELDS
 except Exception:
-    build_trade_contract_diagnostics = None
-
+    ACTIVE_TRADE_FIELDS = []
 
 IST = ZoneInfo("Asia/Kolkata")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_DIR = PROJECT_ROOT / "data" / "runtime"
 PAPER_JOURNAL_STATUS_PATH = RUNTIME_DIR / "paper_journal_status.json"
-TRADE_CONTRACT_DIAGNOSTICS_PATH = RUNTIME_DIR / "trade_contract_diagnostics.json"
+FINAL_VALIDATED_SETUPS_PATH = RUNTIME_DIR / "final_validated_setups.json"
+FINAL_SETUP_WRITE_DEBUG_PATH = RUNTIME_DIR / "final_setup_write_debug.json"
 ACTIVE_TRADES_CSV = PROJECT_ROOT / "data" / "journals" / "active_trades.csv"
 
 PAPER_SOURCE = "RUNTIME_SCANNER_PAPER"
@@ -59,6 +59,7 @@ LOCAL_REQUIRED_FIELDS = [
     "ohlc_status",
     "alert_sent",
     "telegram_alerted",
+    "test_trade",
     "status",
     "created_at_ist",
     "opened_at",
@@ -98,6 +99,27 @@ def _write_json(path, payload):
     tmp.replace(path)
 
 
+def _update_final_setup_read_debug(loaded_count, symbols, validation_failures=None):
+    debug = _read_json(FINAL_SETUP_WRITE_DEBUG_PATH)
+    sequence = debug.get("sequence") if isinstance(debug.get("sequence"), list) else []
+    sequence.append("paper_journal_read_complete")
+    read_timestamp = timestamp_ist()
+    debug.update(
+        {
+            "timestamp_ist": read_timestamp,
+            "paper_journal_read_timestamp_ist": read_timestamp,
+            "paper_journal_loaded_count": loaded_count,
+            "paper_journal_symbols": symbols,
+            "file_written": FINAL_VALIDATED_SETUPS_PATH.exists(),
+            "file_size_bytes": FINAL_VALIDATED_SETUPS_PATH.stat().st_size if FINAL_VALIDATED_SETUPS_PATH.exists() else 0,
+            "validation_failures": validation_failures or debug.get("validation_failures") or [],
+            "path": str(FINAL_VALIDATED_SETUPS_PATH),
+            "sequence": sequence,
+        }
+    )
+    _write_json(FINAL_SETUP_WRITE_DEBUG_PATH, debug)
+
+
 def _read_csv_rows(path):
     path = Path(path)
     if not path.exists():
@@ -115,7 +137,8 @@ def _write_csv_rows(path, fieldnames, rows):
     path.parent.mkdir(parents=True, exist_ok=True)
     ordered = []
     seen = set()
-    for field in list(fieldnames or []) + LOCAL_REQUIRED_FIELDS:
+    preferred = ACTIVE_TRADE_FIELDS if path.resolve() == ACTIVE_TRADES_CSV.resolve() else []
+    for field in list(preferred or []) + list(fieldnames or []) + LOCAL_REQUIRED_FIELDS:
         if field and field not in seen:
             ordered.append(field)
             seen.add(field)
@@ -293,7 +316,8 @@ def _trade_row(setup, *, scan_id, truth_gate_status, selector_used, ohlc_status)
         "rank_score": final_score,
         "paper_trade_id": trade_id,
         "is_paper_trade": True,
-        "source": PAPER_SOURCE,
+        "source": str(setup.get("source") or PAPER_SOURCE),
+        "test_trade": bool(setup.get("test_trade")),
         "truth_gate_status": truth_gate_status,
         "selector_used": selector_used,
         "ohlc_status": ohlc_status,
@@ -333,17 +357,37 @@ def _valid_setups(contract_payload):
     return [
         item
         for item in contract_payload.get("setups") or []
-        if (item.get("validation") or {}).get("status") == "PASS"
+        if (item.get("contract_validation") or {}).get("status") == "PASS"
     ]
 
 
 def latest_contract_payload(refresh=False):
-    if refresh and build_trade_contract_diagnostics is not None:
-        try:
-            return build_trade_contract_diagnostics()
-        except Exception:
-            pass
-    return _read_json(TRADE_CONTRACT_DIAGNOSTICS_PATH)
+    payload = _read_json(FINAL_VALIDATED_SETUPS_PATH)
+    setups = payload.get("setups") if isinstance(payload.get("setups"), list) else []
+    required_fields = ["symbol", "side", "entry", "stop_loss", "target", "rr", "final_score", "reason"]
+    validation_failures = []
+    for setup in setups:
+        missing = [field for field in required_fields if setup.get(field) in (None, "")]
+        if missing:
+            validation_failures.append({"symbol": setup.get("symbol"), "missing_fields": missing})
+    symbols = [str(item.get("symbol") or "").upper() for item in setups]
+    print("[PAPER JOURNAL READ]")
+    print(f"file_exists={FINAL_VALIDATED_SETUPS_PATH.exists()}")
+    print(f"loaded_count={len(setups)}")
+    print(f"symbols={symbols}")
+    if validation_failures:
+        print(f"validation_failures={validation_failures}")
+    _update_final_setup_read_debug(len(setups), symbols, validation_failures)
+    return {
+        "timestamp_ist": payload.get("timestamp_ist"),
+        "scanner_cycle_id": payload.get("scanner_cycle_id"),
+        "final_setup_count": int(payload.get("validated_setup_count") or len(setups)),
+        "valid_setup_count": len([item for item in setups if (item.get("contract_validation") or {}).get("status") == "PASS"]),
+        "setups": setups,
+        "source_path": str(FINAL_VALIDATED_SETUPS_PATH),
+        "source": "final_validated_setups",
+        "reason": payload.get("reason"),
+    }
 
 
 def _base_status(contract_payload=None):
@@ -354,7 +398,7 @@ def _base_status(contract_payload=None):
     return {
         "timestamp_ist": timestamp_ist(),
         "enabled": paper_journal_enabled(),
-        "attempted": 0,
+        "attempted": len(valid),
         "written": 0,
         "duplicate_skipped": 0,
         "failed": 0,
@@ -449,7 +493,6 @@ def maybe_write_paper_journal(
     for setup in valid_setups:
         symbol = str(setup.get("symbol") or "").strip().upper()
         side = _side(setup.get("side"))
-        payload["attempted"] += 1
 
         if _open_trade_exists_local(symbol, side):
             payload["duplicate_skipped"] += 1

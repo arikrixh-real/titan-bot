@@ -67,6 +67,7 @@ MEMORY_DIR = Path("data/memory")
 RUNTIME_DIR = Path("data/runtime")
 ACTIVE_TRADES_CSV = JOURNAL_DIR / "active_trades.csv"
 OUTCOMES_CSV = JOURNAL_DIR / "trade_outcomes.csv"
+LOCAL_TRADE_RESULTS_CSV = JOURNAL_DIR / "trade_results.csv"
 OUTCOMES_JSONL = JOURNAL_DIR / "trade_outcomes.jsonl"
 OUTCOME_TRACKER_STATUS_PATH = RUNTIME_DIR / "outcome_tracker_status.json"
 TRADE_LIFECYCLE_RECONCILIATION_PATH = RUNTIME_DIR / "trade_lifecycle_reconciliation.json"
@@ -95,6 +96,8 @@ OUTCOME_FIELDS = [
     "risk_per_share",
     "paper_trade_id",
     "is_paper_trade",
+    "test_trade",
+    "source",
     "rr",
     "score",
     "rank_score",
@@ -337,6 +340,9 @@ def _ensure_files():
     else:
         _ensure_csv_columns(OUTCOMES_CSV, OUTCOME_FIELDS)
 
+    if LOCAL_TRADE_RESULTS_CSV.exists():
+        _ensure_csv_columns(LOCAL_TRADE_RESULTS_CSV, OUTCOME_FIELDS)
+
     if not OUTCOMES_JSONL.exists():
         OUTCOMES_JSONL.touch()
 
@@ -352,15 +358,19 @@ def _ensure_csv_columns(path, required_fields):
             reader = csv.DictReader(f)
             existing_fields = reader.fieldnames or []
             rows = list(reader)
-        missing = [field for field in required_fields if field not in existing_fields]
-        if not missing:
+        ordered_fields = []
+        seen = set()
+        for field in list(required_fields or []) + list(existing_fields or []):
+            if field and field not in seen:
+                ordered_fields.append(field)
+                seen.add(field)
+        if existing_fields == ordered_fields:
             return
-        fields = existing_fields + missing
         with open(path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fields)
+            writer = csv.DictWriter(f, fieldnames=ordered_fields)
             writer.writeheader()
             for row in rows:
-                writer.writerow({field: row.get(field, "") for field in fields})
+                writer.writerow({field: row.get(field, "") for field in ordered_fields})
     except Exception:
         pass
 
@@ -844,6 +854,8 @@ def _append_outcome(row, outcome, exit_price, pnl_points, reason):
         "risk_per_share": row.get("risk_per_share", ""),
         "paper_trade_id": row.get("paper_trade_id") or row.get("trade_id", ""),
         "is_paper_trade": row.get("is_paper_trade") or "true",
+        "test_trade": row.get("test_trade", ""),
+        "source": row.get("source", ""),
         "rr": row.get("rr", ""),
         "score": row.get("score", ""),
         "rank_score": row.get("rank_score", ""),
@@ -863,6 +875,17 @@ def _append_outcome(row, outcome, exit_price, pnl_points, reason):
 
     with open(OUTCOMES_JSONL, "a", encoding="utf-8") as f:
         f.write(json.dumps(_json_safe(outcome_row), ensure_ascii=False) + "\n")
+
+    if str(outcome_row.get("test_trade") or "").strip().lower() in {"1", "true", "yes", "y"}:
+        if not LOCAL_TRADE_RESULTS_CSV.exists():
+            with open(LOCAL_TRADE_RESULTS_CSV, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=OUTCOME_FIELDS)
+                writer.writeheader()
+        else:
+            _ensure_csv_columns(LOCAL_TRADE_RESULTS_CSV, OUTCOME_FIELDS)
+        with open(LOCAL_TRADE_RESULTS_CSV, "a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=OUTCOME_FIELDS)
+            writer.writerow({field: outcome_row.get(field, "") for field in OUTCOME_FIELDS})
 
     _save_trade_result_to_supabase(outcome_row)
     if sync_paper_account_from_trade_results is not None:
