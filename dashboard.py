@@ -50,6 +50,8 @@ WEEKEND_RESEARCH_MODE_STATUS_PATH = "/".join(["data", "runtime", "weekend_resear
 TITAN_RUNTIME_STATUS_PATH = "/".join(["data", "runtime", "titan_runtime_status.json"])
 RUNTIME_STATUS_TABLE = "runtime_status"
 RUNTIME_FRESH_SECONDS = 15 * 60
+SCANNER_STALE_SECONDS = 7 * 60
+SCANNER_SIGNATURE_REPEAT_WARNING_CYCLES = 3
 SCANNER_FRESH_SECONDS_BY_MODE = {
     "MARKET_MODE": 10 * 60,
     "INTELLIGENCE_MODE": 24 * 3600,
@@ -447,8 +449,9 @@ def build_runtime_status_from_supabase():
     return data if data else None
 
 
-@st.cache_data(ttl=AUTO_REFRESH_SECONDS)
 def get_supabase_scanner_status_payload():
+    # Scanner status is the dashboard truth surface; keep this uncached so
+    # Streamlit cannot pin filter counts across auto-refresh cycles.
     if supabase is None:
         return {}
     try:
@@ -1827,7 +1830,63 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         "dashboard_status_message": "Final count unavailable from current runtime output",
         "repeated_data_signature": False,
         "repeated_data_warning": None,
+        "data_signature": None,
+        "scanner_truth_status": "WAITING",
+        "scanner_truth_statuses": [],
+        "age_seconds": None,
+        "repeat_count": 0,
+        "ohlc_stale": False,
     }
+
+    preferred_payload, preferred_source = get_preferred_scanner_status_payload()
+    if isinstance(preferred_payload, dict) and preferred_payload:
+        flags = scanner_truth_flags(preferred_payload)
+        master_payload = master_runtime_data if isinstance(master_runtime_data, dict) else {}
+        alerts = first_number(
+            preferred_payload.get("alerts_sent"),
+            preferred_payload.get("alerts_this_scan"),
+            master_payload.get("alerts_sent"),
+            master_payload.get("alerts_this_scan"),
+            default=0,
+        )
+        return {
+            "stocks_checked": int(first_number(preferred_payload.get("stocks_checked"), default=0)),
+            "trend_passed": int(first_number(preferred_payload.get("trend_passed"), preferred_payload.get("trend_passed_count"), default=0)),
+            "strict_trend_passed": int(first_number(preferred_payload.get("strict_trend_passed"), preferred_payload.get("trend_passed"), default=0)),
+            "adaptive_trend_passed": int(first_number(preferred_payload.get("adaptive_trend_passed"), default=0)),
+            "momentum_passed": int(first_number(preferred_payload.get("momentum_passed"), preferred_payload.get("momentum_passed_count"), default=0)),
+            "structure_passed": int(first_number(preferred_payload.get("structure_passed"), preferred_payload.get("structure_passed_count"), default=0)),
+            "entry_passed": int(first_number(preferred_payload.get("entry_passed"), preferred_payload.get("entry_passed_count"), default=0)),
+            "breakout_ready_count": int(first_number(preferred_payload.get("breakout_ready_count"), preferred_payload.get("entry_passed"), default=0)),
+            "entry_stage_available": bool(preferred_payload.get("entry_stage_available")),
+            "final_passed": optional_int_number(preferred_payload.get("final_passed"), preferred_payload.get("final_passed_count")),
+            "alerts_this_scan": int(alerts),
+            "source": preferred_source,
+            "timestamp": runtime_payload_dt(preferred_payload),
+            "is_fresh": not flags["stale"],
+            "has_data": int(first_number(preferred_payload.get("stocks_checked"), default=0)) > 0,
+            "limited_runtime": not scanner_payload_has_gate_breakdown(preferred_payload),
+            "scanner_cycle_id": preferred_payload.get("scanner_cycle_id"),
+            "scan_finished_at_ist": preferred_payload.get("scan_finished_at_ist") or preferred_payload.get("scanner_timestamp") or preferred_payload.get("timestamp_ist"),
+            "scan_duration_seconds": preferred_payload.get("scan_duration_seconds"),
+            "scan_only": bool(preferred_payload.get("scan_only")),
+            "partial_stale_tolerated": bool(preferred_payload.get("partial_stale_tolerated")),
+            "stale_symbol_ratio": preferred_payload.get("stale_symbol_ratio"),
+            "stale_policy": preferred_payload.get("stale_policy"),
+            "pipeline_health": preferred_payload.get("pipeline_health") if isinstance(preferred_payload.get("pipeline_health"), dict) else {},
+            "fallback_reason": preferred_payload.get("fallback_reason"),
+            "final_count_source": preferred_payload.get("final_count_source") or "unavailable",
+            "dashboard_status_message": preferred_payload.get("dashboard_status_message"),
+            "repeated_data_signature": flags["repeated_signature_warning"],
+            "repeated_data_warning": "INPUT_UNCHANGED_WARNING" if flags["repeated_signature_warning"] else preferred_payload.get("repeated_data_warning"),
+            "data_signature": preferred_payload.get("data_signature"),
+            "scanner_truth_status": flags["display_status"],
+            "scanner_truth_statuses": flags["display_statuses"],
+            "age_seconds": flags["age_seconds"],
+            "repeat_count": flags["repeat_count"],
+            "ohlc_stale": flags["ohlc_stale"],
+            "counter_confidence": preferred_payload.get("counter_confidence"),
+        }
 
     scanner_truth = safe_read_json(SCANNER_FILTER_TRUTH_STATUS_PATH, {})
     counters = scanner_truth.get("counters") if isinstance(scanner_truth.get("counters"), dict) else {}
@@ -2170,12 +2229,121 @@ def runtime_payload_dt(payload):
         return None
     return parse_dt(
         payload.get("timestamp_ist")
+        or payload.get("scanner_timestamp")
+        or payload.get("scan_finished_at_ist")
         or payload.get("generated_at")
         or payload.get("last_runtime_update")
         or payload.get("updated_at")
         or payload.get("created_at")
         or payload.get("timestamp")
     )
+
+
+def get_preferred_scanner_status_payload():
+    supabase_payload = get_supabase_scanner_status_payload()
+    if isinstance(supabase_payload, dict) and supabase_payload:
+        return supabase_payload, "SUPABASE_RUNTIME_STATUS_SCANNER"
+
+    local_payload = safe_read_json(SCANNER_STATUS_PATH, {})
+    if isinstance(local_payload, dict) and local_payload:
+        return local_payload, "LOCAL_RUNTIME_SCANNER_STATUS_JSON"
+
+    return {}, "UNAVAILABLE"
+
+
+def scanner_age_seconds(timestamp):
+    if not timestamp:
+        return None
+    return max((datetime.now(IST) - timestamp).total_seconds(), 0)
+
+
+def scanner_off_hours(runtime_mode=None):
+    mode = normalize_runtime_mode(runtime_mode)
+    return (not is_market_open_now()) or mode in {"RESEARCH_MODE", "WEEKEND_MODE"}
+
+
+def scanner_ohlc_stale(payload):
+    if not isinstance(payload, dict):
+        return False
+    pipeline_health = payload.get("pipeline_health") if isinstance(payload.get("pipeline_health"), dict) else {}
+    data_health = payload.get("scanner_data_health") if isinstance(payload.get("scanner_data_health"), dict) else {}
+    return bool(
+        payload.get("ohlc_fallback_required")
+        or payload.get("stale_data_warning")
+        or pipeline_health.get("ohlc_stale")
+        or data_health.get("ohlc_stale")
+        or str(data_health.get("stale_policy") or payload.get("stale_policy") or "").upper().startswith("STALE")
+    )
+
+
+def scanner_signature_repeat_count(payload):
+    if not isinstance(payload, dict):
+        return 0
+    for key in [
+        "repeated_data_signature_count",
+        "same_data_signature_cycles",
+        "data_signature_repeat_count",
+        "signature_repeat_count",
+    ]:
+        value = optional_int_number(payload.get(key))
+        if value is not None:
+            return max(int(value), 0)
+
+    signature = str(payload.get("data_signature") or "").strip()
+    cycle = str(payload.get("scanner_cycle_id") or "").strip()
+    if not signature:
+        return 0
+
+    try:
+        state = st.session_state.setdefault("scanner_signature_repeat_tracker", {})
+        if state.get("signature") == signature:
+            if cycle and state.get("cycle") != cycle:
+                state["count"] = int(state.get("count") or 1) + 1
+                state["cycle"] = cycle
+        else:
+            state.clear()
+            state.update({"signature": signature, "cycle": cycle, "count": 1})
+        return int(state.get("count") or 1)
+    except Exception:
+        return 1 if payload.get("repeated_data_signature") else 0
+
+
+def scanner_truth_flags(payload, timestamp=None, runtime_mode=None):
+    timestamp = timestamp or runtime_payload_dt(payload)
+    age_seconds = scanner_age_seconds(timestamp)
+    off_hours = scanner_off_hours(runtime_mode)
+    repeat_count = scanner_signature_repeat_count(payload)
+    stale = bool(age_seconds is None or age_seconds > SCANNER_STALE_SECONDS)
+    ohlc_stale = scanner_ohlc_stale(payload)
+    if off_hours:
+        stale = False
+        ohlc_stale = False
+    repeated = repeat_count >= SCANNER_SIGNATURE_REPEAT_WARNING_CYCLES
+    statuses = []
+    if stale:
+        statuses.append("SCAN_STALE")
+    if repeated:
+        statuses.append("INPUT_UNCHANGED_WARNING")
+    if ohlc_stale:
+        statuses.append("SCAN_ONLY_STALE_OHLC")
+    if stale:
+        display_status = "SCAN_STALE"
+    elif repeated:
+        display_status = "INPUT_UNCHANGED_WARNING"
+    elif ohlc_stale:
+        display_status = "SCAN_ONLY_STALE_OHLC"
+    else:
+        display_status = "ACTIVE"
+    return {
+        "age_seconds": age_seconds,
+        "off_hours": off_hours,
+        "stale": stale,
+        "ohlc_stale": ohlc_stale,
+        "repeat_count": repeat_count,
+        "repeated_signature_warning": repeated,
+        "display_status": display_status,
+        "display_statuses": statuses,
+    }
 
 
 def runtime_payload_is_fresh(payload, fresh_seconds=RUNTIME_FRESH_SECONDS):
@@ -2360,15 +2528,16 @@ def get_dashboard_runtime_status():
 
 
 def get_scanner_runtime_status():
-    data, source = get_runtime_payload("scanner_status", SCANNER_STATUS_PATH)
+    data, source = get_preferred_scanner_status_payload()
     scanner_truth = safe_read_json(SCANNER_FILTER_TRUTH_STATUS_PATH, {})
     daemon_health, _ = get_runtime_payload("daemon_health", "/".join(["data", "runtime", "daemon_health.json"]))
     heartbeat, _ = get_runtime_payload("heartbeat", "/".join(["data", "runtime", "titan_heartbeat.json"]))
     runtime_status, _ = get_runtime_payload("runtime_status", "/".join(["data", "runtime", "titan_runtime_status.json"]))
     runtime_mode = runtime_mode_from_payloads(runtime_status, daemon_health, heartbeat)
-    scanner_fresh = runtime_payload_is_fresh(data, scanner_fresh_seconds_for_mode(runtime_mode))
     payload = data if isinstance(data, dict) else {}
     timestamp = runtime_payload_dt(data)
+    truth_flags = scanner_truth_flags(payload, timestamp, runtime_mode)
+    scanner_fresh = not truth_flags["stale"]
     status = runtime_status_with_freshness(
         data,
         active_status="ACTIVE",
@@ -2376,10 +2545,10 @@ def get_scanner_runtime_status():
     )
     if runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"}:
         status = "MARKET CLOSED / STANDBY"
+    elif truth_flags["display_status"] != "ACTIVE":
+        status = truth_flags["display_status"]
     elif scanner_truth.get("dashboard_scan_sync_status") == "SCAN_PIPELINE_UNAVAILABLE":
         status = "SCAN_PIPELINE_UNAVAILABLE"
-    elif isinstance(data, dict) and data and not scanner_fresh:
-        status = "STALE"
     elif scanner_fresh and runtime_payload_active(data):
         status = "ACTIVE"
     return {
@@ -2391,6 +2560,11 @@ def get_scanner_runtime_status():
         "status": status,
         "is_fresh": scanner_fresh,
         "runtime_mode": runtime_mode,
+        "data_signature": payload.get("data_signature"),
+        "scanner_truth_status": truth_flags["display_status"],
+        "age_seconds": truth_flags["age_seconds"],
+        "repeat_count": truth_flags["repeat_count"],
+        "ohlc_stale": truth_flags["ohlc_stale"],
         "canonical_scan_cycle": scanner_truth.get("authoritative_scan_cycle_id") or scanner_truth.get("scan_cycle_id"),
         "canonical_runtime_timestamp": scanner_truth.get("authoritative_scan_timestamp"),
         "dashboard_scan_sync_status": scanner_truth.get("dashboard_scan_sync_status"),
@@ -3323,6 +3497,23 @@ if scanner_cycle_suffix_text:
     scanner_refresh_proof = f"{scanner_refresh_proof} | Cycle: ...{scanner_cycle_suffix_text}"
 if scan_breakdown.get("counter_confidence") and scan_breakdown.get("counter_confidence") != "HIGH":
     scanner_refresh_proof = f"{scanner_refresh_proof} | Counter confidence: {scan_breakdown.get('counter_confidence')}"
+scanner_signature_text = scanner_cycle_suffix(scan_breakdown.get("data_signature")) or "none"
+scanner_updated_text = (
+    scanner_finished_at.strftime("%d %b %Y %I:%M:%S %p IST")
+    if isinstance(scanner_finished_at, datetime)
+    else "unavailable"
+)
+scanner_age_text = age_text_from_dt(scanner_finished_at)
+scanner_truth_footer = (
+    f"Scanner source: {scan_breakdown.get('source', 'UNKNOWN')} | "
+    f"Cycle: {scan_breakdown.get('scanner_cycle_id') or 'none'} | "
+    f"Updated: {scanner_updated_text} | "
+    f"Signature: ...{scanner_signature_text} | "
+    f"Age: {scanner_age_text}"
+)
+if scan_breakdown.get("scanner_truth_status") and scan_breakdown.get("scanner_truth_status") != "ACTIVE":
+    scanner_statuses = scan_breakdown.get("scanner_truth_statuses") or [scan_breakdown.get("scanner_truth_status")]
+    scanner_truth_footer = f"{scanner_truth_footer} | {' | '.join(scanner_statuses)}"
 final_passed_subtitle = (
     scan_breakdown.get("dashboard_status_message")
     or (
@@ -3341,7 +3532,7 @@ breakout_ready_subtitle = (
     else "Breakout ready"
 )
 scanner_input_warning = (
-    scan_breakdown.get("repeated_data_warning")
+    "INPUT_UNCHANGED_WARNING"
     if scan_breakdown.get("repeated_data_signature")
     else None
 )
@@ -3669,8 +3860,9 @@ if scan_breakdown.get("limited_runtime"):
         "Next VPS scan cycle will update this once scanner_status publishes gate counts."
     )
     st.caption(scanner_refresh_proof)
+    st.caption(scanner_truth_footer)
     if scanner_input_warning:
-        st.caption("Scanner input unchanged from previous cycle.")
+        st.caption(scanner_input_warning)
 
 elif scan_breakdown.get("has_data"):
     b1, b2, b3, b4, b5, b6 = st.columns(6)
@@ -3735,8 +3927,9 @@ elif scan_breakdown.get("has_data"):
             st.caption(f"{reason}: {count}")
 
     st.caption(scanner_refresh_proof)
+    st.caption(scanner_truth_footer)
     if scanner_input_warning:
-        st.caption("Scanner input unchanged from previous cycle.")
+        st.caption(scanner_input_warning)
 
 else:
     st.caption("Awaiting VPS scanner breakdown")
@@ -3761,6 +3954,7 @@ else:
         metric_card("Final Passed", "0", "Awaiting VPS scanner breakdown")
 
     st.caption(scanner_refresh_proof)
+    st.caption(scanner_truth_footer)
 
 st.markdown("</div>", unsafe_allow_html=True)
 
