@@ -1801,6 +1801,33 @@ def optional_int_number(*values):
     return None
 
 
+def scanner_breakout_counts(payload):
+    payload = payload if isinstance(payload, dict) else {}
+    qualified = optional_int_number(
+        payload.get("qualified_breakout_ready_count"),
+        payload.get("breakout_ready_count"),
+        payload.get("breakout_ready"),
+    )
+    qualified = int(qualified or 0)
+    raw = optional_int_number(
+        payload.get("raw_breakout_ready_count"),
+        payload.get("raw_breakout_ready"),
+    )
+    raw_missing = raw is None
+    if raw_missing:
+        # Legacy scanner_status rows did not publish raw breakout. Do not let
+        # the dashboard show raw=0 with qualified>0; qualified implies raw.
+        raw = qualified
+    raw = int(raw or 0)
+    return {
+        "raw_breakout_ready_count": raw,
+        "qualified_breakout_ready_count": qualified,
+        "breakout_ready_count": qualified,
+        "breakout_integrity_valid": qualified <= raw,
+        "raw_breakout_missing_from_payload": raw_missing,
+    }
+
+
 def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_health):
     zero = {
         "stocks_checked": 0,
@@ -1853,6 +1880,7 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             master_payload.get("alerts_this_scan"),
             default=0,
         )
+        breakout_counts = scanner_breakout_counts(preferred_payload)
         return {
             "stocks_checked": int(first_number(preferred_payload.get("stocks_checked"), default=0)),
             "trend_passed": int(first_number(preferred_payload.get("trend_passed"), preferred_payload.get("trend_passed_count"), default=0)),
@@ -1861,9 +1889,11 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "momentum_passed": int(first_number(preferred_payload.get("momentum_passed"), preferred_payload.get("momentum_passed_count"), default=0)),
             "structure_passed": int(first_number(preferred_payload.get("structure_passed"), preferred_payload.get("structure_passed_count"), default=0)),
             "entry_passed": int(first_number(preferred_payload.get("entry_passed"), preferred_payload.get("entry_passed_count"), default=0)),
-            "raw_breakout_ready_count": int(first_number(preferred_payload.get("raw_breakout_ready_count"), preferred_payload.get("raw_breakout_ready"), default=0)),
-            "qualified_breakout_ready_count": int(first_number(preferred_payload.get("qualified_breakout_ready_count"), preferred_payload.get("breakout_ready_count"), preferred_payload.get("breakout_ready"), default=0)),
-            "breakout_ready_count": int(first_number(preferred_payload.get("breakout_ready_count"), preferred_payload.get("qualified_breakout_ready_count"), preferred_payload.get("breakout_ready"), default=0)),
+            "raw_breakout_ready_count": breakout_counts["raw_breakout_ready_count"],
+            "qualified_breakout_ready_count": breakout_counts["qualified_breakout_ready_count"],
+            "breakout_ready_count": breakout_counts["breakout_ready_count"],
+            "breakout_integrity_valid": breakout_counts["breakout_integrity_valid"],
+            "raw_breakout_missing_from_payload": breakout_counts["raw_breakout_missing_from_payload"],
             "entry_stage_available": bool(preferred_payload.get("entry_stage_available")),
             "final_passed": optional_int_number(preferred_payload.get("final_passed"), preferred_payload.get("final_passed_count")),
             "alerts_this_scan": int(alerts),
@@ -1917,6 +1947,13 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         return unavailable
     if counters and scanner_truth.get("scanner_timestamp"):
         confidence = scanner_truth.get("counter_confidence") or "LOW"
+        breakout_counts = scanner_breakout_counts(
+            {
+                "raw_breakout_ready_count": counters.get("raw_breakout_ready"),
+                "qualified_breakout_ready_count": counters.get("qualified_breakout_ready"),
+                "breakout_ready_count": counters.get("breakout_ready"),
+            }
+        )
         return {
             "stocks_checked": int(first_number(counters.get("stocks_checked"), default=0)),
             "trend_passed": int(first_number(counters.get("trend_passed"), default=0)),
@@ -1925,9 +1962,11 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "momentum_passed": int(first_number(counters.get("momentum_passed"), default=0)),
             "structure_passed": int(first_number(counters.get("structure_passed"), default=0)),
             "entry_passed": int(first_number(counters.get("breakout_ready"), default=0)),
-            "raw_breakout_ready_count": int(first_number(counters.get("raw_breakout_ready"), counters.get("breakout_ready"), default=0)),
-            "qualified_breakout_ready_count": int(first_number(counters.get("qualified_breakout_ready"), counters.get("breakout_ready"), default=0)),
-            "breakout_ready_count": int(first_number(counters.get("breakout_ready"), default=0)),
+            "raw_breakout_ready_count": breakout_counts["raw_breakout_ready_count"],
+            "qualified_breakout_ready_count": breakout_counts["qualified_breakout_ready_count"],
+            "breakout_ready_count": breakout_counts["breakout_ready_count"],
+            "breakout_integrity_valid": breakout_counts["breakout_integrity_valid"],
+            "raw_breakout_missing_from_payload": breakout_counts["raw_breakout_missing_from_payload"],
             "entry_stage_available": confidence == "HIGH",
             "final_passed": optional_int_number(counters.get("final_passed")),
             "alerts_this_scan": int(first_number(counters.get("alerts_this_scan"), default=0)),
@@ -1959,6 +1998,7 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
     supabase_stocks_checked = int(first_number(supabase_scanner_payload.get("stocks_checked"), default=0))
     if supabase_stocks_checked > 0:
         master_payload = master_runtime_data if isinstance(master_runtime_data, dict) else {}
+        breakout_counts = scanner_breakout_counts(supabase_scanner_payload)
         alerts = first_number(
             supabase_scanner_payload.get("alerts_sent"),
             supabase_scanner_payload.get("alerts_this_scan"),
@@ -1974,9 +2014,11 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "momentum_passed": int(first_number(supabase_scanner_payload.get("momentum_passed"), default=0)),
             "structure_passed": int(first_number(supabase_scanner_payload.get("structure_passed"), default=0)),
             "entry_passed": int(first_number(supabase_scanner_payload.get("entry_passed"), default=0)),
-            "raw_breakout_ready_count": int(first_number(supabase_scanner_payload.get("raw_breakout_ready_count"), supabase_scanner_payload.get("raw_breakout_ready"), default=0)),
-            "qualified_breakout_ready_count": int(first_number(supabase_scanner_payload.get("qualified_breakout_ready_count"), supabase_scanner_payload.get("breakout_ready_count"), supabase_scanner_payload.get("breakout_ready"), default=0)),
-            "breakout_ready_count": int(first_number(supabase_scanner_payload.get("breakout_ready_count"), supabase_scanner_payload.get("qualified_breakout_ready_count"), supabase_scanner_payload.get("breakout_ready"), default=0)),
+            "raw_breakout_ready_count": breakout_counts["raw_breakout_ready_count"],
+            "qualified_breakout_ready_count": breakout_counts["qualified_breakout_ready_count"],
+            "breakout_ready_count": breakout_counts["breakout_ready_count"],
+            "breakout_integrity_valid": breakout_counts["breakout_integrity_valid"],
+            "raw_breakout_missing_from_payload": breakout_counts["raw_breakout_missing_from_payload"],
             "entry_stage_available": bool(supabase_scanner_payload.get("entry_stage_available")),
             "final_passed": optional_int_number(supabase_scanner_payload.get("final_passed")),
             "alerts_this_scan": int(alerts),
@@ -2008,6 +2050,7 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
     scanner_fresh = bool(scanner_runtime_data.get("is_fresh")) if isinstance(scanner_runtime_data, dict) else False
     if scanner_fresh and scanner_payload_has_gate_breakdown(scanner_payload):
         master_payload = master_runtime_data if isinstance(master_runtime_data, dict) else {}
+        breakout_counts = scanner_breakout_counts(scanner_payload)
         alerts = first_number(
             scanner_payload.get("alerts_sent"),
             scanner_payload.get("alerts_this_scan"),
@@ -2023,9 +2066,11 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "momentum_passed": int(first_number(scanner_payload.get("momentum_passed"), default=0)),
             "structure_passed": int(first_number(scanner_payload.get("structure_passed"), default=0)),
             "entry_passed": int(first_number(scanner_payload.get("entry_passed"), default=0)),
-            "raw_breakout_ready_count": int(first_number(scanner_payload.get("raw_breakout_ready_count"), scanner_payload.get("raw_breakout_ready"), default=0)),
-            "qualified_breakout_ready_count": int(first_number(scanner_payload.get("qualified_breakout_ready_count"), scanner_payload.get("breakout_ready_count"), scanner_payload.get("breakout_ready"), default=0)),
-            "breakout_ready_count": int(first_number(scanner_payload.get("breakout_ready_count"), scanner_payload.get("qualified_breakout_ready_count"), scanner_payload.get("breakout_ready"), default=0)),
+            "raw_breakout_ready_count": breakout_counts["raw_breakout_ready_count"],
+            "qualified_breakout_ready_count": breakout_counts["qualified_breakout_ready_count"],
+            "breakout_ready_count": breakout_counts["breakout_ready_count"],
+            "breakout_integrity_valid": breakout_counts["breakout_integrity_valid"],
+            "raw_breakout_missing_from_payload": breakout_counts["raw_breakout_missing_from_payload"],
             "entry_stage_available": bool(scanner_payload.get("entry_stage_available")),
             "final_passed": optional_int_number(scanner_payload.get("final_passed")),
             "alerts_this_scan": int(alerts),
@@ -2054,6 +2099,7 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         return scan_symbols_breakdown
 
     if scanner_fresh and scanner_payload:
+        breakout_counts = scanner_breakout_counts(scanner_payload)
         return {
             "stocks_checked": int(first_number(scanner_payload.get("stocks_checked"), default=0)),
             "trend_passed": 0,
@@ -2062,9 +2108,11 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "momentum_passed": 0,
             "structure_passed": 0,
             "entry_passed": 0,
-            "raw_breakout_ready_count": int(first_number(scanner_payload.get("raw_breakout_ready_count"), scanner_payload.get("raw_breakout_ready"), default=0)),
-            "qualified_breakout_ready_count": int(first_number(scanner_payload.get("qualified_breakout_ready_count"), scanner_payload.get("breakout_ready_count"), scanner_payload.get("breakout_ready"), default=0)),
-            "breakout_ready_count": int(first_number(scanner_payload.get("breakout_ready_count"), scanner_payload.get("qualified_breakout_ready_count"), scanner_payload.get("breakout_ready"), default=0)),
+            "raw_breakout_ready_count": breakout_counts["raw_breakout_ready_count"],
+            "qualified_breakout_ready_count": breakout_counts["qualified_breakout_ready_count"],
+            "breakout_ready_count": breakout_counts["breakout_ready_count"],
+            "breakout_integrity_valid": breakout_counts["breakout_integrity_valid"],
+            "raw_breakout_missing_from_payload": breakout_counts["raw_breakout_missing_from_payload"],
             "entry_stage_available": bool(scanner_payload.get("entry_stage_available")),
             "final_passed": optional_int_number(scanner_payload.get("final_passed")),
             "alerts_this_scan": int(first_number(scanner_payload.get("alerts_sent"), scanner_payload.get("alerts_this_scan"), default=0)),
@@ -2551,6 +2599,7 @@ def get_scanner_runtime_status():
     payload = data if isinstance(data, dict) else {}
     timestamp = runtime_payload_dt(data)
     truth_flags = scanner_truth_flags(payload, timestamp, runtime_mode)
+    breakout_counts = scanner_breakout_counts(payload)
     scanner_fresh = not truth_flags["stale"]
     status = runtime_status_with_freshness(
         data,
@@ -2588,9 +2637,10 @@ def get_scanner_runtime_status():
         "momentum_passed": int(first_number(payload.get("momentum_passed"), default=0)),
         "structure_passed": int(first_number(payload.get("structure_passed"), default=0)),
         "entry_passed": int(first_number(payload.get("entry_passed"), default=0)),
-        "raw_breakout_ready_count": int(first_number(payload.get("raw_breakout_ready_count"), payload.get("raw_breakout_ready"), default=0)),
-        "qualified_breakout_ready_count": int(first_number(payload.get("qualified_breakout_ready_count"), payload.get("breakout_ready_count"), payload.get("breakout_ready"), default=0)),
-        "breakout_ready_count": int(first_number(payload.get("breakout_ready_count"), payload.get("qualified_breakout_ready_count"), payload.get("breakout_ready"), default=0)),
+        "raw_breakout_ready_count": breakout_counts["raw_breakout_ready_count"],
+        "qualified_breakout_ready_count": breakout_counts["qualified_breakout_ready_count"],
+        "breakout_ready_count": breakout_counts["breakout_ready_count"],
+        "breakout_integrity_valid": breakout_counts["breakout_integrity_valid"],
         "final_passed": optional_int_number(payload.get("final_passed")),
         "alerts_sent": int(first_number(payload.get("alerts_sent"), default=0)),
     }

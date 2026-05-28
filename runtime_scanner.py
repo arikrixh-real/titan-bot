@@ -61,6 +61,7 @@ RUNTIME_SELECTOR_STATUS_PATH = Path("data") / "runtime" / "runtime_selector_stat
 SCAN_SELECTION_STATE_PATH = Path("data") / "scan_selection_state.json"
 FILTER_ENGINE_DIAGNOSTICS_PATH = Path("data") / "runtime" / "filter_engine_diagnostics.json"
 MOMENTUM_BREAKOUT_COUNTER_AUDIT_PATH = Path("data") / "runtime" / "momentum_breakout_counter_audit.json"
+BREAKOUT_PIPELINE_INTEGRITY_PATH = Path("data") / "runtime" / "breakout_pipeline_integrity.json"
 NEAR_PASS_SETUPS_PATH = Path("data") / "runtime" / "near_pass_setups.json"
 FINAL_VALIDATED_SETUPS_PATH = Path("data") / "runtime" / "final_validated_setups.json"
 FINAL_SETUP_WRITE_DEBUG_PATH = Path("data") / "runtime" / "final_setup_write_debug.json"
@@ -1166,6 +1167,68 @@ def _write_momentum_breakout_counter_audit(
     return payload
 
 
+def _write_breakout_pipeline_integrity(
+    records,
+    *,
+    scanner_cycle_id,
+    timestamp_ist,
+    raw_breakout_ready_count,
+    qualified_breakout_ready_count,
+):
+    records = [record for record in records if isinstance(record, dict)]
+    proof_records = []
+    violating_symbols = []
+    for record in records:
+        raw_breakout_ready = bool(record.get("breakout_ready"))
+        qualified_breakout_ready = bool(record.get("counted_breakout_ready"))
+        if qualified_breakout_ready and not raw_breakout_ready:
+            violating_symbols.append(record.get("symbol"))
+        if qualified_breakout_ready:
+            qualification_reason = "QUALIFIED_AFTER_TREND_STRUCTURE_MOMENTUM_AND_BREAKOUT"
+        else:
+            qualification_reason = record.get("pipeline_stop_reason") or (
+                "RAW_BREAKOUT_ONLY_NOT_PIPELINE_QUALIFIED"
+                if raw_breakout_ready
+                else "RAW_BREAKOUT_FALSE"
+            )
+        proof_records.append(
+            {
+                "symbol": record.get("symbol"),
+                "raw_breakout_ready": raw_breakout_ready,
+                "qualified_breakout_ready": qualified_breakout_ready,
+                "momentum_passed": bool(record.get("momentum_passed")),
+                "structure_passed": bool(record.get("structure_passed")),
+                "trend_passed": bool(record.get("trend_passed")),
+                "qualification_reason": qualification_reason,
+            }
+        )
+
+    raw_count = int(raw_breakout_ready_count or 0)
+    qualified_count = int(qualified_breakout_ready_count or 0)
+    integrity_errors = []
+    if qualified_count > raw_count:
+        integrity_errors.append("QUALIFIED_BREAKOUT_EXCEEDS_RAW_BREAKOUT")
+    if violating_symbols:
+        integrity_errors.append("QUALIFIED_SYMBOL_WITHOUT_RAW_BREAKOUT")
+
+    payload = {
+        "timestamp_ist": timestamp_ist,
+        "scanner_cycle_id": scanner_cycle_id,
+        "raw_breakout_ready_count": raw_count,
+        "qualified_breakout_ready_count": qualified_count,
+        "breakout_ready_count": qualified_count,
+        "alias_valid": qualified_count == int(qualified_breakout_ready_count or 0),
+        "integrity_valid": not integrity_errors,
+        "integrity_errors": integrity_errors,
+        "violating_symbols": [symbol for symbol in violating_symbols if symbol],
+        "records": proof_records,
+        "source": "runtime_scanner.breakout_pipeline_integrity",
+        "rule": "qualified_breakout_ready_count <= raw_breakout_ready_count",
+    }
+    _atomic_write_json(BREAKOUT_PIPELINE_INTEGRITY_PATH, payload)
+    return payload
+
+
 def _near_pass_candidate(diag):
     engines = ["trend_engine", "momentum_engine", "structure_engine", "entry_engine"]
     passed = sum(1 for engine in engines if diag.get(engine, {}).get("status") == "PASS")
@@ -1492,6 +1555,7 @@ def _status_payload(
     momentum_passed,
     raw_breakout_ready_count,
     breakout_ready_count,
+    breakout_integrity_payload,
     passed_setups,
     candidate_symbols,
     candidate_details,
@@ -1532,6 +1596,8 @@ def _status_payload(
         status = "SCAN_ONLY_STALE_OHLC"
     elif scan_only:
         status = "SCAN_ONLY_FALLBACK"
+    if isinstance(breakout_integrity_payload, dict) and not breakout_integrity_payload.get("integrity_valid", True):
+        status = "BREAKOUT_PIPELINE_INTEGRITY_ERROR"
 
     if ohlc_fallback_required:
         dashboard_status_message = "True stale OHLC fallback active"
@@ -1619,6 +1685,12 @@ def _status_payload(
         "qualified_breakout_ready_count": breakout_ready_count,
         "breakout_ready": breakout_ready_count,
         "breakout_ready_count": breakout_ready_count,
+        "breakout_pipeline_integrity": {
+            "status_path": "data/runtime/breakout_pipeline_integrity.json",
+            "integrity_valid": bool((breakout_integrity_payload or {}).get("integrity_valid", False)),
+            "integrity_errors": (breakout_integrity_payload or {}).get("integrity_errors") or [],
+            "violating_symbols": (breakout_integrity_payload or {}).get("violating_symbols") or [],
+        },
         "selected_symbols_count": stocks_checked,
         "counter_confidence": "LOW" if scan_only or final_passed is None else "HIGH",
         "counter_source": "runtime_scanner_independent_stage_counters",
@@ -2160,6 +2232,13 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         breakout_ready_count=breakout_ready_count,
         data_signature=data_signature,
     )
+    breakout_integrity_payload = _write_breakout_pipeline_integrity(
+        momentum_breakout_audit_records,
+        scanner_cycle_id=scanner_cycle_id,
+        timestamp_ist=scan_finished_at_ist,
+        raw_breakout_ready_count=momentum_breakout_audit_payload.get("raw_breakout_ready_count"),
+        qualified_breakout_ready_count=momentum_breakout_audit_payload.get("qualified_breakout_ready_count"),
+    )
     payload = _status_payload(
         mode=mode,
         stocks_checked=stocks_checked,
@@ -2170,6 +2249,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         momentum_passed=momentum_passed,
         raw_breakout_ready_count=momentum_breakout_audit_payload.get("raw_breakout_ready_count"),
         breakout_ready_count=breakout_ready_count,
+        breakout_integrity_payload=breakout_integrity_payload,
         passed_setups=passed_setups,
         candidate_symbols=candidate_symbols,
         candidate_details=candidate_details,
