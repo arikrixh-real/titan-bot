@@ -1757,6 +1757,8 @@ def get_latest_scan_symbols_breakdown():
         "momentum_passed": momentum,
         "structure_passed": structure,
         "entry_passed": entry,
+        "raw_breakout_ready_count": entry,
+        "qualified_breakout_ready_count": entry,
         "breakout_ready_count": entry,
         "entry_stage_available": True,
         "final_passed": final,
@@ -1808,6 +1810,8 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         "momentum_passed": 0,
         "structure_passed": 0,
         "entry_passed": 0,
+        "raw_breakout_ready_count": 0,
+        "qualified_breakout_ready_count": 0,
         "breakout_ready_count": 0,
         "entry_stage_available": False,
         "final_passed": None,
@@ -1857,7 +1861,9 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "momentum_passed": int(first_number(preferred_payload.get("momentum_passed"), preferred_payload.get("momentum_passed_count"), default=0)),
             "structure_passed": int(first_number(preferred_payload.get("structure_passed"), preferred_payload.get("structure_passed_count"), default=0)),
             "entry_passed": int(first_number(preferred_payload.get("entry_passed"), preferred_payload.get("entry_passed_count"), default=0)),
-            "breakout_ready_count": int(first_number(preferred_payload.get("breakout_ready_count"), preferred_payload.get("entry_passed"), default=0)),
+            "raw_breakout_ready_count": int(first_number(preferred_payload.get("raw_breakout_ready_count"), preferred_payload.get("raw_breakout_ready"), default=0)),
+            "qualified_breakout_ready_count": int(first_number(preferred_payload.get("qualified_breakout_ready_count"), preferred_payload.get("breakout_ready_count"), preferred_payload.get("breakout_ready"), default=0)),
+            "breakout_ready_count": int(first_number(preferred_payload.get("breakout_ready_count"), preferred_payload.get("qualified_breakout_ready_count"), preferred_payload.get("breakout_ready"), default=0)),
             "entry_stage_available": bool(preferred_payload.get("entry_stage_available")),
             "final_passed": optional_int_number(preferred_payload.get("final_passed"), preferred_payload.get("final_passed_count")),
             "alerts_this_scan": int(alerts),
@@ -1919,6 +1925,8 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "momentum_passed": int(first_number(counters.get("momentum_passed"), default=0)),
             "structure_passed": int(first_number(counters.get("structure_passed"), default=0)),
             "entry_passed": int(first_number(counters.get("breakout_ready"), default=0)),
+            "raw_breakout_ready_count": int(first_number(counters.get("raw_breakout_ready"), counters.get("breakout_ready"), default=0)),
+            "qualified_breakout_ready_count": int(first_number(counters.get("qualified_breakout_ready"), counters.get("breakout_ready"), default=0)),
             "breakout_ready_count": int(first_number(counters.get("breakout_ready"), default=0)),
             "entry_stage_available": confidence == "HIGH",
             "final_passed": optional_int_number(counters.get("final_passed")),
@@ -1966,7 +1974,9 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "momentum_passed": int(first_number(supabase_scanner_payload.get("momentum_passed"), default=0)),
             "structure_passed": int(first_number(supabase_scanner_payload.get("structure_passed"), default=0)),
             "entry_passed": int(first_number(supabase_scanner_payload.get("entry_passed"), default=0)),
-            "breakout_ready_count": int(first_number(supabase_scanner_payload.get("breakout_ready_count"), supabase_scanner_payload.get("entry_passed"), default=0)),
+            "raw_breakout_ready_count": int(first_number(supabase_scanner_payload.get("raw_breakout_ready_count"), supabase_scanner_payload.get("raw_breakout_ready"), default=0)),
+            "qualified_breakout_ready_count": int(first_number(supabase_scanner_payload.get("qualified_breakout_ready_count"), supabase_scanner_payload.get("breakout_ready_count"), supabase_scanner_payload.get("breakout_ready"), default=0)),
+            "breakout_ready_count": int(first_number(supabase_scanner_payload.get("breakout_ready_count"), supabase_scanner_payload.get("qualified_breakout_ready_count"), supabase_scanner_payload.get("breakout_ready"), default=0)),
             "entry_stage_available": bool(supabase_scanner_payload.get("entry_stage_available")),
             "final_passed": optional_int_number(supabase_scanner_payload.get("final_passed")),
             "alerts_this_scan": int(alerts),
@@ -2013,7 +2023,9 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "momentum_passed": int(first_number(scanner_payload.get("momentum_passed"), default=0)),
             "structure_passed": int(first_number(scanner_payload.get("structure_passed"), default=0)),
             "entry_passed": int(first_number(scanner_payload.get("entry_passed"), default=0)),
-            "breakout_ready_count": int(first_number(scanner_payload.get("breakout_ready_count"), scanner_payload.get("entry_passed"), default=0)),
+            "raw_breakout_ready_count": int(first_number(scanner_payload.get("raw_breakout_ready_count"), scanner_payload.get("raw_breakout_ready"), default=0)),
+            "qualified_breakout_ready_count": int(first_number(scanner_payload.get("qualified_breakout_ready_count"), scanner_payload.get("breakout_ready_count"), scanner_payload.get("breakout_ready"), default=0)),
+            "breakout_ready_count": int(first_number(scanner_payload.get("breakout_ready_count"), scanner_payload.get("qualified_breakout_ready_count"), scanner_payload.get("breakout_ready"), default=0)),
             "entry_stage_available": bool(scanner_payload.get("entry_stage_available")),
             "final_passed": optional_int_number(scanner_payload.get("final_passed")),
             "alerts_this_scan": int(alerts),
@@ -2050,7 +2062,9 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "momentum_passed": 0,
             "structure_passed": 0,
             "entry_passed": 0,
-            "breakout_ready_count": int(first_number(scanner_payload.get("breakout_ready_count"), scanner_payload.get("entry_passed"), default=0)),
+            "raw_breakout_ready_count": int(first_number(scanner_payload.get("raw_breakout_ready_count"), scanner_payload.get("raw_breakout_ready"), default=0)),
+            "qualified_breakout_ready_count": int(first_number(scanner_payload.get("qualified_breakout_ready_count"), scanner_payload.get("breakout_ready_count"), scanner_payload.get("breakout_ready"), default=0)),
+            "breakout_ready_count": int(first_number(scanner_payload.get("breakout_ready_count"), scanner_payload.get("qualified_breakout_ready_count"), scanner_payload.get("breakout_ready"), default=0)),
             "entry_stage_available": bool(scanner_payload.get("entry_stage_available")),
             "final_passed": optional_int_number(scanner_payload.get("final_passed")),
             "alerts_this_scan": int(first_number(scanner_payload.get("alerts_sent"), scanner_payload.get("alerts_this_scan"), default=0)),
@@ -2574,6 +2588,9 @@ def get_scanner_runtime_status():
         "momentum_passed": int(first_number(payload.get("momentum_passed"), default=0)),
         "structure_passed": int(first_number(payload.get("structure_passed"), default=0)),
         "entry_passed": int(first_number(payload.get("entry_passed"), default=0)),
+        "raw_breakout_ready_count": int(first_number(payload.get("raw_breakout_ready_count"), payload.get("raw_breakout_ready"), default=0)),
+        "qualified_breakout_ready_count": int(first_number(payload.get("qualified_breakout_ready_count"), payload.get("breakout_ready_count"), payload.get("breakout_ready"), default=0)),
+        "breakout_ready_count": int(first_number(payload.get("breakout_ready_count"), payload.get("qualified_breakout_ready_count"), payload.get("breakout_ready"), default=0)),
         "final_passed": optional_int_number(payload.get("final_passed")),
         "alerts_sent": int(first_number(payload.get("alerts_sent"), default=0)),
     }
@@ -3481,7 +3498,9 @@ latest_adaptive_trend_passed = int(first_number(scan_breakdown.get("adaptive_tre
 latest_momentum_passed = scan_breakdown["momentum_passed"]
 latest_structure_passed = scan_breakdown["structure_passed"]
 latest_entry_passed = scan_breakdown["entry_passed"]
-latest_breakout_ready = scan_breakdown.get("breakout_ready_count", latest_entry_passed)
+latest_raw_breakout_ready = scan_breakdown["raw_breakout_ready_count"]
+latest_qualified_breakout_ready = scan_breakdown["qualified_breakout_ready_count"]
+latest_breakout_ready = scan_breakdown["breakout_ready_count"]
 latest_final_passed = scan_breakdown["final_passed"]
 latest_final_passed_display = "N/A" if latest_final_passed is None else f"{latest_final_passed:,}"
 latest_health_alerts = scan_breakdown["alerts_this_scan"]
@@ -3865,7 +3884,7 @@ if scan_breakdown.get("limited_runtime"):
         st.caption(scanner_input_warning)
 
 elif scan_breakdown.get("has_data"):
-    b1, b2, b3, b4, b5, b6 = st.columns(6)
+    b1, b2, b3, b4, b5, b6, b7 = st.columns(7)
 
     with b1:
         metric_card("Stocks Checked", f"{latest_stocks_checked:,}", "Latest scan cycle")
@@ -3880,9 +3899,12 @@ elif scan_breakdown.get("has_data"):
         metric_card("Structure Passed", f"{latest_structure_passed:,}", "Clean structure")
 
     with b5:
-        metric_card("Breakout Ready", f"{latest_breakout_ready:,}", breakout_ready_subtitle)
+        metric_card("Raw Breakout Ready", f"{latest_raw_breakout_ready:,}", "Breakout condition only")
 
     with b6:
+        metric_card("Qualified Breakout", f"{latest_qualified_breakout_ready:,}", breakout_ready_subtitle)
+
+    with b7:
         metric_card("Final Passed", latest_final_passed_display, final_passed_subtitle)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -3933,7 +3955,7 @@ elif scan_breakdown.get("has_data"):
 
 else:
     st.caption("Awaiting VPS scanner breakdown")
-    b1, b2, b3, b4, b5, b6 = st.columns(6)
+    b1, b2, b3, b4, b5, b6, b7 = st.columns(7)
 
     with b1:
         metric_card("Stocks Checked", "0", "Awaiting VPS scanner breakdown")
@@ -3948,9 +3970,12 @@ else:
         metric_card("Structure Passed", "0", "Awaiting VPS scanner breakdown")
 
     with b5:
-        metric_card("Breakout Ready", "0", "Awaiting VPS scanner breakdown")
+        metric_card("Raw Breakout Ready", "0", "Awaiting VPS scanner breakdown")
 
     with b6:
+        metric_card("Qualified Breakout", "0", "Awaiting VPS scanner breakdown")
+
+    with b7:
         metric_card("Final Passed", "0", "Awaiting VPS scanner breakdown")
 
     st.caption(scanner_refresh_proof)

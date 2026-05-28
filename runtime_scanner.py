@@ -21,8 +21,11 @@ from engines.setup_engine import (
 from engines.market_filter import market_regime_status
 from engines.time_filter import current_bot_mode
 from core.truth_gate import SAFE_SCANNER_PATH, UNSAFE_SCANNER_PATH, scanner_gate_status
+from core.truth_gate import validate_trade_setup
 from data.paper_journal import maybe_write_paper_journal
 from utils.market_hours import is_trade_window
+from engines.risk_engine import calculate_rr
+from engines.trade_levels import calculate_trade_levels
 
 try:
     from scanners.volume_scanner import volume_anomaly_score
@@ -57,11 +60,17 @@ OHLC_REFRESH_STATUS_PATH = Path("data") / "runtime" / "ohlc_refresh_status.json"
 RUNTIME_SELECTOR_STATUS_PATH = Path("data") / "runtime" / "runtime_selector_status.json"
 SCAN_SELECTION_STATE_PATH = Path("data") / "scan_selection_state.json"
 FILTER_ENGINE_DIAGNOSTICS_PATH = Path("data") / "runtime" / "filter_engine_diagnostics.json"
+MOMENTUM_BREAKOUT_COUNTER_AUDIT_PATH = Path("data") / "runtime" / "momentum_breakout_counter_audit.json"
 NEAR_PASS_SETUPS_PATH = Path("data") / "runtime" / "near_pass_setups.json"
+FINAL_VALIDATED_SETUPS_PATH = Path("data") / "runtime" / "final_validated_setups.json"
+FINAL_SETUP_WRITE_DEBUG_PATH = Path("data") / "runtime" / "final_setup_write_debug.json"
+FILTER_DIAGNOSTICS_HISTORY_DIR = Path("data") / "runtime" / "filter_diagnostics_history"
+NEAR_PASS_HISTORY_DIR = Path("data") / "runtime" / "near_pass_history"
 RUNTIME_FRESH_SECONDS = 15 * 60
 MARKET_CANDLE_STALE_MINUTES = 45
 PARTIAL_STALE_TOLERANCE_RATIO = 0.15
 SCORED_DYNAMIC_LIMIT = 50
+DIAGNOSTIC_HISTORY_RETENTION = 100
 
 
 def _timestamp_ist():
@@ -684,6 +693,134 @@ def _live_price_check(live_price_cache, symbol, close):
     }
 
 
+def _safe_history_name(timestamp_ist, scanner_cycle_id):
+    timestamp = str(timestamp_ist or _timestamp_ist()).replace(":", "-")
+    timestamp = timestamp.replace("+", "_").replace("/", "-").replace("\\", "-")
+    cycle = str(scanner_cycle_id or "unknown").replace(":", "-")
+    cycle = cycle.replace("+", "_").replace("/", "-").replace("\\", "-")
+    cycle = "".join(ch if ch.isalnum() or ch in {"-", "_", "."} else "-" for ch in cycle)
+    return f"{timestamp}_{cycle}.json"
+
+
+def _retain_latest_history_files(directory, keep=DIAGNOSTIC_HISTORY_RETENTION):
+    try:
+        directory = Path(directory)
+        if not directory.exists():
+            return
+        files = sorted(
+            [path for path in directory.glob("*.json") if path.is_file()],
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        for old_path in files[int(keep):]:
+            old_path.unlink()
+    except Exception as exc:
+        print(f"[FILTER DIAGNOSTICS] history retention skipped: {exc}")
+
+
+def _write_filter_history_snapshot(payload, near_pass_payload):
+    try:
+        FILTER_DIAGNOSTICS_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+        NEAR_PASS_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+        filename = _safe_history_name(payload.get("timestamp_ist"), payload.get("scanner_cycle_id"))
+        filter_history_path = FILTER_DIAGNOSTICS_HISTORY_DIR / filename
+        near_pass_history_path = NEAR_PASS_HISTORY_DIR / filename
+        _atomic_write_json(filter_history_path, payload)
+        _atomic_write_json(near_pass_history_path, near_pass_payload)
+        _retain_latest_history_files(FILTER_DIAGNOSTICS_HISTORY_DIR)
+        _retain_latest_history_files(NEAR_PASS_HISTORY_DIR)
+        payload["history_snapshot_path"] = str(filter_history_path)
+        payload["near_pass_history_snapshot_path"] = str(near_pass_history_path)
+    except Exception as exc:
+        payload["history_snapshot_error"] = str(exc)
+
+
+def _contract_side(side):
+    side = str(side or "").upper().strip()
+    if side == "LONG":
+        return "BUY"
+    if side == "SHORT":
+        return "SELL"
+    if side in {"BUY", "SELL"}:
+        return side
+    return side
+
+
+def _final_setup_reason(symbol_diag):
+    trend_values = (symbol_diag.get("trend_engine") or {}).get("values") or {}
+    return (
+        f"trend={trend_values.get('direction')}; "
+        f"momentum={(symbol_diag.get('momentum_engine') or {}).get('status')}; "
+        f"structure={(symbol_diag.get('structure_engine') or {}).get('status')}; "
+        f"entry={(symbol_diag.get('entry_engine') or {}).get('status')}"
+    )
+
+
+def _build_final_validated_setup(symbol, data, side, symbol_diag, scanner_cycle_id, truth_gate_payload, selector_payload):
+    entry, stop_loss, target = calculate_trade_levels(data, side=side)
+    rr = calculate_rr(entry, stop_loss, target, side=side)
+    final_score = ((symbol_diag.get("final_score_engine") or {}).get("values") or {}).get("final_score")
+    setup = {
+        "symbol": str(symbol).upper(),
+        "side": _contract_side(side),
+        "entry": entry,
+        "stop_loss": stop_loss,
+        "target": target,
+        "rr": rr,
+        "final_score": final_score,
+        "reason": _final_setup_reason(symbol_diag),
+        "scanner_cycle_id": scanner_cycle_id,
+        "timestamp_ist": _timestamp_ist(),
+        "truth_gate_status": (truth_gate_payload or {}).get("overall_status"),
+        "selector_used": (selector_payload or {}).get("selector_used"),
+    }
+    setup["contract_validation"] = validate_trade_setup(setup)
+    return setup
+
+
+def _write_final_validated_setups(setups, scanner_cycle_id, reason=None):
+    required_fields = ["symbol", "side", "entry", "stop_loss", "target", "rr", "final_score", "reason"]
+    validation_failures = []
+    for setup in setups or []:
+        missing = [field for field in required_fields if setup.get(field) in (None, "")]
+        if missing:
+            validation_failures.append({"symbol": setup.get("symbol"), "missing_fields": missing})
+    payload = {
+        "timestamp_ist": _timestamp_ist(),
+        "scanner_cycle_id": scanner_cycle_id,
+        "validated_setup_count": len(setups or []),
+        "setups": setups or [],
+        "reason": reason if not setups else None,
+        "source": "runtime_scanner.canonical_final_validated_setups",
+        "schema_version": 1,
+    }
+    _atomic_write_json(FINAL_VALIDATED_SETUPS_PATH, payload)
+    file_size = FINAL_VALIDATED_SETUPS_PATH.stat().st_size if FINAL_VALIDATED_SETUPS_PATH.exists() else 0
+    write_timestamp = _timestamp_ist()
+    debug_payload = {
+        "timestamp_ist": write_timestamp,
+        "scanner_write_timestamp_ist": write_timestamp,
+        "scanner_validated_count": len(setups or []),
+        "scanner_symbols": [item.get("symbol") for item in setups or []],
+        "file_written": FINAL_VALIDATED_SETUPS_PATH.exists(),
+        "file_size_bytes": file_size,
+        "paper_journal_loaded_count": None,
+        "paper_journal_symbols": [],
+        "validation_failures": validation_failures,
+        "path": str(FINAL_VALIDATED_SETUPS_PATH),
+        "scanner_cycle_id": scanner_cycle_id,
+        "sequence": ["scanner_write_complete"],
+    }
+    _atomic_write_json(FINAL_SETUP_WRITE_DEBUG_PATH, debug_payload)
+    print("[FINAL SETUPS]")
+    print(f"validated_count={debug_payload['scanner_validated_count']}")
+    print(f"path={FINAL_VALIDATED_SETUPS_PATH}")
+    print(f"symbols={debug_payload['scanner_symbols']}")
+    if validation_failures:
+        print(f"validation_failures={validation_failures}")
+    return payload
+
+
 def _series(data, column):
     try:
         if data is None or column not in data.columns:
@@ -938,6 +1075,97 @@ def _symbol_filter_diagnostics(symbol, data):
     }
 
 
+def _momentum_breakout_audit_record(symbol, diagnostic):
+    momentum_diag = diagnostic.get("momentum_engine") if isinstance(diagnostic, dict) else {}
+    entry_diag = diagnostic.get("entry_engine") if isinstance(diagnostic, dict) else {}
+    trend_diag = diagnostic.get("trend_engine") if isinstance(diagnostic, dict) else {}
+    structure_diag = diagnostic.get("structure_engine") if isinstance(diagnostic, dict) else {}
+    return {
+        "symbol": str(symbol),
+        "momentum_passed": momentum_diag.get("status") == "PASS",
+        "breakout_ready": entry_diag.get("status") == "PASS",
+        "momentum_reason": momentum_diag.get("reason"),
+        "breakout_reason": entry_diag.get("reason"),
+        "momentum_values": momentum_diag.get("values") or {},
+        "breakout_values": entry_diag.get("values") or {},
+        "side": (trend_diag.get("values") or {}).get("side"),
+        "trend_passed": trend_diag.get("status") == "PASS",
+        "structure_passed": structure_diag.get("status") == "PASS",
+        "counted_momentum_passed": False,
+        "counted_breakout_ready": False,
+        "pipeline_stop_reason": None,
+    }
+
+
+def _write_momentum_breakout_counter_audit(
+    records,
+    *,
+    scanner_cycle_id,
+    timestamp_ist,
+    momentum_passed_count,
+    breakout_ready_count,
+    data_signature,
+):
+    records = [record for record in records if isinstance(record, dict)]
+    raw_overlap = sum(1 for row in records if row.get("momentum_passed") and row.get("breakout_ready"))
+    raw_momentum_only = sum(1 for row in records if row.get("momentum_passed") and not row.get("breakout_ready"))
+    raw_breakout_only = sum(1 for row in records if row.get("breakout_ready") and not row.get("momentum_passed"))
+    raw_neither = sum(1 for row in records if not row.get("momentum_passed") and not row.get("breakout_ready"))
+    raw_breakout_ready_count = raw_overlap + raw_breakout_only
+    counted_overlap = sum(1 for row in records if row.get("counted_momentum_passed") and row.get("counted_breakout_ready"))
+    counted_momentum_only = sum(1 for row in records if row.get("counted_momentum_passed") and not row.get("counted_breakout_ready"))
+    counted_breakout_only = sum(1 for row in records if row.get("counted_breakout_ready") and not row.get("counted_momentum_passed"))
+    counted_neither = sum(1 for row in records if not row.get("counted_momentum_passed") and not row.get("counted_breakout_ready"))
+    counted_sets_identical = bool(
+        momentum_passed_count == breakout_ready_count
+        and counted_momentum_only == 0
+        and counted_breakout_only == 0
+    )
+    suspicious_reasons = []
+    if momentum_passed_count == breakout_ready_count:
+        suspicious_reasons.append("COUNTS_IDENTICAL")
+    if counted_breakout_only > 0:
+        suspicious_reasons.append("PIPELINE_COUNT_INCONSISTENCY_BREAKOUT_WITHOUT_MOMENTUM")
+    if raw_breakout_only > 0:
+        suspicious_reasons.append("RAW_BREAKOUT_CAN_PASS_WITHOUT_MOMENTUM")
+    if counted_sets_identical:
+        suspicious_reasons.append("ALL_COUNTED_MOMENTUM_SYMBOLS_ARE_COUNTED_BREAKOUT_SYMBOLS")
+
+    payload = {
+        "timestamp_ist": timestamp_ist,
+        "scanner_cycle_id": scanner_cycle_id,
+        "data_signature": data_signature,
+        "source": "runtime_scanner.independent_momentum_breakout_audit",
+        "counter_sources": {
+            "momentum_passed": "runtime_scanner.loop.strong_momentum",
+            "breakout_ready": "runtime_scanner.loop.breakout_ready",
+        },
+        "momentum_passed_count": int(momentum_passed_count or 0),
+        "raw_breakout_ready_count": raw_breakout_ready_count,
+        "qualified_breakout_ready_count": int(breakout_ready_count or 0),
+        "breakout_ready_count": int(breakout_ready_count or 0),
+        "raw_overlap_count": raw_overlap,
+        "raw_momentum_only_count": raw_momentum_only,
+        "raw_breakout_only_count": raw_breakout_only,
+        "raw_neither_count": raw_neither,
+        "overlap_count": raw_overlap,
+        "momentum_only_count": raw_momentum_only,
+        "breakout_only_count": raw_breakout_only,
+        "neither_count": raw_neither,
+        "counted_overlap_count": counted_overlap,
+        "counted_momentum_only_count": counted_momentum_only,
+        "counted_breakout_only_count": counted_breakout_only,
+        "counted_neither_count": counted_neither,
+        "qualified_breakout_only_count": counted_breakout_only,
+        "exact_same_source": False,
+        "counted_sets_identical": counted_sets_identical,
+        "suspicious_identical_reason": ";".join(suspicious_reasons) if suspicious_reasons else "NOT_IDENTICAL_OR_NATURAL_DIVERGENCE",
+        "records": records,
+    }
+    _atomic_write_json(MOMENTUM_BREAKOUT_COUNTER_AUDIT_PATH, payload)
+    return payload
+
+
 def _near_pass_candidate(diag):
     engines = ["trend_engine", "momentum_engine", "structure_engine", "entry_engine"]
     passed = sum(1 for engine in engines if diag.get(engine, {}).get("status") == "PASS")
@@ -958,7 +1186,7 @@ def _near_pass_candidate(diag):
     }
 
 
-def _write_filter_diagnostics(symbol_diagnostics, scanner_cycle_id):
+def _write_filter_diagnostics(symbol_diagnostics, scanner_cycle_id, final_validated_setups=None):
     engine_names = [
         "trend_engine",
         "momentum_engine",
@@ -997,11 +1225,14 @@ def _write_filter_diagnostics(symbol_diagnostics, scanner_cycle_id):
         key=lambda item: item.get("score") or 0,
         reverse=True,
     )[:10]
-    final_setup_count = sum(
-        1
-        for item in symbol_diagnostics
-        if all(item.get(engine, {}).get("status") == "PASS" for engine in ["trend_engine", "momentum_engine", "structure_engine", "entry_engine"])
-    )
+    if final_validated_setups is not None:
+        final_setup_count = len(final_validated_setups)
+    else:
+        final_setup_count = sum(
+            1
+            for item in symbol_diagnostics
+            if all(item.get(engine, {}).get("status") == "PASS" for engine in ["trend_engine", "momentum_engine", "structure_engine", "entry_engine"])
+        )
     payload = {
         "timestamp_ist": _timestamp_ist(),
         "scanner_cycle_id": scanner_cycle_id,
@@ -1013,15 +1244,14 @@ def _write_filter_diagnostics(symbol_diagnostics, scanner_cycle_id):
         "final_setup_count": final_setup_count,
         "symbols": symbol_diagnostics,
     }
+    near_pass_payload = {
+        "timestamp_ist": payload["timestamp_ist"],
+        "scanner_cycle_id": scanner_cycle_id,
+        "near_pass_setups": near_pass,
+    }
+    _write_filter_history_snapshot(payload, near_pass_payload)
     _atomic_write_json(FILTER_ENGINE_DIAGNOSTICS_PATH, payload)
-    _atomic_write_json(
-        NEAR_PASS_SETUPS_PATH,
-        {
-            "timestamp_ist": payload["timestamp_ist"],
-            "scanner_cycle_id": scanner_cycle_id,
-            "near_pass_setups": near_pass,
-        },
-    )
+    _atomic_write_json(NEAR_PASS_SETUPS_PATH, near_pass_payload)
     return payload
 
 
@@ -1260,6 +1490,7 @@ def _status_payload(
     adaptive_trend_passed,
     structure_passed,
     momentum_passed,
+    raw_breakout_ready_count,
     breakout_ready_count,
     passed_setups,
     candidate_symbols,
@@ -1382,6 +1613,11 @@ def _status_payload(
         ),
         "alerts_sent": 0,
         "alerts_this_scan": 0,
+        "raw_breakout_ready": raw_breakout_ready_count,
+        "raw_breakout_ready_count": raw_breakout_ready_count,
+        "qualified_breakout_ready": breakout_ready_count,
+        "qualified_breakout_ready_count": breakout_ready_count,
+        "breakout_ready": breakout_ready_count,
         "breakout_ready_count": breakout_ready_count,
         "selected_symbols_count": stocks_checked,
         "counter_confidence": "LOW" if scan_only or final_passed is None else "HIGH",
@@ -1668,6 +1904,8 @@ def run_scanner(path=SCANNER_STATUS_PATH):
     entry_examples = {}
     trend_diagnostic_symbols = []
     filter_symbol_diagnostics = []
+    momentum_breakout_audit_records = []
+    final_validated_setups = []
     regime_diagnostics = _regime_diagnostics()
     live_price_cache = _read_json(LIVE_PRICE_CACHE_PATH)
     selector_payload = _write_runtime_selector_status(
@@ -1730,7 +1968,10 @@ def run_scanner(path=SCANNER_STATUS_PATH):
 
     for symbol, data in cached_symbols.items():
         stocks_checked += 1
-        filter_symbol_diagnostics.append(_symbol_filter_diagnostics(symbol, data))
+        symbol_filter_diagnostic = _symbol_filter_diagnostics(symbol, data)
+        filter_symbol_diagnostics.append(symbol_filter_diagnostic)
+        momentum_breakout_audit_record = _momentum_breakout_audit_record(symbol, symbol_filter_diagnostic)
+        momentum_breakout_audit_records.append(momentum_breakout_audit_record)
         candle_dt = _last_candle_timestamp(data)
         latest_candle_dt = _latest_timestamp(latest_candle_dt, candle_dt)
         signature_rows.append(
@@ -1778,6 +2019,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
                 reason = str(trend or "NO_VALID_TREND")
                 trend_reasons[reason] += 1
                 add_example(trend_examples, reason, symbol)
+                momentum_breakout_audit_record["pipeline_stop_reason"] = f"TREND:{reason}"
                 continue
             trend_passed += 1
             if strict_side is None:
@@ -1788,22 +2030,45 @@ def run_scanner(path=SCANNER_STATUS_PATH):
             if not structure_ok(data, side=side):
                 structure_reasons["STRUCTURE_FAIL"] += 1
                 add_example(structure_examples, "STRUCTURE_FAIL", symbol)
+                momentum_breakout_audit_record["pipeline_stop_reason"] = "STRUCTURE_FAIL"
                 continue
             structure_passed += 1
 
             if not strong_momentum(data, side=side):
                 momentum_reasons["MOMENTUM_FAIL"] += 1
                 add_example(momentum_examples, "MOMENTUM_FAIL", symbol)
+                momentum_breakout_audit_record["pipeline_stop_reason"] = "MOMENTUM_FAIL"
                 continue
             momentum_passed += 1
+            momentum_breakout_audit_record["counted_momentum_passed"] = True
 
             if not breakout_ready(data, side=side):
                 entry_reasons["NOT_READY"] += 1
                 add_example(entry_examples, "NOT_READY", symbol)
+                momentum_breakout_audit_record["pipeline_stop_reason"] = "NOT_READY"
                 continue
             breakout_ready_count += 1
+            momentum_breakout_audit_record["counted_breakout_ready"] = True
+            momentum_breakout_audit_record["pipeline_stop_reason"] = "PASSED_BREAKOUT_READY"
 
-            passed_setups += 1
+            final_setup = _build_final_validated_setup(
+                symbol,
+                data,
+                side,
+                symbol_filter_diagnostic,
+                scanner_cycle_id,
+                truth_gate_payload,
+                selector_payload,
+            )
+            if (final_setup.get("contract_validation") or {}).get("status") != "PASS":
+                entry_reasons[f"CONTRACT_INVALID:{(final_setup.get('contract_validation') or {}).get('reason')}"] += 1
+                momentum_breakout_audit_record["pipeline_stop_reason"] = (
+                    f"CONTRACT_INVALID:{(final_setup.get('contract_validation') or {}).get('reason')}"
+                )
+                continue
+
+            final_validated_setups.append(final_setup)
+            passed_setups = len(final_validated_setups)
             if len(candidate_symbols) < 5:
                 candidate_symbols.append(symbol)
             if len(candidate_details) < 5:
@@ -1819,9 +2084,20 @@ def run_scanner(path=SCANNER_STATUS_PATH):
 
         except Exception:
             errors += 1
+            if "momentum_breakout_audit_record" in locals():
+                momentum_breakout_audit_record["pipeline_stop_reason"] = "SCANNER_EXCEPTION"
             continue
 
-    filter_diagnostics_payload = _write_filter_diagnostics(filter_symbol_diagnostics, scanner_cycle_id)
+    final_validated_payload = _write_final_validated_setups(
+        final_validated_setups,
+        scanner_cycle_id,
+        reason=None if final_validated_setups else "NO_VALIDATED_FINAL_SETUPS",
+    )
+    filter_diagnostics_payload = _write_filter_diagnostics(
+        filter_symbol_diagnostics,
+        scanner_cycle_id,
+        final_validated_setups=final_validated_setups,
+    )
     _print_filter_diagnostics_summary(filter_diagnostics_payload)
     paper_journal_payload = maybe_write_paper_journal(
         truth_gate_payload=truth_gate_payload,
@@ -1876,6 +2152,14 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         item["repeated_data_signature"] = repeated_data_signature
         if repeated_data_warning:
             item["stale_reason"] = item.get("stale_reason") or repeated_data_warning
+    momentum_breakout_audit_payload = _write_momentum_breakout_counter_audit(
+        momentum_breakout_audit_records,
+        scanner_cycle_id=scanner_cycle_id,
+        timestamp_ist=scan_finished_at_ist,
+        momentum_passed_count=momentum_passed,
+        breakout_ready_count=breakout_ready_count,
+        data_signature=data_signature,
+    )
     payload = _status_payload(
         mode=mode,
         stocks_checked=stocks_checked,
@@ -1884,6 +2168,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         adaptive_trend_passed=adaptive_trend_passed,
         structure_passed=structure_passed,
         momentum_passed=momentum_passed,
+        raw_breakout_ready_count=momentum_breakout_audit_payload.get("raw_breakout_ready_count"),
         breakout_ready_count=breakout_ready_count,
         passed_setups=passed_setups,
         candidate_symbols=candidate_symbols,
@@ -1933,6 +2218,23 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         "fallback_reason": selector_payload.get("fallback_reason"),
         "selected_count": selector_payload.get("selected_count"),
         "status_path": "data/runtime/runtime_selector_status.json",
+    }
+    payload["momentum_breakout_counter_audit"] = {
+        "status_path": "data/runtime/momentum_breakout_counter_audit.json",
+        "momentum_passed_count": momentum_breakout_audit_payload.get("momentum_passed_count"),
+        "raw_breakout_ready_count": momentum_breakout_audit_payload.get("raw_breakout_ready_count"),
+        "qualified_breakout_ready_count": momentum_breakout_audit_payload.get("qualified_breakout_ready_count"),
+        "breakout_ready_count": momentum_breakout_audit_payload.get("breakout_ready_count"),
+        "overlap_count": momentum_breakout_audit_payload.get("overlap_count"),
+        "raw_breakout_only_count": momentum_breakout_audit_payload.get("raw_breakout_only_count"),
+        "qualified_breakout_only_count": momentum_breakout_audit_payload.get("qualified_breakout_only_count"),
+        "neither_count": momentum_breakout_audit_payload.get("neither_count"),
+        "suspicious_identical_reason": momentum_breakout_audit_payload.get("suspicious_identical_reason"),
+    }
+    payload["final_validated_setups"] = {
+        "validated_setup_count": final_validated_payload.get("validated_setup_count"),
+        "status_path": "data/runtime/final_validated_setups.json",
+        "symbols": [item.get("symbol") for item in final_validated_payload.get("setups") or []],
     }
     payload["paper_journal"] = {
         "enabled": paper_journal_payload.get("enabled"),
