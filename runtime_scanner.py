@@ -2328,6 +2328,25 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         "telegram_sent": False,
         "status_path": "data/runtime/paper_journal_status.json",
     }
+    try:
+        from learning_evolution_truth import refresh_learning_evolution_truth
+
+        learning_truth = refresh_learning_evolution_truth(write_files=True)
+        payload["learning_evolution_truth"] = {
+            "status": "UPDATED",
+            "evolution_memory_path": "data/runtime/evolution_memory.json",
+            "closed_outcome_count": learning_truth.get("closed_outcome_count"),
+            "learning_confidence": learning_truth.get("learning_confidence"),
+            "top_performing_setup_type": (learning_truth.get("top_performing_setup_type") or {}).get("name"),
+            "weakest_setup_type": (learning_truth.get("weakest_setup_type") or {}).get("name"),
+            "evolution_changes_today": (learning_truth.get("strategy_weight_change_log") or {}).get("changes_today"),
+        }
+    except Exception as exc:
+        payload["learning_evolution_truth"] = {
+            "status": "ERROR",
+            "error": f"{type(exc).__name__}:{exc}",
+            "evolution_memory_path": "data/runtime/evolution_memory.json",
+        }
 
     setup_reasons, setup_examples, setup_rejected = _setup_engine_rejections_from_debug(
         pipeline.get("final_debug"),

@@ -48,6 +48,8 @@ RUNTIME_RESILIENCE_STATUS_PATH = "/".join(["data", "runtime", "runtime_resilienc
 PYRAMID_GOVERNANCE_STATUS_PATH = "/".join(["data", "runtime", "pyramid_governance_status.json"])
 WEEKEND_RESEARCH_MODE_STATUS_PATH = "/".join(["data", "runtime", "weekend_research_mode_status.json"])
 TITAN_RUNTIME_STATUS_PATH = "/".join(["data", "runtime", "titan_runtime_status.json"])
+EVOLUTION_MEMORY_PATH = "/".join(["data", "runtime", "evolution_memory.json"])
+STRATEGY_WEIGHT_CHANGE_LOG_PATH = "/".join(["data", "runtime", "strategy_weight_change_log.json"])
 RUNTIME_STATUS_TABLE = "runtime_status"
 RUNTIME_FRESH_SECONDS = 15 * 60
 SCANNER_STALE_SECONDS = 7 * 60
@@ -1013,6 +1015,36 @@ def get_master_shadow_dashboard_data():
         }
     except Exception:
         return neutral
+
+
+def get_learning_evolution_truth_data():
+    memory = safe_read_json(EVOLUTION_MEMORY_PATH, {})
+    weight_log = safe_read_json(STRATEGY_WEIGHT_CHANGE_LOG_PATH, {})
+    top_setup = memory.get("top_performing_setup_type") if isinstance(memory.get("top_performing_setup_type"), dict) else {}
+    weak_setup = memory.get("weakest_setup_type") if isinstance(memory.get("weakest_setup_type"), dict) else {}
+    best_symbols = memory.get("best_symbols") if isinstance(memory.get("best_symbols"), list) else []
+    weak_symbols = memory.get("weakest_symbols") if isinstance(memory.get("weakest_symbols"), list) else []
+
+    def item_name(item, default="INSUFFICIENT_OUTCOMES"):
+        return str((item or {}).get("name") or default)
+
+    def symbol_list(items):
+        names = [str(item.get("name")) for item in items[:3] if isinstance(item, dict) and item.get("name")]
+        return ", ".join(names) if names else "INSUFFICIENT_OUTCOMES"
+
+    confidence = first_number(memory.get("learning_confidence"), default=0.0)
+    closed_count = int(first_number(memory.get("closed_outcome_count"), default=0))
+    return {
+        "top_setup_type": item_name(top_setup),
+        "weakest_setup_type": item_name(weak_setup),
+        "best_symbols": symbol_list(best_symbols),
+        "weakest_symbols": symbol_list(weak_symbols),
+        "learning_confidence": confidence,
+        "learning_confidence_display": f"{confidence * 100:.1f}%",
+        "evolution_changes_today": int(first_number(weight_log.get("changes_today"), default=0)),
+        "closed_outcome_count": closed_count,
+        "status": "OUTCOME_BACKED" if closed_count > 0 else "WAITING_FOR_OUTCOMES",
+    }
 
 
 def normalize_outcome(value):
@@ -3421,6 +3453,7 @@ live_price_monitor_runtime_data = get_live_price_monitor_runtime_status()
 master_runtime_data, _ = get_runtime_payload("master_brain_status", "/".join(["data", "runtime", "master_brain_status.json"]))
 rejection_heatmap_data = safe_read_json(REJECTION_HEATMAP_PATH, {})
 sideways_analysis_data = safe_read_json(SIDEWAYS_ANALYSIS_PATH, {})
+learning_evolution_truth_data = get_learning_evolution_truth_data()
 real_latest_scan_time = scanner_runtime_data["timestamp"]
 
 
@@ -3745,6 +3778,26 @@ with mb4:
         f"{closed_trades:,}",
         "TP/SL results used for accuracy",
     )
+
+st.markdown("<br>", unsafe_allow_html=True)
+le1, le2, le3 = st.columns(3)
+with le1:
+    metric_card(
+        "Top Performing Setup Type",
+        learning_evolution_truth_data["top_setup_type"],
+        f"Closed outcomes: {learning_evolution_truth_data['closed_outcome_count']}",
+    )
+    metric_card(
+        "Weakest Setup Type",
+        learning_evolution_truth_data["weakest_setup_type"],
+        "Outcome-backed weakness",
+    )
+with le2:
+    metric_card("Best Symbols", learning_evolution_truth_data["best_symbols"], "Highest outcome-backed win rate")
+    metric_card("Weakest Symbols", learning_evolution_truth_data["weakest_symbols"], "Lowest outcome-backed win rate")
+with le3:
+    metric_card("Learning Confidence", learning_evolution_truth_data["learning_confidence_display"], learning_evolution_truth_data["status"])
+    metric_card("Evolution Changes Today", f"{learning_evolution_truth_data['evolution_changes_today']:,}", "Strategy weight log entries")
 
 st.markdown("</div>", unsafe_allow_html=True)
 
