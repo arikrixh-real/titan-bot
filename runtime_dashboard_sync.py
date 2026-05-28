@@ -12,6 +12,7 @@ DASHBOARD_SYNC_STATUS_PATH = Path("data") / "runtime" / "dashboard_sync_status.j
 HEARTBEAT_PATH = Path("data") / "runtime" / "titan_heartbeat.json"
 RUNTIME_STATUS_PATH = Path("data") / "runtime" / "titan_runtime_status.json"
 SCANNER_STATUS_PATH = Path("data") / "runtime" / "scanner_status.json"
+SETUP_ENGINE_STATUS_PATH = Path("data") / "runtime" / "setup_engine_status.json"
 MASTER_BRAIN_STATUS_PATH = Path("data") / "runtime" / "master_brain_status.json"
 PAPER_ENGINE_STATUS_PATH = Path("data") / "runtime" / "paper_engine_status.json"
 LIVE_PRICE_MONITOR_STATUS_PATH = Path("data") / "runtime" / "live_price_monitor_status.json"
@@ -39,6 +40,7 @@ RUNTIME_STATUS_SOURCES = {
     "daemon_health": DAEMON_HEALTH_PATH,
     "titan_runtime_status": RUNTIME_STATUS_PATH,
     "scanner_status": SCANNER_STATUS_PATH,
+    "setup_engine_status": SETUP_ENGINE_STATUS_PATH,
     "live_price_monitor_status": LIVE_PRICE_MONITOR_STATUS_PATH,
     "master_brain_status": MASTER_BRAIN_STATUS_PATH,
     "paper_engine_status": PAPER_ENGINE_STATUS_PATH,
@@ -246,6 +248,7 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
     heartbeat = runtime_payloads["titan_heartbeat"]
     runtime_status = runtime_payloads["titan_runtime_status"]
     scanner_status = runtime_payloads["scanner_status"]
+    setup_engine_status = runtime_payloads["setup_engine_status"]
     master_brain_status = runtime_payloads["master_brain_status"]
     paper_engine_status = runtime_payloads["paper_engine_status"]
     news_pulse_status = runtime_payloads["news_pulse_status"]
@@ -367,6 +370,7 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
         "daemon_health": daemon_health or {},
         "runtime_status": runtime_status or {},
         "scanner_status": scanner_status or {},
+        "setup_engine_status": setup_engine_status or {},
         "live_price_monitor_status": live_price_monitor_status or {},
         "master_brain_status": master_brain_status or {},
         "paper_engine_status": paper_engine_status or {},
@@ -452,6 +456,12 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
             "scanner_dashboard_status_message": (
                 scanner_status.get("dashboard_status_message") if isinstance(scanner_status, dict) else None
             ),
+            "setup_engine_marker_only": bool(
+                setup_engine_status.get("marker_only")
+            ) if isinstance(setup_engine_status, dict) else False,
+            "setup_engine_real_run": bool(
+                setup_engine_status.get("real_setup_engine_called")
+            ) if isinstance(setup_engine_status, dict) else False,
         }
     }
 

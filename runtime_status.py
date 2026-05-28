@@ -18,6 +18,7 @@ from utils.market_hours import IST, as_ist_datetime
 
 
 STATUS_PATH = Path("data") / "runtime" / "titan_runtime_status.json"
+SETUP_ENGINE_STATUS_PATH = Path("data") / "runtime" / "setup_engine_status.json"
 HISTORICAL_REPLAY_STATUS_PATH = Path("data") / "runtime" / "historical_replay_status.json"
 HISTORICAL_REPLAY_PROGRESS_PATH = Path("data") / "runtime" / "historical_replay_progress.json"
 HISTORICAL_EXPERIENCE_REPORT_PATH = (
@@ -1233,6 +1234,28 @@ def _setup_engine_runtime_health_summary():
         return {"overall_status": "FAIL", "setup_runtime_health": "UNAVAILABLE", "error": str(exc)}
 
 
+def _setup_engine_truth_summary():
+    payload = _read_json_safe(SETUP_ENGINE_STATUS_PATH)
+    if not payload:
+        runtime_truth = "MISSING"
+    elif payload.get("real_setup_engine_called") or payload.get("actual_setup_generation"):
+        runtime_truth = "REAL_SETUP_ENGINE_RAN"
+    elif payload.get("marker_only") is True:
+        runtime_truth = "MARKER_ONLY"
+    else:
+        runtime_truth = "UNKNOWN"
+
+    return {
+        "status_path": str(SETUP_ENGINE_STATUS_PATH).replace("\\", "/"),
+        "status": payload.get("status") if isinstance(payload, dict) else None,
+        "timestamp_ist": payload.get("timestamp_ist") if isinstance(payload, dict) else None,
+        "marker_only": bool(payload.get("marker_only")) if isinstance(payload, dict) else False,
+        "real_setup_engine_called": bool(payload.get("real_setup_engine_called")) if isinstance(payload, dict) else False,
+        "actual_setup_generation": bool(payload.get("actual_setup_generation")) if isinstance(payload, dict) else False,
+        "runtime_truth": runtime_truth,
+    }
+
+
 def _runtime_fallback_resolution_summary():
     try:
         return run_runtime_fallback_resolution()
@@ -1322,6 +1345,7 @@ def build_runtime_status(value=None):
     runtime_warning_resolution = build_runtime_warning_resolution_status(canonical=canonical_runtime_mode, now=now)
     master_brain_runtime_health = _master_brain_runtime_health_summary()
     setup_engine_runtime_health = _setup_engine_runtime_health_summary()
+    setup_engine_truth = _setup_engine_truth_summary()
     runtime_fallback_resolution = _runtime_fallback_resolution_summary()
     master_brain_runtime_health = runtime_fallback_resolution.get("master_brain_runtime_health") or master_brain_runtime_health
     setup_engine_runtime_health = runtime_fallback_resolution.get("setup_engine_runtime_health") or setup_engine_runtime_health
@@ -1367,6 +1391,7 @@ def build_runtime_status(value=None):
         "runtime_warning_resolution": runtime_warning_resolution,
         "master_brain_runtime_health": master_brain_runtime_health,
         "setup_engine_runtime_health": setup_engine_runtime_health,
+        "setup_engine_truth": setup_engine_truth,
         "runtime_fallback_resolution": runtime_fallback_resolution,
         "scanner_confidence": runtime_fallback_resolution.get("scanner_confidence") or scanner_filter_truth.get("counter_confidence"),
         "fallback_truthfulness": runtime_fallback_resolution.get("fallback_truthfulness"),

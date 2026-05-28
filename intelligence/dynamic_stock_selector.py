@@ -1,5 +1,6 @@
 import contextlib
 import io
+from pathlib import Path
 import yfinance as yf
 
 from config.universe import get_capital_adaptive_universe
@@ -49,6 +50,23 @@ def clean_symbol(symbol):
     return symbol.replace(".NS", "")
 
 
+def load_cached_data(symbol):
+    clean = clean_symbol(symbol)
+    path = Path("data") / "cache" / f"{clean}.csv"
+    if not path.exists():
+        return None
+
+    try:
+        import pandas as pd
+
+        df = pd.read_csv(path)
+        if df is None or df.empty:
+            return None
+        return df
+    except Exception:
+        return None
+
+
 def to_float(value):
     try:
         if hasattr(value, "iloc"):
@@ -61,6 +79,10 @@ def to_float(value):
 def fetch_data(symbol):
     if symbol in BAD_SYMBOLS:
         return None
+
+    cached_df = load_cached_data(symbol)
+    if cached_df is not None:
+        return cached_df
 
     try:
         buffer = io.StringIO()
