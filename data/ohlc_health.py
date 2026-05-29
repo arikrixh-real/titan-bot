@@ -5,14 +5,18 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+import yfinance as yf
 
 from config.upstox_symbols import normalize_symbol
+from scripts.refresh_ohlc_cache import YFINANCE_SYMBOL_ALIASES
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CACHE_DIR = PROJECT_ROOT / "data" / "cache"
 RUNTIME_HEALTH_PATH = PROJECT_ROOT / "data" / "runtime" / "ohlc_health.json"
 REQUIRED_COLUMNS = {"Open", "High", "Low", "Close", "Volume"}
+REQUIRED_ROWS = 100
+MINIMUM_ROWS = 60
 IST = ZoneInfo("Asia/Kolkata")
 
 
@@ -104,6 +108,71 @@ def _read_cache_df(symbol):
         return None, path, f"CACHE_READ_FAILED:{type(exc).__name__}:{exc}"
 
 
+def _normalize_frame(df):
+    if df is None or df.empty:
+        return None
+    df = df.copy()
+    if isinstance(df.columns, pd.MultiIndex):
+        first_level = [str(col[0]) for col in df.columns]
+        if set(first_level).issubset({"Open", "High", "Low", "Close", "Adj Close", "Volume"}):
+            df.columns = first_level
+        else:
+            df.columns = [
+                "_".join(str(part) for part in col if str(part) and str(part) != "nan")
+                for col in df.columns
+            ]
+    if "Datetime" not in df.columns:
+        df = df.reset_index()
+        first = df.columns[0]
+        if first != "Datetime":
+            df = df.rename(columns={first: "Datetime"})
+    df.columns = [str(column).strip() for column in df.columns]
+    if "Date" in df.columns and "Datetime" not in df.columns:
+        df = df.rename(columns={"Date": "Datetime"})
+    missing = REQUIRED_COLUMNS - set(df.columns)
+    if missing:
+        return None
+    parsed = pd.to_datetime(df["Datetime"], errors="coerce", utc=True)
+    df = df.assign(_parsed_datetime=parsed)
+    df = df.dropna(subset=["_parsed_datetime"])
+    for column in REQUIRED_COLUMNS:
+        df[column] = pd.to_numeric(df[column], errors="coerce")
+    df = df.dropna(subset=["Open", "High", "Low", "Close", "Volume"])
+    if df.empty:
+        return None
+    df = df.sort_values("_parsed_datetime")
+    df = df.drop_duplicates(subset=["_parsed_datetime"], keep="last")
+    df["Datetime"] = df["_parsed_datetime"].apply(
+        lambda value: value.isoformat() if hasattr(value, "isoformat") else str(value)
+    )
+    return df[["Datetime", "Open", "High", "Low", "Close", "Volume"]]
+
+
+def _write_cache_df(symbol, df):
+    normalized = _normalize_frame(df)
+    if normalized is None or normalized.empty:
+        return False
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    path = get_cache_file(symbol)
+    temp_path = path.with_suffix(path.suffix + ".tmp")
+    normalized.to_csv(temp_path, index=False)
+    os.replace(temp_path, path)
+    return True
+
+
+def _merge_with_existing_cache(symbol, new_df):
+    existing, _path, _error = _read_cache_df(symbol)
+    frames = []
+    if existing is not None and not existing.empty:
+        frames.append(existing)
+    if new_df is not None and not new_df.empty:
+        frames.append(new_df)
+    if not frames:
+        return False
+    merged = pd.concat(frames, ignore_index=True)
+    return _write_cache_df(symbol, merged)
+
+
 def validate_ohlc_df(df, symbol, max_age_hours=24):
     reasons = []
     rows = 0 if df is None else len(df)
@@ -113,6 +182,10 @@ def validate_ohlc_df(df, symbol, max_age_hours=24):
         reasons.append("OHLC_DF_MISSING")
     elif df.empty:
         reasons.append("OHLC_EMPTY_ROWS")
+    elif rows < MINIMUM_ROWS:
+        reasons.append("INSUFFICIENT_HISTORY_ROWS")
+    elif rows < REQUIRED_ROWS:
+        reasons.append("BELOW_IDEAL_HISTORY_ROWS")
 
     missing_columns = sorted(REQUIRED_COLUMNS - set(columns))
     if missing_columns:
@@ -145,12 +218,28 @@ def validate_ohlc_df(df, symbol, max_age_hours=24):
     elif df is not None:
         reasons.append("VOLUME_ALL_ZERO_OR_MISSING")
 
-    status = "PASS" if not reasons else "FAIL"
+    hard_fail_reasons = [
+        reason for reason in reasons
+        if not reason.startswith("BELOW_IDEAL_HISTORY_ROWS")
+    ]
+    if hard_fail_reasons:
+        status = "FAIL"
+    elif reasons:
+        status = "DEGRADED"
+    else:
+        status = "PASS"
     return {
         "symbol": _clean_symbol(symbol),
         "status": status,
         "reason": None if status == "PASS" else ";".join(reasons),
         "rows": rows,
+        "required_rows": REQUIRED_ROWS,
+        "minimum_rows": MINIMUM_ROWS,
+        "history_depth_status": (
+            "PASS" if rows >= REQUIRED_ROWS else (
+                "DEGRADED" if rows >= MINIMUM_ROWS else "FAIL"
+            )
+        ),
         "columns": columns,
         "missing_columns": missing_columns,
         "latest_candle_timestamp": latest_dt.isoformat() if latest_dt else None,
@@ -187,9 +276,12 @@ def refresh_ohlc_cache(symbol, force=False):
 
     upstox_result = {}
     try:
-        from data.upstox_ohlc import refresh_symbol_from_upstox
+        from data.upstox_ohlc import fetch_upstox_intraday_ohlc
 
-        upstox_result = refresh_symbol_from_upstox(_clean_symbol(symbol))
+        upstox_result = fetch_upstox_intraday_ohlc(_clean_symbol(symbol))
+        upstox_df = upstox_result.get("dataframe") if isinstance(upstox_result, dict) else None
+        if upstox_result.get("status") == "OK" and upstox_df is not None:
+            _merge_with_existing_cache(symbol, upstox_df)
     except Exception as exc:
         upstox_result = {
             "status": "UPSTOX_EXCEPTION",
@@ -197,23 +289,20 @@ def refresh_ohlc_cache(symbol, force=False):
             "source": "UPSTOX",
         }
 
+    after_upstox = get_ohlc_freshness(symbol)
     yfinance_result = {}
-    if upstox_result.get("status") != "OK":
-        try:
-            from scripts.refresh_ohlc_cache import refresh_ohlc_cache as refresh_yfinance_cache
-
-            yfinance_result = refresh_yfinance_cache(
-                symbols=[_yfinance_symbol(symbol)],
-                pause_seconds=0,
-            )
-        except Exception as exc:
-            yfinance_result = {
-                "status": "YFINANCE_EXCEPTION",
-                "reason": f"{type(exc).__name__}:{exc}",
-            }
+    after_upstox_reason = str(after_upstox.get("reason") or "")
+    upstox_status = upstox_result.get("status")
+    upstox_failed_or_unmapped = upstox_status != "OK" or upstox_status == "UNMAPPED"
+    cache_still_stale = "OHLC_STALE:" in after_upstox_reason
+    if (
+        after_upstox.get("rows", 0) < REQUIRED_ROWS
+        or (upstox_failed_or_unmapped and cache_still_stale)
+    ):
+        yfinance_result = _refresh_from_yfinance(symbol)
 
     after = get_ohlc_freshness(symbol)
-    refreshed = after.get("status") == "PASS"
+    refreshed = after.get("status") in {"PASS", "DEGRADED"}
     source = "UPSTOX" if upstox_result.get("status") == "OK" else "YFINANCE_FALLBACK"
     reason = None if refreshed else (
         f"upstox={upstox_result.get('status')}:{upstox_result.get('reason')};"
@@ -230,6 +319,46 @@ def refresh_ohlc_cache(symbol, force=False):
         "before": before,
         "after": after,
     }
+
+
+def _refresh_from_yfinance(symbol):
+    clean = _clean_symbol(symbol)
+    yf_symbol = _yfinance_symbol(clean)
+    yf_symbol = YFINANCE_SYMBOL_ALIASES.get(yf_symbol, yf_symbol)
+    try:
+        df = yf.download(
+            yf_symbol,
+            period="60d",
+            interval="15m",
+            progress=False,
+            threads=False,
+        )
+        normalized = _normalize_frame(df)
+        if normalized is None or normalized.empty:
+            return {
+                "status": "SKIPPED",
+                "reason": "YFINANCE_EMPTY_FRAME",
+                "symbol": clean,
+                "download_symbol": yf_symbol,
+                "rows": 0,
+            }
+        _merge_with_existing_cache(clean, normalized)
+        return {
+            "status": "REFRESHED",
+            "reason": None,
+            "symbol": clean,
+            "download_symbol": yf_symbol,
+            "rows": len(normalized),
+            "period": "60d",
+            "interval": "15m",
+        }
+    except Exception as exc:
+        return {
+            "status": "YFINANCE_EXCEPTION",
+            "reason": f"{type(exc).__name__}:{exc}",
+            "symbol": clean,
+            "download_symbol": yf_symbol,
+        }
 
 
 def ensure_fresh_ohlc(symbols, max_age_hours=24):
@@ -257,7 +386,7 @@ def ensure_fresh_ohlc(symbols, max_age_hours=24):
                 refreshed_count += 1
             freshness = get_ohlc_freshness(symbol, max_age_hours=max_age_hours)
 
-        valid = freshness.get("status") == "PASS"
+        valid = freshness.get("status") in {"PASS", "DEGRADED"}
         if valid:
             valid_symbols.append(symbol)
         else:
@@ -277,12 +406,24 @@ def ensure_fresh_ohlc(symbols, max_age_hours=24):
     invalid_count = len(invalid_symbols)
     invalid_ratio = round(invalid_count / requested, 4) if requested else 1.0
     too_many_invalid = bool(requested and invalid_ratio > 0.15)
-    status = "PASS" if requested and not too_many_invalid and invalid_count == 0 else "FAIL"
+    degraded_count = sum(
+        1
+        for item in results
+        if (item.get("freshness") or {}).get("status") == "DEGRADED"
+    )
+    if requested and not too_many_invalid and invalid_count == 0 and degraded_count == 0:
+        status = "PASS"
+    elif requested and not too_many_invalid:
+        status = "DEGRADED"
+    else:
+        status = "FAIL"
     reason = None
     if not requested:
         reason = "NO_SYMBOLS_REQUESTED"
     elif invalid_count:
         reason = f"OHLC_INVALID_SYMBOLS:{invalid_count}/{requested}"
+    elif degraded_count:
+        reason = f"OHLC_DEGRADED_HISTORY:{degraded_count}/{requested}"
     payload = {
         "timestamp_ist": _timestamp_ist(),
         "status": status,
@@ -291,6 +432,7 @@ def ensure_fresh_ohlc(symbols, max_age_hours=24):
         "requested_count": requested,
         "valid_count": len(valid_symbols),
         "invalid_count": invalid_count,
+        "degraded_count": degraded_count,
         "invalid_ratio": invalid_ratio,
         "too_many_invalid": too_many_invalid,
         "refresh_attempted_count": refresh_attempted_count,
