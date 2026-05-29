@@ -403,7 +403,11 @@ def validate_trade_setup(setup):
     stop_loss = _safe_float(setup.get("stop_loss") or setup.get("sl") or setup.get("stoploss"))
     target = _safe_float(setup.get("target") or setup.get("tp") or setup.get("target_price") or setup.get("t1"))
     rr = _safe_float(setup.get("rr") or setup.get("risk_reward"))
-    final_score = setup.get("final_score")
+    final_score = (
+        setup.get("final_score")
+        or setup.get("score")
+        or setup.get("rank_score")
+    )
     reason_text = str(setup.get("reason") or setup.get("setup_reason") or "").strip()
 
     if not symbol:
@@ -608,6 +612,8 @@ def audit_snapshot():
             }
     if ohlc_health.get("status") == "PASS":
         ohlc_status = _status("PASS", "OHLC_CACHE_FRESH", health=ohlc_health)
+    elif ohlc_health.get("status") == "DEGRADED":
+        ohlc_status = _status("DEGRADED", ohlc_health.get("reason") or "BELOW_IDEAL_HISTORY_ROWS", health=ohlc_health)
     else:
         ohlc_status = _status(
             "FAIL",
