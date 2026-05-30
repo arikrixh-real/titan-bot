@@ -245,6 +245,8 @@ def _reconciled_counter_confidence(confidence, fallback_resolution, master_healt
     master_state = str(master_health.get("master_brain_runtime_health") or "").upper()
     setup_state = str(setup_health.get("setup_runtime_health") or "").upper()
 
+    if confidence == "HIGH":
+        return "HIGH"
     if truthfulness == "OFF_HOURS_RESEARCH_STANDBY":
         return "MEDIUM"
     if truthfulness in {"ENGINE_UNAVAILABLE", "DATA_DEGRADED", "REAL"} and fallback_resolution.get("fallback_active"):
@@ -353,9 +355,14 @@ def build_scanner_filter_truth_status(
 
     raw_identical_warning = _identical_counter_warning(counters)
     identical_warning = False if off_hours_standby else raw_identical_warning
+    scanner_final_source = str(scanner.get("final_count_source") or "")
+    scanner_final_is_validated_truth = scanner_final_source == "runtime_scanner.final_validated_setups"
     setup_final = _int_or_none(setup.get("final_passed") or setup.get("final_passed_count"))
+    # Scanner-owned validated setups are the current final_passed authority;
+    # setup_engine_status is legacy context and must not downgrade current truth.
     final_passed_mismatch = bool(
-        setup_final is not None
+        not scanner_final_is_validated_truth
+        and setup_final is not None
         and counters.get("final_passed") is not None
         and setup_final != counters.get("final_passed")
     )

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from scanner_freshness import inspect_scanner_freshness
+from data.ohlc_health import OHLC_OWNERSHIP_CONTRACT, read_authoritative_ohlc_health
 from utils.market_hours import IST, as_ist_datetime, is_trade_window
 
 
@@ -700,6 +701,10 @@ def _write_ohlc_freshness_status(ohlc, cache, scanner, refresh_info, now_ist):
     )
     payload = {
         "generated_at_ist": now_ist.isoformat(),
+        "diagnostic_only": True,
+        "authoritative_for_ohlc_health": False,
+        "authoritative_status_path": OHLC_OWNERSHIP_CONTRACT["authoritative_status_path"],
+        "ownership_contract": dict(OHLC_OWNERSHIP_CONTRACT),
         "latest_candle_timestamp": ohlc.get("latest_candle_timestamp"),
         "latest_market_candle": ohlc.get("latest_candle_timestamp"),
         "stale_symbol_count": int(ohlc.get("stale_symbol_count") or 0),
@@ -740,6 +745,7 @@ def build_market_data_health(now=None):
     cache = inspect_live_price_cache(now_ist)
     refresh = _ohlc_refresh_visibility()
     refresh.update(refresh_info)
+    authoritative_ohlc_health = read_authoritative_ohlc_health()
     stale_diagnostics = diagnose_stale_symbols(ohlc, cache, refresh, now=now_ist)
     ohlc_status = _write_ohlc_freshness_status(ohlc, cache, scanner, refresh_info, now_ist)
     upstox_runtime_health = _upstox_runtime_health(cache)
@@ -821,6 +827,9 @@ def build_market_data_health(now=None):
         "stale_symbol_diagnostics_path": str(STALE_SYMBOL_DIAGNOSTICS_PATH).replace("\\", "/"),
         "cache_freshness": cache,
         "ohlc_freshness": ohlc,
+        "authoritative_ohlc_health": authoritative_ohlc_health,
+        "authoritative_ohlc_status_path": OHLC_OWNERSHIP_CONTRACT["authoritative_status_path"],
+        "ohlc_ownership_contract": dict(OHLC_OWNERSHIP_CONTRACT),
         "ohlc_freshness_status_path": str(OHLC_FRESHNESS_STATUS_PATH).replace("\\", "/"),
         "scanner_freshness": scanner,
         "upstox_runtime_health": upstox_runtime_health,

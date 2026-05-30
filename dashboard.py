@@ -39,6 +39,8 @@ DASHBOARD_SYNC_STATUS_PATH = "/".join(["data", "runtime", "dashboard_sync_status
 PAPER_ENGINE_STATUS_PATH = "/".join(["data", "runtime", "paper_engine_status.json"])
 SCANNER_STATUS_PATH = "/".join(["data", "runtime", "scanner_status.json"])
 SCANNER_FILTER_TRUTH_STATUS_PATH = "/".join(["data", "runtime", "scanner_filter_truth_status.json"])
+FINAL_VALIDATED_SETUPS_PATH = "/".join(["data", "runtime", "final_validated_setups.json"])
+OHLC_HEALTH_STATUS_PATH = "/".join(["data", "runtime", "ohlc_health.json"])
 TRADE_LIFECYCLE_HEALTH_PATH = "/".join(["data", "runtime", "trade_lifecycle_health.json"])
 TRADE_LIFECYCLE_RECONCILIATION_PATH = "/".join(["data", "runtime", "trade_lifecycle_reconciliation.json"])
 REJECTION_HEATMAP_PATH = "/".join(["data", "runtime", "rejection_heatmap.json"])
@@ -50,6 +52,8 @@ WEEKEND_RESEARCH_MODE_STATUS_PATH = "/".join(["data", "runtime", "weekend_resear
 TITAN_RUNTIME_STATUS_PATH = "/".join(["data", "runtime", "titan_runtime_status.json"])
 EVOLUTION_MEMORY_PATH = "/".join(["data", "runtime", "evolution_memory.json"])
 STRATEGY_WEIGHT_CHANGE_LOG_PATH = "/".join(["data", "runtime", "strategy_weight_change_log.json"])
+REINFORCEMENT_LEARNING_STATUS_PATH = "/".join(["data", "runtime", "reinforcement_learning_status.json"])
+META_LEARNING_STATUS_PATH = "/".join(["data", "runtime", "meta_learning_status.json"])
 RUNTIME_STATUS_TABLE = "runtime_status"
 RUNTIME_FRESH_SECONDS = 15 * 60
 SCANNER_STALE_SECONDS = 7 * 60
@@ -1020,6 +1024,8 @@ def get_master_shadow_dashboard_data():
 def get_learning_evolution_truth_data():
     memory = safe_read_json(EVOLUTION_MEMORY_PATH, {})
     weight_log = safe_read_json(STRATEGY_WEIGHT_CHANGE_LOG_PATH, {})
+    rl_status = safe_read_json(REINFORCEMENT_LEARNING_STATUS_PATH, {})
+    meta_status = safe_read_json(META_LEARNING_STATUS_PATH, {})
     top_setup = memory.get("top_performing_setup_type") if isinstance(memory.get("top_performing_setup_type"), dict) else {}
     weak_setup = memory.get("weakest_setup_type") if isinstance(memory.get("weakest_setup_type"), dict) else {}
     best_symbols = memory.get("best_symbols") if isinstance(memory.get("best_symbols"), list) else []
@@ -1044,6 +1050,14 @@ def get_learning_evolution_truth_data():
         "evolution_changes_today": int(first_number(weight_log.get("changes_today"), default=0)),
         "closed_outcome_count": closed_count,
         "status": "OUTCOME_BACKED" if closed_count > 0 else "WAITING_FOR_OUTCOMES",
+        "reinforcement_runtime_status": rl_status.get("status") or "MISSING",
+        "reinforcement_runtime_source": rl_status.get("source") or REINFORCEMENT_LEARNING_STATUS_PATH,
+        "reinforcement_last_run": rl_status.get("last_run") if isinstance(rl_status.get("last_run"), dict) else {},
+        "reinforcement_status_path": REINFORCEMENT_LEARNING_STATUS_PATH,
+        "meta_learning_runtime_status": meta_status.get("status") or "MISSING",
+        "meta_learning_runtime_source": meta_status.get("source") or META_LEARNING_STATUS_PATH,
+        "meta_learning_last_run": meta_status.get("last_run") if isinstance(meta_status.get("last_run"), dict) else {},
+        "meta_learning_status_path": META_LEARNING_STATUS_PATH,
     }
 
 
@@ -1398,18 +1412,23 @@ def build_trade_results_stats_from_rows(rows, source):
     return stats
 
 
+def read_outcome_tracker_result_rows():
+    rows = []
+    df = read_csv_safe(["data/journals/trade_outcomes.csv"])
+    if not df.empty:
+        rows.extend(df.to_dict("records"))
+    rows.extend(read_jsonl_rows("data/journals/trade_outcomes.jsonl"))
+    return rows
+
+
 def get_trade_results_dataset():
     """
-    Cloud dashboard source-of-truth fix.
-
-    Trading Performance must use Supabase trade_results only.
-    Do NOT fallback to paper_closed_positions or local CSV/JSONL rows when
-    Supabase is empty, because Streamlit Cloud can contain old committed local
-    files that recreate fake wins/losses/PnL after Supabase is cleared.
+    Trading Performance is display-only and must be sourced from
+    journal.outcome_tracker outputs, not stale dashboard fallbacks.
     """
     return build_trade_results_stats_from_rows(
-        get_supabase_trade_result_rows(),
-        "SUPABASE_TRADE_RESULTS",
+        read_outcome_tracker_result_rows(),
+        "OUTCOME_TRACKER_OUTPUT",
     )
 
 
@@ -1580,7 +1599,7 @@ def get_master_brain_status(github_time=None, scan_time=None, outcome_time=None)
             latest_activity_time = external_dt
 
     active_trades = get_live_trades_count()
-    local_stats = get_local_trade_performance_stats()
+    local_stats = get_trade_results_dataset()
 
     # Status logic
     if latest_activity_time:
@@ -1833,6 +1852,26 @@ def optional_int_number(*values):
     return None
 
 
+def final_validated_setups_count(scanner_payload=None):
+    scanner_final = {}
+    if isinstance(scanner_payload, dict) and isinstance(scanner_payload.get("final_validated_setups"), dict):
+        scanner_final = scanner_payload.get("final_validated_setups") or {}
+    count = optional_int_number(scanner_final.get("validated_setup_count"))
+    if count is not None:
+        return count, "scanner_status.final_validated_setups"
+
+    payload = safe_read_json(FINAL_VALIDATED_SETUPS_PATH, {})
+    if not isinstance(payload, dict):
+        return None, "final_validated_setups_unavailable"
+    setups = payload.get("setups")
+    if isinstance(setups, list):
+        return len(setups), "data/runtime/final_validated_setups.json"
+    count = optional_int_number(payload.get("validated_setup_count"))
+    if count is not None:
+        return count, "data/runtime/final_validated_setups.json"
+    return None, "final_validated_setups_unavailable"
+
+
 def scanner_breakout_counts(payload):
     payload = payload if isinstance(payload, dict) else {}
     qualified = optional_int_number(
@@ -1904,6 +1943,7 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
     preferred_payload, preferred_source = get_preferred_scanner_status_payload()
     if isinstance(preferred_payload, dict) and preferred_payload:
         flags = scanner_truth_flags(preferred_payload)
+        final_count, final_count_source = final_validated_setups_count(preferred_payload)
         master_payload = master_runtime_data if isinstance(master_runtime_data, dict) else {}
         alerts = first_number(
             preferred_payload.get("alerts_sent"),
@@ -1927,7 +1967,7 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "breakout_integrity_valid": breakout_counts["breakout_integrity_valid"],
             "raw_breakout_missing_from_payload": breakout_counts["raw_breakout_missing_from_payload"],
             "entry_stage_available": bool(preferred_payload.get("entry_stage_available")),
-            "final_passed": optional_int_number(preferred_payload.get("final_passed"), preferred_payload.get("final_passed_count")),
+            "final_passed": final_count,
             "alerts_this_scan": int(alerts),
             "source": preferred_source,
             "timestamp": runtime_payload_dt(preferred_payload),
@@ -1943,7 +1983,7 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             "stale_policy": preferred_payload.get("stale_policy"),
             "pipeline_health": preferred_payload.get("pipeline_health") if isinstance(preferred_payload.get("pipeline_health"), dict) else {},
             "fallback_reason": preferred_payload.get("fallback_reason"),
-            "final_count_source": preferred_payload.get("final_count_source") or "unavailable",
+            "final_count_source": final_count_source,
             "dashboard_status_message": preferred_payload.get("dashboard_status_message"),
             "repeated_data_signature": flags["repeated_signature_warning"],
             "repeated_data_warning": "INPUT_UNCHANGED_WARNING" if flags["repeated_signature_warning"] else preferred_payload.get("repeated_data_warning"),
@@ -1957,18 +1997,11 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
         }
 
     scanner_truth = safe_read_json(SCANNER_FILTER_TRUTH_STATUS_PATH, {})
-    counters = scanner_truth.get("counters") if isinstance(scanner_truth.get("counters"), dict) else {}
-    if scanner_truth.get("dashboard_scan_sync_status") == "SCAN_PIPELINE_UNAVAILABLE":
+    if isinstance(scanner_truth, dict) and scanner_truth.get("dashboard_scan_sync_status") == "SCAN_PIPELINE_UNAVAILABLE":
         unavailable = dict(zero)
         unavailable.update(
             {
-                "source": "SCANNER_FILTER_TRUTH",
-                "timestamp": parse_dt(scanner_truth.get("authoritative_scan_timestamp") or scanner_truth.get("scanner_timestamp")),
-                "is_fresh": False,
-                "has_data": False,
-                "limited_runtime": True,
-                "scanner_cycle_id": scanner_truth.get("authoritative_scan_cycle_id") or scanner_truth.get("scan_cycle_id"),
-                "scan_finished_at_ist": scanner_truth.get("authoritative_scan_timestamp") or scanner_truth.get("scanner_timestamp"),
+                "source": "SCANNER_STATUS_JSON_UNAVAILABLE",
                 "dashboard_status_message": "SCAN_PIPELINE_UNAVAILABLE",
                 "counter_confidence": scanner_truth.get("counter_confidence") or "UNKNOWN",
                 "recommended_dashboard_display_mode": "SCAN_PIPELINE_UNAVAILABLE",
@@ -1977,196 +2010,6 @@ def get_latest_scan_breakdown(scanner_runtime_data, master_runtime_data, scan_he
             }
         )
         return unavailable
-    if counters and scanner_truth.get("scanner_timestamp"):
-        confidence = scanner_truth.get("counter_confidence") or "LOW"
-        breakout_counts = scanner_breakout_counts(
-            {
-                "raw_breakout_ready_count": counters.get("raw_breakout_ready"),
-                "qualified_breakout_ready_count": counters.get("qualified_breakout_ready"),
-                "breakout_ready_count": counters.get("breakout_ready"),
-            }
-        )
-        return {
-            "stocks_checked": int(first_number(counters.get("stocks_checked"), default=0)),
-            "trend_passed": int(first_number(counters.get("trend_passed"), default=0)),
-            "strict_trend_passed": int(first_number(counters.get("strict_trend_passed"), counters.get("trend_passed"), default=0)),
-            "adaptive_trend_passed": int(first_number(counters.get("adaptive_trend_passed"), default=0)),
-            "momentum_passed": int(first_number(counters.get("momentum_passed"), default=0)),
-            "structure_passed": int(first_number(counters.get("structure_passed"), default=0)),
-            "entry_passed": int(first_number(counters.get("breakout_ready"), default=0)),
-            "raw_breakout_ready_count": breakout_counts["raw_breakout_ready_count"],
-            "qualified_breakout_ready_count": breakout_counts["qualified_breakout_ready_count"],
-            "breakout_ready_count": breakout_counts["breakout_ready_count"],
-            "breakout_integrity_valid": breakout_counts["breakout_integrity_valid"],
-            "raw_breakout_missing_from_payload": breakout_counts["raw_breakout_missing_from_payload"],
-            "entry_stage_available": confidence == "HIGH",
-            "final_passed": optional_int_number(counters.get("final_passed")),
-            "alerts_this_scan": int(first_number(counters.get("alerts_this_scan"), default=0)),
-            "source": "SCANNER_FILTER_TRUTH",
-            "timestamp": parse_dt(scanner_truth.get("authoritative_scan_timestamp") or scanner_truth.get("scanner_timestamp")),
-            "is_fresh": not bool(scanner_truth.get("stale_snapshot_warning")),
-            "has_data": True,
-            "limited_runtime": confidence != "HIGH" or scanner_truth.get("dashboard_scan_sync_status") != "SYNCHRONIZED",
-            "scanner_cycle_id": scanner_truth.get("authoritative_scan_cycle_id") or scanner_truth.get("scan_cycle_id"),
-            "scan_finished_at_ist": scanner_truth.get("authoritative_scan_timestamp") or scanner_truth.get("scanner_timestamp"),
-            "scan_duration_seconds": None,
-            "scan_only": bool(scanner_truth.get("fallback_mode")),
-            "partial_stale_tolerated": False,
-            "stale_symbol_ratio": None,
-            "stale_policy": None,
-            "pipeline_health": {},
-            "fallback_reason": scanner_truth.get("fallback_reason"),
-            "final_count_source": (scanner_truth.get("counter_sources") or {}).get("final_passed") or "scanner_filter_truth",
-            "dashboard_status_message": scanner_truth.get("recommended_dashboard_display_mode"),
-            "repeated_data_signature": bool(scanner_truth.get("frozen_counter_warning")),
-            "repeated_data_warning": "Scanner truth reports frozen/repeated counters" if scanner_truth.get("frozen_counter_warning") else None,
-            "counter_confidence": confidence,
-            "recommended_dashboard_display_mode": scanner_truth.get("recommended_dashboard_display_mode"),
-            "dashboard_scan_sync_status": scanner_truth.get("dashboard_scan_sync_status"),
-            "scanner_publication_health": scanner_truth.get("scanner_publication_health"),
-        }
-
-    supabase_scanner_payload = get_supabase_scanner_status_payload()
-    supabase_stocks_checked = int(first_number(supabase_scanner_payload.get("stocks_checked"), default=0))
-    if supabase_stocks_checked > 0:
-        master_payload = master_runtime_data if isinstance(master_runtime_data, dict) else {}
-        breakout_counts = scanner_breakout_counts(supabase_scanner_payload)
-        alerts = first_number(
-            supabase_scanner_payload.get("alerts_sent"),
-            supabase_scanner_payload.get("alerts_this_scan"),
-            master_payload.get("alerts_sent"),
-            master_payload.get("alerts_this_scan"),
-            default=0,
-        )
-        return {
-            "stocks_checked": supabase_stocks_checked,
-            "trend_passed": int(first_number(supabase_scanner_payload.get("trend_passed"), default=0)),
-            "strict_trend_passed": int(first_number(supabase_scanner_payload.get("strict_trend_passed"), default=0)),
-            "adaptive_trend_passed": int(first_number(supabase_scanner_payload.get("adaptive_trend_passed"), default=0)),
-            "momentum_passed": int(first_number(supabase_scanner_payload.get("momentum_passed"), default=0)),
-            "structure_passed": int(first_number(supabase_scanner_payload.get("structure_passed"), default=0)),
-            "entry_passed": int(first_number(supabase_scanner_payload.get("entry_passed"), default=0)),
-            "raw_breakout_ready_count": breakout_counts["raw_breakout_ready_count"],
-            "qualified_breakout_ready_count": breakout_counts["qualified_breakout_ready_count"],
-            "breakout_ready_count": breakout_counts["breakout_ready_count"],
-            "breakout_integrity_valid": breakout_counts["breakout_integrity_valid"],
-            "raw_breakout_missing_from_payload": breakout_counts["raw_breakout_missing_from_payload"],
-            "entry_stage_available": bool(supabase_scanner_payload.get("entry_stage_available")),
-            "final_passed": optional_int_number(supabase_scanner_payload.get("final_passed")),
-            "alerts_this_scan": int(alerts),
-            "source": "SUPABASE_RUNTIME_SCANNER",
-            "timestamp": runtime_payload_dt(supabase_scanner_payload),
-            "is_fresh": True,
-            "has_data": True,
-            "limited_runtime": False,
-            "scanner_cycle_id": supabase_scanner_payload.get("scanner_cycle_id"),
-            "scan_finished_at_ist": supabase_scanner_payload.get("scan_finished_at_ist"),
-            "scan_duration_seconds": supabase_scanner_payload.get("scan_duration_seconds"),
-            "scan_only": bool(supabase_scanner_payload.get("scan_only")),
-            "partial_stale_tolerated": bool(supabase_scanner_payload.get("partial_stale_tolerated")),
-            "stale_symbol_ratio": supabase_scanner_payload.get("stale_symbol_ratio"),
-            "stale_policy": supabase_scanner_payload.get("stale_policy"),
-            "pipeline_health": supabase_scanner_payload.get("pipeline_health") if isinstance(supabase_scanner_payload.get("pipeline_health"), dict) else {},
-            "fallback_reason": supabase_scanner_payload.get("fallback_reason"),
-            "final_count_source": supabase_scanner_payload.get("final_count_source") or "unavailable",
-            "dashboard_status_message": supabase_scanner_payload.get("dashboard_status_message"),
-            "repeated_data_signature": bool(supabase_scanner_payload.get("repeated_data_signature")),
-            "repeated_data_warning": supabase_scanner_payload.get("repeated_data_warning"),
-        }
-
-    scanner_payload = (
-        scanner_runtime_data.get("payload")
-        if isinstance(scanner_runtime_data, dict) and isinstance(scanner_runtime_data.get("payload"), dict)
-        else {}
-    )
-    scanner_fresh = bool(scanner_runtime_data.get("is_fresh")) if isinstance(scanner_runtime_data, dict) else False
-    if scanner_fresh and scanner_payload_has_gate_breakdown(scanner_payload):
-        master_payload = master_runtime_data if isinstance(master_runtime_data, dict) else {}
-        breakout_counts = scanner_breakout_counts(scanner_payload)
-        alerts = first_number(
-            scanner_payload.get("alerts_sent"),
-            scanner_payload.get("alerts_this_scan"),
-            master_payload.get("alerts_sent"),
-            master_payload.get("alerts_this_scan"),
-            default=0,
-        )
-        return {
-            "stocks_checked": int(first_number(scanner_payload.get("stocks_checked"), default=0)),
-            "trend_passed": int(first_number(scanner_payload.get("trend_passed"), default=0)),
-            "strict_trend_passed": int(first_number(scanner_payload.get("strict_trend_passed"), default=0)),
-            "adaptive_trend_passed": int(first_number(scanner_payload.get("adaptive_trend_passed"), default=0)),
-            "momentum_passed": int(first_number(scanner_payload.get("momentum_passed"), default=0)),
-            "structure_passed": int(first_number(scanner_payload.get("structure_passed"), default=0)),
-            "entry_passed": int(first_number(scanner_payload.get("entry_passed"), default=0)),
-            "raw_breakout_ready_count": breakout_counts["raw_breakout_ready_count"],
-            "qualified_breakout_ready_count": breakout_counts["qualified_breakout_ready_count"],
-            "breakout_ready_count": breakout_counts["breakout_ready_count"],
-            "breakout_integrity_valid": breakout_counts["breakout_integrity_valid"],
-            "raw_breakout_missing_from_payload": breakout_counts["raw_breakout_missing_from_payload"],
-            "entry_stage_available": bool(scanner_payload.get("entry_stage_available")),
-            "final_passed": optional_int_number(scanner_payload.get("final_passed")),
-            "alerts_this_scan": int(alerts),
-            "source": scanner_runtime_data.get("source", "LOCAL_RUNTIME_JSON"),
-            "timestamp": scanner_runtime_data.get("timestamp"),
-            "is_fresh": True,
-            "has_data": True,
-            "limited_runtime": False,
-            "scanner_cycle_id": scanner_payload.get("scanner_cycle_id"),
-            "scan_finished_at_ist": scanner_payload.get("scan_finished_at_ist"),
-            "scan_duration_seconds": scanner_payload.get("scan_duration_seconds"),
-            "scan_only": bool(scanner_payload.get("scan_only")),
-            "partial_stale_tolerated": bool(scanner_payload.get("partial_stale_tolerated")),
-            "stale_symbol_ratio": scanner_payload.get("stale_symbol_ratio"),
-            "stale_policy": scanner_payload.get("stale_policy"),
-            "pipeline_health": scanner_payload.get("pipeline_health") if isinstance(scanner_payload.get("pipeline_health"), dict) else {},
-            "fallback_reason": scanner_payload.get("fallback_reason"),
-            "final_count_source": scanner_payload.get("final_count_source") or "unavailable",
-            "dashboard_status_message": scanner_payload.get("dashboard_status_message"),
-            "repeated_data_signature": bool(scanner_payload.get("repeated_data_signature")),
-            "repeated_data_warning": scanner_payload.get("repeated_data_warning"),
-        }
-
-    scan_symbols_breakdown = get_latest_scan_symbols_breakdown()
-    if scan_symbols_breakdown:
-        return scan_symbols_breakdown
-
-    if scanner_fresh and scanner_payload:
-        breakout_counts = scanner_breakout_counts(scanner_payload)
-        return {
-            "stocks_checked": int(first_number(scanner_payload.get("stocks_checked"), default=0)),
-            "trend_passed": 0,
-            "strict_trend_passed": 0,
-            "adaptive_trend_passed": 0,
-            "momentum_passed": 0,
-            "structure_passed": 0,
-            "entry_passed": 0,
-            "raw_breakout_ready_count": breakout_counts["raw_breakout_ready_count"],
-            "qualified_breakout_ready_count": breakout_counts["qualified_breakout_ready_count"],
-            "breakout_ready_count": breakout_counts["breakout_ready_count"],
-            "breakout_integrity_valid": breakout_counts["breakout_integrity_valid"],
-            "raw_breakout_missing_from_payload": breakout_counts["raw_breakout_missing_from_payload"],
-            "entry_stage_available": bool(scanner_payload.get("entry_stage_available")),
-            "final_passed": optional_int_number(scanner_payload.get("final_passed")),
-            "alerts_this_scan": int(first_number(scanner_payload.get("alerts_sent"), scanner_payload.get("alerts_this_scan"), default=0)),
-            "source": "SUPABASE_RUNTIME_SCANNER",
-            "timestamp": scanner_runtime_data.get("timestamp"),
-            "is_fresh": True,
-            "has_data": True,
-            "limited_runtime": True,
-            "scanner_cycle_id": scanner_payload.get("scanner_cycle_id"),
-            "scan_finished_at_ist": scanner_payload.get("scan_finished_at_ist"),
-            "scan_duration_seconds": scanner_payload.get("scan_duration_seconds"),
-            "scan_only": bool(scanner_payload.get("scan_only")),
-            "partial_stale_tolerated": bool(scanner_payload.get("partial_stale_tolerated")),
-            "stale_symbol_ratio": scanner_payload.get("stale_symbol_ratio"),
-            "stale_policy": scanner_payload.get("stale_policy"),
-            "pipeline_health": scanner_payload.get("pipeline_health") if isinstance(scanner_payload.get("pipeline_health"), dict) else {},
-            "fallback_reason": scanner_payload.get("fallback_reason"),
-            "final_count_source": scanner_payload.get("final_count_source") or "unavailable",
-            "dashboard_status_message": scanner_payload.get("dashboard_status_message"),
-            "repeated_data_signature": bool(scanner_payload.get("repeated_data_signature")),
-            "repeated_data_warning": scanner_payload.get("repeated_data_warning"),
-        }
 
     return zero
 
@@ -2334,13 +2177,9 @@ def runtime_payload_dt(payload):
 
 
 def get_preferred_scanner_status_payload():
-    supabase_payload = get_supabase_scanner_status_payload()
-    if isinstance(supabase_payload, dict) and supabase_payload:
-        return supabase_payload, "SUPABASE_RUNTIME_STATUS_SCANNER"
-
     local_payload = safe_read_json(SCANNER_STATUS_PATH, {})
     if isinstance(local_payload, dict) and local_payload:
-        return local_payload, "LOCAL_RUNTIME_SCANNER_STATUS_JSON"
+        return local_payload, "SCANNER_STATUS_JSON"
 
     return {}, "UNAVAILABLE"
 
@@ -2359,6 +2198,12 @@ def scanner_off_hours(runtime_mode=None):
 def scanner_ohlc_stale(payload):
     if not isinstance(payload, dict):
         return False
+    authoritative = safe_read_json(OHLC_HEALTH_STATUS_PATH, {})
+    authoritative_status = str(authoritative.get("status") or "").upper() if isinstance(authoritative, dict) else ""
+    if authoritative_status == "PASS":
+        return False
+    if authoritative_status == "FAIL":
+        return True
     pipeline_health = payload.get("pipeline_health") if isinstance(payload.get("pipeline_health"), dict) else {}
     data_health = payload.get("scanner_data_health") if isinstance(payload.get("scanner_data_health"), dict) else {}
     return bool(
@@ -2982,45 +2827,19 @@ def get_runtime_paper_open_positions_count():
 def get_live_trades_count():
     """
     FINAL CANONICAL LIVE TRADE FIX:
-    Live trades should come from active/open trades, not trade_results.
-
-    Priority:
-    1. Supabase trades
-    2. Runtime paper_engine_status open positions
-    3. Local active_trades.csv fallback
-    4. 0 if nothing available
+    Live trades should come from data.active_trade_store, not trade_results
+    or lifecycle diagnostic artifacts.
 
     NOTE:
     trade_results is for CLOSED TP/SL performance only.
     """
+    try:
+        from data.active_trade_store import load_open_trades
 
-    possible_paths = [
-        "data/journals/active_trades.csv",
-        "active_trades.csv",
-        "data/active_trades.csv",
-        "journals/active_trades.csv",
-        "journal/active_trades.csv",
-        "trades/active_trades.csv",
-    ]
-
-    lifecycle = safe_read_json(TRADE_LIFECYCLE_HEALTH_PATH, {})
-    if isinstance(lifecycle, dict) and lifecycle.get("overall_status"):
-        if lifecycle.get("active_live_trades_count") is not None:
-            return int(first_number(lifecycle.get("active_live_trades_count"), default=0))
-
-    supabase_count = get_supabase_live_trades_count(fallback_reason="primary_source")
-    if supabase_count > 0:
-        return supabase_count
-
-    runtime_open_count = get_runtime_paper_open_positions_count()
-    if runtime_open_count > 0:
-        return runtime_open_count
-
-    local_count, local_path, fallback_reason = _local_active_trades_count(possible_paths)
-    if local_count is not None:
-        return local_count
-
-    return supabase_count
+        return len([row for row in load_open_trades() if isinstance(row, dict)])
+    except Exception as exc:
+        _dashboard_debug(f"source=ACTIVE_TRADE_STORE live_count=0 fallback_reason=read_error:{exc}")
+        return 0
 
 
 def get_trade_lifecycle_reconciliation():
@@ -3482,10 +3301,9 @@ active_live_trades_count = _reconciliation_count(trade_lifecycle_reconciliation,
 learning_open_trades_count = _reconciliation_count(trade_lifecycle_reconciliation, "learning_open_trades")
 stale_open_trades_count = _reconciliation_count(trade_lifecycle_reconciliation, "stale_open_trades")
 eod_unresolved_trades_count = _reconciliation_count(trade_lifecycle_reconciliation, "eod_unresolved_trades")
-live_trades_count = active_live_trades_count
+active_live_trades_count = live_trades_count
 
-# Performance stats and account PnL use the same closed trade rows.
-# Priority: Supabase trade_results, local trade results, paper closed positions.
+# Performance stats and account PnL use journal.outcome_tracker closed rows only.
 trade_result_stats = get_trade_results_dataset()
 supabase_trade_stats = trade_result_stats
 paper_trading_data = get_paper_trading_status(
@@ -3587,6 +3405,8 @@ latest_breakout_ready = scan_breakdown["breakout_ready_count"]
 latest_final_passed = scan_breakdown["final_passed"]
 latest_final_passed_display = "N/A" if latest_final_passed is None else f"{latest_final_passed:,}"
 latest_health_alerts = scan_breakdown["alerts_this_scan"]
+stocks_scanned = latest_stocks_checked
+stocks_passed = int(latest_final_passed or 0)
 latest_scan_health_age = last_scan_display_from_dt(scan_breakdown.get("timestamp"), market_open)
 scanner_finished_at = parse_dt(scan_breakdown.get("scan_finished_at_ist")) or scan_breakdown.get("timestamp")
 scanner_cycle_suffix_text = scanner_cycle_suffix(scan_breakdown.get("scanner_cycle_id"))
@@ -3798,6 +3618,16 @@ with le2:
 with le3:
     metric_card("Learning Confidence", learning_evolution_truth_data["learning_confidence_display"], learning_evolution_truth_data["status"])
     metric_card("Evolution Changes Today", f"{learning_evolution_truth_data['evolution_changes_today']:,}", "Strategy weight log entries")
+    metric_card(
+        "Reinforcement Learning",
+        learning_evolution_truth_data["reinforcement_runtime_status"],
+        learning_evolution_truth_data["reinforcement_runtime_source"],
+    )
+    metric_card(
+        "Meta-Learning",
+        learning_evolution_truth_data["meta_learning_runtime_status"],
+        learning_evolution_truth_data["meta_learning_runtime_source"],
+    )
 
 st.markdown("</div>", unsafe_allow_html=True)
 

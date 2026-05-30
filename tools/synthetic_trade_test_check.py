@@ -182,8 +182,7 @@ def _remove_previous_synthetic_outcome_rows():
         )
     ]
     if len(kept_results) != len(result_rows):
-        _write_csv(LOCAL_TRADE_RESULTS_CSV, kept_results, fieldnames=_csv_fieldnames(LOCAL_TRADE_RESULTS_CSV))
-        removed += len(result_rows) - len(kept_results)
+        print("[SyntheticTradeTest] local trade_results cleanup skipped; OutcomeTracker owns result files.")
     return removed
 
 

@@ -108,6 +108,9 @@ def run_ohlc_refresh():
     payload = {
         "timestamp_ist": now_ist.isoformat(),
         "status": "PENDING",
+        "diagnostic_only": True,
+        "authoritative_for_ohlc_health": False,
+        "authoritative_status_path": "data/runtime/ohlc_health.json",
         "trade_window": trade_window,
         "source": "UPSTOX_FIRST_YFINANCE_FALLBACK",
         "symbol_source": symbol_source,

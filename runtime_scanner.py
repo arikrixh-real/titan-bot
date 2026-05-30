@@ -167,6 +167,33 @@ def _payload_fresh(payload, fresh_seconds=RUNTIME_FRESH_SECONDS):
     return (datetime.now(IST) - dt).total_seconds() <= fresh_seconds
 
 
+def _final_rejection_diagnostics(payload):
+    if not isinstance(payload, dict) or not payload:
+        return {
+            "diagnostic_only": True,
+            "authoritative_for_final_passed": False,
+            "source_path": str(FINAL_REJECTION_DEBUG_PATH),
+            "fresh": False,
+            "stale": True,
+            "stale_reason": "missing_or_empty",
+        }
+
+    diagnostics = dict(payload)
+    fresh = _payload_fresh(diagnostics)
+    diagnostics.update(
+        {
+            "diagnostic_only": True,
+            "authoritative_for_final_passed": False,
+            "source_path": str(FINAL_REJECTION_DEBUG_PATH),
+            "fresh": fresh,
+            "stale": not fresh,
+        }
+    )
+    if not fresh:
+        diagnostics["stale_reason"] = "timestamp_missing_or_stale"
+    return diagnostics
+
+
 def _payload_active(payload):
     if not isinstance(payload, dict) or not payload:
         return False
@@ -269,12 +296,43 @@ def _final_count_timestamp(payload):
     return dt.isoformat() if dt else None
 
 
-def _resolve_final_count(master_payload, setup_payload, final_debug):
+def _final_validated_count(final_validated_payload):
+    if not isinstance(final_validated_payload, dict):
+        return None
+    setups = final_validated_payload.get("setups")
+    if isinstance(setups, list):
+        return len(setups)
+    return _optional_int(final_validated_payload.get("validated_setup_count"))
+
+
+def _resolve_final_count(
+    master_payload,
+    setup_payload,
+    final_validated_payload=None,
+    current_entry_passed=None,
+):
     """
-    Read-only resolver for actual final candidate counts already emitted by
-    setup_engine/master_brain outputs. Zero is a valid count; None means no
-    usable source exists.
+    Scanner truth ownership: final_passed is the current scan's validated
+    setup count. setup_engine/master_brain counts are legacy fallbacks only
+    when the current validated setup contract is unavailable. The rejection
+    breakdown file is diagnostic and must never authoritatively set final_passed.
     """
+    validated_count = _final_validated_count(final_validated_payload)
+    if validated_count is not None:
+        entry_passed = _optional_int(current_entry_passed)
+        return {
+            "entry_passed": entry_passed,
+            "final_passed": validated_count,
+            "final_count_source": "runtime_scanner.final_validated_setups",
+            "final_passed_note": (
+                "Current final count read from "
+                "data/runtime/final_validated_setups.json setups length."
+            ),
+            "entry_stage_available": entry_passed is not None,
+            "available": True,
+            "timestamp": _final_count_timestamp(final_validated_payload),
+        }
+
     count, key = _first_count(
         master_payload,
         (
@@ -325,22 +383,11 @@ def _resolve_final_count(master_payload, setup_payload, final_debug):
             "timestamp": _final_count_timestamp(setup_payload),
         }
 
-    debug_count, debug_key = _first_count(final_debug, ("final_passed",))
-    if debug_count is not None:
-        return {
-            "entry_passed": _optional_int(final_debug.get("entry_passed")),
-            "final_passed": debug_count,
-            "final_count_source": "setup_engine_status",
-            "final_passed_note": (
-                "Real setup_engine final count read from "
-                f"data/debug/final_rejection_breakdown.json field {debug_key}."
-            ),
-            "entry_stage_available": _optional_int(final_debug.get("entry_passed")) is not None,
-            "available": True,
-            "timestamp": _final_count_timestamp(final_debug),
-        }
-
     missing = []
+    if not isinstance(final_validated_payload, dict) or not final_validated_payload:
+        missing.append("data/runtime/final_validated_setups.json missing or empty")
+    else:
+        missing.append("final_validated_setups has no setups list or validated_setup_count field")
     if not isinstance(setup_payload, dict) or not setup_payload:
         missing.append("data/runtime/setup_engine_status.json missing or empty")
     else:
@@ -349,10 +396,6 @@ def _resolve_final_count(master_payload, setup_payload, final_debug):
         missing.append("data/runtime/master_brain_status.json missing or empty")
     else:
         missing.append("master_brain_status has no selected/final count field")
-    if not isinstance(final_debug, dict) or not final_debug:
-        missing.append("data/debug/final_rejection_breakdown.json missing or empty")
-    else:
-        missing.append("final_rejection_breakdown has no final_passed field")
 
     return {
         "entry_passed": None,
@@ -1736,7 +1779,14 @@ def _status_payload(
     return payload
 
 
-def _full_pipeline_health(ohlc_fallback_required, partial_stale_tolerated, stale_symbol_ratio, stale_policy):
+def _full_pipeline_health(
+    ohlc_fallback_required,
+    partial_stale_tolerated,
+    stale_symbol_ratio,
+    stale_policy,
+    final_validated_payload=None,
+    current_entry_passed=None,
+):
     master_state = _task_availability_state("master_brain", MASTER_BRAIN_STATUS_PATH)
     setup_state = _task_availability_state("setup_engine", SETUP_ENGINE_STATUS_PATH)
     master_payload = master_state["payload"]
@@ -1744,8 +1794,13 @@ def _full_pipeline_health(ohlc_fallback_required, partial_stale_tolerated, stale
     master_ok = master_state["ok"]
     setup_ok = setup_state["ok"]
 
-    final_debug = _read_json(FINAL_REJECTION_DEBUG_PATH)
-    final_count = _resolve_final_count(master_payload, setup_payload, final_debug)
+    final_debug = _final_rejection_diagnostics(_read_json(FINAL_REJECTION_DEBUG_PATH))
+    final_count = _resolve_final_count(
+        master_payload,
+        setup_payload,
+        final_validated_payload=final_validated_payload,
+        current_entry_passed=current_entry_passed,
+    )
 
     fallback_reasons = []
     advisory_reasons = []
@@ -2210,6 +2265,8 @@ def run_scanner(path=SCANNER_STATUS_PATH):
         stale_policy_result["partial_stale_tolerated"],
         stale_policy_result["stale_symbol_ratio"],
         stale_policy_result["stale_policy"],
+        final_validated_payload=final_validated_payload,
+        current_entry_passed=breakout_ready_count,
     )
     scan_only = pipeline["scan_only"]
     mode = _scan_mode(load_debug, scan_only)

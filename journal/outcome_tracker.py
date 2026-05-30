@@ -3,10 +3,10 @@ TITAN - Outcome Tracker Safe Engine
 STEP 9A - SUPABASE DASHBOARD RESULT FIX
 
 Purpose:
-- Reads OPEN trades from data/journals/active_trades.csv
+- Reads OPEN trades through data.active_trade_store
 - Gets latest price
 - Checks TP/SL hit
-- Updates active_trades.csv status
+- Marks active trades closed through data.active_trade_store
 - Writes completed outcomes to:
     data/journals/trade_outcomes.csv
     data/journals/trade_outcomes.jsonl
@@ -33,9 +33,8 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from data.live_price import get_strict_fresh_price_debug
-from data.active_trade_store import close_open_trade, load_open_trades
+from data.active_trade_store import close_open_trade, ensure_active_trade_store, load_open_trades
 from journal.trade_id import build_setup_signature
-from journal.trade_journal import ACTIVE_FIELDS, _ensure_csv as _ensure_active_csv_schema
 from core.truth_gate import validate_outcome_check, write_status as write_truth_gate_status
 from utils.market_hours import is_trade_window, trade_window_text
 
@@ -49,10 +48,14 @@ except Exception:
     update_lifecycle_memory_safely = None
 
 try:
-    from engines.reinforcement_learning_layer import build_reinforcement_learning_report
+    from engines.reinforcement_learning_layer import (
+        build_reinforcement_learning_report,
+        publish_reinforcement_learning_status,
+    )
     print("PHASE 20 REINFORCEMENT LEARNING ACTIVE")
 except Exception:
     build_reinforcement_learning_report = None
+    publish_reinforcement_learning_status = None
 
 try:
     from engines.paper_trading_engine import sync_paper_account_from_trade_results
@@ -316,7 +319,28 @@ def _attach_reinforcement_learning_fields(row, outcome_row):
         stored_report = dict(report)
         stored_report["trade_id"] = result.get("trade_id")
         stored_report["closed_at"] = result.get("closed_at")
-        _append_reinforcement_report(stored_report)
+        report_written = _append_reinforcement_report(stored_report)
+        if publish_reinforcement_learning_status is not None:
+            publish_reinforcement_learning_status(
+                status="EXECUTED_SHADOW",
+                source="journal.outcome_tracker._attach_reinforcement_learning_fields",
+                last_run={
+                    "runtime_trigger_path": "journal.outcome_tracker._append_outcome",
+                    "trade_id": result.get("trade_id"),
+                    "symbol": result.get("symbol"),
+                    "outcome": result.get("outcome"),
+                    "closed_at": result.get("closed_at"),
+                },
+                proof_fields={
+                    "report_appended": report_written,
+                    "report_path": str(REINFORCEMENT_REPORTS_JSONL).replace("\\", "/"),
+                    "memory_path": str(REINFORCEMENT_MEMORY_JSON).replace("\\", "/"),
+                    "reinforcement_score": result.get("reinforcement_score"),
+                    "learning_action": result.get("reinforcement_learning_action"),
+                    "regime_key": result.get("reinforcement_regime_key"),
+                    "outcome_fields_attached": True,
+                },
+            )
     except Exception as e:
         result["reinforcement_error"] = str(e)
 
@@ -327,12 +351,7 @@ def _ensure_files():
     JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
     LEARNING_DIR.mkdir(parents=True, exist_ok=True)
 
-    if not ACTIVE_TRADES_CSV.exists():
-        with open(ACTIVE_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=ACTIVE_FIELDS)
-            writer.writeheader()
-    else:
-        _ensure_active_csv_schema(ACTIVE_TRADES_CSV, ACTIVE_FIELDS)
+    ensure_active_trade_store()
 
     if not OUTCOMES_CSV.exists():
         with open(OUTCOMES_CSV, "w", newline="", encoding="utf-8") as f:
@@ -444,10 +463,10 @@ def _parse_opened_at_date(value):
 
 def _expire_previous_day_open_trades():
     """
-    Closes stale local OPEN rows without creating TP/SL outcomes.
+    Closes stale OPEN rows without creating TP/SL outcomes.
 
     Previous-day local active trades must not be evaluated against a later
-    session's prices. This only rewrites active_trades.csv and deliberately
+    session's prices. This uses the active trade store owner and deliberately
     avoids trade_outcomes, JSONL, and Supabase result sync.
     """
     summary = {
@@ -460,48 +479,39 @@ def _expire_previous_day_open_trades():
     try:
         _ensure_files()
 
-        with open(ACTIVE_TRADES_CSV, "r", newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
+        rows = load_open_trades()
 
         today = datetime.now(IST).date()
         checked_at = _now()
-        updated_rows = []
 
         for row in rows:
             status = str(row.get("status", "")).upper().strip()
             if status != "OPEN":
-                updated_rows.append(row)
                 continue
 
             opened_date = _parse_opened_at_date(row.get("opened_at"))
             if opened_date is None:
-                updated_rows.append(row)
                 continue
 
             if opened_date >= today:
                 summary["skipped_same_day_count"] += 1
-                updated_rows.append(row)
                 continue
 
-            row["status"] = "EOD_UNRESOLVED"
-            row["outcome"] = ""
-            row["result"] = ""
-            row["last_checked_at"] = checked_at
-            row["result_reason"] = "EOD_UNRESOLVED: previous trading date open without TP/SL confirmation"
+            updates = {
+                "status": "EOD_UNRESOLVED",
+                "outcome": "",
+                "result": "",
+                "last_checked_at": checked_at,
+                "result_reason": "EOD_UNRESOLVED: previous trading date open without TP/SL confirmation",
+            }
+            close_result = close_open_trade(row, updates)
+            if not close_result.get("closed"):
+                continue
 
             symbol = str(row.get("symbol", "")).upper().strip()
             if symbol:
                 summary["expired_symbols"].append(symbol)
             summary["expired_count"] += 1
-            updated_rows.append(row)
-
-        if summary["expired_count"]:
-            with open(ACTIVE_TRADES_CSV, "w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=ACTIVE_FIELDS, extrasaction="ignore")
-                writer.writeheader()
-                for row in updated_rows:
-                    writer.writerow({field: row.get(field, "") for field in ACTIVE_FIELDS})
 
         print(
             "[OutcomeTracker EXPIRE] "

@@ -12,6 +12,7 @@ DASHBOARD_SYNC_STATUS_PATH = Path("data") / "runtime" / "dashboard_sync_status.j
 HEARTBEAT_PATH = Path("data") / "runtime" / "titan_heartbeat.json"
 RUNTIME_STATUS_PATH = Path("data") / "runtime" / "titan_runtime_status.json"
 SCANNER_STATUS_PATH = Path("data") / "runtime" / "scanner_status.json"
+FINAL_VALIDATED_SETUPS_PATH = Path("data") / "runtime" / "final_validated_setups.json"
 SETUP_ENGINE_STATUS_PATH = Path("data") / "runtime" / "setup_engine_status.json"
 MASTER_BRAIN_STATUS_PATH = Path("data") / "runtime" / "master_brain_status.json"
 PAPER_ENGINE_STATUS_PATH = Path("data") / "runtime" / "paper_engine_status.json"
@@ -40,6 +41,7 @@ RUNTIME_STATUS_SOURCES = {
     "daemon_health": DAEMON_HEALTH_PATH,
     "titan_runtime_status": RUNTIME_STATUS_PATH,
     "scanner_status": SCANNER_STATUS_PATH,
+    "final_validated_setups": FINAL_VALIDATED_SETUPS_PATH,
     "setup_engine_status": SETUP_ENGINE_STATUS_PATH,
     "live_price_monitor_status": LIVE_PRICE_MONITOR_STATUS_PATH,
     "master_brain_status": MASTER_BRAIN_STATUS_PATH,
@@ -100,6 +102,24 @@ def optional_int_number(value):
         return int(float(value))
     except Exception:
         return None
+
+
+def scanner_final_validated_count(scanner_status, final_validated_setups):
+    nested = scanner_status.get("final_validated_setups") if isinstance(scanner_status, dict) else {}
+    nested = nested if isinstance(nested, dict) else {}
+    count = optional_int_number(nested.get("validated_setup_count"))
+    if count is not None:
+        return count, "scanner_status.final_validated_setups"
+
+    if isinstance(final_validated_setups, dict):
+        setups = final_validated_setups.get("setups")
+        if isinstance(setups, list):
+            return len(setups), "data/runtime/final_validated_setups.json"
+        count = optional_int_number(final_validated_setups.get("validated_setup_count"))
+        if count is not None:
+            return count, "data/runtime/final_validated_setups.json"
+
+    return None, "final_validated_setups_unavailable"
 
 
 def governance_summary(governance_status, weekend_research_status):
@@ -248,6 +268,7 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
     heartbeat = runtime_payloads["titan_heartbeat"]
     runtime_status = runtime_payloads["titan_runtime_status"]
     scanner_status = runtime_payloads["scanner_status"]
+    final_validated_setups = runtime_payloads["final_validated_setups"]
     setup_engine_status = runtime_payloads["setup_engine_status"]
     master_brain_status = runtime_payloads["master_brain_status"]
     paper_engine_status = runtime_payloads["paper_engine_status"]
@@ -323,6 +344,10 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
         else None
     )
     no_block_reasons = not block_reasons
+    scanner_final_passed, scanner_final_count_source = scanner_final_validated_count(
+        scanner_status,
+        final_validated_setups,
+    )
     standby_runtime_healthy = (
         market_workers_allowed_idle
         and no_block_reasons
@@ -370,6 +395,7 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
         "daemon_health": daemon_health or {},
         "runtime_status": runtime_status or {},
         "scanner_status": scanner_status or {},
+        "final_validated_setups": final_validated_setups or {},
         "setup_engine_status": setup_engine_status or {},
         "live_price_monitor_status": live_price_monitor_status or {},
         "master_brain_status": master_brain_status or {},
@@ -446,12 +472,10 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
                 scanner_status.get("stale_symbol_ratio") if isinstance(scanner_status, dict) else None
             ),
             "scanner_final_passed": (
-                optional_int_number(scanner_status.get("final_passed"))
-                if isinstance(scanner_status, dict)
-                else None
+                scanner_final_passed
             ),
             "scanner_final_count_source": (
-                scanner_status.get("final_count_source") if isinstance(scanner_status, dict) else None
+                scanner_final_count_source
             ),
             "scanner_dashboard_status_message": (
                 scanner_status.get("dashboard_status_message") if isinstance(scanner_status, dict) else None

@@ -310,7 +310,6 @@ def _paper_fields(setup):
 def ensure_files():
     JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
     _ensure_csv(TRADE_JOURNAL_CSV, JOURNAL_FIELDS)
-    _ensure_csv(ACTIVE_TRADES_CSV, ACTIVE_FIELDS)
 
     if not TRADE_JOURNAL_JSONL.exists():
         TRADE_JOURNAL_JSONL.touch()
@@ -332,12 +331,11 @@ def _load_existing_open_keys():
     keys = set()
 
     try:
-        with open(ACTIVE_TRADES_CSV, "r", newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
+        from data.active_trade_store import load_open_trades
 
-            for row in reader:
-                if str(row.get("status", "")).upper().strip() == "OPEN":
-                    keys.add(_active_key(row))
+        for row in load_open_trades():
+            if str(row.get("status", "")).upper().strip() == "OPEN":
+                keys.add(_active_key(row))
 
     except Exception:
         pass
@@ -545,9 +543,10 @@ def journal_eligible_setups(
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
     if new_active_rows:
-        with open(ACTIVE_TRADES_CSV, "a", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=ACTIVE_FIELDS)
-            writer.writerows(new_active_rows)
+        from data.active_trade_store import append_open_trade
+
+        for row in new_active_rows:
+            append_open_trade(row)
 
     print(f"📘 Trade Journal Updated: {len(journal_rows)} setups journaled")
     print(f"📌 Active Trades Added: {len(new_active_rows)} new OPEN trades")

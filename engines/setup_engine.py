@@ -32,7 +32,7 @@ from engines.structure_engine import structure_ok
 
 from journal.trade_journal import log_trade
 from journal.scan_journal import log_scan
-from utils.market_hours import is_trade_window, trade_window_text
+from utils.market_hours import IST, is_trade_window, trade_window_text
 
 try:
     from config.universe import (
@@ -140,8 +140,13 @@ def _record_final_rejection(counter, symbols_by_reason, symbol, reason):
 
 
 def _save_final_rejection_breakdown(counter, symbols_by_reason, entry_passed, final_passed):
+    timestamp = datetime.now(IST).isoformat()
     payload = {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": timestamp,
+        "timestamp_ist": timestamp,
+        "source": "engines.setup_engine.scan_for_setups",
+        "diagnostic_only": True,
+        "authoritative_for_final_passed": False,
         "entry_passed": entry_passed,
         "final_passed": final_passed,
         "total_final_rejections_after_entry": sum(counter.values()),

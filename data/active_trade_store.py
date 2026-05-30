@@ -23,6 +23,14 @@ ACTIVE_TRADES_CSV = PROJECT_ROOT / "data" / "journals" / "active_trades.csv"
 DEBUG_PATH = RUNTIME_DIR / "active_trade_store_debug.json"
 OPEN_STATUSES = {"OPEN", "ACTIVE", "LIVE"}
 
+"""
+Authoritative active_trades storage owner.
+
+All active trade lifecycle mutations must go through this module. Other
+components may decide when to open/close/read trades, but direct writes to
+data/journals/active_trades.csv or Supabase trades are centralized here.
+"""
+
 
 def _timestamp_ist():
     return datetime.now(IST).isoformat()
@@ -90,6 +98,14 @@ def _write_csv_rows(rows, fieldnames=None):
     return ordered
 
 
+def ensure_active_trade_store():
+    fieldnames, rows = _read_csv_rows()
+    if fieldnames and ACTIVE_TRADES_CSV.exists() and ACTIVE_TRADES_CSV.stat().st_size > 0:
+        return {"ensured": True, "created": False, "fieldnames": fieldnames}
+    schema_fields = _write_csv_rows(rows, fieldnames)
+    return {"ensured": True, "created": True, "fieldnames": schema_fields}
+
+
 def _get_supabase_client():
     if str(os.getenv("TITAN_ACTIVE_STORE_DISABLE_SUPABASE", "")).strip().lower() in {"1", "true", "yes", "y"}:
         return None, None
@@ -113,6 +129,18 @@ def _supabase_payload(row):
     payload.setdefault("updated_at", _timestamp_ist())
     if payload.get("created_at_ist") and not payload.get("created_at"):
         payload["created_at"] = payload.get("created_at_ist")
+    return payload
+
+
+def _supabase_update_payload(row):
+    payload = dict(row or {})
+    if "symbol" in payload:
+        payload["symbol"] = _symbol(payload.get("symbol"))
+    if "side" in payload:
+        payload["side"] = _side(payload.get("side"))
+    if "status" in payload:
+        payload["status"] = str(payload.get("status") or "").upper()
+    payload.setdefault("updated_at", _timestamp_ist())
     return payload
 
 
@@ -278,14 +306,28 @@ def append_open_trade(row, *, client=None, prefer_supabase=True):
     }
 
 
-def close_open_trade(trade, updates=None):
+def update_active_trade(trade, updates=None):
     updates = dict(updates or {})
-    trade_id = trade.get("trade_id") if isinstance(trade, dict) else str(trade or "")
+    trade = trade if isinstance(trade, dict) else {"trade_id": str(trade or "")}
+    trade_id = str(trade.get("trade_id") or "").strip()
+    match_fields = ["symbol", "side", "opened_at", "entry", "sl", "target"]
     fieldnames, rows = _read_csv_rows()
     updated = False
     updated_rows = []
+
     for row in rows:
-        if trade_id and str(row.get("trade_id") or "") == str(trade_id):
+        row_trade_id = str(row.get("trade_id") or "").strip()
+        trade_id_match = bool(trade_id and row_trade_id == trade_id)
+        fallback_pairs = [
+            field
+            for field in match_fields
+            if trade.get(field) not in (None, "")
+        ]
+        fallback_match = bool(fallback_pairs) and not trade_id and all(
+            str(row.get(field) or "").strip() == str(trade.get(field) or "").strip()
+            for field in fallback_pairs
+        )
+        if trade_id_match or fallback_match:
             row.update(updates)
             updated = True
         updated_rows.append(row)
@@ -298,36 +340,25 @@ def close_open_trade(trade, updates=None):
             errors.append(client_error)
     elif trade_id:
         try:
-            client.table("trades").update(_supabase_payload(updates)).eq("trade_id", trade_id).execute()
+            client.table("trades").update(_supabase_update_payload(updates)).eq("trade_id", trade_id).execute()
         except Exception as exc:
-            errors.append(f"SUPABASE_CLOSE_FAILED:{exc}")
+            errors.append(f"SUPABASE_UPDATE_FAILED:{exc}")
 
     open_rows = [row for row in updated_rows if _is_open(row)]
     _write_debug(
         write_destination="LOCAL_ACTIVE_TRADES_CSV",
         read_sources_checked=[str(ACTIVE_TRADES_CSV), "SUPABASE_TRADES"],
         open_trades=open_rows,
-        synthetic_trade_found=(
-            (
-                isinstance(trade, dict)
-                and (
-                    _truthy(trade.get("test_trade"))
-                    or str(trade.get("source") or "").upper() == "SYNTHETIC_PIPELINE_TEST"
-                )
-            )
-            or any(
-                _is_open(row)
-                and (
-                    _truthy(row.get("test_trade"))
-                    or str(row.get("source") or "").upper() == "SYNTHETIC_PIPELINE_TEST"
-                )
-                for row in open_rows
-            )
-        ),
         schema_fields=schema_fields,
         errors=errors,
     )
-    return {"closed": updated, "trade_id": trade_id, "errors": errors}
+    return {"updated": updated, "trade_id": trade_id, "errors": errors}
+
+
+def close_open_trade(trade, updates=None):
+    result = update_active_trade(trade, updates)
+    return {"closed": result.get("updated"), "trade_id": result.get("trade_id"), "errors": result.get("errors", [])}
+
 
 
 def remove_matching_trades(predicate):

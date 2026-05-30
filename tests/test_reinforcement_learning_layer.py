@@ -1,3 +1,4 @@
+import json
 import sys
 import tempfile
 import unittest
@@ -69,6 +70,12 @@ class ReinforcementLearningLayerTests(unittest.TestCase):
             self.assertTrue(report_path.exists())
             self.assertTrue(status_path.exists())
             self.assertIn("REINFORCEMENT LEARNING REPORT", report_path.read_text(encoding="utf-8"))
+            status = json.loads(status_path.read_text(encoding="utf-8"))
+            self.assertEqual(status["phase"], "PHASE_20_REINFORCEMENT_LEARNING")
+            self.assertIn("timestamp_ist", status)
+            self.assertEqual(status["source"], "runtime_historical_replay.refresh_reinforcement_memory_from_replay")
+            self.assertEqual(status["last_run"]["records_processed"], 2)
+            self.assertTrue(status["proof_fields"]["status_written"])
 
 
 if __name__ == "__main__":

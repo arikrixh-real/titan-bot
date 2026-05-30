@@ -8,6 +8,7 @@ from runtime_dependency_graph import SAFETY_FLAGS, build_runtime_dependency_grap
 from runtime_engine_health import build_master_brain_runtime_health, build_setup_engine_runtime_health
 from runtime_fallback_resolver import run_runtime_fallback_resolution
 from runtime_mode_resolver import build_canonical_runtime_mode, build_runtime_warning_resolution_status
+from scanner_publication_health import run_scanner_publication_health_check
 from utils.market_hours import IST, as_ist_datetime
 
 
@@ -17,6 +18,7 @@ RUNTIME_PRIORITY_ORDER = [
     "runtime_health",
     "market_data_health",
     "scanner_status",
+    "scanner_publication_health",
     "runtime_fallback_resolution",
     "master_brain_runtime_health",
     "setup_engine_runtime_health",
@@ -31,6 +33,8 @@ RUNTIME_SOURCES = {
     "runtime_health": Path("data") / "runtime" / "titan_authoritative_runtime_health.json",
     "market_data_health": Path("data") / "runtime" / "titan_market_data_health.json",
     "scanner_status": Path("data") / "runtime" / "scanner_status.json",
+    "scanner_publication_health": Path("data") / "runtime" / "scanner_publication_health.json",
+    "scanner_runtime_heartbeat": Path("data") / "runtime" / "scanner_runtime_heartbeat.json",
     "master_brain_runtime_health": Path("data") / "runtime" / "master_brain_runtime_health.json",
     "setup_engine_runtime_health": Path("data") / "runtime" / "setup_engine_runtime_health.json",
     "runtime_fallback_resolution": Path("data") / "runtime" / "runtime_fallback_resolution.json",
@@ -242,6 +246,10 @@ def build_runtime_topology(path=TOPOLOGY_PATH, now=None):
         runtime_fallback_resolution = run_runtime_fallback_resolution(now=now_ist)
     except Exception as exc:
         runtime_fallback_resolution = {"overall_status": "FAIL", "error": str(exc)}
+    try:
+        scanner_publication_health = run_scanner_publication_health_check(now=now_ist)
+    except Exception as exc:
+        scanner_publication_health = {"overall_status": "FAIL", "publish_health": "UNAVAILABLE", "error": str(exc)}
     runtime_sources = {
         name: _source_record(name, source_path, now_ist)
         for name, source_path in RUNTIME_SOURCES.items()
@@ -340,6 +348,12 @@ def build_runtime_topology(path=TOPOLOGY_PATH, now=None):
         "master_brain_runtime_health": _read_json_safe(RUNTIME_SOURCES["master_brain_runtime_health"]),
         "setup_engine_runtime_health": _read_json_safe(RUNTIME_SOURCES["setup_engine_runtime_health"]),
         "runtime_fallback_resolution": runtime_fallback_resolution,
+        "scanner_publication_health": scanner_publication_health,
+        "scanner_loop_health": scanner_publication_health.get("runtime_scheduler_health"),
+        "publish_cadence_seconds": scanner_publication_health.get("publish_cadence_seconds"),
+        "scan_age_seconds": scanner_publication_health.get("scan_age_seconds"),
+        "scanner_writer_heartbeat": scanner_publication_health.get("scanner_writer_heartbeat"),
+        "stale_cycle_detected": scanner_publication_health.get("stale_cycle_detected"),
         "scanner_confidence": runtime_fallback_resolution.get("scanner_confidence"),
         "fallback_truthfulness": runtime_fallback_resolution.get("fallback_truthfulness"),
         "off_hours_runtime_continuity": runtime_fallback_resolution.get("off_hours_runtime_continuity"),

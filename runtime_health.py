@@ -20,6 +20,8 @@ REPLAY_STATUS_PATH = RUNTIME_DIR / "historical_replay_status.json"
 REPLAY_PROGRESS_PATH = RUNTIME_DIR / "historical_replay_progress.json"
 REINFORCEMENT_LEARNING_STATUS_PATH = RUNTIME_DIR / "reinforcement_learning_status.json"
 REINFORCEMENT_LEARNING_MEMORY_PATH = Path("data") / "memory" / "reinforcement_learning_memory.json"
+META_LEARNING_STATUS_PATH = RUNTIME_DIR / "meta_learning_status.json"
+META_LEARNING_MEMORY_PATH = Path("data") / "memory" / "meta_learning_state.json"
 DASHBOARD_SYNC_STATUS_PATH = RUNTIME_DIR / "dashboard_sync_status.json"
 
 FRESH_SECONDS = 15 * 60
@@ -203,6 +205,8 @@ def run_authoritative_runtime_health_check(path=AUTHORITATIVE_RUNTIME_HEALTH_PAT
     replay_progress = _read_json_safe(REPLAY_PROGRESS_PATH)
     reinforcement_status = _read_json_safe(REINFORCEMENT_LEARNING_STATUS_PATH)
     reinforcement_memory = _read_json_safe(REINFORCEMENT_LEARNING_MEMORY_PATH)
+    meta_learning_status = _read_json_safe(META_LEARNING_STATUS_PATH)
+    meta_learning_memory = _read_json_safe(META_LEARNING_MEMORY_PATH)
     dashboard_sync_status = _read_json_safe(DASHBOARD_SYNC_STATUS_PATH)
 
     daemon_pid = daemon_health.get("pid") or heartbeat.get("pid") or lock_payload.get("pid")
@@ -248,6 +252,7 @@ def run_authoritative_runtime_health_check(path=AUTHORITATIVE_RUNTIME_HEALTH_PAT
 
     replay_payload = replay_progress if replay_progress else replay_status
     reinforcement_payload = reinforcement_status if reinforcement_status else reinforcement_memory
+    meta_learning_payload = meta_learning_status if meta_learning_status else meta_learning_memory
     scanner_freshness = _artifact_freshness(
         "scanner",
         SCANNER_STATUS_PATH,
@@ -276,6 +281,13 @@ def run_authoritative_runtime_health_check(path=AUTHORITATIVE_RUNTIME_HEALTH_PAT
         now_ist,
         fresh_seconds=RESEARCH_FRESH_SECONDS,
     )
+    meta_learning_freshness = _artifact_freshness(
+        "meta_learning",
+        META_LEARNING_STATUS_PATH if meta_learning_status else META_LEARNING_MEMORY_PATH,
+        meta_learning_payload,
+        now_ist,
+        fresh_seconds=RESEARCH_FRESH_SECONDS,
+    )
     dashboard_sync_freshness = _artifact_freshness(
         "dashboard_sync",
         DASHBOARD_SYNC_STATUS_PATH,
@@ -288,6 +300,7 @@ def run_authoritative_runtime_health_check(path=AUTHORITATIVE_RUNTIME_HEALTH_PAT
         master_brain_freshness,
         replay_freshness,
         reinforcement_learning_freshness,
+        meta_learning_freshness,
         dashboard_sync_freshness,
     ]
     stale_artifacts = [
@@ -346,6 +359,7 @@ def run_authoritative_runtime_health_check(path=AUTHORITATIVE_RUNTIME_HEALTH_PAT
         "master_brain_freshness": master_brain_freshness,
         "replay_freshness": replay_freshness,
         "reinforcement_learning_freshness": reinforcement_learning_freshness,
+        "meta_learning_freshness": meta_learning_freshness,
         "dashboard_sync_freshness": dashboard_sync_freshness,
         "contradiction_flags": contradiction_flags,
         "stale_artifacts": stale_artifacts,

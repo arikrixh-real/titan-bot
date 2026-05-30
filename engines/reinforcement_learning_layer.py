@@ -14,6 +14,7 @@ import math
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
+from zoneinfo import ZoneInfo
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +25,7 @@ REINFORCEMENT_MEMORY_PATH = MEMORY_DIR / "reinforcement_learning_memory.json"
 REINFORCEMENT_REPORT_PATH = REPORTS_DIR / "phase20_reinforcement_learning_report.txt"
 REINFORCEMENT_STATUS_PATH = RUNTIME_DIR / "reinforcement_learning_status.json"
 MAX_REPLAY_RECORDS = 500
+IST = ZoneInfo("Asia/Kolkata")
 
 WIN_OUTCOMES = {
     "TP",
@@ -93,6 +95,10 @@ def _as_list(value: Any) -> List[Any]:
 
 def _now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _now_ist() -> str:
+    return datetime.now(IST).isoformat()
 
 
 def _read_json(path: Path) -> Dict[str, Any]:
@@ -556,6 +562,40 @@ def write_reinforcement_learning_report(memory: Dict[str, Any], path: Path = REI
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def publish_reinforcement_learning_status(
+    *,
+    status_path: Path = REINFORCEMENT_STATUS_PATH,
+    status: str = "EXECUTED_SHADOW",
+    source: str,
+    last_run: Dict[str, Any],
+    proof_fields: Dict[str, Any],
+) -> Dict[str, Any]:
+    payload = {
+        "timestamp_ist": _now_ist(),
+        "timestamp_utc": _now_utc(),
+        "status": status,
+        "source": source,
+        "phase": "PHASE_20_REINFORCEMENT_LEARNING",
+        "authoritative_status_path": str(status_path).replace("\\", "/"),
+        "last_run": _as_dict(last_run),
+        "proof_fields": _as_dict(proof_fields),
+        "research_only": True,
+        "advisory_only": True,
+        "shadow_mode": True,
+        "safety": {
+            "final_decision_engine_rank_mutation": False,
+            "scanner_mutation": False,
+            "execution_mutation": False,
+            "broker_mutation": False,
+            "telegram_mutation": False,
+            "supabase_mutation": False,
+            "autonomous_self_modifying_live_trading": False,
+        },
+    }
+    _write_json(status_path, payload)
+    return payload
+
+
 def refresh_reinforcement_memory_from_replay(
     records: Any,
     write_files: bool = True,
@@ -566,9 +606,27 @@ def refresh_reinforcement_memory_from_replay(
     existing_memory = _read_json(memory_path)
     memory = build_reinforcement_memory_from_replay(records, existing_memory=existing_memory)
     status = {
+        "timestamp_ist": _now_ist(),
         "timestamp_utc": memory.get("last_updated"),
         "status": "CONNECTED_SHADOW" if memory.get("records_processed") else "CONNECTED_NO_REPLAY_RECORDS",
+        "source": "runtime_historical_replay.refresh_reinforcement_memory_from_replay",
         "phase": "PHASE_20_REINFORCEMENT_LEARNING",
+        "authoritative_status_path": str(status_path).replace("\\", "/"),
+        "last_run": {
+            "runtime_trigger_path": "runtime_historical_replay._refresh_reinforcement_learning_from_replay",
+            "records_received": memory.get("records_received"),
+            "records_processed": memory.get("records_processed"),
+            "wins": memory.get("wins"),
+            "losses": memory.get("losses"),
+        },
+        "proof_fields": {
+            "memory_written": bool(write_files),
+            "report_written": bool(write_files),
+            "status_written": bool(write_files),
+            "memory_path": str(memory_path).replace("\\", "/"),
+            "report_path": str(report_path).replace("\\", "/"),
+            "runtime_status_path": str(status_path).replace("\\", "/"),
+        },
         "research_only": True,
         "advisory_only": True,
         "shadow_mode": True,

@@ -344,9 +344,7 @@ def _supabase_payload(row):
 
 
 def _append_local_trade(row):
-    fieldnames, rows = _read_csv_rows(ACTIVE_TRADES_CSV)
-    rows.append(row)
-    _write_csv_rows(ACTIVE_TRADES_CSV, fieldnames, rows)
+    return append_open_trade(row, prefer_supabase=False)
 
 
 def _valid_setups(contract_payload):

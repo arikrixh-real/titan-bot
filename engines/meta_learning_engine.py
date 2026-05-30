@@ -14,6 +14,7 @@ import math
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+from zoneinfo import ZoneInfo
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +25,7 @@ REPORT_PATH = PROJECT_ROOT / "reports" / "meta_learning_report.txt"
 
 STATE_VERSION = "41.0"
 MAX_PRIORITIES = 24
+IST = ZoneInfo("Asia/Kolkata")
 
 MEMORY_INPUTS = {
     "reinforcement_learning": PROJECT_ROOT / "data" / "memory" / "reinforcement_learning_memory.json",
@@ -39,6 +41,10 @@ MEMORY_INPUTS = {
 
 def _now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _now_ist() -> str:
+    return datetime.now(IST).isoformat()
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -303,13 +309,39 @@ def render_meta_learning_report(state: Dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def refresh_meta_learning(accuracy_state: Dict[str, Any] | None = None, write_files: bool = True) -> Dict[str, Any]:
+def refresh_meta_learning(
+    accuracy_state: Dict[str, Any] | None = None,
+    write_files: bool = True,
+    source: str = "engines.meta_learning_engine.run_meta_learning",
+) -> Dict[str, Any]:
     previous = _read_json(META_STATE_PATH)
     state = build_meta_learning_state(accuracy_state=accuracy_state, previous=previous)
+    timestamp_ist = _now_ist()
     runtime_status = {
         "phase": state["phase"],
         "status": state["status"],
+        "timestamp_ist": timestamp_ist,
+        "timestamp_utc": state["generated_at"],
         "generated_at": state["generated_at"],
+        "source": source,
+        "authoritative_status_path": _relative(RUNTIME_STATUS_PATH),
+        "last_run": {
+            "runtime_trigger_path": source,
+            "run_count": state["run_count"],
+            "continued_from_previous_state": state["continued_from_previous_state"],
+            "phase40_run_count_seen": state.get("phase40_run_count_seen"),
+            "priority_count": state["priority_count"],
+        },
+        "proof_fields": {
+            "state_written": bool(write_files),
+            "status_written": bool(write_files),
+            "report_written": bool(write_files),
+            "state_path": state["state_path"],
+            "runtime_status_path": _relative(RUNTIME_STATUS_PATH),
+            "report_path": state["report_path"],
+            "memory_inputs_checked": sorted((state.get("memory_sources") or {}).keys()),
+            "learning_priorities_count": state["priority_count"],
+        },
         "run_count": state["run_count"],
         "continued_from_previous_state": state["continued_from_previous_state"],
         "phase40_run_count_seen": state.get("phase40_run_count_seen"),
@@ -331,7 +363,11 @@ def refresh_meta_learning(accuracy_state: Dict[str, Any] | None = None, write_fi
     return state
 
 
-def run_meta_learning(accuracy_state: Dict[str, Any] | None = None, write_files: bool = True) -> Dict[str, Any]:
+def run_meta_learning(
+    accuracy_state: Dict[str, Any] | None = None,
+    write_files: bool = True,
+    source: str = "engines.meta_learning_engine.run_meta_learning",
+) -> Dict[str, Any]:
     """
     Stable public runtime callable for Phase 41.
 
@@ -339,7 +375,7 @@ def run_meta_learning(accuracy_state: Dict[str, Any] | None = None, write_files:
     Phase 40 state when one is not supplied, writes state/status/report
     artifacts, and returns the refreshed state.
     """
-    return refresh_meta_learning(accuracy_state=accuracy_state, write_files=write_files)
+    return refresh_meta_learning(accuracy_state=accuracy_state, write_files=write_files, source=source)
 
 
 if __name__ == "__main__":

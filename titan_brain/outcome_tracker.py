@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from data.live_price import get_live_price
+from data.active_trade_store import close_open_trade
 from titan_brain.supabase_client import supabase
 from titan_brain.db import insert_trade_result
 from utils.market_hours import is_trade_window, trade_window_text
@@ -25,9 +26,7 @@ def get_open_trades():
 
 def update_trade_closed(trade_id, result, exit_price, actual_rr, pnl):
     try:
-        supabase.table("trades").update({
-            "status": "CLOSED"
-        }).eq("trade_id", trade_id).execute()
+        close_open_trade({"trade_id": trade_id}, {"status": "CLOSED"})
 
         supabase.table("setups").update({
             "status": "CLOSED"

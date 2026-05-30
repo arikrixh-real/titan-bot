@@ -533,8 +533,11 @@ def select_dynamic_scan_universe(scan_id):
 
 def save_selected_alerts_to_trade_results(selected_alerts, scan_id, market_status):
     """
-    Saves only the final selected/alerted Titan trades to Supabase trade_results.
-    Uses this file's Supabase client directly, so dashboard metrics update reliably.
+    Deprecated compatibility helper.
+
+    trade_results final outcome ownership belongs to journal.outcome_tracker.
+    setup_engine may create setup/open-trade candidates elsewhere, but must not
+    write trade_results rows.
     """
     if not selected_alerts:
         print("ℹ️ trade_results: no selected alerts to save")
@@ -604,12 +607,10 @@ def save_selected_alerts_to_trade_results(selected_alerts, scan_id, market_statu
                 "updated_at": now_iso,
             }
 
-            supabase.table("trade_results").insert(row).execute()
-            saved_count += 1
-            print(f"✅ trade_results saved: {symbol} | {side} | entry={entry} sl={sl} tp={tp}")
+            print("[SetupEngine] trade_results write skipped; OutcomeTracker owns final outcomes.")
 
         except Exception as e:
-            print(f"❌ trade_results insert failed for {setup.get('symbol')}: {e}")
+            print(f"❌ trade_results ownership skip failed for {setup.get('symbol')}: {e}")
 
     print(f"✅ trade_results final saved count: {saved_count}/{len(selected_alerts)}")
     return saved_count

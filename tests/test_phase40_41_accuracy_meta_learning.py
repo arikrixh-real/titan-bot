@@ -118,6 +118,7 @@ class Phase40Phase41Tests(unittest.TestCase):
                 }
                 with patch.object(runtime_status, "PHASE_STATUS_ARTIFACTS", phase_specs):
                     visibility = runtime_status._phase_status_summaries()
+                phase41_status = json.loads(phase41_runtime.read_text(encoding="utf-8"))
                 artifacts_written = all(
                     path.exists()
                     for path in (
@@ -151,6 +152,14 @@ class Phase40Phase41Tests(unittest.TestCase):
         self.assertEqual(visibility["phase41_meta_learning"]["values"]["phase40_run_count_seen"], 2)
         self.assertTrue(visibility["phase40_accuracy_validation"]["values"])
         self.assertTrue(visibility["phase41_meta_learning"]["values"])
+        self.assertIn("timestamp_ist", phase41_status)
+        self.assertIn("timestamp_utc", phase41_status)
+        self.assertEqual(phase41_status["source"], "engines.meta_learning_engine.run_meta_learning")
+        self.assertEqual(phase41_status["last_run"]["run_count"], 2)
+        self.assertEqual(phase41_status["last_run"]["phase40_run_count_seen"], 2)
+        self.assertTrue(phase41_status["proof_fields"]["status_written"])
+        self.assertTrue(phase41_status["proof_fields"]["state_written"])
+        self.assertTrue(phase41_status["proof_fields"]["report_written"])
 
 
 if __name__ == "__main__":

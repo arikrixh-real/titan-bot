@@ -125,37 +125,14 @@ def insert_trade(trade_data):
 
 
 def insert_trade_result(result_data):
-    if not _db_available():
-        return None
-    try:
-        result_data = result_data or {}
+    """
+    Deprecated compatibility helper.
 
-        # Prevent missing column issues
-        allowed_fields = {
-            "trade_id",
-            "symbol",
-            "side",
-            "entry",
-            "sl",
-            "exit_price",
-            "result",
-            "pnl_points",
-            "closed_at",
-            "close_reason",
-            "market_status"
-        }
-
-        cleaned = {
-            k: v for k, v in result_data.items()
-            if k in allowed_fields
-        }
-
-        payload = _safe_json(cleaned)
-
-        supabase.table("trade_results").insert(payload).execute()
-
-    except Exception as e:
-        _log_db_error("TRADE RESULT", e)
+    Final trade_results ownership belongs to journal.outcome_tracker. Legacy
+    titan_brain callers must not insert closed result rows directly.
+    """
+    print("[DB] trade_results insert skipped; journal.outcome_tracker owns final outcomes.")
+    return None
 
 
 def insert_learning(learning_data):

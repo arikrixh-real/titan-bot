@@ -13,13 +13,11 @@ from data.paper_journal import (  # noqa: E402
     ACTIVE_TRADES_CSV,
     PAPER_FLAG,
     PAPER_JOURNAL_STATUS_PATH,
+    latest_contract_payload,
     latest_status,
     paper_journal_enabled,
     write_disabled_status,
 )
-
-
-TRADE_CONTRACT_DIAGNOSTICS_PATH = PROJECT_ROOT / "data" / "runtime" / "trade_contract_diagnostics.json"
 
 
 def _read_json(path):
@@ -67,9 +65,10 @@ def main():
         write_disabled_status(reason="STATUS_FILE_MISSING_CREATED_READ_ONLY_STATUS")
 
     status = latest_status()
-    contract = _read_json(TRADE_CONTRACT_DIAGNOSTICS_PATH)
-    latest_setup_count = int(contract.get("final_setup_count") or status.get("latest_setup_count") or 0)
-    valid_setup_count = int(contract.get("valid_setup_count") or status.get("valid_setup_count") or 0)
+    final_setups = latest_contract_payload(refresh=True)
+    setups = final_setups.get("setups") if isinstance(final_setups.get("setups"), list) else []
+    latest_setup_count = int(final_setups.get("final_setup_count") or len(setups))
+    valid_setup_count = int(final_setups.get("valid_setup_count") or 0)
     enabled = paper_journal_enabled()
 
     print("PAPER JOURNAL STATUS")

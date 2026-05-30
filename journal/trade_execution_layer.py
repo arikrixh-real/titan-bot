@@ -39,6 +39,7 @@ except Exception:
 from journal.trade_id import build_canonical_trade_id, build_setup_signature
 from core.truth_gate import validate_trade_setup, write_status as write_truth_gate_status
 from utils.market_hours import is_trade_window, trade_window_text
+from data.active_trade_store import append_open_trade, close_open_trade, find_open_trade, update_active_trade
 
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -442,45 +443,14 @@ def _insert_trade_to_supabase(row):
 
 def _insert_result_to_supabase_minimal(result_row):
     """
-    Minimal trade_results insert. If outcome tracker already saves results,
-    duplicate/schema errors are skipped safely.
+    Diagnostic compatibility stub.
+
+    trade_results final outcome ownership belongs to journal.outcome_tracker.
+    The execution layer may create/open trades, but it must not write closed
+    result rows to Supabase trade_results.
     """
-    client = _get_supabase()
-
-    if client is None:
-        return False
-
-    setup_signature = str(result_row.get("setup_signature") or "").strip().upper()
-    if setup_signature and _same_day_setup_exists(client, "trade_results", setup_signature):
-        print(f"[TradeExecution] DUPLICATE_SETUP_SKIPPED: {setup_signature}")
-        return False
-
-    payload = {
-        "trade_id": str(result_row.get("trade_id", "")),
-        "setup_signature": setup_signature,
-        "trade_date": str(result_row.get("trade_date") or _today_key()),
-        "symbol": str(result_row.get("symbol", "")).upper(),
-        "side": str(result_row.get("side", "")).upper(),
-        "entry": _safe_float(result_row.get("entry")),
-        "exit_price": _safe_float(result_row.get("close_price")),
-        "close_price": _safe_float(result_row.get("close_price")),
-        "result": str(result_row.get("result", "")),
-        "outcome": "TP" if str(result_row.get("result", "")).upper() == "WIN" else "SL",
-        "pnl_points": _safe_float(result_row.get("pnl_points")),
-        "pnl": _safe_float(result_row.get("realized_pnl")),
-        "realized_pnl": _safe_float(result_row.get("realized_pnl")),
-        "quantity": _safe_float(result_row.get("quantity") or result_row.get("qty")),
-        "qty": _safe_float(result_row.get("quantity") or result_row.get("qty")),
-        "position_size": _safe_float(result_row.get("position_size")),
-        "capital_used": _safe_float(result_row.get("capital_used") or result_row.get("position_size")),
-        "risk_amount": _safe_float(result_row.get("risk_amount")),
-        "risk_per_trade_pct": _safe_float(result_row.get("risk_per_trade_pct"), 1.0),
-        "closed_at": result_row.get("closed_at") or _now_iso(),
-        "reason": _safe_text(result_row.get("reason"), 500),
-        "created_at": _now_iso(),
-    }
-
-    return _safe_supabase_insert(client, "trade_results", payload)
+    print("[TradeExecution] trade_results write skipped; OutcomeTracker owns final outcomes.")
+    return False
 
 
 def _trade_hit_result(side, price, sl, target):
@@ -566,7 +536,11 @@ def add_good_setups_as_live_trades(
         if not symbol or side not in ["LONG", "SHORT"]:
             continue
 
-        if _local_open_trade_exists(active_df, symbol, side):
+        existing_trade = find_open_trade(symbol)
+        if (
+            _local_open_trade_exists(active_df, symbol, side)
+            or (existing_trade and str(existing_trade.get("side") or "").strip().upper() == side)
+        ):
             duplicate_skipped += 1
             continue
 
@@ -647,17 +621,16 @@ def add_good_setups_as_live_trades(
             "reason": _safe_text(setup.get("reason", ""), 500),
         }
 
-        # Local trade is always added first.
+        store_result = append_open_trade(row)
+        if not store_result.get("written"):
+            continue
+
         new_rows.append(row)
         local_added += 1
-
-        # Supabase sync is best-effort and will not block local tracking.
-        if _insert_trade_to_supabase(row):
+        if "SUPABASE_TRADES" in str(store_result.get("destination") or ""):
             supabase_added += 1
 
         active_df = pd.concat([active_df, pd.DataFrame([row])], ignore_index=True)
-
-    _write_csv(active_df, ACTIVE_TRADES_FILE, ACTIVE_COLUMNS)
 
     print(f"📌 Active Trades Added: {len(new_rows)} new OPEN trades")
     print(f"☁️ Supabase Trades Stored: {supabase_added}")
@@ -682,12 +655,6 @@ def update_live_trade_outcomes():
         ACTIVE_COLUMNS,
         legacy_path=LEGACY_ACTIVE_TRADES_FILE,
     )
-    results_df = _read_csv(
-        TRADE_RESULTS_FILE,
-        RESULT_COLUMNS,
-        legacy_path=LEGACY_TRADE_RESULTS_FILE,
-    )
-
     if active_df.empty:
         print("📊 Trade Execution Layer: 0 active trades")
         return {
@@ -739,6 +706,13 @@ def update_live_trade_outcomes():
         hit = _trade_hit_result(side, price, sl, target)
 
         if hit not in ["TARGET", "SL"]:
+            update_active_trade(
+                row.to_dict(),
+                {
+                    "last_checked_at": active_df.at[idx, "last_checked_at"],
+                    "last_price": active_df.at[idx, "last_price"],
+                },
+            )
             continue
 
         close_time = _now()
@@ -754,6 +728,7 @@ def update_live_trade_outcomes():
         active_df.at[idx, "closed_at"] = close_time
         active_df.at[idx, "result"] = result
         active_df.at[idx, "realized_pnl"] = realized_pnl
+        active_df.at[idx, "pnl_points"] = pnl
 
         result_row = {
             "trade_id": row.get("trade_id", ""),
@@ -785,11 +760,6 @@ def update_live_trade_outcomes():
             "reason": row.get("reason", ""),
         }
 
-        results_df = pd.concat(
-            [results_df, pd.DataFrame([result_row])],
-            ignore_index=True,
-        )
-
         _safe_supabase_update_trade_closed(
             client=client,
             trade_id=str(row.get("trade_id", "")),
@@ -798,15 +768,14 @@ def update_live_trade_outcomes():
             closed_at=close_iso,
         )
 
+        close_open_trade(active_df.loc[idx].to_dict(), active_df.loc[idx].to_dict())
+
         _insert_result_to_supabase_minimal(result_row)
 
         if result == "WIN":
             closed_targets += 1
         else:
             closed_sls += 1
-
-    _write_csv(active_df, ACTIVE_TRADES_FILE, ACTIVE_COLUMNS)
-    _write_csv(results_df, TRADE_RESULTS_FILE, RESULT_COLUMNS)
 
     still_open = len(
         active_df[

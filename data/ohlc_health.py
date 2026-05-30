@@ -14,10 +14,32 @@ from scripts.refresh_ohlc_cache import YFINANCE_SYMBOL_ALIASES
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CACHE_DIR = PROJECT_ROOT / "data" / "cache"
 RUNTIME_HEALTH_PATH = PROJECT_ROOT / "data" / "runtime" / "ohlc_health.json"
+AUTHORITATIVE_OHLC_STATUS_PATH = RUNTIME_HEALTH_PATH
 REQUIRED_COLUMNS = {"Open", "High", "Low", "Close", "Volume"}
 REQUIRED_ROWS = 100
 MINIMUM_ROWS = 60
 IST = ZoneInfo("Asia/Kolkata")
+
+OHLC_OWNERSHIP_CONTRACT = {
+    "owner": "data.ohlc_health",
+    "authoritative_status_path": "data/runtime/ohlc_health.json",
+    "authoritative_for": [
+        "ohlc_freshness",
+        "ohlc_health",
+        "scanner_ohlc_gate",
+        "dashboard_ohlc_status",
+    ],
+    "diagnostic_only_paths": [
+        "data/runtime/ohlc_refresh_status.json",
+        "data/runtime/ohlc_freshness_status.json",
+        "data/runtime/stale_symbol_diagnostics.json",
+    ],
+    "contract": (
+        "Refresh modules may update data/cache CSVs and publish refresh telemetry, "
+        "but runtime health consumers must read data/runtime/ohlc_health.json for "
+        "OHLC freshness truth."
+    ),
+}
 
 
 def _now_ist():
@@ -52,6 +74,40 @@ def _atomic_write_json(path, payload):
     temp_path = path.with_suffix(path.suffix + ".tmp")
     temp_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     temp_path.replace(path)
+
+
+def ownership_contract():
+    return dict(OHLC_OWNERSHIP_CONTRACT)
+
+
+def publish_ohlc_health(payload, path=AUTHORITATIVE_OHLC_STATUS_PATH):
+    authoritative = dict(payload or {})
+    authoritative["ownership_contract"] = ownership_contract()
+    authoritative["authoritative"] = True
+    authoritative["authoritative_status_path"] = "data/runtime/ohlc_health.json"
+    _atomic_write_json(path, authoritative)
+    return authoritative
+
+
+def read_authoritative_ohlc_health(path=AUTHORITATIVE_OHLC_STATUS_PATH):
+    try:
+        path = Path(path)
+        if not path.exists():
+            return {}
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def authoritative_ohlc_is_fresh(payload=None):
+    health = payload if isinstance(payload, dict) else read_authoritative_ohlc_health()
+    status = str(health.get("status") or "").upper()
+    if status == "PASS":
+        return True
+    if status == "FAIL":
+        return False
+    return None
 
 
 def get_cache_file(symbol):
@@ -441,5 +497,4 @@ def ensure_fresh_ohlc(symbols, max_age_hours=24):
         "invalid_symbols": invalid_symbols,
         "symbol_results": results,
     }
-    _atomic_write_json(RUNTIME_HEALTH_PATH, payload)
-    return payload
+    return publish_ohlc_health(payload)

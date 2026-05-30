@@ -593,6 +593,9 @@ def auto_close_live_trades_after_market_close():
     """
     After 3:30 PM IST, unresolved LIVE trades become MARKET_CLOSED.
     This prevents dashboard showing fake live trades at night.
+
+    Deprecated for trade_results ownership: final outcome/status writes belong
+    to journal.outcome_tracker.
     """
     now = _now_ist()
 
@@ -625,19 +628,7 @@ def auto_close_live_trades_after_market_close():
             if not row_id:
                 continue
 
-            updated = _safe_supabase_update(supabase, "trade_results", {
-                "status": "MARKET_CLOSED",
-                "outcome": "MARKET_CLOSED",
-                "result": "MARKET_CLOSED",
-                "closed_at": now.isoformat(),
-                "updated_at": now.isoformat(),
-                "reason": "Auto closed because market session ended"
-            }, "id", row_id)
-
-            if not updated:
-                continue
-
-            closed_count += 1
+            print(f"[TradeResults] MARKET_CLOSED write skipped for {symbol}; OutcomeTracker owns final outcomes.")
             print(f"[MarketClose] Auto-closed LIVE trade: {symbol}")
 
     except Exception as e:
@@ -681,8 +672,11 @@ def _live_trade_exists(supabase, symbol, side):
 
 def save_sent_packets_to_trade_results(sent_packets, context=None):
     """
-    Saves only Telegram-sent trades into trade_results.
-    Prevents duplicate LIVE trade for same symbol + side.
+    Deprecated compatibility helper.
+
+    trade_results final outcome ownership belongs to journal.outcome_tracker.
+    Master brain may send alerts/open trades elsewhere, but must not write
+    trade_results rows.
     """
     if not sent_packets:
         print("[TradeResults] No sent packets to save.")
@@ -814,16 +808,7 @@ def save_sent_packets_to_trade_results(sent_packets, context=None):
                 "updated_at": now_iso,
             }
 
-            inserted = _safe_supabase_insert(supabase, "trade_results", row)
-
-            if not inserted:
-                continue
-
-            saved_count += 1
-            print(
-                f"[TradeResults] SAVED REAL TRADE: "
-                f"{symbol} | {side} | entry={entry} | sl={sl} | tp={tp}"
-            )
+            print("[TradeResults] write skipped; OutcomeTracker owns final outcomes.")
 
         except Exception as e:
             print(f"[TradeResults ERROR] Save failed for packet {packet}: {e}")
@@ -1792,7 +1777,11 @@ def refresh_phase41_meta_learning_safely(accuracy_state=None, context=None):
         return None
 
     try:
-        report = run_meta_learning(accuracy_state=accuracy_state, write_files=True)
+        report = run_meta_learning(
+            accuracy_state=accuracy_state,
+            write_files=True,
+            source="titan_master_brain.master_controller.refresh_phase41_meta_learning_safely",
+        )
         print(
             "[Phase41] Meta-learning refreshed: data/memory/meta_learning_state.json | "
             f"status={report.get('status')} | run_count={report.get('run_count')} | "

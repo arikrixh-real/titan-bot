@@ -29,6 +29,8 @@ class RuntimeHealthTests(unittest.TestCase):
             "REPLAY_PROGRESS_PATH": self.runtime_dir / "historical_replay_progress.json",
             "REINFORCEMENT_LEARNING_STATUS_PATH": self.runtime_dir / "reinforcement_learning_status.json",
             "REINFORCEMENT_LEARNING_MEMORY_PATH": self.memory_dir / "reinforcement_learning_memory.json",
+            "META_LEARNING_STATUS_PATH": self.runtime_dir / "meta_learning_status.json",
+            "META_LEARNING_MEMORY_PATH": self.memory_dir / "meta_learning_state.json",
             "DASHBOARD_SYNC_STATUS_PATH": self.runtime_dir / "dashboard_sync_status.json",
         }
         self.patchers = [patch.object(runtime_health, name, path) for name, path in self.paths.items()]
@@ -55,6 +57,7 @@ class RuntimeHealthTests(unittest.TestCase):
         self._write_json(runtime_health.MASTER_BRAIN_STATUS_PATH, {"status": "OK", "timestamp_ist": timestamp})
         self._write_json(runtime_health.REPLAY_PROGRESS_PATH, {"status": "OK", "last_completed_at_ist": timestamp})
         self._write_json(runtime_health.REINFORCEMENT_LEARNING_STATUS_PATH, {"status": "OK", "timestamp_ist": timestamp})
+        self._write_json(runtime_health.META_LEARNING_STATUS_PATH, {"status": "OK", "timestamp_ist": timestamp})
         self._write_json(runtime_health.DASHBOARD_SYNC_STATUS_PATH, {"status": "OK", "timestamp_ist": timestamp})
 
     def test_stale_lock_becomes_warning_or_fail_not_ok(self):
