@@ -30,7 +30,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-import pandas as pd
+try:
+    import pandas as pd
+except ModuleNotFoundError as exc:
+    pd = None
+    PANDAS_IMPORT_ERROR = exc
+else:
+    PANDAS_IMPORT_ERROR = None
 
 from engines.momentum_engine import strong_momentum
 from engines.trade_levels import calculate_trade_levels
@@ -164,6 +170,8 @@ def discover_symbols(requested: Optional[Iterable[str]] = None, source_dir: Opti
 
 
 def read_candles(symbol: str, source_dir: Optional[Path] = None) -> pd.DataFrame:
+    if pd is None:
+        raise RuntimeError(str(PANDAS_IMPORT_ERROR or "pandas is required for historical replay candle parsing"))
     source_path = resolve_source_dir(source_dir)
     path = source_path / f"{normalize_symbol(symbol)}.csv"
     if not path.exists():
@@ -640,6 +648,26 @@ def run_feeder(
     max_per_year: Optional[int] = None,
 ) -> Dict[str, Any]:
     source_path = resolve_source_dir(source_dir)
+    if pd is None:
+        return {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "status": "DEPENDENCY_UNAVAILABLE",
+            "dependency": "pandas",
+            "error_type": PANDAS_IMPORT_ERROR.__class__.__name__ if PANDAS_IMPORT_ERROR else "ModuleNotFoundError",
+            "error": str(PANDAS_IMPORT_ERROR or "pandas is required for historical replay candle parsing"),
+            "records_generated": 0,
+            "skipped_duplicates": 0,
+            "symbols_scanned": 0,
+            "source_dir": str(source_path),
+            "output_jsonl": str(JSONL_PATH),
+            "output_csv": str(CSV_PATH),
+            "sampling_mode": sampling_mode,
+            "year_focus": parse_year_focus(year_focus),
+            "max_per_symbol": max_per_symbol,
+            "max_per_year": max_per_year,
+            "safety": SAFETY_TAGS,
+            "note": "Historical replay skipped locally because optional pandas dependency is unavailable.",
+        }
     selected_symbols = discover_symbols(symbols, source_dir=source_path)
     existing_hashes = load_existing_hashes()
     emitted_hashes = set(existing_hashes)

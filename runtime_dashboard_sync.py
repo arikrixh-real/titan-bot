@@ -55,6 +55,24 @@ RUNTIME_STATUS_SOURCES = {
 }
 
 
+DASHBOARD_SYNC_TELEMETRY_CONTRACT = {
+    "diagnostic_only": True,
+    "authoritative_for_dashboard_metrics": False,
+    "reason": (
+        "runtime_status table rows are transport/visibility mirrors. Dashboard "
+        "metric truth must stay with the local authoritative runtime artifacts."
+    ),
+    "authoritative_sources": {
+        "scanner": "data/runtime/scanner_status.json + data/runtime/final_validated_setups.json",
+        "trade_results": "journal.outcome_tracker output",
+        "active_trades": "data.active_trade_store",
+        "ohlc": "data/runtime/ohlc_health.json",
+        "reinforcement_learning": "data/runtime/reinforcement_learning_status.json",
+        "meta_learning": "data/runtime/meta_learning_status.json",
+    },
+}
+
+
 def read_json_safe(path):
     try:
         path = Path(path)
@@ -392,6 +410,9 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
             daemon_health,
         ),
         "heartbeat": heartbeat or {},
+        "telemetry_contract": dict(DASHBOARD_SYNC_TELEMETRY_CONTRACT),
+        "diagnostic_only": True,
+        "authoritative_for_dashboard_metrics": False,
         "daemon_health": daemon_health or {},
         "runtime_status": runtime_status or {},
         "scanner_status": scanner_status or {},

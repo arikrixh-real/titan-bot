@@ -18,6 +18,54 @@ ADVISORY_FRESH_SECONDS = 24 * 60 * 60
 EXTERNAL_READONLY_FRESH_SECONDS = 15 * 60
 
 
+P1_RUNTIME_ARTIFACT_CLASSIFICATION = {
+    "authoritative": [
+        "data/runtime/scanner_status.json",
+        "data/runtime/final_validated_setups.json",
+        "data/runtime/ohlc_health.json",
+        "data/runtime/reinforcement_learning_status.json",
+        "data/runtime/meta_learning_status.json",
+        "data/runtime/titan_authoritative_runtime_health.json",
+        "data/runtime/titan_runtime_status.json",
+        "data/runtime/titan_heartbeat.json",
+        "data/runtime/daemon_health.json",
+    ],
+    "diagnostic": [
+        "data/runtime/scanner_filter_truth_status.json",
+        "data/runtime/signal_path_diagnostics.json",
+        "data/runtime/rejection_heatmap.json",
+        "data/runtime/sideways_analysis.json",
+        "data/runtime/ohlc_refresh_status.json",
+        "data/runtime/stale_symbol_diagnostics.json",
+        "data/runtime/trade_lifecycle_health.json",
+        "data/runtime/trade_lifecycle_reconciliation.json",
+        "data/runtime/runtime_fallback_resolution.json",
+        "data/runtime/dashboard_sync_status.json",
+    ],
+    "fallback_risk": [
+        "supabase.runtime_status.scanner_status",
+        "supabase.scan_symbols",
+        "supabase.setups",
+        "supabase.trade_results",
+        "data/runtime/setup_engine_status.json:final_passed",
+        "data/runtime/master_brain_status.json:selected_count",
+        "data/paper_trading/paper_closed_positions.json",
+    ],
+    "dead_candidate": [
+        "data/runtime/final_singlefix_status.json",
+        "data/runtime/true_final_fix_status.json",
+        "data/runtime/journal_status.json",
+        "data/runtime/market_pressure_check_status.json",
+        "data/runtime/market_regime_update_status.json",
+        "data/runtime/pnl_refresh_status.json",
+        "data/runtime/sector_strength_status.json",
+        "data/runtime/volatility_check_status.json",
+        "data/runtime/weekly_report_status.json",
+        "data/runtime/.runtime_resilience_status.json.i7yygiwf.tmp",
+    ],
+}
+
+
 DASHBOARD_METRIC_SPECS = {
     "deterministic_runtime_owner": {
         "owner": "titan_runtime_watchdog",
@@ -405,6 +453,10 @@ def build_dashboard_truth_registry(ownership=None, dependency_graph=None, path=N
         "dashboard_truth_registry_status": _status_from_issues(failures, warnings),
         "source_of_truth_mode": "backend_visibility_only",
         "dashboard_rendering_mutation": False,
+        "p1_runtime_artifact_classification": P1_RUNTIME_ARTIFACT_CLASSIFICATION,
+        "diagnostic_only_artifacts": P1_RUNTIME_ARTIFACT_CLASSIFICATION["diagnostic"],
+        "fallback_risk_artifacts": P1_RUNTIME_ARTIFACT_CLASSIFICATION["fallback_risk"],
+        "dead_artifact_candidates": P1_RUNTIME_ARTIFACT_CLASSIFICATION["dead_candidate"],
         "canonical_sources": canonical_sources,
         "metric_count": len(metrics),
         "runtime_critical_metrics": [
@@ -464,6 +516,12 @@ def build_dashboard_runtime_integrity(registry=None, ownership=None, dependency_
         "generated_at_ist": now_ist.isoformat(),
         "dashboard_runtime_integrity_status": _status_from_issues(failures, warnings),
         "dashboard_backend_truth_stabilized": not failures,
+        "p1_cleanup_contract": {
+            "delete_files": False,
+            "diagnostic_only_markers_added": True,
+            "fallback_risk_classification_active": True,
+            "dead_candidates_require_later_approval": True,
+        },
         "metric_count": len(metrics),
         "stale_metric_count": len(stale_metrics),
         "stale_runtime_critical_metric_count": len(stale_critical),
@@ -480,6 +538,8 @@ def build_dashboard_runtime_integrity(registry=None, ownership=None, dependency_
             "external_readonly_metrics_classified": True,
             "stale_runtime_critical_metric_detected": bool(stale_critical),
         },
+        "dead_artifact_candidates": P1_RUNTIME_ARTIFACT_CLASSIFICATION["dead_candidate"],
+        "fallback_risk_artifacts": P1_RUNTIME_ARTIFACT_CLASSIFICATION["fallback_risk"],
         "warnings": warnings,
         "failures": failures,
         "safety_flags": dict(SAFETY_FLAGS),

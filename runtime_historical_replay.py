@@ -537,6 +537,28 @@ def run_historical_replay(
             source_dir=HISTORICAL_SOURCE_DIR,
             **replay_config,
         )
+        if feeder_report.get("status") == "DEPENDENCY_UNAVAILABLE":
+            payload.update(
+                {
+                    "status": "SKIPPED_DEPENDENCY_UNAVAILABLE",
+                    "records_generated": 0,
+                    "feeder": feeder_report,
+                    "dependency": feeder_report.get("dependency"),
+                    "error_type": feeder_report.get("error_type"),
+                    "error": feeder_report.get("error"),
+                }
+            )
+            progress.update(
+                {
+                    "status": payload["status"],
+                    "last_skipped_at_ist": payload["timestamp_ist"],
+                    "last_skip_reason": feeder_report.get("error"),
+                    "dependency": feeder_report.get("dependency"),
+                }
+            )
+            _write_json(HISTORICAL_REPLAY_STATUS_PATH, payload)
+            _write_json(HISTORICAL_REPLAY_PROGRESS_PATH, progress)
+            return payload
         generated = int(feeder_report.get("records_generated") or 0)
         latest_records = _latest_jsonl_records(consolidate_historical_experience.INPUT_PATH, generated)
 

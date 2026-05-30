@@ -2124,7 +2124,7 @@ def format_runtime_timestamp(value):
     return str(value or "No heartbeat yet")
 
 
-def get_runtime_payload(runtime_key, local_path=None):
+def get_runtime_payload(runtime_key, local_path=None, authoritative_local=False):
     supabase_data = build_runtime_status_from_supabase()
     supabase_payload = (
         supabase_data.get(runtime_key)
@@ -2136,6 +2136,8 @@ def get_runtime_payload(runtime_key, local_path=None):
         data = safe_read_json(local_path, {})
         if isinstance(data, dict):
             local_payload = data
+    if authoritative_local and isinstance(local_payload, dict):
+        return local_payload, "LOCAL_RUNTIME_JSON_AUTHORITATIVE"
     if isinstance(supabase_payload, dict) and isinstance(local_payload, dict):
         supabase_dt = parse_dt(
             supabase_payload.get("timestamp_ist")
@@ -2334,7 +2336,7 @@ def get_dashboard_runtime_status():
     resilience_status, _ = get_runtime_payload("runtime_resilience_status", RUNTIME_RESILIENCE_STATUS_PATH)
     governance_status, _ = get_runtime_payload("pyramid_governance_status", PYRAMID_GOVERNANCE_STATUS_PATH)
     weekend_research_status, _ = get_runtime_payload("weekend_research_mode_status", WEEKEND_RESEARCH_MODE_STATUS_PATH)
-    scanner_status, _ = get_runtime_payload("scanner_status", SCANNER_STATUS_PATH)
+    scanner_status, _ = get_runtime_payload("scanner_status", SCANNER_STATUS_PATH, authoritative_local=True)
     scanner_truth = safe_read_json(SCANNER_FILTER_TRUTH_STATUS_PATH, {})
     master_brain_status, _ = get_runtime_payload("master_brain_status", "/".join(["data", "runtime", "master_brain_status.json"]))
     paper_engine_status, _ = get_runtime_payload("paper_engine_status", PAPER_ENGINE_STATUS_PATH)
