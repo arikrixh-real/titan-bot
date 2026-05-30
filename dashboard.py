@@ -2870,9 +2870,11 @@ def _reconciliation_count(reconciliation, key):
 
 def get_supabase_live_trades_count(fallback_reason="local_active_trades_unavailable"):
     """
-    Fallback reader for live/open trades from Supabase trades table.
-    Does NOT use trade_results because trade_results stores closed TP/SL outcomes.
-    Excludes manual TEST rows.
+    Deprecated diagnostic reader for Supabase trades visibility checks.
+
+    Dashboard live/open trade metrics must use data.active_trade_store via
+    get_live_trades_count(); this helper is intentionally not part of the
+    active display path.
     """
     if supabase is None:
         _dashboard_debug(f"source=SUPABASE_TRADES live_count=0 fallback_reason={fallback_reason}; supabase_unavailable")
@@ -2904,12 +2906,10 @@ def get_supabase_live_trades_count(fallback_reason="local_active_trades_unavaila
 
 def get_trade_results_stats():
     """
-    FINAL FIX:
-    Reads Supabase trade_results as the source of truth.
-    - LIVE/OPEN/ACTIVE = open learning trades
-    - WIN/TP = wins
-    - LOSS/SL = losses
-    - excludes manual TEST / TESTPY rows
+    Deprecated diagnostic reader for Supabase trade_results visibility checks.
+
+    Dashboard performance metrics must use get_trade_results_dataset(), which
+    reads journal.outcome_tracker output only.
     """
     stats = {
         "wins": 0,
@@ -2917,7 +2917,7 @@ def get_trade_results_stats():
         "closed_total": 0,
         "accuracy": 0,
         "open_total": 0,
-        "source": "SUPABASE_TRADE_RESULTS",
+        "source": "DIAGNOSTIC_SUPABASE_TRADE_RESULTS_DEPRECATED",
         "latest_outcome_time": None,
     }
 

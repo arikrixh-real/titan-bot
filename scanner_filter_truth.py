@@ -247,6 +247,8 @@ def _reconciled_counter_confidence(confidence, fallback_resolution, master_healt
 
     if confidence == "HIGH":
         return "HIGH"
+    if confidence == "LOW" and not stale_snapshot_warning:
+        return "LOW"
     if truthfulness == "OFF_HOURS_RESEARCH_STANDBY":
         return "MEDIUM"
     if truthfulness in {"ENGINE_UNAVAILABLE", "DATA_DEGRADED", "REAL"} and fallback_resolution.get("fallback_active"):
