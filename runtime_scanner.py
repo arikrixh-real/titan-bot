@@ -26,6 +26,7 @@ from data.paper_journal import maybe_write_paper_journal
 from utils.market_hours import is_trade_window
 from engines.risk_engine import calculate_rr
 from engines.trade_levels import calculate_trade_levels
+from lineage.lineage_ids import build_setup_id_record
 
 try:
     from scanners.volume_scanner import volume_anomaly_score
@@ -804,9 +805,24 @@ def _build_final_validated_setup(symbol, data, side, symbol_diag, scanner_cycle_
     entry, stop_loss, target = calculate_trade_levels(data, side=side)
     rr = calculate_rr(entry, stop_loss, target, side=side)
     final_score = ((symbol_diag.get("final_score_engine") or {}).get("values") or {}).get("final_score")
+    timestamp_ist = _timestamp_ist()
+    setup_type = _contract_side(side)
+    lineage = build_setup_id_record(
+        symbol=symbol,
+        side=setup_type,
+        setup_type=setup_type,
+        timestamp=timestamp_ist,
+        scanner_cycle_id=scanner_cycle_id,
+        source="runtime_scanner.canonical_final_validated_setups",
+        entry=entry,
+        stop_loss=stop_loss,
+        target=target,
+        final_score=final_score,
+    )
     setup = {
+        **lineage,
         "symbol": str(symbol).upper(),
-        "side": _contract_side(side),
+        "side": setup_type,
         "entry": entry,
         "stop_loss": stop_loss,
         "target": target,
@@ -814,7 +830,7 @@ def _build_final_validated_setup(symbol, data, side, symbol_diag, scanner_cycle_
         "final_score": final_score,
         "reason": _final_setup_reason(symbol_diag),
         "scanner_cycle_id": scanner_cycle_id,
-        "timestamp_ist": _timestamp_ist(),
+        "timestamp_ist": timestamp_ist,
         "truth_gate_status": (truth_gate_payload or {}).get("overall_status"),
         "selector_used": (selector_payload or {}).get("selector_used"),
     }
