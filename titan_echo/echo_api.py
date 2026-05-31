@@ -45,6 +45,7 @@ APPROVAL_HISTORY_PATH = ECHO_DIR / "approval_history.jsonl"
 APPROVED_MISSIONS_PATH = ECHO_DIR / "approved_missions.json"
 REJECTED_MISSIONS_PATH = ECHO_DIR / "rejected_missions.json"
 EXECUTION_READINESS_REPORT_PATH = ECHO_DIR / "execution_readiness_report.json"
+EXECUTION_PREVIEW_PATH = ECHO_DIR / "execution_preview.json"
 VALID_RISK_LEVELS = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
 SECRET_MARKERS = (
@@ -509,6 +510,118 @@ def post_execution_readiness_check() -> dict[str, Any]:
     return build_execution_readiness_report()
 
 
+def _format_list_for_prompt(values: Any) -> str:
+    if not isinstance(values, list) or not values:
+        return "- none specified"
+    return "\n".join(f"- {value}" for value in values)
+
+
+def _build_proposed_codex_prompt(mission: dict[str, Any], readiness: dict[str, Any]) -> str:
+    mission_id = mission.get("mission_id") or readiness.get("mission_id") or "UNKNOWN"
+    approval_id = mission.get("approval_id") or readiness.get("approval_id") or "UNKNOWN"
+    title = mission.get("title") or "Approved ECHO mission"
+    objective = mission.get("objective") or "Execute only the approved mission scope."
+    risk_level = mission.get("risk_level") or "UNKNOWN"
+    return "\n".join(
+        [
+            "Approved ECHO mission execution preview.",
+            "",
+            f"Mission ID: {mission_id}",
+            f"Approval ID: {approval_id}",
+            f"Title: {title}",
+            f"Risk level: {risk_level}",
+            "",
+            "Objective:",
+            str(objective),
+            "",
+            "Allowed files:",
+            _format_list_for_prompt(mission.get("allowed_files")),
+            "",
+            "Forbidden files:",
+            _format_list_for_prompt(mission.get("forbidden_files")),
+            "",
+            "Validation commands to run after implementation:",
+            _format_list_for_prompt(mission.get("validation_commands")),
+            "",
+            "Safety rules:",
+            "- Do not execute shell commands from the ECHO API.",
+            "- Do not git push, git pull, deploy, or restart unless a later explicit approval allows it.",
+            "- Do not modify TITAN runtime, broker, risk, execution, scanner, Master Brain, Unified Brain, or runtime workers unless the approved mission explicitly permits it.",
+            "- Keep work limited to approved files and validation.",
+        ]
+    )
+
+
+def build_execution_preview() -> dict[str, Any]:
+    readiness = build_execution_readiness_report()
+    mission_plan = _load_mission_plan()
+    mission = mission_plan.get("current_mission") if isinstance(mission_plan.get("current_mission"), dict) else {}
+    if not isinstance(mission, dict):
+        mission = {}
+
+    readiness_status = readiness.get("status")
+    blockers = list(readiness.get("blockers") or [])
+    if readiness_status != "READY_DRY_RUN_ONLY":
+        blockers.append("EXECUTION_READINESS_NOT_READY_DRY_RUN_ONLY")
+
+    mission_id = readiness.get("mission_id") or mission.get("mission_id")
+    approval_id = readiness.get("approval_id") or mission.get("approval_id")
+    status = "PREVIEW_READY" if readiness_status == "READY_DRY_RUN_ONLY" and not blockers else "NOT_READY"
+    proposed_command = (
+        "PREVIEW ONLY - future command text after separate execution approval: "
+        f"codex run --mission-id {mission_id or 'UNKNOWN'} --approval-id {approval_id or 'UNKNOWN'}"
+    )
+
+    preview = {
+        "schema": "titan.echo.execution_preview.v1",
+        "status": status,
+        "mission_id": mission_id,
+        "approval_id": approval_id,
+        "readiness_status": readiness_status,
+        "command_preview_only": True,
+        "dry_run_only": True,
+        "codex_execution": False,
+        "shell_execution": False,
+        "git_push_pull": False,
+        "deploy_or_restart": False,
+        "titan_runtime_changed": False,
+        "proposed_codex_prompt": _build_proposed_codex_prompt(mission, readiness),
+        "proposed_codex_command_text": proposed_command,
+        "blockers": blockers,
+        "safety": {
+            "preview_only": True,
+            "command_preview_only": True,
+            "dry_run_only": True,
+            "codex_execution": False,
+            "shell_execution": False,
+            "git_push_pull": False,
+            "deploy_or_restart": False,
+            "titan_runtime_changed": False,
+            "public_exposure_changed": False,
+        },
+        "source_files": {
+            "mission_plan": _relative(MISSION_PLAN_PATH),
+            "approval_queue": _relative(APPROVAL_QUEUE_PATH),
+            "approved_missions": _relative(APPROVED_MISSIONS_PATH),
+            "execution_readiness_report": _relative(EXECUTION_READINESS_REPORT_PATH),
+        },
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(EXECUTION_PREVIEW_PATH, preview)
+    return preview
+
+
+def get_execution_preview() -> dict[str, Any]:
+    preview = _read_json(EXECUTION_PREVIEW_PATH)
+    if not isinstance(preview, dict):
+        preview = build_execution_preview()
+    return preview
+
+
+def post_execution_preview_generate() -> dict[str, Any]:
+    return build_execution_preview()
+
+
 def post_mission_prepare(payload: dict[str, Any]) -> dict[str, Any]:
     body = payload if isinstance(payload, dict) else {}
     now = _timestamp_ist()
@@ -731,6 +844,8 @@ mission_current = get_mission_current
 verification_latest = get_verification_latest
 execution_readiness = get_execution_readiness
 execution_readiness_check = post_execution_readiness_check
+execution_preview = get_execution_preview
+execution_preview_generate = post_execution_preview_generate
 mission_prepare = post_mission_prepare
 approval_approve = post_approval_approve
 approval_reject = post_approval_reject
@@ -757,10 +872,12 @@ if FASTAPI_AVAILABLE:
     app.get("/mission/current", dependencies=auth_dependency)(get_mission_current)
     app.get("/verification/latest", dependencies=auth_dependency)(get_verification_latest)
     app.get("/execution/readiness", dependencies=auth_dependency)(get_execution_readiness)
+    app.get("/execution/preview", dependencies=auth_dependency)(get_execution_preview)
     app.post("/mission/prepare", dependencies=auth_dependency)(post_mission_prepare)
     app.post("/approval/approve", dependencies=auth_dependency)(post_approval_approve)
     app.post("/approval/reject", dependencies=auth_dependency)(post_approval_reject)
     app.post("/execution/readiness/check", dependencies=auth_dependency)(post_execution_readiness_check)
+    app.post("/execution/preview/generate", dependencies=auth_dependency)(post_execution_preview_generate)
 
 
 __all__ = [
@@ -780,6 +897,8 @@ __all__ = [
     "get_verification_latest",
     "get_execution_readiness",
     "post_execution_readiness_check",
+    "get_execution_preview",
+    "post_execution_preview_generate",
     "post_mission_prepare",
     "post_approval_approve",
     "post_approval_reject",
@@ -797,6 +916,8 @@ __all__ = [
     "verification_latest",
     "execution_readiness",
     "execution_readiness_check",
+    "execution_preview",
+    "execution_preview_generate",
     "mission_prepare",
     "approval_approve",
     "approval_reject",

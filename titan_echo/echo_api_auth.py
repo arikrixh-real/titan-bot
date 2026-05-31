@@ -32,6 +32,8 @@ PROTECTED_ENDPOINTS = (
     "/approval/reject",
     "/execution/readiness",
     "/execution/readiness/check",
+    "/execution/preview",
+    "/execution/preview/generate",
 )
 PUBLIC_ENDPOINTS = ("/health",)
 
