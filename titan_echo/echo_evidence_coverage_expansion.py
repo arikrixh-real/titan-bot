@@ -8,20 +8,25 @@ services, execute commands, or mutate TITAN runtime subsystems.
 from __future__ import annotations
 
 import json
+import sys
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from echo_alert_engine import build_alerts, write_queue
-from echo_answer_engine import generate_answer
-from echo_api_status import generate_reports as generate_api_status
-from echo_brain_status_evidence_writer import generate_brain_status_evidence
-from echo_final_readiness_audit import AUDIT_PATH, SUMMARY_PATH as FINAL_READINESS_SUMMARY_PATH
-from echo_final_readiness_audit import build_reports as build_final_readiness
-from echo_project_state_registry import generate_reports as generate_project_registry
-from echo_runtime_evidence import generate_reports as generate_runtime_evidence
-from echo_runtime_repair_priority_planner import main as generate_runtime_repair_priority
+REPO_ROOT_FOR_IMPORTS = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT_FOR_IMPORTS) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT_FOR_IMPORTS))
+
+from titan_echo.echo_alert_engine import build_alerts, write_queue
+from titan_echo.echo_answer_engine import generate_answer
+from titan_echo.echo_api_status import generate_reports as generate_api_status
+from titan_echo.echo_brain_status_evidence_writer import generate_brain_status_evidence
+from titan_echo.echo_final_readiness_audit import AUDIT_PATH, SUMMARY_PATH as FINAL_READINESS_SUMMARY_PATH
+from titan_echo.echo_final_readiness_audit import build_reports as build_final_readiness
+from titan_echo.echo_project_state_registry import generate_reports as generate_project_registry
+from titan_echo.echo_runtime_evidence import generate_reports as generate_runtime_evidence
+from titan_echo.echo_runtime_repair_priority_planner import main as generate_runtime_repair_priority
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
