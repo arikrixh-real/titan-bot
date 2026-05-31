@@ -18,6 +18,7 @@ RUNTIME_DIR = REPO_ROOT / "data" / "runtime"
 ECHO_DIR = RUNTIME_DIR / "echo"
 REPORT_PATH = ECHO_DIR / "runtime_evidence_report.json"
 SUMMARY_PATH = ECHO_DIR / "runtime_evidence_summary.json"
+CANONICAL_RUNTIME_STATUS_PATH = RUNTIME_DIR / "titan_runtime_status.json"
 IST = timezone(timedelta(hours=5, minutes=30))
 FRESH_SECONDS = 900
 
@@ -95,6 +96,15 @@ STATUS_KEYS = (
     "worker_status",
 )
 FAIL_TOKENS = ("FAIL", "FAILED", "ERROR", "BROKEN", "BLOCKED", "CRITICAL")
+TRUE_WORKER_FAIL_TOKENS = ("ERROR", "EXCEPTION", "CRASH", "TIMEOUT", "FAILED")
+SAFE_STANDBY_TOKENS = (
+    "WAITING_FOR_MODE",
+    "OFF_HOURS",
+    "WEEKEND_MODE",
+    "SKIPPED_NOT_MARKET_MODE",
+    "OUTSIDE_TRADE_WINDOW_STANDBY",
+    "READ_ONLY",
+)
 DEGRADED_TOKENS = ("DEGRADED", "WARNING", "PARTIAL")
 RUNNING_TOKENS = ("RUNNING", "ACTIVE", "ALIVE")
 HEALTHY_TOKENS = ("HEALTHY", "PASS", "OK", "READY", "COMPLETE", "OPERATIONAL")
@@ -199,6 +209,8 @@ def status_tokens(payloads: list[Any]) -> list[str]:
         for item in iter_dicts(payload):
             for key in STATUS_KEYS:
                 value = item.get(key)
+                if isinstance(value, (dict, list)):
+                    continue
                 if value not in (None, ""):
                     values.append(str(value).upper())
     return values
@@ -206,6 +218,113 @@ def status_tokens(payloads: list[Any]) -> list[str]:
 
 def contains_any(values: list[str], tokens: tuple[str, ...]) -> bool:
     return any(token in value for value in values for token in tokens)
+
+
+def numeric_values_for_keys(payloads: list[Any], keys: tuple[str, ...]) -> list[float]:
+    values: list[float] = []
+    for payload in payloads:
+        for item in iter_dicts(payload):
+            for key in keys:
+                value = item.get(key)
+                try:
+                    if value not in (None, ""):
+                        values.append(float(value))
+                except Exception:
+                    pass
+    return values
+
+
+def runtime_context(payloads: list[Any]) -> dict[str, Any]:
+    values: list[str] = []
+    for payload in payloads:
+        for item in iter_dicts(payload):
+            for value in item.values():
+                if isinstance(value, str) and value.strip():
+                    values.append(value.strip().upper())
+            mode_allowed = item.get("mode_allowed")
+            if mode_allowed is False:
+                values.append("MODE_ALLOWED_FALSE")
+            if item.get("is_market_open") is False:
+                values.append("MARKET_CLOSED")
+    safe_tokens_seen = sorted(
+        {
+            token
+            for token in SAFE_STANDBY_TOKENS
+            if any(token in value for value in values)
+        }
+    )
+    mode_allowed_false = "MODE_ALLOWED_FALSE" in values
+    market_closed = "MARKET_CLOSED" in values
+    off_hours = bool(safe_tokens_seen) or mode_allowed_false or market_closed
+    return {
+        "expected_off_hours_standby": off_hours,
+        "safe_tokens_seen": safe_tokens_seen,
+        "mode_allowed_false_seen": mode_allowed_false,
+        "market_closed_seen": market_closed,
+    }
+
+
+def true_worker_failure_found(payloads: list[Any], values: list[str], context: dict[str, Any]) -> bool:
+    worker_failure_values = [
+        value
+        for value in values
+        if any(token in value for token in TRUE_WORKER_FAIL_TOKENS)
+        and "BREAKOUT_PIPELINE_INTEGRITY_ERROR" not in value
+    ]
+    if worker_failure_values:
+        return True
+    counts = numeric_values_for_keys(payloads, ("consecutive_failure_count", "error_count"))
+    if context["expected_off_hours_standby"] and contains_any(values, SAFE_STANDBY_TOKENS):
+        return False
+    return any(count > 0 for count in counts)
+
+
+def scanner_standby_evidence(payloads: list[Any]) -> bool:
+    for payload in payloads:
+        for item in iter_dicts(payload):
+            publication = str(item.get("scanner_publication_health") or "").upper()
+            loop = str(item.get("scanner_loop_health") or "").upper()
+            scheduler = item.get("scheduler_active")
+            if publication == "PASS" or loop == "ACTIVE" or scheduler is True:
+                return True
+    return False
+
+
+def master_read_only_evidence(payloads: list[Any]) -> bool:
+    for payload in payloads:
+        for item in iter_dicts(payload):
+            mode = str(item.get("master_brain_runtime_mode") or item.get("runtime_mode") or "").upper()
+            if "READ_ONLY" in mode:
+                return True
+            if item.get("observe_only") is True:
+                return True
+    return False
+
+
+def standby_status(name: str, context: dict[str, Any], freshness_seconds: int | None) -> dict[str, str]:
+    if name == "Scanner":
+        return {
+            "status": "STANDBY",
+            "confidence": "MEDIUM",
+            "reason": "NO_LIVE_SCANNING_OUTSIDE_TRADE_WINDOW;WAITING_FOR_MARKET;EXPECTED_OFF_HOURS_STANDBY",
+        }
+    if name == "Master Brain":
+        return {
+            "status": "DEGRADED",
+            "confidence": "MEDIUM",
+            "reason": "EXPECTED_OFF_HOURS_STANDBY;WAITING_FOR_MARKET",
+        }
+    if name == "Runtime Workers":
+        return {
+            "status": "DEGRADED",
+            "confidence": "MEDIUM",
+            "reason": "EXPECTED_OFF_HOURS_STANDBY;WAITING_FOR_MARKET",
+        }
+    return {
+        "status": "DEGRADED" if freshness_seconds else "NOT_PROVEN",
+        "confidence": "MEDIUM" if freshness_seconds else "LOW",
+        "reason": "EXPECTED_OFF_HOURS_STANDBY;WAITING_FOR_MARKET",
+    }
 
 
 def pid_lock_paths() -> list[Path]:
@@ -230,10 +349,13 @@ def evaluate_subsystem(name: str, configured_paths: list[Path]) -> dict[str, Any
     present_paths = [path for path in paths if path.exists()]
     payloads = [load_payload(path) for path in present_paths]
     payloads = [payload for payload in payloads if payload is not None]
+    canonical_runtime_payload = load_payload(CANONICAL_RUNTIME_STATUS_PATH)
+    context_payloads = payloads + ([canonical_runtime_payload] if canonical_runtime_payload is not None else [])
     latest = latest_timestamp(payloads, present_paths)
     now = datetime.now(IST)
     freshness_seconds = int((now - latest).total_seconds()) if latest else None
     values = status_tokens(payloads)
+    context = runtime_context(context_payloads)
     evidence_found = bool(present_paths)
     missing = [relative(path) for path in configured_paths if not path.exists()]
 
@@ -241,6 +363,25 @@ def evaluate_subsystem(name: str, configured_paths: list[Path]) -> dict[str, Any
         status = "UNKNOWN"
         confidence = "LOW"
         reason = "No configured evidence files found."
+    elif name == "Runtime Workers" and true_worker_failure_found(payloads, values, context):
+        status = "FAIL"
+        confidence = "HIGH"
+        reason = "Runtime worker evidence contains true failure token or positive failure/error count."
+    elif name == "Runtime Workers" and context["expected_off_hours_standby"]:
+        standby = standby_status(name, context, freshness_seconds)
+        status = standby["status"]
+        confidence = standby["confidence"]
+        reason = standby["reason"]
+    elif name == "Scanner" and context["expected_off_hours_standby"] and scanner_standby_evidence(context_payloads):
+        standby = standby_status(name, context, freshness_seconds)
+        status = standby["status"]
+        confidence = standby["confidence"]
+        reason = standby["reason"]
+    elif name == "Master Brain" and context["expected_off_hours_standby"] and master_read_only_evidence(context_payloads):
+        standby = standby_status(name, context, freshness_seconds)
+        status = standby["status"]
+        confidence = standby["confidence"]
+        reason = standby["reason"]
     elif contains_any(values, FAIL_TOKENS):
         status = "FAIL"
         confidence = "HIGH"
@@ -288,6 +429,7 @@ def evaluate_subsystem(name: str, configured_paths: list[Path]) -> dict[str, Any
         "missing_evidence": missing,
         "status_values_seen": values[:20],
         "reason": reason,
+        "classification_context": context,
     }
 
 
@@ -302,6 +444,8 @@ def verdict_for(summary_counts: dict[str, int], subsystems: dict[str, dict[str, 
         return "RUNTIME_PROVEN"
     if summary_counts["fail_count"] > 0:
         return "PARTIAL_RUNTIME_EVIDENCE"
+    if summary_counts.get("standby_count", 0) > 0:
+        return "EXPECTED_OFF_HOURS_STANDBY"
     if summary_counts["stale_count"] > 0:
         return "STALE_RUNTIME_EVIDENCE"
     if any(status not in ("UNKNOWN", "NOT_PROVEN") for status in core):
@@ -314,9 +458,11 @@ def build_reports() -> tuple[dict[str, Any], dict[str, Any]]:
     subsystems = {item["subsystem"]: item for item in subsystem_list}
     status_counts = {
         "stale_count": sum(1 for item in subsystem_list if item["status"] == "STALE"),
+        "standby_count": sum(1 for item in subsystem_list if item["status"] == "STANDBY"),
         "unknown_count": sum(1 for item in subsystem_list if item["status"] in ("UNKNOWN", "NOT_PROVEN")),
         "fail_count": sum(1 for item in subsystem_list if item["status"] == "FAIL"),
         "healthy_count": sum(1 for item in subsystem_list if item["status"] in ("RUNNING", "HEALTHY")),
+        "degraded_count": sum(1 for item in subsystem_list if item["status"] == "DEGRADED"),
     }
     report = {
         "schema": "titan.echo.runtime_evidence_report.v1",
@@ -370,8 +516,10 @@ def main() -> None:
     print(f"worker_runtime_status={summary['worker_runtime_status']}")
     print(f"unified_brain_runtime_status={summary['unified_brain_runtime_status']}")
     print(f"stale_count={summary['stale_count']}")
+    print(f"standby_count={summary['standby_count']}")
     print(f"unknown_count={summary['unknown_count']}")
     print(f"fail_count={summary['fail_count']}")
+    print(f"degraded_count={summary['degraded_count']}")
     print(f"healthy_count={summary['healthy_count']}")
     print(f"current_runtime_truth_verdict={summary['current_runtime_truth_verdict']}")
     print("still_unknown_systems=" + ", ".join(summary["still_unknown_systems"]))
