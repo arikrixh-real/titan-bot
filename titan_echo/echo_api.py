@@ -146,6 +146,28 @@ def _save_approval_queue(queue: dict[str, Any]) -> None:
     _write_echo_json(APPROVAL_QUEUE_PATH, queue)
 
 
+def _load_mission_plan() -> dict[str, Any]:
+    mission_plan = _read_json(MISSION_PLAN_PATH)
+    return mission_plan if isinstance(mission_plan, dict) else {}
+
+
+def _decision_safety() -> dict[str, bool]:
+    return {
+        "execution_allowed": False,
+        "codex_execution": False,
+        "shell_execution": False,
+        "git_push_pull": False,
+        "deploy_or_restart": False,
+        "broker_changed": False,
+        "risk_changed": False,
+        "execution_changed": False,
+        "scanner_changed": False,
+        "master_brain_changed": False,
+        "unified_brain_changed": False,
+        "runtime_workers_changed": False,
+    }
+
+
 def _source_status(name: str, missing_status: str) -> dict[str, Any]:
     path = READ_ONLY_EVIDENCE[name]
     data = _sanitize(_read_json(path))
@@ -421,6 +443,96 @@ def post_mission_prepare(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _update_approval_decision(payload: dict[str, Any], decision: str) -> dict[str, Any]:
+    body = payload if isinstance(payload, dict) else {}
+    approval_id = str(body.get("approval_id") or "").strip()
+    note = str(body.get("note") or "").strip()
+    now = _timestamp_ist()
+    safety = _decision_safety()
+    if not approval_id:
+        return {
+            "status": "UNKNOWN_NOT_PROVEN",
+            "reason": "APPROVAL_ID_REQUIRED",
+            "approval_id": "",
+            "execution_allowed": False,
+            "codex_execution": False,
+            "git_push_pull": False,
+            "deploy_or_restart": False,
+            "safety": safety,
+        }
+
+    queue = _load_approval_queue()
+    approvals = [item for item in queue.get("approvals", []) if isinstance(item, dict)]
+    matched: dict[str, Any] | None = None
+    for item in approvals:
+        if str(item.get("approval_id") or "") == approval_id:
+            item["status"] = decision
+            item["approval_note"] = note
+            item["decision_timestamp_ist"] = now
+            item["execution_allowed"] = False
+            item["codex_execution"] = False
+            item["git_push_pull"] = False
+            item["deploy_or_restart"] = False
+            item["safety"] = safety
+            matched = item
+            break
+
+    if matched is None:
+        return {
+            "status": "UNKNOWN_NOT_PROVEN",
+            "reason": "APPROVAL_ID_NOT_FOUND",
+            "approval_id": approval_id,
+            "execution_allowed": False,
+            "codex_execution": False,
+            "git_push_pull": False,
+            "deploy_or_restart": False,
+            "safety": safety,
+        }
+
+    queue["approvals"] = approvals
+    _save_approval_queue(queue)
+
+    mission_plan = _load_mission_plan()
+    current = mission_plan.get("current_mission") if isinstance(mission_plan.get("current_mission"), dict) else None
+    if current and str(current.get("approval_id") or "") == approval_id:
+        current["approval_status"] = decision
+        current["approval_note"] = note
+        current["decision_timestamp_ist"] = now
+        current["safety"] = safety
+        mission_plan["current_mission"] = current
+        mission_plan["approval_gate"] = f"ARI_{decision}"
+        mission_plan["timestamp_ist"] = now
+        mission_plan["execution_allowed"] = False
+        mission_plan["codex_execution"] = False
+        mission_plan["git_push_pull"] = False
+        mission_plan["deploy_or_restart"] = False
+        mission_plan["safety"] = safety
+        _write_echo_json(MISSION_PLAN_PATH, mission_plan)
+
+    return {
+        "status": decision,
+        "approval_id": approval_id,
+        "mission_id": matched.get("mission_id"),
+        "approval_note": note,
+        "decision_timestamp_ist": now,
+        "approval_queue_path": _relative(APPROVAL_QUEUE_PATH),
+        "mission_plan_path": _relative(MISSION_PLAN_PATH),
+        "execution_allowed": False,
+        "codex_execution": False,
+        "git_push_pull": False,
+        "deploy_or_restart": False,
+        "safety": safety,
+    }
+
+
+def post_approval_approve(payload: dict[str, Any]) -> dict[str, Any]:
+    return _update_approval_decision(payload, "APPROVED")
+
+
+def post_approval_reject(payload: dict[str, Any]) -> dict[str, Any]:
+    return _update_approval_decision(payload, "REJECTED")
+
+
 # Compatibility aliases for existing local imports and FastAPI route names.
 health = get_health
 status = get_status
@@ -435,6 +547,8 @@ approval_pending = get_approval_pending
 mission_current = get_mission_current
 verification_latest = get_verification_latest
 mission_prepare = post_mission_prepare
+approval_approve = post_approval_approve
+approval_reject = post_approval_reject
 
 
 app = None
@@ -458,6 +572,8 @@ if FASTAPI_AVAILABLE:
     app.get("/mission/current", dependencies=auth_dependency)(get_mission_current)
     app.get("/verification/latest", dependencies=auth_dependency)(get_verification_latest)
     app.post("/mission/prepare", dependencies=auth_dependency)(post_mission_prepare)
+    app.post("/approval/approve", dependencies=auth_dependency)(post_approval_approve)
+    app.post("/approval/reject", dependencies=auth_dependency)(post_approval_reject)
 
 
 __all__ = [
@@ -476,6 +592,8 @@ __all__ = [
     "get_mission_current",
     "get_verification_latest",
     "post_mission_prepare",
+    "post_approval_approve",
+    "post_approval_reject",
     "health",
     "status",
     "projects",
@@ -489,4 +607,6 @@ __all__ = [
     "mission_current",
     "verification_latest",
     "mission_prepare",
+    "approval_approve",
+    "approval_reject",
 ]
