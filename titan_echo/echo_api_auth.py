@@ -27,6 +27,7 @@ PROTECTED_ENDPOINTS = (
     "/approval/pending",
     "/mission/current",
     "/verification/latest",
+    "/mission/prepare",
 )
 PUBLIC_ENDPOINTS = ("/health",)
 
