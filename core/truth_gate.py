@@ -73,8 +73,132 @@ def _read_csv_sample(path):
             return {}
         with path.open("r", newline="", encoding="utf-8") as handle:
             reader = csv.DictReader(handle)
-            for row in reader:
-                return row
+            rows = []
+            for index, row in enumerate(reader, start=1):
+                if not isinstance(row, dict):
+                    continue
+                clean = {str(key): value for key, value in row.items() if key is not None}
+                if not any(str(value or "").strip() for value in clean.values()):
+                    continue
+                rows.append((index, clean, row.get(None)))
+        if not rows:
+            return {}
+
+        def value(row, *keys):
+            for key in keys:
+                item = row.get(key)
+                if item is not None and str(item).strip() != "":
+                    return item
+            return None
+
+        def active_rank(row):
+            status = str(value(row, "status", "trade_status", "state") or "").strip().upper()
+            if status in {"OPEN", "ACTIVE", "LIVE"}:
+                return 0
+            if not status:
+                return 1
+            return 2
+
+        def parsed_timestamp(row):
+            for key in (
+                "timestamp",
+                "opened_at",
+                "created_at",
+                "updated_at",
+                "last_checked_at",
+                "datetime",
+                "Datetime",
+                "date",
+                "Date",
+                "time",
+            ):
+                parsed = _parse_dt(row.get(key))
+                if parsed:
+                    return parsed
+            return None
+
+        def row_validity(row, overflow):
+            missing = []
+            if not value(row, "symbol", "stock", "ticker"):
+                missing.append("symbol")
+            if _side(row) not in {"BUY", "SELL"}:
+                missing.append("side")
+            if _safe_float(value(row, "entry", "entry_price")) is None:
+                missing.append("entry")
+            if _safe_float(value(row, "stop_loss", "sl", "stoploss")) is None:
+                missing.append("stop_loss")
+            if _safe_float(value(row, "target", "tp", "target_price", "t1")) is None:
+                missing.append("target")
+            if missing:
+                return False, "missing_or_invalid:" + ",".join(missing)
+            if overflow:
+                return True, "valid_with_extra_legacy_columns"
+            return True, "valid"
+
+        candidates = []
+        diagnostics = []
+        total_rows = len(rows)
+        for index, row, overflow in rows:
+            is_valid, validity_reason = row_validity(row, overflow)
+            selected_dt = parsed_timestamp(row)
+            status_text = str(value(row, "status", "trade_status", "state") or "").strip().upper()
+            diag = {
+                "row_number": index,
+                "valid": is_valid,
+                "validity_reason": validity_reason,
+                "status": status_text or None,
+                "timestamp_ist": selected_dt.isoformat() if selected_dt else None,
+            }
+            diagnostics.append(diag)
+            if not is_valid:
+                continue
+            candidates.append(
+                {
+                    "row_number": index,
+                    "row": row,
+                    "active_rank": active_rank(row),
+                    "timestamp": selected_dt,
+                    "validity_reason": validity_reason,
+                }
+            )
+
+        if candidates:
+            candidates.sort(
+                key=lambda item: (
+                    item["active_rank"],
+                    -(item["timestamp"].timestamp() if item["timestamp"] else float("-inf")),
+                    -item["row_number"],
+                )
+            )
+            selected = candidates[0]
+            selected_row = dict(selected["row"])
+            selected_row["_truth_gate_sample_selection"] = {
+                "source_path": str(path),
+                "selection_policy": "prefer_open_active_live_then_newest_valid_row",
+                "selected_row_number": selected["row_number"],
+                "total_non_empty_rows": total_rows,
+                "valid_candidate_count": len(candidates),
+                "selected_status": str(value(selected_row, "status", "trade_status", "state") or "").strip().upper() or None,
+                "selected_timestamp_ist": selected["timestamp"].isoformat() if selected["timestamp"] else None,
+                "selected_reason": selected["validity_reason"],
+            }
+            return selected_row
+
+        first_index, first_row, first_overflow = rows[0]
+        fallback = dict(first_row)
+        fallback["_truth_gate_sample_selection"] = {
+            "source_path": str(path),
+            "selection_policy": "fallback_first_non_empty_row_no_valid_candidates",
+            "selected_row_number": first_index,
+            "total_non_empty_rows": total_rows,
+            "valid_candidate_count": 0,
+            "selected_status": str(value(first_row, "status", "trade_status", "state") or "").strip().upper() or None,
+            "selected_timestamp_ist": parsed_timestamp(first_row).isoformat() if parsed_timestamp(first_row) else None,
+            "selected_reason": "fallback_preserves_legacy_behavior",
+            "first_row_extra_columns": bool(first_overflow),
+            "rejected_rows_sample": diagnostics[:5],
+        }
+        return fallback
     except Exception:
         return {}
     return {}
