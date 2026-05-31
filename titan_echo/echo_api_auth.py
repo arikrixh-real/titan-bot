@@ -40,6 +40,9 @@ PROTECTED_ENDPOINTS = (
     "/execution/lock/create",
     "/execution/evidence",
     "/execution/ledger",
+    "/execution/policy",
+    "/execution/gate",
+    "/execution/gate/evaluate",
 )
 PUBLIC_ENDPOINTS = ("/health",)
 

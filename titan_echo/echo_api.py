@@ -50,6 +50,8 @@ EXECUTION_AUTHORIZATION_PATH = ECHO_DIR / "execution_authorization.json"
 EXECUTION_LOCK_PATH = ECHO_DIR / "execution_lock.json"
 EXECUTION_EVIDENCE_PATH = ECHO_DIR / "execution_evidence.json"
 EXECUTION_LEDGER_PATH = ECHO_DIR / "execution_ledger.json"
+EXECUTION_POLICY_PATH = ECHO_DIR / "execution_policy.json"
+EXECUTION_GATE_PATH = ECHO_DIR / "execution_gate.json"
 VALID_RISK_LEVELS = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
 SECRET_MARKERS = (
@@ -923,6 +925,113 @@ def get_execution_ledger() -> dict[str, Any]:
     return ledger
 
 
+def build_execution_policy() -> dict[str, Any]:
+    policy = {
+        "schema": "titan.echo.execution_policy.v1",
+        "status": "EXECUTION_DISABLED_BY_POLICY",
+        "execution_mode": "DISABLED",
+        "actual_execution_permitted": False,
+        "required_chain": [
+            "mission_prepared",
+            "mission_approved",
+            "approval_audited",
+            "readiness_ready",
+            "preview_ready",
+            "authorization_dry_run_only",
+            "lock_created",
+            "evidence_ready",
+            "ledger_complete",
+        ],
+        "forbidden_actions": [
+            "codex_execution",
+            "shell_execution",
+            "git_push_pull",
+            "deploy_or_restart",
+            "titan_runtime_modification",
+            "broker_change",
+            "risk_change",
+            "scanner_change",
+            "master_brain_change",
+            "unified_brain_change",
+        ],
+        "safety": _execution_governance_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(EXECUTION_POLICY_PATH, policy)
+    return policy
+
+
+def get_execution_policy() -> dict[str, Any]:
+    policy = _read_json(EXECUTION_POLICY_PATH)
+    if not isinstance(policy, dict):
+        policy = build_execution_policy()
+    return policy
+
+
+def build_execution_gate() -> dict[str, Any]:
+    readiness = _read_json(EXECUTION_READINESS_REPORT_PATH)
+    if not isinstance(readiness, dict):
+        readiness = build_execution_readiness_report()
+    preview = _read_json(EXECUTION_PREVIEW_PATH)
+    if not isinstance(preview, dict):
+        preview = build_execution_preview()
+    authorization = _read_json(EXECUTION_AUTHORIZATION_PATH)
+    if not isinstance(authorization, dict):
+        authorization = build_execution_authorization()
+    lock = _read_json(EXECUTION_LOCK_PATH)
+    if not isinstance(lock, dict):
+        lock = build_execution_lock()
+    evidence = _read_json(EXECUTION_EVIDENCE_PATH)
+    if not isinstance(evidence, dict):
+        evidence = build_execution_evidence()
+    ledger = _read_json(EXECUTION_LEDGER_PATH)
+    if not isinstance(ledger, dict):
+        ledger = build_execution_ledger()
+    policy = _read_json(EXECUTION_POLICY_PATH)
+    if not isinstance(policy, dict):
+        policy = build_execution_policy()
+
+    checks = {
+        "readiness_ready_dry_run_only": readiness.get("status") == "READY_DRY_RUN_ONLY",
+        "preview_ready": preview.get("status") == "PREVIEW_READY",
+        "authorization_authorized_dry_run_only": authorization.get("status") == "AUTHORIZED_DRY_RUN_ONLY",
+        "lock_locked_dry_run_only": lock.get("status") == "LOCKED_DRY_RUN_ONLY",
+        "evidence_ready": evidence.get("status") == "EVIDENCE_READY",
+        "ledger_governance_chain_complete": ledger.get("status") == "GOVERNANCE_CHAIN_COMPLETE",
+        "policy_execution_disabled": policy.get("status") == "EXECUTION_DISABLED_BY_POLICY",
+        "actual_execution_permitted_false": policy.get("actual_execution_permitted") is False,
+    }
+    blockers = [name for name, passed in checks.items() if not passed]
+    gate = {
+        "schema": "titan.echo.execution_gate.v1",
+        "status": "EXECUTION_BLOCKED_POLICY_LOCKED",
+        "gate_decision": "BLOCK_EXECUTION",
+        "reason": "POLICY_DISABLED_EXECUTION",
+        "mission_id": readiness.get("mission_id") or preview.get("mission_id") or authorization.get("mission_id"),
+        "approval_id": readiness.get("approval_id") or preview.get("approval_id") or authorization.get("approval_id"),
+        "authorization_id": authorization.get("authorization_id") or lock.get("authorization_id") or evidence.get("authorization_id"),
+        "lock_id": lock.get("lock_id") or evidence.get("lock_id") or ledger.get("lock_id"),
+        "evidence_id": evidence.get("evidence_id") or ledger.get("evidence_id"),
+        "checks": checks,
+        "blockers": blockers,
+        "generated_at_ist": _timestamp_ist(),
+        "safety": _execution_governance_safety({"execution_mode": "DISABLED"}),
+    }
+    _write_echo_json(EXECUTION_GATE_PATH, gate)
+    return gate
+
+
+def get_execution_gate() -> dict[str, Any]:
+    gate = _read_json(EXECUTION_GATE_PATH)
+    if not isinstance(gate, dict):
+        gate = build_execution_gate()
+    return gate
+
+
+def post_execution_gate_evaluate() -> dict[str, Any]:
+    return build_execution_gate()
+
+
 def post_mission_prepare(payload: dict[str, Any]) -> dict[str, Any]:
     body = payload if isinstance(payload, dict) else {}
     now = _timestamp_ist()
@@ -1153,6 +1262,9 @@ execution_lock = get_execution_lock
 execution_lock_create = post_execution_lock_create
 execution_evidence = get_execution_evidence
 execution_ledger = get_execution_ledger
+execution_policy = get_execution_policy
+execution_gate = get_execution_gate
+execution_gate_evaluate = post_execution_gate_evaluate
 mission_prepare = post_mission_prepare
 approval_approve = post_approval_approve
 approval_reject = post_approval_reject
@@ -1184,6 +1296,8 @@ if FASTAPI_AVAILABLE:
     app.get("/execution/lock", dependencies=auth_dependency)(get_execution_lock)
     app.get("/execution/evidence", dependencies=auth_dependency)(get_execution_evidence)
     app.get("/execution/ledger", dependencies=auth_dependency)(get_execution_ledger)
+    app.get("/execution/policy", dependencies=auth_dependency)(get_execution_policy)
+    app.get("/execution/gate", dependencies=auth_dependency)(get_execution_gate)
     app.post("/mission/prepare", dependencies=auth_dependency)(post_mission_prepare)
     app.post("/approval/approve", dependencies=auth_dependency)(post_approval_approve)
     app.post("/approval/reject", dependencies=auth_dependency)(post_approval_reject)
@@ -1191,6 +1305,7 @@ if FASTAPI_AVAILABLE:
     app.post("/execution/preview/generate", dependencies=auth_dependency)(post_execution_preview_generate)
     app.post("/execution/authorize", dependencies=auth_dependency)(post_execution_authorize)
     app.post("/execution/lock/create", dependencies=auth_dependency)(post_execution_lock_create)
+    app.post("/execution/gate/evaluate", dependencies=auth_dependency)(post_execution_gate_evaluate)
 
 
 __all__ = [
@@ -1218,6 +1333,9 @@ __all__ = [
     "post_execution_lock_create",
     "get_execution_evidence",
     "get_execution_ledger",
+    "get_execution_policy",
+    "get_execution_gate",
+    "post_execution_gate_evaluate",
     "post_mission_prepare",
     "post_approval_approve",
     "post_approval_reject",
@@ -1243,6 +1361,9 @@ __all__ = [
     "execution_lock_create",
     "execution_evidence",
     "execution_ledger",
+    "execution_policy",
+    "execution_gate",
+    "execution_gate_evaluate",
     "mission_prepare",
     "approval_approve",
     "approval_reject",
