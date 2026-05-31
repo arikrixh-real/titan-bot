@@ -46,6 +46,7 @@ APPROVED_MISSIONS_PATH = ECHO_DIR / "approved_missions.json"
 REJECTED_MISSIONS_PATH = ECHO_DIR / "rejected_missions.json"
 EXECUTION_READINESS_REPORT_PATH = ECHO_DIR / "execution_readiness_report.json"
 EXECUTION_PREVIEW_PATH = ECHO_DIR / "execution_preview.json"
+EXECUTION_AUTHORIZATION_PATH = ECHO_DIR / "execution_authorization.json"
 VALID_RISK_LEVELS = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
 SECRET_MARKERS = (
@@ -622,6 +623,110 @@ def post_execution_preview_generate() -> dict[str, Any]:
     return build_execution_preview()
 
 
+def build_execution_authorization() -> dict[str, Any]:
+    mission_plan = _load_mission_plan()
+    mission = mission_plan.get("current_mission") if isinstance(mission_plan.get("current_mission"), dict) else {}
+    if not isinstance(mission, dict):
+        mission = {}
+
+    readiness = _read_json(EXECUTION_READINESS_REPORT_PATH)
+    if not isinstance(readiness, dict):
+        readiness = build_execution_readiness_report()
+
+    preview = _read_json(EXECUTION_PREVIEW_PATH)
+    if not isinstance(preview, dict):
+        preview = build_execution_preview()
+
+    mission_id = mission.get("mission_id")
+    approval_id = mission.get("approval_id")
+    readiness_mission_id = readiness.get("mission_id")
+    readiness_approval_id = readiness.get("approval_id")
+    preview_mission_id = preview.get("mission_id")
+    preview_approval_id = preview.get("approval_id")
+
+    safety_sources = [mission, readiness, preview]
+    safety_flags = ("codex_execution", "shell_execution", "git_push_pull", "deploy_or_restart", "titan_runtime_changed")
+
+    def _safety_false_everywhere(flag: str) -> bool:
+        for source in safety_sources:
+            value = source.get(flag)
+            safety = source.get("safety") if isinstance(source.get("safety"), dict) else {}
+            if value is None:
+                value = safety.get(flag)
+            if value is None and flag == "titan_runtime_changed":
+                granular_flags = (
+                    "broker_changed",
+                    "risk_changed",
+                    "execution_changed",
+                    "scanner_changed",
+                    "master_brain_changed",
+                    "unified_brain_changed",
+                    "runtime_workers_changed",
+                )
+                value = any(safety.get(item) is True or source.get(item) is True for item in granular_flags)
+            if value is not False:
+                return False
+        return True
+
+    checks = {
+        "readiness_ready_dry_run_only": readiness.get("status") == "READY_DRY_RUN_ONLY",
+        "preview_ready": preview.get("status") == "PREVIEW_READY",
+        "mission_id_present": bool(mission_id),
+        "approval_id_present": bool(approval_id),
+        "mission_id_matches_readiness": bool(mission_id) and mission_id == readiness_mission_id,
+        "mission_id_matches_preview": bool(mission_id) and mission_id == preview_mission_id,
+        "approval_id_matches_readiness": bool(approval_id) and approval_id == readiness_approval_id,
+        "approval_id_matches_preview": bool(approval_id) and approval_id == preview_approval_id,
+        "codex_execution_false": _safety_false_everywhere("codex_execution"),
+        "shell_execution_false": _safety_false_everywhere("shell_execution"),
+        "git_push_pull_false": _safety_false_everywhere("git_push_pull"),
+        "deploy_or_restart_false": _safety_false_everywhere("deploy_or_restart"),
+        "titan_runtime_changed_false": _safety_false_everywhere("titan_runtime_changed"),
+    }
+    blockers = [name for name, passed in checks.items() if not passed]
+    status = "AUTHORIZED_DRY_RUN_ONLY" if not blockers else "NOT_AUTHORIZED"
+    now = _timestamp_ist()
+    authorization_id = _stable_id("echo-execution-auth", str(mission_id), str(approval_id), now)
+    authorization = {
+        "schema": "titan.echo.execution_authorization.v1",
+        "status": status,
+        "mission_id": mission_id,
+        "approval_id": approval_id,
+        "authorization_id": authorization_id,
+        "checks": checks,
+        "blockers": blockers,
+        "safety": {
+            "dry_run_only": True,
+            "authorization_only": True,
+            "codex_execution": False,
+            "shell_execution": False,
+            "git_push_pull": False,
+            "deploy_or_restart": False,
+            "titan_runtime_changed": False,
+            "actual_execution_permitted": False,
+        },
+        "authorized_at_ist": now,
+        "message": (
+            "Dry-run authorization record created. Actual execution remains prohibited."
+            if status == "AUTHORIZED_DRY_RUN_ONLY"
+            else "Authorization not granted; blockers must be resolved without enabling execution."
+        ),
+    }
+    _write_echo_json(EXECUTION_AUTHORIZATION_PATH, authorization)
+    return authorization
+
+
+def get_execution_authorization() -> dict[str, Any]:
+    authorization = _read_json(EXECUTION_AUTHORIZATION_PATH)
+    if not isinstance(authorization, dict):
+        authorization = build_execution_authorization()
+    return authorization
+
+
+def post_execution_authorize() -> dict[str, Any]:
+    return build_execution_authorization()
+
+
 def post_mission_prepare(payload: dict[str, Any]) -> dict[str, Any]:
     body = payload if isinstance(payload, dict) else {}
     now = _timestamp_ist()
@@ -846,6 +951,8 @@ execution_readiness = get_execution_readiness
 execution_readiness_check = post_execution_readiness_check
 execution_preview = get_execution_preview
 execution_preview_generate = post_execution_preview_generate
+execution_authorization = get_execution_authorization
+execution_authorize = post_execution_authorize
 mission_prepare = post_mission_prepare
 approval_approve = post_approval_approve
 approval_reject = post_approval_reject
@@ -873,11 +980,13 @@ if FASTAPI_AVAILABLE:
     app.get("/verification/latest", dependencies=auth_dependency)(get_verification_latest)
     app.get("/execution/readiness", dependencies=auth_dependency)(get_execution_readiness)
     app.get("/execution/preview", dependencies=auth_dependency)(get_execution_preview)
+    app.get("/execution/authorization", dependencies=auth_dependency)(get_execution_authorization)
     app.post("/mission/prepare", dependencies=auth_dependency)(post_mission_prepare)
     app.post("/approval/approve", dependencies=auth_dependency)(post_approval_approve)
     app.post("/approval/reject", dependencies=auth_dependency)(post_approval_reject)
     app.post("/execution/readiness/check", dependencies=auth_dependency)(post_execution_readiness_check)
     app.post("/execution/preview/generate", dependencies=auth_dependency)(post_execution_preview_generate)
+    app.post("/execution/authorize", dependencies=auth_dependency)(post_execution_authorize)
 
 
 __all__ = [
@@ -899,6 +1008,8 @@ __all__ = [
     "post_execution_readiness_check",
     "get_execution_preview",
     "post_execution_preview_generate",
+    "get_execution_authorization",
+    "post_execution_authorize",
     "post_mission_prepare",
     "post_approval_approve",
     "post_approval_reject",
@@ -918,6 +1029,8 @@ __all__ = [
     "execution_readiness_check",
     "execution_preview",
     "execution_preview_generate",
+    "execution_authorization",
+    "execution_authorize",
     "mission_prepare",
     "approval_approve",
     "approval_reject",
