@@ -67,6 +67,7 @@ JARVIS_DEEP_TITAN_CONTEXT_PATH = ECHO_DIR / "jarvis_deep_titan_context.json"
 CHATGPT_BRIDGE_READINESS_PATH = ECHO_DIR / "chatgpt_bridge_readiness.json"
 CHATGPT_CONNECTOR_PLAN_PATH = ECHO_DIR / "chatgpt_connector_plan.json"
 CHATGPT_HANDSHAKE_STATUS_PATH = ECHO_DIR / "chatgpt_handshake_status.json"
+CHATGPT_EVIDENCE_CONTRACT_PATH = ECHO_DIR / "chatgpt_evidence_contract.json"
 TITAN_RUNTIME_CONTEXT_PATH = ECHO_DIR / "titan_runtime_context.json"
 TITAN_HEALTH_SUMMARY_PATH = ECHO_DIR / "titan_health_summary.json"
 TITAN_WORKER_SUMMARY_PATH = ECHO_DIR / "titan_worker_summary.json"
@@ -1152,6 +1153,144 @@ def get_chatgpt_handshake_status() -> dict[str, Any]:
 
 def post_chatgpt_handshake_test() -> dict[str, Any]:
     return build_chatgpt_handshake_status()
+
+
+CHATGPT_EVIDENCE_GROUPS = {
+    "governance evidence": list(PHASE_OMEGA_EVIDENCE_FILES),
+    "runtime evidence": ["titan_runtime_status", "runtime_selector_status", "setup_engine_status", "ohlc_refresh_status"],
+    "scanner evidence": ["scanner_status", "filter_engine_diagnostics", "near_pass_setups"],
+    "worker evidence": ["worker_health"],
+    "trade evidence": [
+        "trade_contract_diagnostics",
+        "trade_journal_diagnostics",
+        "outcome_tracker_diagnostics",
+        "paper_account",
+        "active_trades",
+        "trade_outcomes",
+    ],
+    "master brain evidence": ["master_brain_status", "outcome_tracker_status"],
+    "evolution evidence": ["evolution_status"],
+    "learning evidence": ["learning_status"],
+    "memory evidence": ["memory_consolidation_status"],
+    "news evidence": ["news_status"],
+    "dashboard evidence": ["dashboard_sync_status"],
+}
+
+
+def _evidence_source_for_name(name: str) -> str:
+    if name in PHASE_OMEGA_EVIDENCE_FILES:
+        return _relative(PHASE_OMEGA_EVIDENCE_FILES[name])
+    if name in TITAN_RUNTIME_EVIDENCE_FILES:
+        return _relative(TITAN_RUNTIME_EVIDENCE_FILES[name])
+    return "UNKNOWN_NOT_PROVEN"
+
+
+def _evidence_contract_group(group_name: str, names: list[str]) -> dict[str, Any]:
+    return {
+        "evidence_type": group_name,
+        "source_files": {name: _evidence_source_for_name(name) for name in names},
+        "confidence_source": "LOCAL_RUNTIME_FILE_PRESENCE_AND_SCHEMA_FIELDS",
+        "truth_source": "ECHO_READ_ONLY_EVIDENCE_FILES",
+        "missing_file_truth": "UNKNOWN_NOT_PROVEN",
+    }
+
+
+def build_chatgpt_evidence_contract() -> dict[str, Any]:
+    payload = {
+        "schema": "titan.echo.chatgpt_evidence_contract.v1",
+        "status": "CHATGPT_EVIDENCE_CONTRACT_READY_LOCAL_ONLY",
+        "chatgpt_brain_expected": True,
+        "echo_role": "EVIDENCE_LAYER",
+        "jarvis_role": "CHATGPT_SIDE",
+        "chatgpt_connection_enabled": False,
+        "external_api_calls_enabled": False,
+        "public_exposure_allowed": False,
+        "evidence_groups": {
+            group: _evidence_contract_group(group, names)
+            for group, names in CHATGPT_EVIDENCE_GROUPS.items()
+        },
+        "truth_rule": "Never claim live integration exists; missing files return UNKNOWN_NOT_PROVEN.",
+        "safety": _connector_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(CHATGPT_EVIDENCE_CONTRACT_PATH, payload)
+    return payload
+
+
+def get_chatgpt_evidence_contract() -> dict[str, Any]:
+    return build_chatgpt_evidence_contract()
+
+
+def get_chatgpt_evidence_catalog() -> dict[str, Any]:
+    contract = build_chatgpt_evidence_contract()
+    endpoints = {
+        "governance evidence": ["/echo/context", "/echo/runtime", "/echo/evidence"],
+        "runtime evidence": ["/titan/status", "/titan/runtime/context"],
+        "scanner evidence": ["/titan/scanner"],
+        "worker evidence": ["/titan/workers"],
+        "trade evidence": ["/titan/trades"],
+        "master brain evidence": ["/titan/brain"],
+        "evolution evidence": ["/jarvis/ask"],
+        "learning evidence": ["/jarvis/ask"],
+        "memory evidence": ["/jarvis/ask"],
+        "news evidence": ["/jarvis/ask"],
+        "dashboard evidence": ["/jarvis/ask"],
+    }
+    catalog = []
+    for evidence_type, group in contract["evidence_groups"].items():
+        catalog.append(
+            {
+                "endpoint_name": endpoints.get(evidence_type, []),
+                "evidence_type": evidence_type,
+                "source_files": group["source_files"],
+                "confidence_source": group["confidence_source"],
+                "truth_source": group["truth_source"],
+            }
+        )
+    return {
+        "schema": "titan.echo.chatgpt_evidence_catalog.v1",
+        "status": "CHATGPT_EVIDENCE_CATALOG_READY_LOCAL_ONLY",
+        "chatgpt_brain_expected": True,
+        "echo_role": "EVIDENCE_LAYER",
+        "jarvis_role": "CHATGPT_SIDE",
+        "chatgpt_connection_enabled": False,
+        "catalog": catalog,
+        "safety": _connector_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+
+
+def get_chatgpt_integration_status() -> dict[str, Any]:
+    bridge = build_chatgpt_bridge_readiness()
+    checks = {
+        "governance_complete": bridge.get("checks", {}).get("governance_chain_complete") is True,
+        "execution_blocked": bridge.get("checks", {}).get("execution_gate_blocks_execution") is True,
+        "jarvis_ask_exists": bridge.get("checks", {}).get("jarvis_ask_endpoint_exists") is True,
+        "auth_enabled": (
+            "/chatgpt/evidence/contract" in PROTECTED_ENDPOINTS
+            and "/chatgpt/evidence/catalog" in PROTECTED_ENDPOINTS
+            and "/chatgpt/integration/status" in PROTECTED_ENDPOINTS
+        ),
+        "localhost_only": True,
+        "public_exposure_disabled": True,
+        "external_api_disabled": True,
+    }
+    blockers = [name for name, passed in checks.items() if not passed]
+    return {
+        "schema": "titan.echo.chatgpt_integration_status.v1",
+        "status": "CHATGPT_EVIDENCE_INTEGRATION_READY" if not blockers else "NOT_READY",
+        "checks": checks,
+        "blockers": blockers,
+        "chatgpt_brain_expected": True,
+        "echo_role": "EVIDENCE_LAYER",
+        "jarvis_role": "CHATGPT_SIDE",
+        "chatgpt_connection_enabled": False,
+        "external_api_calls_enabled": False,
+        "public_exposure_allowed": False,
+        "live_integration_exists": False,
+        "safety": _connector_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
 
 
 def build_jarvis_ask_response(question: str = "") -> dict[str, Any]:
@@ -2478,6 +2617,9 @@ chatgpt_bridge_readiness = get_chatgpt_bridge_readiness
 chatgpt_connector_plan = get_chatgpt_connector_plan
 chatgpt_handshake_status = get_chatgpt_handshake_status
 chatgpt_handshake_test = post_chatgpt_handshake_test
+chatgpt_evidence_contract = get_chatgpt_evidence_contract
+chatgpt_evidence_catalog = get_chatgpt_evidence_catalog
+chatgpt_integration_status = get_chatgpt_integration_status
 mission_prepare = post_mission_prepare
 approval_approve = post_approval_approve
 approval_reject = post_approval_reject
@@ -2535,6 +2677,9 @@ if FASTAPI_AVAILABLE:
     app.get("/chatgpt/connector/plan", dependencies=auth_dependency)(get_chatgpt_connector_plan)
     app.get("/chatgpt/handshake/status", dependencies=auth_dependency)(get_chatgpt_handshake_status)
     app.post("/chatgpt/handshake/test", dependencies=auth_dependency)(post_chatgpt_handshake_test)
+    app.get("/chatgpt/evidence/contract", dependencies=auth_dependency)(get_chatgpt_evidence_contract)
+    app.get("/chatgpt/evidence/catalog", dependencies=auth_dependency)(get_chatgpt_evidence_catalog)
+    app.get("/chatgpt/integration/status", dependencies=auth_dependency)(get_chatgpt_integration_status)
     app.post("/mission/prepare", dependencies=auth_dependency)(post_mission_prepare)
     app.post("/approval/approve", dependencies=auth_dependency)(post_approval_approve)
     app.post("/approval/reject", dependencies=auth_dependency)(post_approval_reject)
@@ -2599,6 +2744,9 @@ __all__ = [
     "get_chatgpt_connector_plan",
     "get_chatgpt_handshake_status",
     "post_chatgpt_handshake_test",
+    "get_chatgpt_evidence_contract",
+    "get_chatgpt_evidence_catalog",
+    "get_chatgpt_integration_status",
     "post_mission_prepare",
     "post_approval_approve",
     "post_approval_reject",
@@ -2652,6 +2800,9 @@ __all__ = [
     "chatgpt_connector_plan",
     "chatgpt_handshake_status",
     "chatgpt_handshake_test",
+    "chatgpt_evidence_contract",
+    "chatgpt_evidence_catalog",
+    "chatgpt_integration_status",
     "mission_prepare",
     "approval_approve",
     "approval_reject",
