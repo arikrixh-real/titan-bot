@@ -65,6 +65,8 @@ JARVIS_ASK_RESPONSE_PATH = ECHO_DIR / "jarvis_ask_response.json"
 JARVIS_RUNTIME_INTELLIGENCE_PATH = ECHO_DIR / "jarvis_runtime_intelligence.json"
 JARVIS_DEEP_TITAN_CONTEXT_PATH = ECHO_DIR / "jarvis_deep_titan_context.json"
 CHATGPT_BRIDGE_READINESS_PATH = ECHO_DIR / "chatgpt_bridge_readiness.json"
+CHATGPT_CONNECTOR_PLAN_PATH = ECHO_DIR / "chatgpt_connector_plan.json"
+CHATGPT_HANDSHAKE_STATUS_PATH = ECHO_DIR / "chatgpt_handshake_status.json"
 TITAN_RUNTIME_CONTEXT_PATH = ECHO_DIR / "titan_runtime_context.json"
 TITAN_HEALTH_SUMMARY_PATH = ECHO_DIR / "titan_health_summary.json"
 TITAN_WORKER_SUMMARY_PATH = ECHO_DIR / "titan_worker_summary.json"
@@ -1047,6 +1049,109 @@ def build_chatgpt_bridge_readiness() -> dict[str, Any]:
 
 def get_chatgpt_bridge_readiness() -> dict[str, Any]:
     return build_chatgpt_bridge_readiness()
+
+
+def _connector_safety() -> dict[str, bool]:
+    return {
+        "chatgpt_connection_enabled": False,
+        "external_api_calls_enabled": False,
+        "public_exposure_allowed": False,
+        "actual_execution_permitted": False,
+        "codex_execution": False,
+        "shell_execution": False,
+        "git_push_pull": False,
+        "deploy_or_restart": False,
+        "titan_runtime_changed": False,
+    }
+
+
+def build_chatgpt_connector_plan() -> dict[str, Any]:
+    payload = {
+        "schema": "titan.echo.chatgpt_connector_plan.v1",
+        "status": "CHATGPT_CONNECTOR_READY_LOCAL_ONLY",
+        "enabled_mode": "LOCAL_MANUAL_BRIDGE",
+        "supported_future_modes": {
+            "LOCAL_MANUAL_BRIDGE": {
+                "status": "ENABLED_LOCAL_ONLY",
+                "description": "Manual local copy/paste bridge between ChatGPT and protected ECHO endpoints.",
+            },
+            "SECURE_RELAY_BRIDGE": {
+                "status": "DESIGN_ONLY_DISABLED",
+                "description": "Future authenticated relay design; no relay is configured or exposed.",
+            },
+            "CUSTOM_GPT_ACTION_BRIDGE": {
+                "status": "DESIGN_ONLY_DISABLED",
+                "description": "Future Custom GPT action design; no public URL or external API integration is enabled.",
+            },
+        },
+        "constraints": {
+            "public_url_configured": False,
+            "ports_opened": False,
+            "openai_api_calls": False,
+            "external_api_calls_enabled": False,
+            "chatgpt_connection_enabled": False,
+        },
+        "safety": _connector_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(CHATGPT_CONNECTOR_PLAN_PATH, payload)
+    return payload
+
+
+def get_chatgpt_connector_plan() -> dict[str, Any]:
+    return build_chatgpt_connector_plan()
+
+
+def build_chatgpt_handshake_status() -> dict[str, Any]:
+    gate = _read_json(EXECUTION_GATE_PATH)
+    gate = gate if isinstance(gate, dict) else {}
+    checks = {
+        "echo_api_alive": True,
+        "auth_required": (
+            "/chatgpt/connector/plan" in PROTECTED_ENDPOINTS
+            and "/chatgpt/handshake/status" in PROTECTED_ENDPOINTS
+            and "/chatgpt/handshake/test" in PROTECTED_ENDPOINTS
+        ),
+        "jarvis_ask_available": _route_exists("/jarvis/ask", "POST") or "post_jarvis_ask" in globals(),
+        "chatgpt_bridge_readiness_available": _route_exists("/chatgpt/bridge/readiness", "GET") or "get_chatgpt_bridge_readiness" in globals(),
+        "execution_gate_blocks_execution": gate.get("gate_decision") == "BLOCK_EXECUTION",
+        "public_exposure_disabled": True,
+        "external_api_calls_disabled": True,
+    }
+    blockers = [name for name, passed in checks.items() if not passed]
+    payload = {
+        "schema": "titan.echo.chatgpt_handshake_status.v1",
+        "status": "CHATGPT_CONNECTOR_READY_LOCAL_ONLY" if not blockers else "NOT_READY",
+        "checks": checks,
+        "blockers": blockers,
+        "enabled_mode": "LOCAL_MANUAL_BRIDGE",
+        "chatgpt_connection_enabled": False,
+        "external_api_calls_enabled": False,
+        "public_exposure_allowed": False,
+        "actual_execution_permitted": False,
+        "source_files": {
+            "execution_gate": {
+                "source": _relative(EXECUTION_GATE_PATH),
+                "status": "EVIDENCE_PRESENT" if gate else "UNKNOWN_NOT_PROVEN",
+            }
+        },
+        "safety": _connector_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(CHATGPT_HANDSHAKE_STATUS_PATH, payload)
+    return payload
+
+
+def get_chatgpt_handshake_status() -> dict[str, Any]:
+    existing = _read_json(CHATGPT_HANDSHAKE_STATUS_PATH)
+    if isinstance(existing, dict):
+        existing["safety"] = _connector_safety()
+        return existing
+    return build_chatgpt_handshake_status()
+
+
+def post_chatgpt_handshake_test() -> dict[str, Any]:
+    return build_chatgpt_handshake_status()
 
 
 def build_jarvis_ask_response(question: str = "") -> dict[str, Any]:
@@ -2370,6 +2475,9 @@ titan_trades = get_titan_trades
 titan_brain = get_titan_brain
 titan_runtime_context = get_titan_runtime_context
 chatgpt_bridge_readiness = get_chatgpt_bridge_readiness
+chatgpt_connector_plan = get_chatgpt_connector_plan
+chatgpt_handshake_status = get_chatgpt_handshake_status
+chatgpt_handshake_test = post_chatgpt_handshake_test
 mission_prepare = post_mission_prepare
 approval_approve = post_approval_approve
 approval_reject = post_approval_reject
@@ -2424,6 +2532,9 @@ if FASTAPI_AVAILABLE:
     app.get("/titan/brain", dependencies=auth_dependency)(get_titan_brain)
     app.get("/titan/runtime/context", dependencies=auth_dependency)(get_titan_runtime_context)
     app.get("/chatgpt/bridge/readiness", dependencies=auth_dependency)(get_chatgpt_bridge_readiness)
+    app.get("/chatgpt/connector/plan", dependencies=auth_dependency)(get_chatgpt_connector_plan)
+    app.get("/chatgpt/handshake/status", dependencies=auth_dependency)(get_chatgpt_handshake_status)
+    app.post("/chatgpt/handshake/test", dependencies=auth_dependency)(post_chatgpt_handshake_test)
     app.post("/mission/prepare", dependencies=auth_dependency)(post_mission_prepare)
     app.post("/approval/approve", dependencies=auth_dependency)(post_approval_approve)
     app.post("/approval/reject", dependencies=auth_dependency)(post_approval_reject)
@@ -2485,6 +2596,9 @@ __all__ = [
     "get_titan_brain",
     "get_titan_runtime_context",
     "get_chatgpt_bridge_readiness",
+    "get_chatgpt_connector_plan",
+    "get_chatgpt_handshake_status",
+    "post_chatgpt_handshake_test",
     "post_mission_prepare",
     "post_approval_approve",
     "post_approval_reject",
@@ -2535,6 +2649,9 @@ __all__ = [
     "titan_brain",
     "titan_runtime_context",
     "chatgpt_bridge_readiness",
+    "chatgpt_connector_plan",
+    "chatgpt_handshake_status",
+    "chatgpt_handshake_test",
     "mission_prepare",
     "approval_approve",
     "approval_reject",

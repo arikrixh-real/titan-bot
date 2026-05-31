@@ -64,6 +64,9 @@ PROTECTED_ENDPOINTS = (
     "/titan/brain",
     "/titan/runtime/context",
     "/chatgpt/bridge/readiness",
+    "/chatgpt/connector/plan",
+    "/chatgpt/handshake/status",
+    "/chatgpt/handshake/test",
 )
 PUBLIC_ENDPOINTS = ("/health",)
 
