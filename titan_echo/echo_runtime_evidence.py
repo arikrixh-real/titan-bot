@@ -301,6 +301,42 @@ def master_read_only_evidence(payloads: list[Any]) -> bool:
     return False
 
 
+def alert_queue_evidence(payloads: list[Any]) -> bool:
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("schema") == "titan_echo.alert_queue.v1" and isinstance(payload.get("alerts"), list):
+            return True
+        if isinstance(payload.get("summary"), dict) and "total_alerts" in payload["summary"]:
+            return True
+    return False
+
+
+def echo_api_read_only_evidence(payloads: list[Any]) -> bool:
+    api_status_present = False
+    api_contract_present = False
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("schema") == "titan.echo.api_status.v1" and payload.get("api_mode") == "READ_ONLY":
+            api_status_present = True
+        if payload.get("schema") == "titan.echo.api_contract.v1" and payload.get("api_mode") == "READ_ONLY":
+            endpoints = payload.get("endpoints")
+            api_contract_present = isinstance(endpoints, list) and bool(endpoints)
+    return api_status_present and api_contract_present
+
+
+def unified_brain_shadow_only(payloads: list[Any]) -> bool:
+    for payload in payloads:
+        for item in iter_dicts(payload):
+            if item.get("live_decision_allowed") is False:
+                return True
+            mode = str(item.get("mode") or item.get("promotion_state") or "").upper()
+            if "SHADOW" in mode or "READ_ONLY" in mode:
+                return True
+    return False
+
+
 def standby_status(name: str, context: dict[str, Any], freshness_seconds: int | None) -> dict[str, str]:
     if name == "Scanner":
         return {
@@ -382,6 +418,18 @@ def evaluate_subsystem(name: str, configured_paths: list[Path]) -> dict[str, Any
         status = standby["status"]
         confidence = standby["confidence"]
         reason = standby["reason"]
+    elif name == "Alerts" and alert_queue_evidence(payloads):
+        status = "DEGRADED"
+        confidence = "MEDIUM"
+        reason = "ALERT_QUEUE_PRESENT_READ_ONLY_NOT_DELIVERY_PROOF"
+    elif name == "ECHO API" and echo_api_read_only_evidence(payloads):
+        status = "DEGRADED"
+        confidence = "MEDIUM"
+        reason = "API_CONTRACT_PRESENT_READ_ONLY_NOT_SERVER_PROOF"
+    elif name == "Unified Brain" and unified_brain_shadow_only(payloads):
+        status = "DEGRADED"
+        confidence = "MEDIUM"
+        reason = "UNIFIED_BRAIN_SHADOW_ONLY_NOT_LIVE_DECISION_PROOF"
     elif contains_any(values, FAIL_TOKENS):
         status = "FAIL"
         confidence = "HIGH"
