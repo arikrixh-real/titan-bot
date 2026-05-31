@@ -47,6 +47,9 @@ REJECTED_MISSIONS_PATH = ECHO_DIR / "rejected_missions.json"
 EXECUTION_READINESS_REPORT_PATH = ECHO_DIR / "execution_readiness_report.json"
 EXECUTION_PREVIEW_PATH = ECHO_DIR / "execution_preview.json"
 EXECUTION_AUTHORIZATION_PATH = ECHO_DIR / "execution_authorization.json"
+EXECUTION_LOCK_PATH = ECHO_DIR / "execution_lock.json"
+EXECUTION_EVIDENCE_PATH = ECHO_DIR / "execution_evidence.json"
+EXECUTION_LEDGER_PATH = ECHO_DIR / "execution_ledger.json"
 VALID_RISK_LEVELS = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
 SECRET_MARKERS = (
@@ -727,6 +730,199 @@ def post_execution_authorize() -> dict[str, Any]:
     return build_execution_authorization()
 
 
+def _execution_governance_safety(extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    safety = {
+        "dry_run_only": True,
+        "codex_execution": False,
+        "shell_execution": False,
+        "git_push_pull": False,
+        "deploy_or_restart": False,
+        "titan_runtime_changed": False,
+        "actual_execution_permitted": False,
+    }
+    if extra:
+        safety.update(extra)
+    return safety
+
+
+def _current_chain_sources() -> dict[str, Any]:
+    mission_plan = _load_mission_plan()
+    mission = mission_plan.get("current_mission") if isinstance(mission_plan.get("current_mission"), dict) else {}
+    if not isinstance(mission, dict):
+        mission = {}
+    readiness = _read_json(EXECUTION_READINESS_REPORT_PATH)
+    if not isinstance(readiness, dict):
+        readiness = build_execution_readiness_report()
+    preview = _read_json(EXECUTION_PREVIEW_PATH)
+    if not isinstance(preview, dict):
+        preview = build_execution_preview()
+    authorization = _read_json(EXECUTION_AUTHORIZATION_PATH)
+    if not isinstance(authorization, dict):
+        authorization = build_execution_authorization()
+    lock = _read_json(EXECUTION_LOCK_PATH)
+    return {
+        "mission": mission,
+        "readiness": readiness,
+        "preview": preview,
+        "authorization": authorization,
+        "lock": lock if isinstance(lock, dict) else {},
+    }
+
+
+def _chain_ids(chain: dict[str, Any]) -> dict[str, Any]:
+    mission = chain.get("mission") if isinstance(chain.get("mission"), dict) else {}
+    authorization = chain.get("authorization") if isinstance(chain.get("authorization"), dict) else {}
+    lock = chain.get("lock") if isinstance(chain.get("lock"), dict) else {}
+    return {
+        "mission_id": mission.get("mission_id") or authorization.get("mission_id") or lock.get("mission_id"),
+        "approval_id": mission.get("approval_id") or authorization.get("approval_id") or lock.get("approval_id"),
+        "authorization_id": authorization.get("authorization_id") or lock.get("authorization_id"),
+        "lock_id": lock.get("lock_id"),
+    }
+
+
+def build_execution_lock() -> dict[str, Any]:
+    chain = _current_chain_sources()
+    mission = chain["mission"]
+    authorization = chain["authorization"]
+    mission_id = mission.get("mission_id")
+    approval_id = mission.get("approval_id")
+    authorization_id = authorization.get("authorization_id")
+    checks = {
+        "authorization_status_authorized_dry_run_only": authorization.get("status") == "AUTHORIZED_DRY_RUN_ONLY",
+        "mission_id_matches_authorization": bool(mission_id) and mission_id == authorization.get("mission_id"),
+        "approval_id_matches_authorization": bool(approval_id) and approval_id == authorization.get("approval_id"),
+        "authorization_id_present": bool(authorization_id),
+    }
+    blockers = [name for name, passed in checks.items() if not passed]
+    now = _timestamp_ist()
+    lock_id = _stable_id("echo-execution-lock", str(mission_id), str(approval_id), str(authorization_id), now)
+    lock = {
+        "schema": "titan.echo.execution_lock.v1",
+        "lock_id": lock_id,
+        "mission_id": mission_id,
+        "approval_id": approval_id,
+        "authorization_id": authorization_id,
+        "status": "LOCKED_DRY_RUN_ONLY" if not blockers else "NOT_LOCKED",
+        "checks": checks,
+        "blockers": blockers,
+        "created_at_ist": now,
+        "safety": _execution_governance_safety({"execution_locked": not blockers}),
+    }
+    _write_echo_json(EXECUTION_LOCK_PATH, lock)
+    return lock
+
+
+def get_execution_lock() -> dict[str, Any]:
+    lock = _read_json(EXECUTION_LOCK_PATH)
+    if not isinstance(lock, dict):
+        lock = build_execution_lock()
+    return lock
+
+
+def post_execution_lock_create() -> dict[str, Any]:
+    return build_execution_lock()
+
+
+def build_execution_evidence() -> dict[str, Any]:
+    chain = _current_chain_sources()
+    if not chain.get("lock"):
+        chain["lock"] = build_execution_lock()
+    ids = _chain_ids(chain)
+    mission = chain["mission"]
+    readiness = chain["readiness"]
+    preview = chain["preview"]
+    authorization = chain["authorization"]
+    lock = chain["lock"]
+    chain_integrity = {
+        "mission_to_readiness": bool(ids["mission_id"]) and ids["mission_id"] == readiness.get("mission_id"),
+        "mission_to_preview": bool(ids["mission_id"]) and ids["mission_id"] == preview.get("mission_id"),
+        "mission_to_authorization": bool(ids["mission_id"]) and ids["mission_id"] == authorization.get("mission_id"),
+        "mission_to_lock": bool(ids["mission_id"]) and ids["mission_id"] == lock.get("mission_id"),
+        "approval_to_readiness": bool(ids["approval_id"]) and ids["approval_id"] == readiness.get("approval_id"),
+        "approval_to_preview": bool(ids["approval_id"]) and ids["approval_id"] == preview.get("approval_id"),
+        "approval_to_authorization": bool(ids["approval_id"]) and ids["approval_id"] == authorization.get("approval_id"),
+        "approval_to_lock": bool(ids["approval_id"]) and ids["approval_id"] == lock.get("approval_id"),
+        "authorization_to_lock": bool(ids["authorization_id"]) and ids["authorization_id"] == lock.get("authorization_id"),
+        "readiness_ready": readiness.get("status") == "READY_DRY_RUN_ONLY",
+        "preview_ready": preview.get("status") == "PREVIEW_READY",
+        "authorization_ready": authorization.get("status") == "AUTHORIZED_DRY_RUN_ONLY",
+        "lock_ready": lock.get("status") == "LOCKED_DRY_RUN_ONLY",
+    }
+    blockers = [name for name, passed in chain_integrity.items() if not passed]
+    evidence_id = _stable_id(
+        "echo-execution-evidence",
+        str(ids["mission_id"]),
+        str(ids["approval_id"]),
+        str(ids["authorization_id"]),
+        str(ids["lock_id"]),
+    )
+    evidence = {
+        "schema": "titan.echo.execution_evidence.v1",
+        "evidence_id": evidence_id,
+        "status": "EVIDENCE_READY" if not blockers else "EVIDENCE_NOT_READY",
+        "mission_id": ids["mission_id"],
+        "approval_id": ids["approval_id"],
+        "authorization_id": ids["authorization_id"],
+        "lock_id": ids["lock_id"],
+        "readiness_status": readiness.get("status"),
+        "preview_status": preview.get("status"),
+        "authorization_status": authorization.get("status"),
+        "lock_status": lock.get("status"),
+        "chain_integrity": chain_integrity,
+        "blockers": blockers,
+        "generated_at_ist": _timestamp_ist(),
+        "safety": _execution_governance_safety(),
+    }
+    _write_echo_json(EXECUTION_EVIDENCE_PATH, evidence)
+    return evidence
+
+
+def get_execution_evidence() -> dict[str, Any]:
+    evidence = _read_json(EXECUTION_EVIDENCE_PATH)
+    if not isinstance(evidence, dict):
+        evidence = build_execution_evidence()
+    return evidence
+
+
+def build_execution_ledger() -> dict[str, Any]:
+    evidence = _read_json(EXECUTION_EVIDENCE_PATH)
+    if not isinstance(evidence, dict):
+        evidence = build_execution_evidence()
+    timestamp = _timestamp_ist()
+    ledger = {
+        "schema": "titan.echo.execution_ledger.v1",
+        "status": "GOVERNANCE_CHAIN_COMPLETE" if evidence.get("status") == "EVIDENCE_READY" else "GOVERNANCE_CHAIN_INCOMPLETE",
+        "mission_id": evidence.get("mission_id"),
+        "approval_id": evidence.get("approval_id"),
+        "authorization_id": evidence.get("authorization_id"),
+        "lock_id": evidence.get("lock_id"),
+        "evidence_id": evidence.get("evidence_id"),
+        "timestamp": timestamp,
+        "entries": [
+            {
+                "event": "GOVERNANCE_CHAIN_RECORDED",
+                "mission_id": evidence.get("mission_id"),
+                "approval_id": evidence.get("approval_id"),
+                "authorization_id": evidence.get("authorization_id"),
+                "lock_id": evidence.get("lock_id"),
+                "evidence_id": evidence.get("evidence_id"),
+                "timestamp": timestamp,
+            }
+        ],
+        "safety": _execution_governance_safety(),
+    }
+    _write_echo_json(EXECUTION_LEDGER_PATH, ledger)
+    return ledger
+
+
+def get_execution_ledger() -> dict[str, Any]:
+    ledger = _read_json(EXECUTION_LEDGER_PATH)
+    if not isinstance(ledger, dict):
+        ledger = build_execution_ledger()
+    return ledger
+
+
 def post_mission_prepare(payload: dict[str, Any]) -> dict[str, Any]:
     body = payload if isinstance(payload, dict) else {}
     now = _timestamp_ist()
@@ -953,6 +1149,10 @@ execution_preview = get_execution_preview
 execution_preview_generate = post_execution_preview_generate
 execution_authorization = get_execution_authorization
 execution_authorize = post_execution_authorize
+execution_lock = get_execution_lock
+execution_lock_create = post_execution_lock_create
+execution_evidence = get_execution_evidence
+execution_ledger = get_execution_ledger
 mission_prepare = post_mission_prepare
 approval_approve = post_approval_approve
 approval_reject = post_approval_reject
@@ -981,12 +1181,16 @@ if FASTAPI_AVAILABLE:
     app.get("/execution/readiness", dependencies=auth_dependency)(get_execution_readiness)
     app.get("/execution/preview", dependencies=auth_dependency)(get_execution_preview)
     app.get("/execution/authorization", dependencies=auth_dependency)(get_execution_authorization)
+    app.get("/execution/lock", dependencies=auth_dependency)(get_execution_lock)
+    app.get("/execution/evidence", dependencies=auth_dependency)(get_execution_evidence)
+    app.get("/execution/ledger", dependencies=auth_dependency)(get_execution_ledger)
     app.post("/mission/prepare", dependencies=auth_dependency)(post_mission_prepare)
     app.post("/approval/approve", dependencies=auth_dependency)(post_approval_approve)
     app.post("/approval/reject", dependencies=auth_dependency)(post_approval_reject)
     app.post("/execution/readiness/check", dependencies=auth_dependency)(post_execution_readiness_check)
     app.post("/execution/preview/generate", dependencies=auth_dependency)(post_execution_preview_generate)
     app.post("/execution/authorize", dependencies=auth_dependency)(post_execution_authorize)
+    app.post("/execution/lock/create", dependencies=auth_dependency)(post_execution_lock_create)
 
 
 __all__ = [
@@ -1010,6 +1214,10 @@ __all__ = [
     "post_execution_preview_generate",
     "get_execution_authorization",
     "post_execution_authorize",
+    "get_execution_lock",
+    "post_execution_lock_create",
+    "get_execution_evidence",
+    "get_execution_ledger",
     "post_mission_prepare",
     "post_approval_approve",
     "post_approval_reject",
@@ -1031,6 +1239,10 @@ __all__ = [
     "execution_preview_generate",
     "execution_authorization",
     "execution_authorize",
+    "execution_lock",
+    "execution_lock_create",
+    "execution_evidence",
+    "execution_ledger",
     "mission_prepare",
     "approval_approve",
     "approval_reject",
