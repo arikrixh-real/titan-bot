@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from titan_echo.echo_api_auth import require_echo_api_key
+from titan_echo.echo_api_auth import PROTECTED_ENDPOINTS, require_echo_api_key
 from titan_echo.echo_api_status import build_status, read_sources
 
 
@@ -52,6 +52,7 @@ EXECUTION_EVIDENCE_PATH = ECHO_DIR / "execution_evidence.json"
 EXECUTION_LEDGER_PATH = ECHO_DIR / "execution_ledger.json"
 EXECUTION_POLICY_PATH = ECHO_DIR / "execution_policy.json"
 EXECUTION_GATE_PATH = ECHO_DIR / "execution_gate.json"
+CHATGPT_CONNECTION_READINESS_PATH = ECHO_DIR / "chatgpt_connection_readiness.json"
 VALID_RISK_LEVELS = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
 SECRET_MARKERS = (
@@ -1032,6 +1033,73 @@ def post_execution_gate_evaluate() -> dict[str, Any]:
     return build_execution_gate()
 
 
+def build_chatgpt_connection_readiness() -> dict[str, Any]:
+    policy = _read_json(EXECUTION_POLICY_PATH)
+    if not isinstance(policy, dict):
+        policy = build_execution_policy()
+    gate = _read_json(EXECUTION_GATE_PATH)
+    if not isinstance(gate, dict):
+        gate = build_execution_gate()
+    ledger = _read_json(EXECUTION_LEDGER_PATH)
+    if not isinstance(ledger, dict):
+        ledger = build_execution_ledger()
+
+    safety = {
+        "codex_execution": False,
+        "shell_execution": False,
+        "git_push_pull": False,
+        "deploy_or_restart": False,
+        "titan_runtime_changed": False,
+        "actual_execution_permitted": False,
+        "chatgpt_connection_enabled": False,
+        "external_api_calls_enabled": False,
+        "public_exposure_allowed": False,
+    }
+    checks = {
+        "echo_service_localhost_only": True,
+        "api_key_auth_enabled": "/chatgpt/readiness" in PROTECTED_ENDPOINTS,
+        "governance_bridge_exists": ledger.get("status") == "GOVERNANCE_CHAIN_COMPLETE",
+        "execution_gate_blocks_execution": gate.get("gate_decision") == "BLOCK_EXECUTION",
+        "execution_mode_disabled": policy.get("execution_mode") == "DISABLED" or gate.get("safety", {}).get("execution_mode") == "DISABLED",
+        "actual_execution_permitted_false": policy.get("actual_execution_permitted") is False and gate.get("safety", {}).get("actual_execution_permitted") is False,
+        "no_public_exposure": safety["public_exposure_allowed"] is False,
+        "no_shell_execution": safety["shell_execution"] is False,
+        "no_codex_execution": safety["codex_execution"] is False,
+        "no_git_push_pull": safety["git_push_pull"] is False,
+        "no_deploy_restart": safety["deploy_or_restart"] is False,
+    }
+    blockers = [name for name, passed in checks.items() if not passed]
+    report = {
+        "schema": "titan.echo.chatgpt_connection_readiness.v1",
+        "status": "CHATGPT_CONNECTION_READY_LOCAL_ONLY" if not blockers else "NOT_READY",
+        "bridge_status": ledger.get("status"),
+        "governance_gate_status": gate.get("status"),
+        "localhost_only": checks["echo_service_localhost_only"],
+        "auth_required": checks["api_key_auth_enabled"],
+        "public_exposure_allowed": False,
+        "chatgpt_connection_enabled": False,
+        "external_api_calls_enabled": False,
+        "actual_execution_permitted": False,
+        "checks": checks,
+        "blockers": blockers,
+        "safety": safety,
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(CHATGPT_CONNECTION_READINESS_PATH, report)
+    return report
+
+
+def get_chatgpt_readiness() -> dict[str, Any]:
+    report = _read_json(CHATGPT_CONNECTION_READINESS_PATH)
+    if not isinstance(report, dict):
+        report = build_chatgpt_connection_readiness()
+    return report
+
+
+def post_chatgpt_readiness_check() -> dict[str, Any]:
+    return build_chatgpt_connection_readiness()
+
+
 def post_mission_prepare(payload: dict[str, Any]) -> dict[str, Any]:
     body = payload if isinstance(payload, dict) else {}
     now = _timestamp_ist()
@@ -1265,6 +1333,8 @@ execution_ledger = get_execution_ledger
 execution_policy = get_execution_policy
 execution_gate = get_execution_gate
 execution_gate_evaluate = post_execution_gate_evaluate
+chatgpt_readiness = get_chatgpt_readiness
+chatgpt_readiness_check = post_chatgpt_readiness_check
 mission_prepare = post_mission_prepare
 approval_approve = post_approval_approve
 approval_reject = post_approval_reject
@@ -1298,6 +1368,7 @@ if FASTAPI_AVAILABLE:
     app.get("/execution/ledger", dependencies=auth_dependency)(get_execution_ledger)
     app.get("/execution/policy", dependencies=auth_dependency)(get_execution_policy)
     app.get("/execution/gate", dependencies=auth_dependency)(get_execution_gate)
+    app.get("/chatgpt/readiness", dependencies=auth_dependency)(get_chatgpt_readiness)
     app.post("/mission/prepare", dependencies=auth_dependency)(post_mission_prepare)
     app.post("/approval/approve", dependencies=auth_dependency)(post_approval_approve)
     app.post("/approval/reject", dependencies=auth_dependency)(post_approval_reject)
@@ -1306,6 +1377,7 @@ if FASTAPI_AVAILABLE:
     app.post("/execution/authorize", dependencies=auth_dependency)(post_execution_authorize)
     app.post("/execution/lock/create", dependencies=auth_dependency)(post_execution_lock_create)
     app.post("/execution/gate/evaluate", dependencies=auth_dependency)(post_execution_gate_evaluate)
+    app.post("/chatgpt/readiness/check", dependencies=auth_dependency)(post_chatgpt_readiness_check)
 
 
 __all__ = [
@@ -1336,6 +1408,8 @@ __all__ = [
     "get_execution_policy",
     "get_execution_gate",
     "post_execution_gate_evaluate",
+    "get_chatgpt_readiness",
+    "post_chatgpt_readiness_check",
     "post_mission_prepare",
     "post_approval_approve",
     "post_approval_reject",
@@ -1364,6 +1438,8 @@ __all__ = [
     "execution_policy",
     "execution_gate",
     "execution_gate_evaluate",
+    "chatgpt_readiness",
+    "chatgpt_readiness_check",
     "mission_prepare",
     "approval_approve",
     "approval_reject",
