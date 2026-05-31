@@ -55,6 +55,13 @@ PROTECTED_ENDPOINTS = (
     "/jarvis/explain",
     "/jarvis/investigate",
     "/jarvis/mission",
+    "/titan/status",
+    "/titan/health",
+    "/titan/workers",
+    "/titan/scanner",
+    "/titan/trades",
+    "/titan/brain",
+    "/titan/runtime/context",
 )
 PUBLIC_ENDPOINTS = ("/health",)
 

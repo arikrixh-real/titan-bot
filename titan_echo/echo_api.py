@@ -8,6 +8,7 @@ it still exposes fallback functions for local callers.
 from __future__ import annotations
 
 import importlib.util
+import csv
 import hashlib
 import json
 from collections import Counter
@@ -60,6 +61,12 @@ ECHO_EVIDENCE_CONTEXT_PATH = ECHO_DIR / "echo_evidence_context.json"
 JARVIS_STATUS_PATH = ECHO_DIR / "jarvis_status.json"
 JARVIS_RESPONSE_PATH = ECHO_DIR / "jarvis_response.json"
 JARVIS_INVESTIGATION_PATH = ECHO_DIR / "jarvis_investigation.json"
+TITAN_RUNTIME_CONTEXT_PATH = ECHO_DIR / "titan_runtime_context.json"
+TITAN_HEALTH_SUMMARY_PATH = ECHO_DIR / "titan_health_summary.json"
+TITAN_WORKER_SUMMARY_PATH = ECHO_DIR / "titan_worker_summary.json"
+TITAN_SCANNER_SUMMARY_PATH = ECHO_DIR / "titan_scanner_summary.json"
+TITAN_TRADE_SUMMARY_PATH = ECHO_DIR / "titan_trade_summary.json"
+TITAN_BRAIN_SUMMARY_PATH = ECHO_DIR / "titan_brain_summary.json"
 VALID_RISK_LEVELS = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
 SECRET_MARKERS = (
@@ -255,6 +262,12 @@ def _jarvis_safety() -> dict[str, bool]:
         "deploy_or_restart": False,
         "titan_runtime_changed": False,
         "actual_execution_permitted": False,
+        "broker_changed": False,
+        "risk_changed": False,
+        "scanner_changed": False,
+        "master_brain_changed": False,
+        "runtime_workers_changed": False,
+        "trade_execution_permitted": False,
         "chatgpt_connection_enabled": False,
         "external_api_calls_enabled": False,
         "public_exposure_allowed": False,
@@ -278,6 +291,26 @@ PHASE_OMEGA_EVIDENCE_FILES = {
     "chatgpt_connection_readiness": CHATGPT_CONNECTION_READINESS_PATH,
 }
 
+TITAN_RUNTIME_EVIDENCE_FILES = {
+    "titan_runtime_status": REPO_ROOT / "data" / "runtime" / "titan_runtime_status.json",
+    "worker_health": REPO_ROOT / "data" / "runtime" / "worker_health.json",
+    "scanner_status": REPO_ROOT / "data" / "runtime" / "scanner_status.json",
+    "runtime_selector_status": REPO_ROOT / "data" / "runtime" / "runtime_selector_status.json",
+    "setup_engine_status": REPO_ROOT / "data" / "runtime" / "setup_engine_status.json",
+    "master_brain_status": REPO_ROOT / "data" / "runtime" / "master_brain_status.json",
+    "outcome_tracker_status": REPO_ROOT / "data" / "runtime" / "outcome_tracker_status.json",
+    "dashboard_sync_status": REPO_ROOT / "data" / "runtime" / "dashboard_sync_status.json",
+    "ohlc_refresh_status": REPO_ROOT / "data" / "runtime" / "ohlc_refresh_status.json",
+    "filter_engine_diagnostics": REPO_ROOT / "data" / "runtime" / "filter_engine_diagnostics.json",
+    "near_pass_setups": REPO_ROOT / "data" / "runtime" / "near_pass_setups.json",
+    "trade_contract_diagnostics": REPO_ROOT / "data" / "runtime" / "trade_contract_diagnostics.json",
+    "trade_journal_diagnostics": REPO_ROOT / "data" / "runtime" / "trade_journal_diagnostics.json",
+    "outcome_tracker_diagnostics": REPO_ROOT / "data" / "runtime" / "outcome_tracker_diagnostics.json",
+    "paper_account": REPO_ROOT / "data" / "paper_trading" / "paper_account.json",
+    "active_trades": REPO_ROOT / "data" / "journals" / "active_trades.csv",
+    "trade_outcomes": REPO_ROOT / "data" / "journals" / "trade_outcomes.csv",
+}
+
 
 def _read_jsonl(path: Path) -> list[Any] | None:
     if not path.exists():
@@ -299,6 +332,22 @@ def _read_phase_omega_source(path: Path) -> Any:
     return _read_json(path)
 
 
+def _read_csv_rows(path: Path) -> list[dict[str, Any]] | None:
+    if not path.exists():
+        return None
+    try:
+        with path.open("r", encoding="utf-8", errors="ignore", newline="") as handle:
+            return [dict(row) for row in csv.DictReader(handle)]
+    except Exception:
+        return None
+
+
+def _read_runtime_source(path: Path) -> Any:
+    if path.suffix.lower() == ".csv":
+        return _read_csv_rows(path)
+    return _read_phase_omega_source(path)
+
+
 def _evidence_record(name: str, path: Path) -> dict[str, Any]:
     data = _sanitize(_read_phase_omega_source(path))
     return {
@@ -314,6 +363,220 @@ def _phase_omega_evidence_map() -> dict[str, dict[str, Any]]:
         name: _evidence_record(name, path)
         for name, path in PHASE_OMEGA_EVIDENCE_FILES.items()
     }
+
+
+def _titan_evidence_record(name: str, path: Path) -> dict[str, Any]:
+    data = _sanitize(_read_runtime_source(path))
+    return {
+        "name": name,
+        "source": _relative(path),
+        "status": "EVIDENCE_PRESENT" if data is not None else "UNKNOWN_NOT_PROVEN",
+        "data": data,
+    }
+
+
+def _titan_runtime_evidence_map() -> dict[str, dict[str, Any]]:
+    return {
+        name: _titan_evidence_record(name, path)
+        for name, path in TITAN_RUNTIME_EVIDENCE_FILES.items()
+    }
+
+
+def _record_status(record: dict[str, Any]) -> str:
+    data = record.get("data")
+    if not isinstance(data, dict):
+        return "UNKNOWN_NOT_PROVEN"
+    value = data.get("status") or data.get("health") or data.get("state") or data.get("runtime_status")
+    return str(value) if value not in (None, "") else "UNKNOWN_NOT_PROVEN"
+
+
+def _source_statuses(evidence: dict[str, dict[str, Any]], names: list[str]) -> dict[str, dict[str, Any]]:
+    return {
+        name: {
+            "source": evidence[name]["source"],
+            "status": evidence[name]["status"],
+        }
+        for name in names
+        if name in evidence
+    }
+
+
+def _missing_sources(evidence: dict[str, dict[str, Any]], names: list[str]) -> list[str]:
+    return [name for name in names if evidence.get(name, {}).get("status") != "EVIDENCE_PRESENT"]
+
+
+def _titan_summary_status(evidence: dict[str, dict[str, Any]], names: list[str]) -> str:
+    return "EVIDENCE_PRESENT" if not _missing_sources(evidence, names) else "UNKNOWN_NOT_PROVEN"
+
+
+def _count_rows(value: Any) -> int | str:
+    if isinstance(value, list):
+        return len(value)
+    return "UNKNOWN_NOT_PROVEN"
+
+
+def build_titan_health_summary() -> dict[str, Any]:
+    evidence = _titan_runtime_evidence_map()
+    names = [
+        "titan_runtime_status",
+        "worker_health",
+        "dashboard_sync_status",
+        "ohlc_refresh_status",
+        "filter_engine_diagnostics",
+    ]
+    payload = {
+        "schema": "titan.echo.titan_health_summary.v1",
+        "status": _titan_summary_status(evidence, names),
+        "runtime_status": _record_status(evidence["titan_runtime_status"]),
+        "worker_health": _record_status(evidence["worker_health"]),
+        "dashboard_sync_status": _record_status(evidence["dashboard_sync_status"]),
+        "ohlc_refresh_status": _record_status(evidence["ohlc_refresh_status"]),
+        "filter_engine_diagnostics_status": _record_status(evidence["filter_engine_diagnostics"]),
+        "source_files": _source_statuses(evidence, names),
+        "unknowns": _missing_sources(evidence, names),
+        "safety": _jarvis_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(TITAN_HEALTH_SUMMARY_PATH, payload)
+    return payload
+
+
+def build_titan_worker_summary() -> dict[str, Any]:
+    evidence = _titan_runtime_evidence_map()
+    names = ["worker_health"]
+    payload = {
+        "schema": "titan.echo.titan_worker_summary.v1",
+        "status": _titan_summary_status(evidence, names),
+        "worker_health": evidence["worker_health"]["data"] if evidence["worker_health"]["status"] == "EVIDENCE_PRESENT" else "UNKNOWN_NOT_PROVEN",
+        "source_files": _source_statuses(evidence, names),
+        "unknowns": _missing_sources(evidence, names),
+        "safety": _jarvis_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(TITAN_WORKER_SUMMARY_PATH, payload)
+    return payload
+
+
+def build_titan_scanner_summary() -> dict[str, Any]:
+    evidence = _titan_runtime_evidence_map()
+    names = [
+        "scanner_status",
+        "runtime_selector_status",
+        "setup_engine_status",
+        "filter_engine_diagnostics",
+        "near_pass_setups",
+    ]
+    payload = {
+        "schema": "titan.echo.titan_scanner_summary.v1",
+        "status": _titan_summary_status(evidence, names),
+        "scanner_status": _record_status(evidence["scanner_status"]),
+        "runtime_selector_status": _record_status(evidence["runtime_selector_status"]),
+        "setup_engine_status": _record_status(evidence["setup_engine_status"]),
+        "near_pass_setup_count": _count_rows(evidence["near_pass_setups"]["data"]),
+        "source_files": _source_statuses(evidence, names),
+        "unknowns": _missing_sources(evidence, names),
+        "safety": _jarvis_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(TITAN_SCANNER_SUMMARY_PATH, payload)
+    return payload
+
+
+def build_titan_trade_summary() -> dict[str, Any]:
+    evidence = _titan_runtime_evidence_map()
+    names = [
+        "trade_contract_diagnostics",
+        "trade_journal_diagnostics",
+        "outcome_tracker_diagnostics",
+        "paper_account",
+        "active_trades",
+        "trade_outcomes",
+    ]
+    payload = {
+        "schema": "titan.echo.titan_trade_summary.v1",
+        "status": _titan_summary_status(evidence, names),
+        "active_trade_count": _count_rows(evidence["active_trades"]["data"]),
+        "trade_outcome_count": _count_rows(evidence["trade_outcomes"]["data"]),
+        "paper_account_status": _record_status(evidence["paper_account"]),
+        "trade_contract_diagnostics_status": _record_status(evidence["trade_contract_diagnostics"]),
+        "trade_journal_diagnostics_status": _record_status(evidence["trade_journal_diagnostics"]),
+        "outcome_tracker_diagnostics_status": _record_status(evidence["outcome_tracker_diagnostics"]),
+        "source_files": _source_statuses(evidence, names),
+        "unknowns": _missing_sources(evidence, names),
+        "safety": _jarvis_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(TITAN_TRADE_SUMMARY_PATH, payload)
+    return payload
+
+
+def build_titan_brain_summary() -> dict[str, Any]:
+    evidence = _titan_runtime_evidence_map()
+    names = ["master_brain_status", "setup_engine_status", "outcome_tracker_status"]
+    payload = {
+        "schema": "titan.echo.titan_brain_summary.v1",
+        "status": _titan_summary_status(evidence, names),
+        "master_brain_status": _record_status(evidence["master_brain_status"]),
+        "setup_engine_status": _record_status(evidence["setup_engine_status"]),
+        "outcome_tracker_status": _record_status(evidence["outcome_tracker_status"]),
+        "source_files": _source_statuses(evidence, names),
+        "unknowns": _missing_sources(evidence, names),
+        "safety": _jarvis_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(TITAN_BRAIN_SUMMARY_PATH, payload)
+    return payload
+
+
+def build_titan_runtime_context() -> dict[str, Any]:
+    evidence = _titan_runtime_evidence_map()
+    payload = {
+        "schema": "titan.echo.titan_runtime_context.v1",
+        "status": "TITAN_RUNTIME_CONTEXT_LOCAL_ONLY",
+        "runtime": {
+            "titan_runtime_status": _record_status(evidence["titan_runtime_status"]),
+            "health": build_titan_health_summary(),
+            "workers": build_titan_worker_summary(),
+            "scanner": build_titan_scanner_summary(),
+            "trades": build_titan_trade_summary(),
+            "brain": build_titan_brain_summary(),
+        },
+        "source_files": _source_statuses(evidence, list(TITAN_RUNTIME_EVIDENCE_FILES)),
+        "unknowns": _missing_sources(evidence, list(TITAN_RUNTIME_EVIDENCE_FILES)),
+        "truth_rule": "UNKNOWN_NOT_PROVEN when unavailable from TITAN runtime evidence files.",
+        "safety": _jarvis_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(TITAN_RUNTIME_CONTEXT_PATH, payload)
+    return payload
+
+
+def get_titan_status() -> dict[str, Any]:
+    return build_titan_runtime_context()
+
+
+def get_titan_health() -> dict[str, Any]:
+    return build_titan_health_summary()
+
+
+def get_titan_workers() -> dict[str, Any]:
+    return build_titan_worker_summary()
+
+
+def get_titan_scanner() -> dict[str, Any]:
+    return build_titan_scanner_summary()
+
+
+def get_titan_trades() -> dict[str, Any]:
+    return build_titan_trade_summary()
+
+
+def get_titan_brain() -> dict[str, Any]:
+    return build_titan_brain_summary()
+
+
+def get_titan_runtime_context() -> dict[str, Any]:
+    return build_titan_runtime_context()
 
 
 def _source_status_value(evidence: dict[str, dict[str, Any]], name: str) -> str:
@@ -461,6 +724,13 @@ def get_echo_evidence() -> dict[str, Any]:
 
 
 QUESTION_CATEGORY_KEYWORDS = {
+    "titan_runtime_status": ("what is titan doing", "titan doing", "runtime status"),
+    "titan_health": ("titan healthy", "titan health", "healthy"),
+    "titan_workers": ("workers", "worker", "alive"),
+    "titan_scanner": ("scanner", "scan"),
+    "titan_trades": ("open trades", "taking trades", "trades", "trade"),
+    "titan_brain": ("master brain", "brain"),
+    "titan_blockers": ("what is blocked", "blocked", "not taking trades", "blockers"),
     "titan_status": ("titan", "system"),
     "echo_status": ("echo",),
     "mission_status": ("mission",),
@@ -481,6 +751,54 @@ def _interpret_question_category(question: str) -> str | None:
     return None
 
 
+def _unknown_titan_answer() -> str:
+    return "ECHO does not have verified TITAN runtime evidence for this yet."
+
+
+def _titan_answer_payload(category: str) -> tuple[str, Any, list[str], list[str]]:
+    if category == "titan_runtime_status":
+        summary = build_titan_runtime_context()
+        if summary["unknowns"]:
+            return "UNKNOWN_NOT_PROVEN", _unknown_titan_answer(), list(summary["source_files"]), summary["unknowns"]
+        return summary["status"], summary["runtime"], list(summary["source_files"]), []
+    if category == "titan_health":
+        summary = build_titan_health_summary()
+        if summary["status"] == "UNKNOWN_NOT_PROVEN":
+            return "UNKNOWN_NOT_PROVEN", _unknown_titan_answer(), list(summary["source_files"]), summary["unknowns"]
+        return summary["status"], summary, list(summary["source_files"]), []
+    if category == "titan_workers":
+        summary = build_titan_worker_summary()
+        if summary["status"] == "UNKNOWN_NOT_PROVEN":
+            return "UNKNOWN_NOT_PROVEN", _unknown_titan_answer(), list(summary["source_files"]), summary["unknowns"]
+        return summary["status"], summary["worker_health"], list(summary["source_files"]), []
+    if category == "titan_scanner":
+        summary = build_titan_scanner_summary()
+        if summary["status"] == "UNKNOWN_NOT_PROVEN":
+            return "UNKNOWN_NOT_PROVEN", _unknown_titan_answer(), list(summary["source_files"]), summary["unknowns"]
+        return summary["status"], summary, list(summary["source_files"]), []
+    if category == "titan_trades":
+        summary = build_titan_trade_summary()
+        if summary["status"] == "UNKNOWN_NOT_PROVEN":
+            return "UNKNOWN_NOT_PROVEN", _unknown_titan_answer(), list(summary["source_files"]), summary["unknowns"]
+        return summary["status"], summary, list(summary["source_files"]), []
+    if category == "titan_brain":
+        summary = build_titan_brain_summary()
+        if summary["status"] == "UNKNOWN_NOT_PROVEN":
+            return "UNKNOWN_NOT_PROVEN", _unknown_titan_answer(), list(summary["source_files"]), summary["unknowns"]
+        return summary["status"], summary, list(summary["source_files"]), []
+    if category == "titan_blockers":
+        summary = build_titan_runtime_context()
+        blockers = {
+            "missing_evidence": summary["unknowns"],
+            "trade_execution_permitted": False,
+            "actual_execution_permitted": False,
+        }
+        status = "UNKNOWN_NOT_PROVEN" if summary["unknowns"] else "EVIDENCE_PRESENT"
+        answer = _unknown_titan_answer() if status == "UNKNOWN_NOT_PROVEN" else blockers
+        return status, answer, list(summary["source_files"]), summary["unknowns"]
+    return "UNKNOWN_NOT_PROVEN", _unknown_titan_answer(), [], ["unsupported_titan_question_category"]
+
+
 def _jarvis_answer_for_category(category: str | None, summary: dict[str, Any], evidence: dict[str, dict[str, Any]]) -> tuple[str, Any, list[str], list[str]]:
     if category is None:
         return (
@@ -489,8 +807,10 @@ def _jarvis_answer_for_category(category: str | None, summary: dict[str, Any], e
             [],
             ["unsupported_question_category"],
         )
+    if category.startswith("titan_") and category != "titan_status":
+        return _titan_answer_payload(category)
     if category == "titan_status":
-        return "UNKNOWN_NOT_PROVEN", "UNKNOWN_NOT_PROVEN", [], ["titan_status_not_present_in_phase_omega_evidence"]
+        return _titan_answer_payload("titan_runtime_status")
     if category == "echo_status":
         return "ECHO_CONTEXT_LOCAL_ONLY", "ECHO local context is available from runtime evidence files only.", ["echo_context"], []
     if category == "mission_status":
@@ -1683,6 +2003,13 @@ jarvis_question_post = post_jarvis_question
 jarvis_explain = get_jarvis_explain
 jarvis_investigate = get_jarvis_investigate
 jarvis_mission = get_jarvis_mission
+titan_status = get_titan_status
+titan_health = get_titan_health
+titan_workers = get_titan_workers
+titan_scanner = get_titan_scanner
+titan_trades = get_titan_trades
+titan_brain = get_titan_brain
+titan_runtime_context = get_titan_runtime_context
 mission_prepare = post_mission_prepare
 approval_approve = post_approval_approve
 approval_reject = post_approval_reject
@@ -1728,6 +2055,13 @@ if FASTAPI_AVAILABLE:
     app.get("/jarvis/explain", dependencies=auth_dependency)(get_jarvis_explain)
     app.get("/jarvis/investigate", dependencies=auth_dependency)(get_jarvis_investigate)
     app.get("/jarvis/mission", dependencies=auth_dependency)(get_jarvis_mission)
+    app.get("/titan/status", dependencies=auth_dependency)(get_titan_status)
+    app.get("/titan/health", dependencies=auth_dependency)(get_titan_health)
+    app.get("/titan/workers", dependencies=auth_dependency)(get_titan_workers)
+    app.get("/titan/scanner", dependencies=auth_dependency)(get_titan_scanner)
+    app.get("/titan/trades", dependencies=auth_dependency)(get_titan_trades)
+    app.get("/titan/brain", dependencies=auth_dependency)(get_titan_brain)
+    app.get("/titan/runtime/context", dependencies=auth_dependency)(get_titan_runtime_context)
     app.post("/mission/prepare", dependencies=auth_dependency)(post_mission_prepare)
     app.post("/approval/approve", dependencies=auth_dependency)(post_approval_approve)
     app.post("/approval/reject", dependencies=auth_dependency)(post_approval_reject)
@@ -1780,6 +2114,13 @@ __all__ = [
     "get_jarvis_explain",
     "get_jarvis_investigate",
     "get_jarvis_mission",
+    "get_titan_status",
+    "get_titan_health",
+    "get_titan_workers",
+    "get_titan_scanner",
+    "get_titan_trades",
+    "get_titan_brain",
+    "get_titan_runtime_context",
     "post_mission_prepare",
     "post_approval_approve",
     "post_approval_reject",
@@ -1821,6 +2162,13 @@ __all__ = [
     "jarvis_explain",
     "jarvis_investigate",
     "jarvis_mission",
+    "titan_status",
+    "titan_health",
+    "titan_workers",
+    "titan_scanner",
+    "titan_trades",
+    "titan_brain",
+    "titan_runtime_context",
     "mission_prepare",
     "approval_approve",
     "approval_reject",
