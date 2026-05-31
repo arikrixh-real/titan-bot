@@ -61,6 +61,10 @@ ECHO_EVIDENCE_CONTEXT_PATH = ECHO_DIR / "echo_evidence_context.json"
 JARVIS_STATUS_PATH = ECHO_DIR / "jarvis_status.json"
 JARVIS_RESPONSE_PATH = ECHO_DIR / "jarvis_response.json"
 JARVIS_INVESTIGATION_PATH = ECHO_DIR / "jarvis_investigation.json"
+JARVIS_ASK_RESPONSE_PATH = ECHO_DIR / "jarvis_ask_response.json"
+JARVIS_RUNTIME_INTELLIGENCE_PATH = ECHO_DIR / "jarvis_runtime_intelligence.json"
+JARVIS_DEEP_TITAN_CONTEXT_PATH = ECHO_DIR / "jarvis_deep_titan_context.json"
+CHATGPT_BRIDGE_READINESS_PATH = ECHO_DIR / "chatgpt_bridge_readiness.json"
 TITAN_RUNTIME_CONTEXT_PATH = ECHO_DIR / "titan_runtime_context.json"
 TITAN_HEALTH_SUMMARY_PATH = ECHO_DIR / "titan_health_summary.json"
 TITAN_WORKER_SUMMARY_PATH = ECHO_DIR / "titan_worker_summary.json"
@@ -274,6 +278,23 @@ def _jarvis_safety() -> dict[str, bool]:
     }
 
 
+def _jarvis_core_safety() -> dict[str, bool]:
+    return {
+        "codex_execution": False,
+        "shell_execution": False,
+        "git_push_pull": False,
+        "deploy_or_restart": False,
+        "titan_runtime_changed": False,
+        "actual_execution_permitted": False,
+        "broker_changed": False,
+        "risk_changed": False,
+        "scanner_changed": False,
+        "master_brain_changed": False,
+        "runtime_workers_changed": False,
+        "trade_execution_permitted": False,
+    }
+
+
 PHASE_OMEGA_EVIDENCE_FILES = {
     "mission_plan": MISSION_PLAN_PATH,
     "approval_queue": APPROVAL_QUEUE_PATH,
@@ -309,6 +330,10 @@ TITAN_RUNTIME_EVIDENCE_FILES = {
     "paper_account": REPO_ROOT / "data" / "paper_trading" / "paper_account.json",
     "active_trades": REPO_ROOT / "data" / "journals" / "active_trades.csv",
     "trade_outcomes": REPO_ROOT / "data" / "journals" / "trade_outcomes.csv",
+    "evolution_status": REPO_ROOT / "data" / "runtime" / "evolution_status.json",
+    "learning_status": REPO_ROOT / "data" / "runtime" / "learning_status.json",
+    "news_status": REPO_ROOT / "data" / "runtime" / "news_status.json",
+    "memory_consolidation_status": REPO_ROOT / "data" / "runtime" / "memory_consolidation_status.json",
 }
 
 
@@ -579,6 +604,84 @@ def get_titan_runtime_context() -> dict[str, Any]:
     return build_titan_runtime_context()
 
 
+def _deep_titan_context_summary(evidence: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "runtime": _record_status(evidence["titan_runtime_status"]),
+        "health": {
+            "worker_health": _record_status(evidence["worker_health"]),
+            "dashboard_sync_status": _record_status(evidence["dashboard_sync_status"]),
+            "ohlc_refresh_status": _record_status(evidence["ohlc_refresh_status"]),
+        },
+        "scanner": {
+            "scanner_status": _record_status(evidence["scanner_status"]),
+            "runtime_selector_status": _record_status(evidence["runtime_selector_status"]),
+            "setup_engine_status": _record_status(evidence["setup_engine_status"]),
+            "near_pass_setup_count": _count_rows(evidence["near_pass_setups"]["data"]),
+        },
+        "trades": {
+            "active_trade_count": _count_rows(evidence["active_trades"]["data"]),
+            "trade_outcome_count": _count_rows(evidence["trade_outcomes"]["data"]),
+            "paper_account_status": _record_status(evidence["paper_account"]),
+            "trade_contract_diagnostics_status": _record_status(evidence["trade_contract_diagnostics"]),
+            "trade_journal_diagnostics_status": _record_status(evidence["trade_journal_diagnostics"]),
+            "outcome_tracker_diagnostics_status": _record_status(evidence["outcome_tracker_diagnostics"]),
+        },
+        "brain": {
+            "master_brain_status": _record_status(evidence["master_brain_status"]),
+            "setup_engine_status": _record_status(evidence["setup_engine_status"]),
+            "outcome_tracker_status": _record_status(evidence["outcome_tracker_status"]),
+        },
+        "evolution": _record_status(evidence["evolution_status"]),
+        "learning": _record_status(evidence["learning_status"]),
+        "memory": _record_status(evidence["memory_consolidation_status"]),
+        "news": _record_status(evidence["news_status"]),
+        "dashboard": _record_status(evidence["dashboard_sync_status"]),
+    }
+
+
+def build_jarvis_deep_titan_context() -> dict[str, Any]:
+    evidence = _titan_runtime_evidence_map()
+    names = list(TITAN_RUNTIME_EVIDENCE_FILES)
+    payload = {
+        "schema": "titan.echo.jarvis_deep_titan_context.v1",
+        "status": _titan_summary_status(evidence, names),
+        "summary": _deep_titan_context_summary(evidence),
+        "evidence": evidence,
+        "source_files": _source_statuses(evidence, names),
+        "unknowns": _missing_sources(evidence, names),
+        "truth_rule": "UNKNOWN_NOT_PROVEN when unavailable from TITAN runtime evidence files.",
+        "safety": _jarvis_core_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(JARVIS_DEEP_TITAN_CONTEXT_PATH, payload)
+    return payload
+
+
+def build_jarvis_runtime_intelligence() -> dict[str, Any]:
+    echo_evidence = _phase_omega_evidence_map()
+    titan_context = build_jarvis_deep_titan_context()
+    governance = _runtime_intelligence_summary(echo_evidence)
+    unknowns = [
+        f"echo:{name}"
+        for name, record in echo_evidence.items()
+        if record["status"] == "UNKNOWN_NOT_PROVEN"
+    ]
+    unknowns.extend(f"titan:{name}" for name in titan_context["unknowns"])
+    payload = {
+        "schema": "titan.echo.jarvis_runtime_intelligence.v1",
+        "status": "EVIDENCE_PRESENT" if not unknowns else "PARTIAL_EVIDENCE",
+        "echo_context": _runtime_intelligence_summary(echo_evidence),
+        "titan_context": titan_context["summary"],
+        "governance_context": governance,
+        "safety_context": _jarvis_core_safety(),
+        "unknowns": unknowns,
+        "safety": _jarvis_core_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(JARVIS_RUNTIME_INTELLIGENCE_PATH, payload)
+    return payload
+
+
 def _source_status_value(evidence: dict[str, dict[str, Any]], name: str) -> str:
     record = evidence.get(name, {})
     data = record.get("data")
@@ -742,6 +845,25 @@ QUESTION_CATEGORY_KEYWORDS = {
     "safety_status": ("safety", "safe", "permissions"),
 }
 
+JARVIS_ASK_CATEGORY_KEYWORDS = {
+    "titan_summary": ("what is titan doing", "titan summary", "summarize titan", "titan status"),
+    "titan_health": ("healthy", "health"),
+    "titan_runtime": ("runtime", "running"),
+    "titan_scanner": ("scanner", "scan"),
+    "titan_workers": ("workers", "worker", "alive"),
+    "titan_trades": ("open trades", "taking trades", "trades", "trade"),
+    "titan_brain": ("master brain", "brain"),
+    "titan_evolution": ("evolution", "evolve"),
+    "titan_learning": ("learning", "learn"),
+    "titan_memory": ("memory", "consolidation"),
+    "titan_news": ("news",),
+    "titan_dashboard": ("dashboard",),
+    "governance_status": ("governance", "chain", "policy"),
+    "execution_blockers": ("blocked", "blockers", "not taking trades", "why is titan not taking trades"),
+    "chatgpt_bridge_readiness": ("chatgpt", "bridge", "readiness"),
+    "safety_status": ("safety", "safe", "permissions"),
+}
+
 
 def _interpret_question_category(question: str) -> str | None:
     text = question.lower()
@@ -749,6 +871,242 @@ def _interpret_question_category(question: str) -> str | None:
         if any(keyword in text for keyword in keywords):
             return category
     return None
+
+
+def _interpret_jarvis_ask_category(question: str) -> str:
+    text = question.lower()
+    if any(keyword in text for keyword in JARVIS_ASK_CATEGORY_KEYWORDS["execution_blockers"]):
+        return "execution_blockers"
+    for category, keywords in JARVIS_ASK_CATEGORY_KEYWORDS.items():
+        if any(keyword in text for keyword in keywords):
+            return category
+    return "unknown"
+
+
+def _ask_status_from_unknowns(unknowns: list[str], evidence_used: list[str]) -> str:
+    if not evidence_used:
+        return "UNKNOWN_NOT_PROVEN"
+    return "PARTIAL_EVIDENCE" if unknowns else "EVIDENCE_PRESENT"
+
+
+def _ask_unknown_summary() -> str:
+    return "ECHO does not have verified TITAN runtime evidence for this yet."
+
+
+def _deep_context_section(deep_context: dict[str, Any], section: str) -> Any:
+    summary = deep_context.get("summary")
+    if not isinstance(summary, dict):
+        return "UNKNOWN_NOT_PROVEN"
+    return summary.get(section, "UNKNOWN_NOT_PROVEN")
+
+
+def _evidence_names_for_category(category: str) -> list[str]:
+    mapping = {
+        "titan_summary": list(TITAN_RUNTIME_EVIDENCE_FILES),
+        "titan_health": ["titan_runtime_status", "worker_health", "dashboard_sync_status", "ohlc_refresh_status", "filter_engine_diagnostics"],
+        "titan_runtime": ["titan_runtime_status"],
+        "titan_scanner": ["scanner_status", "runtime_selector_status", "setup_engine_status", "filter_engine_diagnostics", "near_pass_setups"],
+        "titan_workers": ["worker_health"],
+        "titan_trades": ["trade_contract_diagnostics", "trade_journal_diagnostics", "outcome_tracker_diagnostics", "paper_account", "active_trades", "trade_outcomes"],
+        "titan_brain": ["master_brain_status", "setup_engine_status", "outcome_tracker_status"],
+        "titan_evolution": ["evolution_status"],
+        "titan_learning": ["learning_status"],
+        "titan_memory": ["memory_consolidation_status"],
+        "titan_news": ["news_status"],
+        "titan_dashboard": ["dashboard_sync_status"],
+        "governance_status": list(PHASE_OMEGA_EVIDENCE_FILES),
+        "execution_blockers": list(PHASE_OMEGA_EVIDENCE_FILES) + list(TITAN_RUNTIME_EVIDENCE_FILES),
+        "chatgpt_bridge_readiness": ["execution_ledger", "execution_gate", "execution_policy"],
+        "safety_status": ["endpoint_safety_policy"],
+    }
+    return mapping.get(category, [])
+
+
+def _ask_details_for_category(
+    category: str,
+    runtime_intelligence: dict[str, Any],
+    deep_context: dict[str, Any],
+    bridge: dict[str, Any],
+) -> Any:
+    if category == "titan_summary":
+        return deep_context.get("summary", {})
+    if category == "titan_health":
+        return _deep_context_section(deep_context, "health")
+    if category == "titan_runtime":
+        return {"runtime": _deep_context_section(deep_context, "runtime")}
+    if category == "titan_scanner":
+        return _deep_context_section(deep_context, "scanner")
+    if category == "titan_workers":
+        return {"workers": _deep_context_section(deep_context, "health").get("worker_health", "UNKNOWN_NOT_PROVEN") if isinstance(_deep_context_section(deep_context, "health"), dict) else "UNKNOWN_NOT_PROVEN"}
+    if category == "titan_trades":
+        return _deep_context_section(deep_context, "trades")
+    if category == "titan_brain":
+        return _deep_context_section(deep_context, "brain")
+    if category == "titan_evolution":
+        return {"evolution": _deep_context_section(deep_context, "evolution")}
+    if category == "titan_learning":
+        return {"learning": _deep_context_section(deep_context, "learning")}
+    if category == "titan_memory":
+        return {"memory": _deep_context_section(deep_context, "memory")}
+    if category == "titan_news":
+        return {"news": _deep_context_section(deep_context, "news")}
+    if category == "titan_dashboard":
+        return {"dashboard": _deep_context_section(deep_context, "dashboard")}
+    if category == "governance_status":
+        return runtime_intelligence.get("governance_context", {})
+    if category == "execution_blockers":
+        return {
+            "governance": runtime_intelligence.get("governance_context", {}),
+            "missing_evidence": runtime_intelligence.get("unknowns", []),
+            "actual_execution_permitted": False,
+            "trade_execution_permitted": False,
+        }
+    if category == "chatgpt_bridge_readiness":
+        return bridge
+    if category == "safety_status":
+        return _jarvis_core_safety()
+    return {}
+
+
+def _ask_summary_for_category(category: str, status: str) -> str:
+    if category == "unknown":
+        return "ECHO does not have verified evidence for this question yet."
+    if status == "UNKNOWN_NOT_PROVEN":
+        return _ask_unknown_summary()
+    if status == "PARTIAL_EVIDENCE":
+        return "ECHO found partial evidence only. Missing evidence is listed in unknowns."
+    return "ECHO found verified local evidence for this question. See details and evidence_used."
+
+
+def _ask_blockers(category: str, unknowns: list[str], bridge: dict[str, Any]) -> list[str]:
+    blockers = list(unknowns)
+    if category == "execution_blockers":
+        blockers.extend(["actual_execution_permitted=false", "trade_execution_permitted=false"])
+    if category == "chatgpt_bridge_readiness":
+        blockers.extend(str(item) for item in bridge.get("blockers", []) if item)
+    return sorted(set(blockers))
+
+
+def _ask_next_safe_step(category: str, status: str, blockers: list[str]) -> str:
+    if blockers:
+        return "Resolve or generate the missing local evidence files before drawing operational conclusions."
+    if category == "chatgpt_bridge_readiness" and status == "EVIDENCE_PRESENT":
+        return "Proceed with local chatbox wiring while keeping ChatGPT connection, external APIs, and public exposure disabled."
+    return ""
+
+
+def _route_exists(path: str, method: str) -> bool:
+    app_obj = globals().get("app")
+    if app_obj is None:
+        return False
+    for route in getattr(app_obj, "routes", []):
+        if getattr(route, "path", "") == path and method.upper() in getattr(route, "methods", set()):
+            return True
+    return False
+
+
+def build_chatgpt_bridge_readiness() -> dict[str, Any]:
+    ledger = _read_json(EXECUTION_LEDGER_PATH)
+    gate = _read_json(EXECUTION_GATE_PATH)
+    policy = _read_json(EXECUTION_POLICY_PATH)
+    ledger = ledger if isinstance(ledger, dict) else {}
+    gate = gate if isinstance(gate, dict) else {}
+    policy = policy if isinstance(policy, dict) else {}
+    checks = {
+        "governance_chain_complete": ledger.get("status") == "GOVERNANCE_CHAIN_COMPLETE",
+        "execution_gate_blocks_execution": gate.get("gate_decision") == "BLOCK_EXECUTION",
+        "jarvis_ask_endpoint_exists": _route_exists("/jarvis/ask", "POST") or "post_jarvis_ask" in globals(),
+        "auth_required": "/jarvis/ask" in PROTECTED_ENDPOINTS and "/chatgpt/bridge/readiness" in PROTECTED_ENDPOINTS,
+        "localhost_only": True,
+        "public_exposure_false": False is False,
+        "external_api_false": False is False,
+        "actual_execution_false": policy.get("actual_execution_permitted") is False or gate.get("safety", {}).get("actual_execution_permitted") is False,
+    }
+    blockers = [name for name, passed in checks.items() if not passed]
+    ready = not blockers
+    payload = {
+        "schema": "titan.echo.chatgpt_bridge_readiness.v1",
+        "status": "CHATGPT_BRIDGE_READY_LOCAL_ONLY" if ready else "NOT_READY",
+        "chatgpt_bridge_ready": ready,
+        "chatgpt_connection_enabled": False,
+        "external_api_calls_enabled": False,
+        "public_exposure_allowed": False,
+        "checks": checks,
+        "blockers": blockers,
+        "source_files": {
+            "execution_ledger": {"source": _relative(EXECUTION_LEDGER_PATH), "status": "EVIDENCE_PRESENT" if ledger else "UNKNOWN_NOT_PROVEN"},
+            "execution_gate": {"source": _relative(EXECUTION_GATE_PATH), "status": "EVIDENCE_PRESENT" if gate else "UNKNOWN_NOT_PROVEN"},
+            "execution_policy": {"source": _relative(EXECUTION_POLICY_PATH), "status": "EVIDENCE_PRESENT" if policy else "UNKNOWN_NOT_PROVEN"},
+        },
+        "safety": _jarvis_core_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(CHATGPT_BRIDGE_READINESS_PATH, payload)
+    return payload
+
+
+def get_chatgpt_bridge_readiness() -> dict[str, Any]:
+    return build_chatgpt_bridge_readiness()
+
+
+def build_jarvis_ask_response(question: str = "") -> dict[str, Any]:
+    category = _interpret_jarvis_ask_category(question)
+    runtime_intelligence = build_jarvis_runtime_intelligence()
+    deep_context = build_jarvis_deep_titan_context()
+    bridge = build_chatgpt_bridge_readiness()
+    evidence_used = _evidence_names_for_category(category)
+    unknowns = []
+    if category == "unknown":
+        unknowns = ["unsupported_question_category"]
+    elif category == "safety_status":
+        unknowns = []
+    else:
+        source_files = deep_context.get("source_files", {})
+        echo_sources = _source_statuses(_phase_omega_evidence_map(), list(PHASE_OMEGA_EVIDENCE_FILES))
+        titan_names = set(TITAN_RUNTIME_EVIDENCE_FILES)
+        echo_names = set(PHASE_OMEGA_EVIDENCE_FILES)
+        unknowns.extend(
+            name
+            for name in evidence_used
+            if name in titan_names and source_files.get(name, {}).get("status") == "UNKNOWN_NOT_PROVEN"
+        )
+        unknowns.extend(
+            name
+            for name in evidence_used
+            if name in echo_names and echo_sources.get(name, {}).get("status") == "UNKNOWN_NOT_PROVEN"
+        )
+    if category == "chatgpt_bridge_readiness" and bridge["status"] != "CHATGPT_BRIDGE_READY_LOCAL_ONLY":
+        unknowns.extend(str(item) for item in bridge.get("blockers", []))
+    status = _ask_status_from_unknowns(unknowns, evidence_used)
+    details = _ask_details_for_category(category, runtime_intelligence, deep_context, bridge)
+    blockers = _ask_blockers(category, unknowns, bridge)
+    payload = {
+        "schema": "titan.echo.jarvis_ask.v1",
+        "status": status,
+        "question": question,
+        "interpreted_category": category,
+        "summary": _ask_summary_for_category(category, status),
+        "details": details if status != "UNKNOWN_NOT_PROVEN" else {},
+        "evidence_used": evidence_used,
+        "unknowns": sorted(set(unknowns)),
+        "blockers": blockers,
+        "recommended_next_safe_step": _ask_next_safe_step(category, status, blockers),
+        "chatgpt_bridge": {
+            "chatgpt_bridge_ready": bridge["status"] == "CHATGPT_BRIDGE_READY_LOCAL_ONLY",
+            "chatgpt_connection_enabled": False,
+            "external_api_calls_enabled": False,
+            "public_exposure_allowed": False,
+        },
+        "safety": _jarvis_core_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(JARVIS_ASK_RESPONSE_PATH, payload)
+    return payload
+
+
+def post_jarvis_ask(payload: dict[str, Any]) -> dict[str, Any]:
+    body = payload if isinstance(payload, dict) else {}
+    return build_jarvis_ask_response(str(body.get("question") or ""))
 
 
 def _unknown_titan_answer() -> str:
@@ -2000,6 +2358,7 @@ echo_evidence = get_echo_evidence
 jarvis_status = get_jarvis_status
 jarvis_question = get_jarvis_question
 jarvis_question_post = post_jarvis_question
+jarvis_ask = post_jarvis_ask
 jarvis_explain = get_jarvis_explain
 jarvis_investigate = get_jarvis_investigate
 jarvis_mission = get_jarvis_mission
@@ -2010,6 +2369,7 @@ titan_scanner = get_titan_scanner
 titan_trades = get_titan_trades
 titan_brain = get_titan_brain
 titan_runtime_context = get_titan_runtime_context
+chatgpt_bridge_readiness = get_chatgpt_bridge_readiness
 mission_prepare = post_mission_prepare
 approval_approve = post_approval_approve
 approval_reject = post_approval_reject
@@ -2052,6 +2412,7 @@ if FASTAPI_AVAILABLE:
     app.get("/jarvis/status", dependencies=auth_dependency)(get_jarvis_status)
     app.get("/jarvis/question", dependencies=auth_dependency)(get_jarvis_question)
     app.post("/jarvis/question", dependencies=auth_dependency)(post_jarvis_question)
+    app.post("/jarvis/ask", dependencies=auth_dependency)(post_jarvis_ask)
     app.get("/jarvis/explain", dependencies=auth_dependency)(get_jarvis_explain)
     app.get("/jarvis/investigate", dependencies=auth_dependency)(get_jarvis_investigate)
     app.get("/jarvis/mission", dependencies=auth_dependency)(get_jarvis_mission)
@@ -2062,6 +2423,7 @@ if FASTAPI_AVAILABLE:
     app.get("/titan/trades", dependencies=auth_dependency)(get_titan_trades)
     app.get("/titan/brain", dependencies=auth_dependency)(get_titan_brain)
     app.get("/titan/runtime/context", dependencies=auth_dependency)(get_titan_runtime_context)
+    app.get("/chatgpt/bridge/readiness", dependencies=auth_dependency)(get_chatgpt_bridge_readiness)
     app.post("/mission/prepare", dependencies=auth_dependency)(post_mission_prepare)
     app.post("/approval/approve", dependencies=auth_dependency)(post_approval_approve)
     app.post("/approval/reject", dependencies=auth_dependency)(post_approval_reject)
@@ -2111,6 +2473,7 @@ __all__ = [
     "get_jarvis_status",
     "get_jarvis_question",
     "post_jarvis_question",
+    "post_jarvis_ask",
     "get_jarvis_explain",
     "get_jarvis_investigate",
     "get_jarvis_mission",
@@ -2121,6 +2484,7 @@ __all__ = [
     "get_titan_trades",
     "get_titan_brain",
     "get_titan_runtime_context",
+    "get_chatgpt_bridge_readiness",
     "post_mission_prepare",
     "post_approval_approve",
     "post_approval_reject",
@@ -2159,6 +2523,7 @@ __all__ = [
     "jarvis_status",
     "jarvis_question",
     "jarvis_question_post",
+    "jarvis_ask",
     "jarvis_explain",
     "jarvis_investigate",
     "jarvis_mission",
@@ -2169,6 +2534,7 @@ __all__ = [
     "titan_trades",
     "titan_brain",
     "titan_runtime_context",
+    "chatgpt_bridge_readiness",
     "mission_prepare",
     "approval_approve",
     "approval_reject",

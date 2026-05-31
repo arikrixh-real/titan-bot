@@ -52,6 +52,7 @@ PROTECTED_ENDPOINTS = (
     "/echo/evidence",
     "/jarvis/status",
     "/jarvis/question",
+    "/jarvis/ask",
     "/jarvis/explain",
     "/jarvis/investigate",
     "/jarvis/mission",
@@ -62,6 +63,7 @@ PROTECTED_ENDPOINTS = (
     "/titan/trades",
     "/titan/brain",
     "/titan/runtime/context",
+    "/chatgpt/bridge/readiness",
 )
 PUBLIC_ENDPOINTS = ("/health",)
 
