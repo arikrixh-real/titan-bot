@@ -326,6 +326,43 @@ def echo_api_read_only_evidence(payloads: list[Any]) -> bool:
     return api_status_present and api_contract_present
 
 
+def truth_gate_market_closed_safe(payloads: list[Any]) -> bool:
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        blocked = str(payload.get("blocked_reason") or "").upper()
+        outcome = payload.get("outcome_validation_status") if isinstance(payload.get("outcome_validation_status"), dict) else {}
+        market = payload.get("market_data_status") if isinstance(payload.get("market_data_status"), dict) else {}
+        trade = payload.get("trade_validation_status") if isinstance(payload.get("trade_validation_status"), dict) else {}
+        if (
+            "MARKET_CLOSED_NOT_LIVE_SAFE" in blocked
+            or str(outcome.get("reason") or "").upper() == "TRADE_NOT_OPEN"
+            or market.get("trading_day") is False
+            or market.get("market_open") is False
+        ):
+            if str(trade.get("status") or "").upper() == "PASS":
+                return True
+    return False
+
+
+def filter_candidate_rejections_only(payloads: list[Any]) -> bool:
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("exceptions"):
+            return False
+        has_filter_shape = isinstance(payload.get("engine_counts"), dict) or isinstance(payload.get("symbols"), list)
+        if not has_filter_shape:
+            continue
+        final_setup_count = payload.get("final_setup_count")
+        symbols_scanned = payload.get("symbols_scanned")
+        if isinstance(final_setup_count, int) and final_setup_count > 0:
+            return True
+        if isinstance(symbols_scanned, int) and symbols_scanned > 0:
+            return True
+    return False
+
+
 def unified_brain_shadow_only(payloads: list[Any]) -> bool:
     for payload in payloads:
         for item in iter_dicts(payload):
@@ -430,6 +467,14 @@ def evaluate_subsystem(name: str, configured_paths: list[Path]) -> dict[str, Any
         status = "DEGRADED"
         confidence = "MEDIUM"
         reason = "UNIFIED_BRAIN_SHADOW_ONLY_NOT_LIVE_DECISION_PROOF"
+    elif name == "Truth Gate" and context["expected_off_hours_standby"] and truth_gate_market_closed_safe(payloads):
+        status = "DEGRADED"
+        confidence = "MEDIUM"
+        reason = "MARKET_CLOSED_NOT_LIVE_SAFE;TRADE_NOT_OPEN;EXPECTED_OFF_HOURS_STANDBY"
+    elif name == "Filter Engine" and filter_candidate_rejections_only(payloads):
+        status = "STALE" if freshness_seconds is not None and freshness_seconds > FRESH_SECONDS else "DEGRADED"
+        confidence = "MEDIUM"
+        reason = "FILTER_DIAGNOSTICS_CANDIDATE_REJECTIONS_NOT_RUNTIME_FAILURE"
     elif contains_any(values, FAIL_TOKENS):
         status = "FAIL"
         confidence = "HIGH"
