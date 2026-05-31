@@ -31,6 +31,9 @@ READ_ONLY_EVIDENCE = {
     "answer": ECHO_DIR / "echo_answer.json",
     "mission_center": ECHO_DIR / "echo_mission_center.json",
     "query_router": ECHO_DIR / "echo_query_router.json",
+    "approval_queue": ECHO_DIR / "approval_queue.json",
+    "mission_plan": ECHO_DIR / "mission_plan.json",
+    "verification_report": ECHO_DIR / "verification_report.json",
 }
 
 SECRET_MARKERS = (
@@ -82,6 +85,16 @@ def _evidence_payload(name: str) -> dict[str, Any]:
         "source": _relative(path),
         "data": data,
         "status": "EVIDENCE_PRESENT" if data is not None else "UNKNOWN",
+    }
+
+
+def _source_status(name: str, missing_status: str) -> dict[str, Any]:
+    path = READ_ONLY_EVIDENCE[name]
+    data = _sanitize(_read_json(path))
+    return {
+        "source": _relative(path),
+        "data": data,
+        "status": "EVIDENCE_PRESENT" if data is not None else missing_status,
     }
 
 
@@ -194,6 +207,68 @@ def get_query(intent: str = "status") -> dict[str, Any]:
     }
 
 
+def get_approval_pending() -> dict[str, Any]:
+    payload = _source_status("approval_queue", "WAITING_FOR_DATA")
+    data = payload["data"]
+    approvals = data.get("approvals") if isinstance(data, dict) else []
+    if not isinstance(approvals, list):
+        approvals = []
+    pending = [
+        item
+        for item in approvals
+        if isinstance(item, dict) and str(item.get("status", "")).upper() == "PENDING"
+    ]
+    return {
+        "source": payload["source"],
+        "status": payload["status"],
+        "pending": pending,
+        "pending_count": len(pending),
+        "read_only": True,
+        "execution_allowed": False,
+        "codex_execution": False,
+        "git_push_pull": False,
+        "deploy_or_restart": False,
+    }
+
+
+def get_mission_current() -> dict[str, Any]:
+    payload = _source_status("mission_plan", "UNKNOWN_NOT_PROVEN")
+    data = payload["data"]
+    active_mission = None
+    if isinstance(data, dict):
+        active_mission = (
+            data.get("current_mission")
+            or data.get("active_mission")
+            or data.get("mission")
+        )
+    return {
+        "source": payload["source"],
+        "status": payload["status"],
+        "active_mission": active_mission,
+        "active_mission_proven": active_mission is not None,
+        "read_only": True,
+        "execution_allowed": False,
+        "codex_execution": False,
+        "git_push_pull": False,
+        "deploy_or_restart": False,
+    }
+
+
+def get_verification_latest() -> dict[str, Any]:
+    payload = _source_status("verification_report", "UNKNOWN_NOT_PROVEN")
+    return {
+        "source": payload["source"],
+        "status": payload["status"],
+        "verification_report": payload["data"],
+        "verification_proven": payload["data"] is not None,
+        "read_only": True,
+        "execution_allowed": False,
+        "codex_execution": False,
+        "git_push_pull": False,
+        "deploy_or_restart": False,
+    }
+
+
 # Compatibility aliases for existing local imports and FastAPI route names.
 health = get_health
 status = get_status
@@ -204,6 +279,9 @@ alerts = get_alerts
 missions = get_missions
 answer = get_answer
 query = get_query
+approval_pending = get_approval_pending
+mission_current = get_mission_current
+verification_latest = get_verification_latest
 
 
 app = None
@@ -223,6 +301,9 @@ if FASTAPI_AVAILABLE:
     app.get("/missions", dependencies=auth_dependency)(get_missions)
     app.get("/answer", dependencies=auth_dependency)(get_answer)
     app.get("/query", dependencies=auth_dependency)(get_query)
+    app.get("/approval/pending", dependencies=auth_dependency)(get_approval_pending)
+    app.get("/mission/current", dependencies=auth_dependency)(get_mission_current)
+    app.get("/verification/latest", dependencies=auth_dependency)(get_verification_latest)
 
 
 __all__ = [
@@ -237,6 +318,9 @@ __all__ = [
     "get_missions",
     "get_answer",
     "get_query",
+    "get_approval_pending",
+    "get_mission_current",
+    "get_verification_latest",
     "health",
     "status",
     "projects",
@@ -246,4 +330,7 @@ __all__ = [
     "missions",
     "answer",
     "query",
+    "approval_pending",
+    "mission_current",
+    "verification_latest",
 ]
