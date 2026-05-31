@@ -45,6 +45,16 @@ PROTECTED_ENDPOINTS = (
     "/execution/gate/evaluate",
     "/chatgpt/readiness",
     "/chatgpt/readiness/check",
+    "/chat/session",
+    "/chat/session/create",
+    "/echo/context",
+    "/echo/runtime",
+    "/echo/evidence",
+    "/jarvis/status",
+    "/jarvis/question",
+    "/jarvis/explain",
+    "/jarvis/investigate",
+    "/jarvis/mission",
 )
 PUBLIC_ENDPOINTS = ("/health",)
 

@@ -53,6 +53,13 @@ EXECUTION_LEDGER_PATH = ECHO_DIR / "execution_ledger.json"
 EXECUTION_POLICY_PATH = ECHO_DIR / "execution_policy.json"
 EXECUTION_GATE_PATH = ECHO_DIR / "execution_gate.json"
 CHATGPT_CONNECTION_READINESS_PATH = ECHO_DIR / "chatgpt_connection_readiness.json"
+CHAT_SESSION_PATH = ECHO_DIR / "chat_session.json"
+ECHO_CONTEXT_PATH = ECHO_DIR / "echo_context.json"
+ECHO_RUNTIME_CONTEXT_PATH = ECHO_DIR / "echo_runtime_context.json"
+ECHO_EVIDENCE_CONTEXT_PATH = ECHO_DIR / "echo_evidence_context.json"
+JARVIS_STATUS_PATH = ECHO_DIR / "jarvis_status.json"
+JARVIS_RESPONSE_PATH = ECHO_DIR / "jarvis_response.json"
+JARVIS_INVESTIGATION_PATH = ECHO_DIR / "jarvis_investigation.json"
 VALID_RISK_LEVELS = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
 SECRET_MARKERS = (
@@ -238,6 +245,336 @@ def _decision_safety() -> dict[str, bool]:
         "unified_brain_changed": False,
         "runtime_workers_changed": False,
     }
+
+
+def _jarvis_safety() -> dict[str, bool]:
+    return {
+        "codex_execution": False,
+        "shell_execution": False,
+        "git_push_pull": False,
+        "deploy_or_restart": False,
+        "titan_runtime_changed": False,
+        "actual_execution_permitted": False,
+        "chatgpt_connection_enabled": False,
+        "external_api_calls_enabled": False,
+        "public_exposure_allowed": False,
+    }
+
+
+PHASE_OMEGA_EVIDENCE_FILES = {
+    "mission_plan": MISSION_PLAN_PATH,
+    "approval_queue": APPROVAL_QUEUE_PATH,
+    "approval_history": APPROVAL_HISTORY_PATH,
+    "approved_missions": APPROVED_MISSIONS_PATH,
+    "rejected_missions": REJECTED_MISSIONS_PATH,
+    "execution_readiness_report": EXECUTION_READINESS_REPORT_PATH,
+    "execution_preview": EXECUTION_PREVIEW_PATH,
+    "execution_authorization": EXECUTION_AUTHORIZATION_PATH,
+    "execution_lock": EXECUTION_LOCK_PATH,
+    "execution_evidence": EXECUTION_EVIDENCE_PATH,
+    "execution_ledger": EXECUTION_LEDGER_PATH,
+    "execution_policy": EXECUTION_POLICY_PATH,
+    "execution_gate": EXECUTION_GATE_PATH,
+    "chatgpt_connection_readiness": CHATGPT_CONNECTION_READINESS_PATH,
+}
+
+
+def _read_jsonl(path: Path) -> list[Any] | None:
+    if not path.exists():
+        return None
+    records: list[Any] = []
+    try:
+        for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            text = line.strip()
+            if text:
+                records.append(json.loads(text))
+    except Exception:
+        return None
+    return records
+
+
+def _read_phase_omega_source(path: Path) -> Any:
+    if path.suffix.lower() == ".jsonl":
+        return _read_jsonl(path)
+    return _read_json(path)
+
+
+def _evidence_record(name: str, path: Path) -> dict[str, Any]:
+    data = _sanitize(_read_phase_omega_source(path))
+    return {
+        "name": name,
+        "source": _relative(path),
+        "status": "EVIDENCE_PRESENT" if data is not None else "UNKNOWN_NOT_PROVEN",
+        "data": data,
+    }
+
+
+def _phase_omega_evidence_map() -> dict[str, dict[str, Any]]:
+    return {
+        name: _evidence_record(name, path)
+        for name, path in PHASE_OMEGA_EVIDENCE_FILES.items()
+    }
+
+
+def _source_status_value(evidence: dict[str, dict[str, Any]], name: str) -> str:
+    record = evidence.get(name, {})
+    data = record.get("data")
+    if not isinstance(data, dict):
+        return "UNKNOWN_NOT_PROVEN"
+    value = data.get("status") or data.get("gate_decision") or data.get("approval_gate")
+    return str(value) if value not in (None, "") else "UNKNOWN_NOT_PROVEN"
+
+
+def _current_mission_from_evidence(evidence: dict[str, dict[str, Any]]) -> Any:
+    data = evidence.get("mission_plan", {}).get("data")
+    if not isinstance(data, dict):
+        return "UNKNOWN_NOT_PROVEN"
+    mission = data.get("current_mission") or data.get("active_mission") or data.get("mission")
+    return mission if mission is not None else "UNKNOWN_NOT_PROVEN"
+
+
+def _approval_state_from_evidence(evidence: dict[str, dict[str, Any]]) -> Any:
+    queue = evidence.get("approval_queue", {}).get("data")
+    if not isinstance(queue, dict):
+        return "UNKNOWN_NOT_PROVEN"
+    approvals = queue.get("approvals")
+    if not isinstance(approvals, list):
+        return "UNKNOWN_NOT_PROVEN"
+    counts = Counter(str(item.get("status", "UNKNOWN_NOT_PROVEN")).upper() for item in approvals if isinstance(item, dict))
+    return {
+        "total": sum(counts.values()),
+        "pending": counts.get("PENDING", 0),
+        "approved": counts.get("APPROVED", 0),
+        "rejected": counts.get("REJECTED", 0),
+    }
+
+
+def _governance_chain_from_evidence(evidence: dict[str, dict[str, Any]]) -> dict[str, str]:
+    return {
+        "readiness_state": _source_status_value(evidence, "execution_readiness_report"),
+        "preview_state": _source_status_value(evidence, "execution_preview"),
+        "authorization_state": _source_status_value(evidence, "execution_authorization"),
+        "lock_state": _source_status_value(evidence, "execution_lock"),
+        "evidence_state": _source_status_value(evidence, "execution_evidence"),
+        "ledger_state": _source_status_value(evidence, "execution_ledger"),
+        "policy_state": _source_status_value(evidence, "execution_policy"),
+        "execution_gate_state": _source_status_value(evidence, "execution_gate"),
+    }
+
+
+def _runtime_intelligence_summary(evidence: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    governance_chain = _governance_chain_from_evidence(evidence)
+    return {
+        "current_mission": _current_mission_from_evidence(evidence),
+        "approval_state": _approval_state_from_evidence(evidence),
+        "governance_chain": governance_chain,
+        "execution_gate_state": governance_chain["execution_gate_state"],
+        "readiness_state": governance_chain["readiness_state"],
+        "preview_state": governance_chain["preview_state"],
+        "authorization_state": governance_chain["authorization_state"],
+        "lock_state": governance_chain["lock_state"],
+        "evidence_state": governance_chain["evidence_state"],
+        "ledger_state": governance_chain["ledger_state"],
+        "chatgpt_readiness_state": _source_status_value(evidence, "chatgpt_connection_readiness"),
+    }
+
+
+def build_chat_session() -> dict[str, Any]:
+    payload = {
+        "schema": "titan.echo.chat_session.v1",
+        "session_id": _stable_id("echo-chat-session", _timestamp_ist()),
+        "status": "CHAT_SESSION_LOCAL_ONLY",
+        "chatgpt_connection_enabled": False,
+        "external_api_calls_enabled": False,
+        "public_exposure_allowed": False,
+        "created_at_ist": _timestamp_ist(),
+        "safety": _jarvis_safety(),
+    }
+    _write_echo_json(CHAT_SESSION_PATH, payload)
+    return payload
+
+
+def get_chat_session() -> dict[str, Any]:
+    payload = _read_json(CHAT_SESSION_PATH)
+    if not isinstance(payload, dict):
+        payload = build_chat_session()
+    payload["safety"] = _jarvis_safety()
+    return payload
+
+
+def post_chat_session_create() -> dict[str, Any]:
+    return build_chat_session()
+
+
+def build_echo_context() -> dict[str, Any]:
+    evidence = _phase_omega_evidence_map()
+    payload = {
+        "schema": "titan.echo.context.v1",
+        "status": "ECHO_CONTEXT_LOCAL_ONLY",
+        "runtime_intelligence": _runtime_intelligence_summary(evidence),
+        "sources": {name: {"source": record["source"], "status": record["status"]} for name, record in evidence.items()},
+        "truth_rule": "UNKNOWN_NOT_PROVEN when unavailable from runtime evidence files.",
+        "safety": _jarvis_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(ECHO_CONTEXT_PATH, payload)
+    return payload
+
+
+def build_echo_runtime_context() -> dict[str, Any]:
+    evidence = _phase_omega_evidence_map()
+    payload = {
+        "schema": "titan.echo.runtime_context.v1",
+        "status": "ECHO_RUNTIME_CONTEXT_LOCAL_ONLY",
+        "runtime_intelligence": _runtime_intelligence_summary(evidence),
+        "safety": _jarvis_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(ECHO_RUNTIME_CONTEXT_PATH, payload)
+    return payload
+
+
+def build_echo_evidence_context() -> dict[str, Any]:
+    evidence = _phase_omega_evidence_map()
+    payload = {
+        "schema": "titan.echo.evidence_context.v1",
+        "status": "ECHO_EVIDENCE_CONTEXT_LOCAL_ONLY",
+        "evidence": evidence,
+        "truth_rule": "UNKNOWN_NOT_PROVEN when unavailable from runtime evidence files.",
+        "safety": _jarvis_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(ECHO_EVIDENCE_CONTEXT_PATH, payload)
+    return payload
+
+
+def get_echo_context() -> dict[str, Any]:
+    return build_echo_context()
+
+
+def get_echo_runtime() -> dict[str, Any]:
+    return build_echo_runtime_context()
+
+
+def get_echo_evidence() -> dict[str, Any]:
+    return build_echo_evidence_context()
+
+
+QUESTION_CATEGORY_KEYWORDS = {
+    "titan_status": ("titan", "system"),
+    "echo_status": ("echo",),
+    "mission_status": ("mission",),
+    "approval_status": ("approval", "approved", "rejected", "pending"),
+    "governance_status": ("governance", "chain", "policy"),
+    "execution_gate_status": ("execution gate", "gate", "execution"),
+    "chatgpt_readiness": ("chatgpt", "readiness", "connection"),
+    "blocked_actions": ("blocked", "forbidden", "not allowed", "prevented"),
+    "safety_status": ("safety", "safe", "permissions"),
+}
+
+
+def _interpret_question_category(question: str) -> str | None:
+    text = question.lower()
+    for category, keywords in QUESTION_CATEGORY_KEYWORDS.items():
+        if any(keyword in text for keyword in keywords):
+            return category
+    return None
+
+
+def _jarvis_answer_for_category(category: str | None, summary: dict[str, Any], evidence: dict[str, dict[str, Any]]) -> tuple[str, Any, list[str], list[str]]:
+    if category is None:
+        return (
+            "UNKNOWN_NOT_PROVEN",
+            "ECHO does not have verified evidence for this question yet.",
+            [],
+            ["unsupported_question_category"],
+        )
+    if category == "titan_status":
+        return "UNKNOWN_NOT_PROVEN", "UNKNOWN_NOT_PROVEN", [], ["titan_status_not_present_in_phase_omega_evidence"]
+    if category == "echo_status":
+        return "ECHO_CONTEXT_LOCAL_ONLY", "ECHO local context is available from runtime evidence files only.", ["echo_context"], []
+    if category == "mission_status":
+        return "EVIDENCE_PRESENT" if summary["current_mission"] != "UNKNOWN_NOT_PROVEN" else "UNKNOWN_NOT_PROVEN", summary["current_mission"], ["mission_plan"], []
+    if category == "approval_status":
+        return "EVIDENCE_PRESENT" if summary["approval_state"] != "UNKNOWN_NOT_PROVEN" else "UNKNOWN_NOT_PROVEN", summary["approval_state"], ["approval_queue"], []
+    if category == "governance_status":
+        return "EVIDENCE_PRESENT", summary["governance_chain"], [name for name in PHASE_OMEGA_EVIDENCE_FILES if name.startswith("execution_")], []
+    if category == "execution_gate_status":
+        return summary["execution_gate_state"], summary["execution_gate_state"], ["execution_gate"], []
+    if category == "chatgpt_readiness":
+        return summary["chatgpt_readiness_state"], summary["chatgpt_readiness_state"], ["chatgpt_connection_readiness"], []
+    if category == "blocked_actions":
+        blocked = [key for key, value in _jarvis_safety().items() if value is False]
+        return "EVIDENCE_PRESENT", blocked, ["endpoint_safety_policy"], []
+    if category == "safety_status":
+        return "EVIDENCE_PRESENT", _jarvis_safety(), ["endpoint_safety_policy"], []
+    return "UNKNOWN_NOT_PROVEN", "ECHO does not have verified evidence for this question yet.", [], ["unsupported_question_category"]
+
+
+def build_jarvis_response(question: str = "") -> dict[str, Any]:
+    evidence = _phase_omega_evidence_map()
+    summary = _runtime_intelligence_summary(evidence)
+    category = _interpret_question_category(question)
+    status, answer, evidence_used, unknowns = _jarvis_answer_for_category(category, summary, evidence)
+    payload = {
+        "schema": "titan.echo.jarvis_response.v1",
+        "status": status,
+        "question": question,
+        "interpreted_category": category or "unsupported",
+        "answer": answer,
+        "evidence_used": evidence_used,
+        "unknowns": unknowns,
+        "safety": _jarvis_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(JARVIS_RESPONSE_PATH, payload)
+    return payload
+
+
+def get_jarvis_status() -> dict[str, Any]:
+    evidence = _phase_omega_evidence_map()
+    payload = {
+        "schema": "titan.echo.jarvis_status.v1",
+        "status": "JARVIS_LOCAL_ONLY",
+        "allowed_question_categories": sorted(QUESTION_CATEGORY_KEYWORDS),
+        "runtime_intelligence": _runtime_intelligence_summary(evidence),
+        "safety": _jarvis_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(JARVIS_STATUS_PATH, payload)
+    return payload
+
+
+def get_jarvis_question() -> dict[str, Any]:
+    return build_jarvis_response("")
+
+
+def post_jarvis_question(payload: dict[str, Any]) -> dict[str, Any]:
+    body = payload if isinstance(payload, dict) else {}
+    return build_jarvis_response(str(body.get("question") or ""))
+
+
+def get_jarvis_explain() -> dict[str, Any]:
+    return build_jarvis_response("governance status")
+
+
+def get_jarvis_investigate() -> dict[str, Any]:
+    evidence = _phase_omega_evidence_map()
+    payload = {
+        "schema": "titan.echo.jarvis_investigation.v1",
+        "status": "JARVIS_INVESTIGATION_LOCAL_ONLY",
+        "runtime_intelligence": _runtime_intelligence_summary(evidence),
+        "evidence_used": list(evidence),
+        "unknowns": [name for name, record in evidence.items() if record["status"] == "UNKNOWN_NOT_PROVEN"],
+        "safety": _jarvis_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(JARVIS_INVESTIGATION_PATH, payload)
+    return payload
+
+
+def get_jarvis_mission() -> dict[str, Any]:
+    return build_jarvis_response("mission status")
 
 
 def _approval_queue_record(mission_id: str, approval_id: str) -> dict[str, Any] | None:
@@ -1335,6 +1672,17 @@ execution_gate = get_execution_gate
 execution_gate_evaluate = post_execution_gate_evaluate
 chatgpt_readiness = get_chatgpt_readiness
 chatgpt_readiness_check = post_chatgpt_readiness_check
+chat_session = get_chat_session
+chat_session_create = post_chat_session_create
+echo_context = get_echo_context
+echo_runtime = get_echo_runtime
+echo_evidence = get_echo_evidence
+jarvis_status = get_jarvis_status
+jarvis_question = get_jarvis_question
+jarvis_question_post = post_jarvis_question
+jarvis_explain = get_jarvis_explain
+jarvis_investigate = get_jarvis_investigate
+jarvis_mission = get_jarvis_mission
 mission_prepare = post_mission_prepare
 approval_approve = post_approval_approve
 approval_reject = post_approval_reject
@@ -1369,6 +1717,17 @@ if FASTAPI_AVAILABLE:
     app.get("/execution/policy", dependencies=auth_dependency)(get_execution_policy)
     app.get("/execution/gate", dependencies=auth_dependency)(get_execution_gate)
     app.get("/chatgpt/readiness", dependencies=auth_dependency)(get_chatgpt_readiness)
+    app.get("/chat/session", dependencies=auth_dependency)(get_chat_session)
+    app.post("/chat/session/create", dependencies=auth_dependency)(post_chat_session_create)
+    app.get("/echo/context", dependencies=auth_dependency)(get_echo_context)
+    app.get("/echo/runtime", dependencies=auth_dependency)(get_echo_runtime)
+    app.get("/echo/evidence", dependencies=auth_dependency)(get_echo_evidence)
+    app.get("/jarvis/status", dependencies=auth_dependency)(get_jarvis_status)
+    app.get("/jarvis/question", dependencies=auth_dependency)(get_jarvis_question)
+    app.post("/jarvis/question", dependencies=auth_dependency)(post_jarvis_question)
+    app.get("/jarvis/explain", dependencies=auth_dependency)(get_jarvis_explain)
+    app.get("/jarvis/investigate", dependencies=auth_dependency)(get_jarvis_investigate)
+    app.get("/jarvis/mission", dependencies=auth_dependency)(get_jarvis_mission)
     app.post("/mission/prepare", dependencies=auth_dependency)(post_mission_prepare)
     app.post("/approval/approve", dependencies=auth_dependency)(post_approval_approve)
     app.post("/approval/reject", dependencies=auth_dependency)(post_approval_reject)
@@ -1410,6 +1769,17 @@ __all__ = [
     "post_execution_gate_evaluate",
     "get_chatgpt_readiness",
     "post_chatgpt_readiness_check",
+    "get_chat_session",
+    "post_chat_session_create",
+    "get_echo_context",
+    "get_echo_runtime",
+    "get_echo_evidence",
+    "get_jarvis_status",
+    "get_jarvis_question",
+    "post_jarvis_question",
+    "get_jarvis_explain",
+    "get_jarvis_investigate",
+    "get_jarvis_mission",
     "post_mission_prepare",
     "post_approval_approve",
     "post_approval_reject",
@@ -1440,6 +1810,17 @@ __all__ = [
     "execution_gate_evaluate",
     "chatgpt_readiness",
     "chatgpt_readiness_check",
+    "chat_session",
+    "chat_session_create",
+    "echo_context",
+    "echo_runtime",
+    "echo_evidence",
+    "jarvis_status",
+    "jarvis_question",
+    "jarvis_question_post",
+    "jarvis_explain",
+    "jarvis_investigate",
+    "jarvis_mission",
     "mission_prepare",
     "approval_approve",
     "approval_reject",
