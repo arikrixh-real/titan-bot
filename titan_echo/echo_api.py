@@ -41,6 +41,9 @@ READ_ONLY_EVIDENCE = {
 }
 MISSION_PLAN_PATH = ECHO_DIR / "mission_plan.json"
 APPROVAL_QUEUE_PATH = ECHO_DIR / "approval_queue.json"
+APPROVAL_HISTORY_PATH = ECHO_DIR / "approval_history.jsonl"
+APPROVED_MISSIONS_PATH = ECHO_DIR / "approved_missions.json"
+REJECTED_MISSIONS_PATH = ECHO_DIR / "rejected_missions.json"
 VALID_RISK_LEVELS = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
 SECRET_MARKERS = (
@@ -98,6 +101,17 @@ def _write_echo_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _append_echo_jsonl(path: Path, payload: dict[str, Any]) -> None:
+    resolved_echo = ECHO_DIR.resolve()
+    resolved_path = path.resolve()
+    if resolved_echo not in (resolved_path, *resolved_path.parents):
+        raise ValueError("ECHO API bridge writes only under data/runtime/echo")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        json.dump(payload, handle, sort_keys=True)
+        handle.write("\n")
+
+
 def _evidence_payload(name: str) -> dict[str, Any]:
     path = READ_ONLY_EVIDENCE[name]
     data = _sanitize(_read_json(path))
@@ -149,6 +163,36 @@ def _save_approval_queue(queue: dict[str, Any]) -> None:
 def _load_mission_plan() -> dict[str, Any]:
     mission_plan = _read_json(MISSION_PLAN_PATH)
     return mission_plan if isinstance(mission_plan, dict) else {}
+
+
+def _load_mission_collection(path: Path) -> dict[str, Any]:
+    payload = _read_json(path)
+    if not isinstance(payload, dict):
+        return {"schema": "titan.echo.approval_decision_missions.v1", "missions": []}
+    missions = payload.get("missions")
+    if not isinstance(missions, list):
+        payload["missions"] = []
+    return payload
+
+
+def _append_mission_decision(path: Path, decision: str, record: dict[str, Any], mission_plan: dict[str, Any]) -> None:
+    payload = _load_mission_collection(path)
+    mission_snapshot = mission_plan.get("current_mission") if isinstance(mission_plan.get("current_mission"), dict) else {}
+    item = {
+        "approval_id": record.get("approval_id"),
+        "mission_id": record.get("mission_id"),
+        "decision": decision,
+        "decision_timestamp_ist": record.get("decision_timestamp_ist"),
+        "approval_note": record.get("approval_note", ""),
+        "approval_record": record,
+        "mission": mission_snapshot,
+        "safety": _decision_safety(),
+    }
+    payload["schema"] = "titan.echo.approval_decision_missions.v1"
+    payload["timestamp_ist"] = _timestamp_ist()
+    payload["missions"].append(item)
+    payload["summary"] = {"total": len(payload["missions"])}
+    _write_echo_json(path, payload)
 
 
 def _decision_safety() -> dict[str, bool]:
@@ -509,6 +553,27 @@ def _update_approval_decision(payload: dict[str, Any], decision: str) -> dict[st
         mission_plan["safety"] = safety
         _write_echo_json(MISSION_PLAN_PATH, mission_plan)
 
+    history_record = {
+        "history_event": decision,
+        "approval_id": approval_id,
+        "mission_id": matched.get("mission_id"),
+        "approval_note": note,
+        "decision_timestamp_ist": now,
+        "approval_record": matched,
+        "execution_allowed": False,
+        "codex_execution": False,
+        "git_push_pull": False,
+        "deploy_or_restart": False,
+        "safety": safety,
+    }
+    _append_echo_jsonl(APPROVAL_HISTORY_PATH, history_record)
+    if decision == "APPROVED":
+        _append_mission_decision(APPROVED_MISSIONS_PATH, decision, matched, mission_plan)
+        decision_collection_path = APPROVED_MISSIONS_PATH
+    else:
+        _append_mission_decision(REJECTED_MISSIONS_PATH, decision, matched, mission_plan)
+        decision_collection_path = REJECTED_MISSIONS_PATH
+
     return {
         "status": decision,
         "approval_id": approval_id,
@@ -517,6 +582,8 @@ def _update_approval_decision(payload: dict[str, Any], decision: str) -> dict[st
         "decision_timestamp_ist": now,
         "approval_queue_path": _relative(APPROVAL_QUEUE_PATH),
         "mission_plan_path": _relative(MISSION_PLAN_PATH),
+        "approval_history_path": _relative(APPROVAL_HISTORY_PATH),
+        "decision_collection_path": _relative(decision_collection_path),
         "execution_allowed": False,
         "codex_execution": False,
         "git_push_pull": False,
