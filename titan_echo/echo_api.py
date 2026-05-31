@@ -68,6 +68,8 @@ CHATGPT_BRIDGE_READINESS_PATH = ECHO_DIR / "chatgpt_bridge_readiness.json"
 CHATGPT_CONNECTOR_PLAN_PATH = ECHO_DIR / "chatgpt_connector_plan.json"
 CHATGPT_HANDSHAKE_STATUS_PATH = ECHO_DIR / "chatgpt_handshake_status.json"
 CHATGPT_EVIDENCE_CONTRACT_PATH = ECHO_DIR / "chatgpt_evidence_contract.json"
+SECURE_RELAY_PLAN_PATH = ECHO_DIR / "secure_relay_plan.json"
+CUSTOM_GPT_ACTION_PLAN_PATH = ECHO_DIR / "custom_gpt_action_plan.json"
 TITAN_RUNTIME_CONTEXT_PATH = ECHO_DIR / "titan_runtime_context.json"
 TITAN_HEALTH_SUMMARY_PATH = ECHO_DIR / "titan_health_summary.json"
 TITAN_WORKER_SUMMARY_PATH = ECHO_DIR / "titan_worker_summary.json"
@@ -1291,6 +1293,115 @@ def get_chatgpt_integration_status() -> dict[str, Any]:
         "safety": _connector_safety(),
         "generated_at_ist": _timestamp_ist(),
     }
+
+
+def _relay_plan_safety() -> dict[str, bool]:
+    return {
+        "public_exposure_allowed": False,
+        "relay_enabled": False,
+        "custom_gpt_action_enabled": False,
+        "external_api_calls_enabled": False,
+        "actual_execution_permitted": False,
+    }
+
+
+def _read_only_evidence_endpoint_allowlist() -> list[str]:
+    return [
+        "/chatgpt/evidence/contract",
+        "/chatgpt/evidence/catalog",
+        "/chatgpt/integration/status",
+        "/chatgpt/bridge/readiness",
+        "/jarvis/ask",
+        "/echo/context",
+        "/echo/runtime",
+        "/echo/evidence",
+        "/titan/status",
+        "/titan/health",
+        "/titan/workers",
+        "/titan/scanner",
+        "/titan/trades",
+        "/titan/brain",
+        "/titan/runtime/context",
+    ]
+
+
+def _blocked_execution_endpoint_patterns() -> list[str]:
+    return [
+        "/mission/prepare",
+        "/approval/approve",
+        "/approval/reject",
+        "/execution/readiness/check",
+        "/execution/preview/generate",
+        "/execution/authorize",
+        "/execution/lock/create",
+        "/execution/gate/evaluate",
+        "/chatgpt/readiness/check",
+        "/chatgpt/handshake/test",
+    ]
+
+
+def build_secure_relay_plan() -> dict[str, Any]:
+    payload = {
+        "schema": "titan.echo.secure_relay_plan.v1",
+        "status": "SECURE_RELAY_PLAN_READY_DISABLED",
+        "preferred_architecture": [
+            "ChatGPT Custom GPT Action",
+            "HTTPS secure relay",
+            "VPS localhost ECHO API",
+            "TITAN evidence",
+        ],
+        "enabled": False,
+        "echo_remains_localhost_only": True,
+        "relay_must_require_auth": True,
+        "relay_read_only_evidence_endpoints_allowed": _read_only_evidence_endpoint_allowlist(),
+        "relay_execution_endpoints_blocked": _blocked_execution_endpoint_patterns(),
+        "broker_risk_runtime_mutation_allowed": False,
+        "public_raw_echo_exposure_allowed": False,
+        "deployment_actions_performed": False,
+        "firewall_changed": False,
+        "ports_opened": False,
+        "safety": _relay_plan_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(SECURE_RELAY_PLAN_PATH, payload)
+    return payload
+
+
+def get_chatgpt_secure_relay_plan() -> dict[str, Any]:
+    return build_secure_relay_plan()
+
+
+def build_custom_gpt_action_plan() -> dict[str, Any]:
+    payload = {
+        "schema": "titan.echo.custom_gpt_action_plan.v1",
+        "status": "CUSTOM_GPT_ACTION_PLAN_READY_DISABLED",
+        "preferred_architecture": [
+            "ChatGPT Custom GPT Action",
+            "HTTPS secure relay",
+            "VPS localhost ECHO API",
+            "TITAN evidence",
+        ],
+        "enabled": False,
+        "custom_gpt_action_enabled": False,
+        "action_scope": "READ_ONLY_EVIDENCE_CONSUMPTION_DESIGN_ONLY",
+        "allowed_methods": ["GET", "POST /jarvis/ask"],
+        "allowed_evidence_endpoints": _read_only_evidence_endpoint_allowlist(),
+        "blocked_execution_endpoints": _blocked_execution_endpoint_patterns(),
+        "auth_required": True,
+        "public_raw_echo_exposure_allowed": False,
+        "external_api_calls_enabled": False,
+        "actual_execution_permitted": False,
+        "broker_risk_runtime_mutation_allowed": False,
+        "deployment_actions_performed": False,
+        "safety": _relay_plan_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+    _write_echo_json(CUSTOM_GPT_ACTION_PLAN_PATH, payload)
+    return payload
+
+
+def get_chatgpt_custom_action_plan() -> dict[str, Any]:
+    return build_custom_gpt_action_plan()
 
 
 def build_jarvis_ask_response(question: str = "") -> dict[str, Any]:
@@ -2620,6 +2731,8 @@ chatgpt_handshake_test = post_chatgpt_handshake_test
 chatgpt_evidence_contract = get_chatgpt_evidence_contract
 chatgpt_evidence_catalog = get_chatgpt_evidence_catalog
 chatgpt_integration_status = get_chatgpt_integration_status
+chatgpt_secure_relay_plan = get_chatgpt_secure_relay_plan
+chatgpt_custom_action_plan = get_chatgpt_custom_action_plan
 mission_prepare = post_mission_prepare
 approval_approve = post_approval_approve
 approval_reject = post_approval_reject
@@ -2680,6 +2793,8 @@ if FASTAPI_AVAILABLE:
     app.get("/chatgpt/evidence/contract", dependencies=auth_dependency)(get_chatgpt_evidence_contract)
     app.get("/chatgpt/evidence/catalog", dependencies=auth_dependency)(get_chatgpt_evidence_catalog)
     app.get("/chatgpt/integration/status", dependencies=auth_dependency)(get_chatgpt_integration_status)
+    app.get("/chatgpt/secure-relay/plan", dependencies=auth_dependency)(get_chatgpt_secure_relay_plan)
+    app.get("/chatgpt/custom-action/plan", dependencies=auth_dependency)(get_chatgpt_custom_action_plan)
     app.post("/mission/prepare", dependencies=auth_dependency)(post_mission_prepare)
     app.post("/approval/approve", dependencies=auth_dependency)(post_approval_approve)
     app.post("/approval/reject", dependencies=auth_dependency)(post_approval_reject)
@@ -2747,6 +2862,8 @@ __all__ = [
     "get_chatgpt_evidence_contract",
     "get_chatgpt_evidence_catalog",
     "get_chatgpt_integration_status",
+    "get_chatgpt_secure_relay_plan",
+    "get_chatgpt_custom_action_plan",
     "post_mission_prepare",
     "post_approval_approve",
     "post_approval_reject",
@@ -2803,6 +2920,8 @@ __all__ = [
     "chatgpt_evidence_contract",
     "chatgpt_evidence_catalog",
     "chatgpt_integration_status",
+    "chatgpt_secure_relay_plan",
+    "chatgpt_custom_action_plan",
     "mission_prepare",
     "approval_approve",
     "approval_reject",

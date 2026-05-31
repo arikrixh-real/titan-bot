@@ -70,6 +70,8 @@ PROTECTED_ENDPOINTS = (
     "/chatgpt/evidence/contract",
     "/chatgpt/evidence/catalog",
     "/chatgpt/integration/status",
+    "/chatgpt/secure-relay/plan",
+    "/chatgpt/custom-action/plan",
 )
 PUBLIC_ENDPOINTS = ("/health",)
 
