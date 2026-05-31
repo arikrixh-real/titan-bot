@@ -16,6 +16,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from titan_echo.echo_codex_runner import (
+    get_codex_runner_policy,
+    get_codex_runner_status,
+    post_codex_runner_request,
+)
 from titan_echo.echo_api_auth import PROTECTED_ENDPOINTS, require_echo_api_key
 from titan_echo.echo_api_status import build_status, read_sources
 
@@ -2733,6 +2738,9 @@ chatgpt_evidence_catalog = get_chatgpt_evidence_catalog
 chatgpt_integration_status = get_chatgpt_integration_status
 chatgpt_secure_relay_plan = get_chatgpt_secure_relay_plan
 chatgpt_custom_action_plan = get_chatgpt_custom_action_plan
+codex_runner_status = get_codex_runner_status
+codex_runner_policy = get_codex_runner_policy
+codex_runner_request = post_codex_runner_request
 mission_prepare = post_mission_prepare
 approval_approve = post_approval_approve
 approval_reject = post_approval_reject
@@ -2795,6 +2803,9 @@ if FASTAPI_AVAILABLE:
     app.get("/chatgpt/integration/status", dependencies=auth_dependency)(get_chatgpt_integration_status)
     app.get("/chatgpt/secure-relay/plan", dependencies=auth_dependency)(get_chatgpt_secure_relay_plan)
     app.get("/chatgpt/custom-action/plan", dependencies=auth_dependency)(get_chatgpt_custom_action_plan)
+    app.get("/codex/runner/status", dependencies=auth_dependency)(get_codex_runner_status)
+    app.get("/codex/runner/policy", dependencies=auth_dependency)(get_codex_runner_policy)
+    app.post("/codex/runner/request", dependencies=auth_dependency)(post_codex_runner_request)
     app.post("/mission/prepare", dependencies=auth_dependency)(post_mission_prepare)
     app.post("/approval/approve", dependencies=auth_dependency)(post_approval_approve)
     app.post("/approval/reject", dependencies=auth_dependency)(post_approval_reject)
@@ -2864,6 +2875,9 @@ __all__ = [
     "get_chatgpt_integration_status",
     "get_chatgpt_secure_relay_plan",
     "get_chatgpt_custom_action_plan",
+    "get_codex_runner_status",
+    "get_codex_runner_policy",
+    "post_codex_runner_request",
     "post_mission_prepare",
     "post_approval_approve",
     "post_approval_reject",
@@ -2922,6 +2936,9 @@ __all__ = [
     "chatgpt_integration_status",
     "chatgpt_secure_relay_plan",
     "chatgpt_custom_action_plan",
+    "codex_runner_status",
+    "codex_runner_policy",
+    "codex_runner_request",
     "mission_prepare",
     "approval_approve",
     "approval_reject",
