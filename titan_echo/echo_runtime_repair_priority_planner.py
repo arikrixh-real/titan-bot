@@ -86,6 +86,7 @@ LOW_VALUE_TERMS = {
     "informational",
     "non-blocking",
 }
+MISSING_EVIDENCE_CATEGORY = "missing_evidence_waiting_for_data"
 DEPENDENCY_TERMS = {
     "scanner": "scanner/runtime evidence chain",
     "worker": "worker execution path",
@@ -117,8 +118,32 @@ class Finding:
 
 
 def load_json(path: Path) -> Any:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+    if not path.exists():
+        return missing_evidence_payload(path)
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except Exception as exc:
+        return {
+            "status": "UNKNOWN_NOT_PROVEN",
+            "evidence_status": "WAITING_FOR_DATA",
+            "issue_type": "MISSING_EVIDENCE",
+            "source_file": str(path),
+            "reason": f"INVALID_JSON:{type(exc).__name__}",
+            "read_only_fallback": True,
+        }
+
+
+def missing_evidence_payload(path: Path) -> dict[str, Any]:
+    return {
+        "status": "UNKNOWN_NOT_PROVEN",
+        "evidence_status": "WAITING_FOR_DATA",
+        "issue_type": "MISSING_EVIDENCE",
+        "source_file": str(path),
+        "reason": "MISSING_EVIDENCE",
+        "read_only_fallback": True,
+        "no_fake_health_claim": True,
+    }
 
 
 def compact(value: Any, limit: int = 260) -> str:
@@ -162,6 +187,8 @@ def infer_subsystem(path: str, value: Any) -> str:
 
 def infer_category(source: str, value: Any) -> str:
     text = text_blob(value)
+    if isinstance(value, dict) and value.get("issue_type") == "MISSING_EVIDENCE":
+        return MISSING_EVIDENCE_CATEGORY
     if contains_any(text, LOW_VALUE_TERMS) or source == "echo_conversation_style":
         return "low_value_repairs"
     if contains_any(text, EXTERNAL_TERMS):
@@ -175,6 +202,8 @@ def infer_category(source: str, value: Any) -> str:
 
 def infer_root_cause(category: str, subsystem: str, evidence: list[str]) -> str:
     joined = " ".join(evidence).lower()
+    if category == MISSING_EVIDENCE_CATEGORY:
+        return f"{subsystem} repair priority is UNKNOWN_NOT_PROVEN because required evidence is missing or unreadable."
     if category == "already_repaired_waiting_for_runtime_regeneration":
         return "Repair evidence exists, but runtime artifacts still need regeneration before the failure can be cleared."
     if category == "stale_evidence_only":
@@ -194,6 +223,8 @@ def infer_root_cause(category: str, subsystem: str, evidence: list[str]) -> str:
 
 def infer_dependency_impact(subsystem: str, category: str) -> str:
     impact = DEPENDENCY_TERMS.get(subsystem, "runtime health reporting")
+    if category == MISSING_EVIDENCE_CATEGORY:
+        return f"Cannot rank {impact} confidently until missing evidence is regenerated or transferred."
     if category == "real_current_failures":
         return f"Blocks or degrades {impact}; repair should happen before lower-signal cleanup."
     if category == "already_repaired_waiting_for_runtime_regeneration":
@@ -207,6 +238,8 @@ def infer_dependency_impact(subsystem: str, category: str) -> str:
 
 def infer_risk(category: str, evidence: list[str]) -> str:
     joined = " ".join(evidence).lower()
+    if category == MISSING_EVIDENCE_CATEGORY:
+        return "low"
     if category == "real_current_failures":
         if any(term in joined for term in ("crash", "blocked", "critical", "fatal", "missing")):
             return "high"
@@ -220,6 +253,8 @@ def infer_risk(category: str, evidence: list[str]) -> str:
 
 def infer_complexity(category: str, evidence: list[str]) -> str:
     joined = " ".join(evidence).lower()
+    if category == MISSING_EVIDENCE_CATEGORY:
+        return "low"
     if category in {"stale_evidence_only", "low_value_repairs"}:
         return "low"
     if category == "already_repaired_waiting_for_runtime_regeneration":
@@ -232,6 +267,8 @@ def infer_complexity(category: str, evidence: list[str]) -> str:
 
 
 def expected_improvement(category: str, subsystem: str) -> str:
+    if category == MISSING_EVIDENCE_CATEGORY:
+        return "No repair is recommended from missing evidence alone; regenerate evidence before ranking runtime repairs."
     if category == "real_current_failures":
         return f"Removes an active {subsystem} runtime failure and should reduce current failure count after regeneration."
     if category == "already_repaired_waiting_for_runtime_regeneration":
@@ -261,6 +298,12 @@ def verification_for(category: str, subsystem: str) -> list[str]:
             "Confirm stale failure references disappear from runtime_failure_summary.json.",
             "Confirm scanner_breakout_integrity_repair_report.json remains clean.",
         ]
+    if category == MISSING_EVIDENCE_CATEGORY:
+        return [
+            "Regenerate or transfer the missing ECHO evidence artifacts.",
+            "Re-run the runtime repair priority planner.",
+            "Do not modify scanner, workers, Master Brain, Unified Brain, broker/risk from missing evidence alone.",
+        ]
     if category in {"stale_evidence_only", "low_value_repairs"}:
         return [
             "Confirm no active failure in runtime_failure_summary.json.",
@@ -273,7 +316,9 @@ def verification_for(category: str, subsystem: str) -> list[str]:
 
 def evidence_score(category: str, source: str, evidence: list[str]) -> int:
     score = 0
-    if category == "real_current_failures":
+    if category == MISSING_EVIDENCE_CATEGORY:
+        score += 1
+    elif category == "real_current_failures":
         score += 100
     elif category == "external_config_issues":
         score += 55
@@ -376,7 +421,8 @@ def ranked_findings(findings: list[Finding]) -> list[Finding]:
         "external_config_issues": 1,
         "already_repaired_waiting_for_runtime_regeneration": 2,
         "stale_evidence_only": 3,
-        "low_value_repairs": 4,
+        MISSING_EVIDENCE_CATEGORY: 4,
+        "low_value_repairs": 5,
     }
     risk_order = {"high": 0, "medium": 1, "low": 2}
     return sorted(
@@ -397,6 +443,14 @@ def mission_prompt(finding: Finding | None) -> str:
             "MISSION: ECHO Runtime Verification\n"
             "Goal: No active repair target was identified by the priority planner. Re-run runtime evidence generation and confirm Batch 6 inputs remain clean.\n"
             "Rules: Do not modify scanner, workers, Master Brain, Unified Brain, broker/risk. Do not restart TITAN. Do not deploy. Do not push."
+        )
+    if finding.category == MISSING_EVIDENCE_CATEGORY:
+        return (
+            "MISSION: ECHO Evidence Regeneration\n"
+            f"Goal: Regenerate or transfer missing evidence for {finding.source} before ranking runtime repairs.\n"
+            f"Evidence: {finding.evidence[0]}\n"
+            "Rules: Do not modify scanner, workers, Master Brain, Unified Brain, broker/risk. Do not restart TITAN. Do not deploy. Do not push.\n"
+            "Verification: Re-run echo_runtime_repair_priority_planner.py and confirm missing evidence leaves WAITING_FOR_DATA."
         )
     return (
         f"MISSION: ECHO Targeted Runtime Repair - {finding.title}\n"
@@ -441,9 +495,22 @@ def build_plan(docs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     plan_items = [as_plan_item(index + 1, finding) for index, finding in enumerate(findings)]
 
     counts = Counter(finding.category for finding in findings)
+    input_status = {
+        name: {
+            "path": str(path),
+            "exists": path.exists(),
+            "status": "PRESENT" if path.exists() else "MISSING_EVIDENCE",
+            "evidence_status": "PRESENT" if path.exists() else "WAITING_FOR_DATA",
+            "fallback": not path.exists(),
+        }
+        for name, path in INPUTS.items()
+    }
+    missing_inputs = [name for name, status in input_status.items() if status["fallback"]]
     plan = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "inputs": {name: str(path) for name, path in INPUTS.items()},
+        "input_status": input_status,
+        "missing_inputs": missing_inputs,
         "method": "Evidence-ranked planner generated from Batch 6 runtime failure split artifacts.",
         "forbidden_actions": FORBIDDEN_ACTIONS,
         "recommended_next_repair": as_plan_item(1, recommended) if recommended else None,
@@ -472,11 +539,17 @@ def build_plan(docs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             "low_value_repairs": [
                 as_plan_item(index + 1, item) for index, item in enumerate(buckets.get("low_value_repairs", []))
             ],
+            "missing_evidence_waiting_for_data": [
+                as_plan_item(index + 1, item)
+                for index, item in enumerate(buckets.get(MISSING_EVIDENCE_CATEGORY, []))
+            ],
         },
         "counts": dict(counts),
     }
     summary = {
         "generated_at": plan["generated_at"],
+        "input_status": input_status,
+        "missing_inputs": missing_inputs,
         "recommended_next_repair": plan["recommended_next_repair"],
         "why_this_is_first": plan["why_this_is_first"],
         "what_not_to_touch": plan["what_not_to_touch"],
@@ -487,7 +560,9 @@ def build_plan(docs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             "status": "PASS",
             "read_only_planning_only": True,
             "forbidden_actions_preserved": True,
-            "notes": "Planner only reads Batch 6 artifacts and writes priority report JSON files.",
+            "missing_evidence_is_waiting_for_data": True,
+            "no_fake_health_claim": True,
+            "notes": "Planner reads available Batch 6 artifacts, converts missing artifacts to WAITING_FOR_DATA, and writes priority report JSON files.",
         },
         "next_codex_mission_prompt": mission_prompt(recommended),
     }
@@ -495,10 +570,6 @@ def build_plan(docs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def main() -> int:
-    missing = [str(path) for path in INPUTS.values() if not path.exists()]
-    if missing:
-        raise FileNotFoundError(f"Missing required input artifact(s): {', '.join(missing)}")
-
     docs = {name: load_json(path) for name, path in INPUTS.items()}
     plan, summary = build_plan(docs)
 
