@@ -22,6 +22,7 @@ ALERT_QUEUE_PATH = ECHO_RUNTIME / "alert_queue.json"
 ALERT_HISTORY_PATH = ECHO_RUNTIME / "alert_history.jsonl"
 
 IST = timezone(timedelta(hours=5, minutes=30))
+LAST_SOURCE_STATUS: dict[str, dict[str, Any]] = {}
 
 FORBIDDEN_ACTIONS = [
     "restart TITAN",
@@ -38,11 +39,48 @@ def timestamp_ist() -> str:
     return datetime.now(IST).isoformat()
 
 
+def relative(path: Path) -> str:
+    try:
+        return str(path.relative_to(REPO_ROOT)).replace("\\", "/")
+    except ValueError:
+        return str(path).replace("\\", "/")
+
+
 def load_json(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
-        data = json.load(handle)
+    source = relative(path)
+    if not path.exists():
+        LAST_SOURCE_STATUS[source] = {
+            "exists": False,
+            "alert_status": "ALERT_STATUS_UNKNOWN",
+            "evidence_status": "WAITING_FOR_DATA",
+            "reason": "NO_ALERT_EVIDENCE",
+        }
+        return {}
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except Exception as exc:
+        LAST_SOURCE_STATUS[source] = {
+            "exists": True,
+            "alert_status": "ALERT_STATUS_UNKNOWN",
+            "evidence_status": "WAITING_FOR_DATA",
+            "reason": f"INVALID_ALERT_EVIDENCE:{type(exc).__name__}",
+        }
+        return {}
     if not isinstance(data, dict):
-        raise ValueError(f"Expected JSON object: {path}")
+        LAST_SOURCE_STATUS[source] = {
+            "exists": True,
+            "alert_status": "ALERT_STATUS_UNKNOWN",
+            "evidence_status": "WAITING_FOR_DATA",
+            "reason": "NO_ALERT_EVIDENCE",
+        }
+        return {}
+    LAST_SOURCE_STATUS[source] = {
+        "exists": True,
+        "alert_status": "ALERT_EVIDENCE_PRESENT",
+        "evidence_status": "PRESENT",
+        "reason": "EVIDENCE_FILE_READ",
+    }
     return data
 
 
@@ -254,7 +292,27 @@ def alerts_from_registry(registry: dict[str, Any]) -> list[dict[str, Any]]:
     return alerts
 
 
+def alerts_from_missing_inputs() -> list[dict[str, Any]]:
+    alerts = []
+    for source, status in sorted(LAST_SOURCE_STATUS.items()):
+        if status.get("evidence_status") != "WAITING_FOR_DATA":
+            continue
+        alerts.append(
+            make_alert(
+                "WARNING",
+                f"Missing alert evidence: {Path(source).name}",
+                f"{source} is unavailable; alert status is ALERT_STATUS_UNKNOWN and waiting for data.",
+                [source],
+                [status.get("reason", "NO_ALERT_EVIDENCE")],
+                "Regenerate or transfer the missing ECHO evidence file before claiming alert health.",
+                requires_ari_approval=False,
+            )
+        )
+    return alerts
+
+
 def build_alerts() -> list[dict[str, Any]]:
+    LAST_SOURCE_STATUS.clear()
     live_status = load_json(LIVE_STATUS_PATH)
     load_json(OBSERVATIONS_PATH)
     observation_summary = load_json(OBSERVATION_SUMMARY_PATH)
@@ -266,10 +324,16 @@ def build_alerts() -> list[dict[str, Any]]:
     alerts.extend(alerts_from_summary(observation_summary))
     alerts.extend(alerts_from_truth_audit(truth_audit))
     alerts.extend(alerts_from_registry(registry))
+    alerts.extend(alerts_from_missing_inputs())
     return dedupe_alerts(alerts)
 
 
 def write_queue(alerts: list[dict[str, Any]]) -> None:
+    missing_inputs = [
+        source
+        for source, status in LAST_SOURCE_STATUS.items()
+        if status.get("evidence_status") == "WAITING_FOR_DATA"
+    ]
     payload = {
         "schema": "titan_echo.alert_queue.v1",
         "timestamp_ist": timestamp_ist(),
@@ -278,6 +342,24 @@ def write_queue(alerts: list[dict[str, Any]]) -> None:
         "summary": {
             "total_alerts": len(alerts),
             "severity_counts": dict(Counter(alert["severity"] for alert in alerts)),
+            "alert_status": "ALERT_STATUS_UNKNOWN" if missing_inputs else "ALERT_EVIDENCE_PRESENT",
+            "evidence_status": "WAITING_FOR_DATA" if missing_inputs else "PRESENT",
+            "missing_input_files": sorted(missing_inputs),
+            "no_fake_health_claim": True,
+        },
+        "source_evidence_status": LAST_SOURCE_STATUS,
+        "safety": {
+            "read_only_alert_evidence": True,
+            "telegram_send_enabled": False,
+            "broker_changed": False,
+            "risk_changed": False,
+            "scanner_changed": False,
+            "execution_changed": False,
+            "runtime_behavior_changed": False,
+            "master_brain_behavior_changed": False,
+            "unified_brain_behavior_changed": False,
+            "deploy_or_restart": False,
+            "push": False,
         },
     }
     with ALERT_QUEUE_PATH.open("w", encoding="utf-8") as handle:
