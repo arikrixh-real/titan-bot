@@ -44,6 +44,7 @@ APPROVAL_QUEUE_PATH = ECHO_DIR / "approval_queue.json"
 APPROVAL_HISTORY_PATH = ECHO_DIR / "approval_history.jsonl"
 APPROVED_MISSIONS_PATH = ECHO_DIR / "approved_missions.json"
 REJECTED_MISSIONS_PATH = ECHO_DIR / "rejected_missions.json"
+EXECUTION_READINESS_REPORT_PATH = ECHO_DIR / "execution_readiness_report.json"
 VALID_RISK_LEVELS = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
 SECRET_MARKERS = (
@@ -175,6 +176,25 @@ def _load_mission_collection(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _mission_collection_items(path: Path) -> list[dict[str, Any]]:
+    payload = _load_mission_collection(path)
+    missions = payload.get("missions")
+    return [item for item in missions if isinstance(item, dict)] if isinstance(missions, list) else []
+
+
+def _mission_collection_contains(path: Path, mission_id: str, approval_id: str) -> bool:
+    for item in _mission_collection_items(path):
+        if str(item.get("mission_id") or "") == mission_id and str(item.get("approval_id") or "") == approval_id:
+            return True
+        mission = item.get("mission") if isinstance(item.get("mission"), dict) else {}
+        if str(mission.get("mission_id") or "") == mission_id and str(mission.get("approval_id") or "") == approval_id:
+            return True
+        approval = item.get("approval_record") if isinstance(item.get("approval_record"), dict) else {}
+        if str(approval.get("mission_id") or "") == mission_id and str(approval.get("approval_id") or "") == approval_id:
+            return True
+    return False
+
+
 def _append_mission_decision(path: Path, decision: str, record: dict[str, Any], mission_plan: dict[str, Any]) -> None:
     payload = _load_mission_collection(path)
     mission_snapshot = mission_plan.get("current_mission") if isinstance(mission_plan.get("current_mission"), dict) else {}
@@ -210,6 +230,26 @@ def _decision_safety() -> dict[str, bool]:
         "unified_brain_changed": False,
         "runtime_workers_changed": False,
     }
+
+
+def _approval_queue_record(mission_id: str, approval_id: str) -> dict[str, Any] | None:
+    queue = _load_approval_queue()
+    approvals = queue.get("approvals")
+    if not isinstance(approvals, list):
+        return None
+    for item in approvals:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("mission_id") or "") == mission_id and str(item.get("approval_id") or "") == approval_id:
+            return item
+    return None
+
+
+def _false_flag(data: dict[str, Any], key: str) -> bool:
+    value = data.get(key)
+    if value is None and isinstance(data.get("safety"), dict):
+        value = data["safety"].get(key)
+    return value is False
 
 
 def _source_status(name: str, missing_status: str) -> dict[str, Any]:
@@ -391,6 +431,82 @@ def get_verification_latest() -> dict[str, Any]:
         "git_push_pull": False,
         "deploy_or_restart": False,
     }
+
+
+def build_execution_readiness_report() -> dict[str, Any]:
+    mission_plan = _load_mission_plan()
+    mission = mission_plan.get("current_mission") if isinstance(mission_plan.get("current_mission"), dict) else {}
+    mission_id = str(mission.get("mission_id") or "")
+    approval_id = str(mission.get("approval_id") or "")
+    approval_status = str(mission.get("approval_status") or mission.get("status") or "").upper()
+    queue_record = _approval_queue_record(mission_id, approval_id) if mission_id and approval_id else None
+    queue_status = str(queue_record.get("status") or "").upper() if isinstance(queue_record, dict) else ""
+    approved_registry_present = _mission_collection_contains(APPROVED_MISSIONS_PATH, mission_id, approval_id) if mission_id and approval_id else False
+    rejected_registry_present = _mission_collection_contains(REJECTED_MISSIONS_PATH, mission_id, approval_id) if mission_id and approval_id else False
+    merged_safety = dict(mission.get("safety") if isinstance(mission.get("safety"), dict) else {})
+    for key in ("execution_allowed", "codex_execution", "shell_execution", "git_push_pull", "deploy_or_restart"):
+        if key not in merged_safety and key in mission_plan:
+            merged_safety[key] = mission_plan.get(key)
+        if key not in merged_safety and key in mission:
+            merged_safety[key] = mission.get(key)
+
+    checks = {
+        "mission_id_exists": bool(mission_id),
+        "approval_id_exists": bool(approval_id),
+        "mission_status_approved": approval_status == "APPROVED",
+        "approval_queue_decision_approved": queue_status == "APPROVED",
+        "mission_exists_in_approved_missions": approved_registry_present,
+        "mission_absent_from_rejected_missions": not rejected_registry_present,
+        "execution_allowed_remains_false": merged_safety.get("execution_allowed") is False,
+        "codex_execution_remains_false": merged_safety.get("codex_execution") is False,
+        "shell_execution_remains_false": merged_safety.get("shell_execution") is False,
+        "git_push_pull_remains_false": merged_safety.get("git_push_pull") is False,
+        "deploy_or_restart_remains_false": merged_safety.get("deploy_or_restart") is False,
+    }
+    blockers = [name for name, passed in checks.items() if not passed]
+    status = "READY_DRY_RUN_ONLY" if not blockers else "NOT_READY"
+    report = {
+        "schema": "titan.echo.execution_readiness_report.v1",
+        "status": status,
+        "mission_id": mission_id or None,
+        "approval_id": approval_id or None,
+        "checks": checks,
+        "blockers": blockers,
+        "safety": {
+            "dry_run_only": True,
+            "execution_allowed": False,
+            "codex_execution": False,
+            "shell_execution": False,
+            "git_push_pull": False,
+            "deploy_or_restart": False,
+            "titan_runtime_changed": False,
+            "scanner_changed": False,
+            "broker_changed": False,
+            "risk_changed": False,
+            "master_brain_changed": False,
+            "unified_brain_changed": False,
+            "runtime_workers_changed": False,
+        },
+        "generated_at_ist": _timestamp_ist(),
+        "message": (
+            "Mission is approved for dry-run readiness only. No execution is enabled."
+            if status == "READY_DRY_RUN_ONLY"
+            else "Mission is not execution-ready; blockers must be resolved without enabling execution."
+        ),
+    }
+    _write_echo_json(EXECUTION_READINESS_REPORT_PATH, report)
+    return report
+
+
+def get_execution_readiness() -> dict[str, Any]:
+    report = _read_json(EXECUTION_READINESS_REPORT_PATH)
+    if not isinstance(report, dict):
+        report = build_execution_readiness_report()
+    return report
+
+
+def post_execution_readiness_check() -> dict[str, Any]:
+    return build_execution_readiness_report()
 
 
 def post_mission_prepare(payload: dict[str, Any]) -> dict[str, Any]:
@@ -613,6 +729,8 @@ query = get_query
 approval_pending = get_approval_pending
 mission_current = get_mission_current
 verification_latest = get_verification_latest
+execution_readiness = get_execution_readiness
+execution_readiness_check = post_execution_readiness_check
 mission_prepare = post_mission_prepare
 approval_approve = post_approval_approve
 approval_reject = post_approval_reject
@@ -638,9 +756,11 @@ if FASTAPI_AVAILABLE:
     app.get("/approval/pending", dependencies=auth_dependency)(get_approval_pending)
     app.get("/mission/current", dependencies=auth_dependency)(get_mission_current)
     app.get("/verification/latest", dependencies=auth_dependency)(get_verification_latest)
+    app.get("/execution/readiness", dependencies=auth_dependency)(get_execution_readiness)
     app.post("/mission/prepare", dependencies=auth_dependency)(post_mission_prepare)
     app.post("/approval/approve", dependencies=auth_dependency)(post_approval_approve)
     app.post("/approval/reject", dependencies=auth_dependency)(post_approval_reject)
+    app.post("/execution/readiness/check", dependencies=auth_dependency)(post_execution_readiness_check)
 
 
 __all__ = [
@@ -658,6 +778,8 @@ __all__ = [
     "get_approval_pending",
     "get_mission_current",
     "get_verification_latest",
+    "get_execution_readiness",
+    "post_execution_readiness_check",
     "post_mission_prepare",
     "post_approval_approve",
     "post_approval_reject",
@@ -673,6 +795,8 @@ __all__ = [
     "approval_pending",
     "mission_current",
     "verification_latest",
+    "execution_readiness",
+    "execution_readiness_check",
     "mission_prepare",
     "approval_approve",
     "approval_reject",
