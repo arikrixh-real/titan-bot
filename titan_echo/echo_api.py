@@ -1503,11 +1503,224 @@ def _batch3_safety() -> dict[str, bool]:
         "public_exposure_allowed": False,
         "external_api_calls_enabled": False,
         "chatgpt_connection_enabled": False,
+        "custom_gpt_enabled": False,
+        "relay_enabled": False,
         "voice_enabled": False,
     }
 
 
+def _batch3_action(
+    name: str,
+    method: str,
+    relay_path: str,
+    upstream_echo_path: str,
+    reason: str,
+    risk_level: str = "LOW",
+    read_only: bool = True,
+) -> dict[str, Any]:
+    return {
+        "name": name,
+        "method": method,
+        "relay_path": relay_path,
+        "upstream_echo_path": upstream_echo_path,
+        "read_only": read_only,
+        "enabled": False,
+        "required_auth": "relay_api_key",
+        "risk_level": risk_level,
+        "allowed_now": False,
+        "reason": reason,
+    }
+
+
+def _batch3_artifact_payloads() -> dict[Path, dict[str, Any]]:
+    safety = _batch3_safety()
+    disabled_flags = {
+        "public_exposure_allowed": False,
+        "chatgpt_connection_enabled": False,
+        "custom_gpt_enabled": False,
+        "relay_enabled": False,
+        "voice_enabled": False,
+        "actual_execution_permitted": False,
+    }
+    return {
+        CUSTOM_GPT_CONTRACT_PATH: {
+            "schema": "titan.echo.custom_gpt_contract.v1",
+            "status": "CUSTOM_GPT_CONTRACT_READY_DISABLED",
+            "custom_gpt_name": "TITAN ECHO",
+            "role": "ChatGPT-side Jarvis brain",
+            "echo_role": "VPS evidence/operator layer",
+            "titan_role": "trading system",
+            "chat_style": "ChatGPT-like, human, truth-grounded, not robotic",
+            "allowed_capabilities": [
+                "ask status",
+                "ask architecture",
+                "ask file/module role",
+                "ask runtime evidence",
+                "ask governance status",
+                "ask safety status",
+                "prepare mission",
+                "request Codex runner record-only",
+            ],
+            "disabled_capabilities": [
+                "real Codex execution",
+                "deploy",
+                "rollback",
+                "broker/risk changes",
+                "trade placement",
+                "public exposure",
+                "voice mode",
+            ],
+            **disabled_flags,
+            "safety": safety,
+        },
+        ACTION_REGISTRY_PATH: {
+            "schema": "titan.echo.action_registry.v1",
+            "status": "ACTION_REGISTRY_READY_DISABLED",
+            "actions": [
+                _batch3_action("getTitanStatus", "GET", "/relay/titan/status", "/titan/status", "Future Custom GPT action disabled; protected local evidence endpoint only."),
+                _batch3_action("askJarvis", "POST", "/relay/jarvis/ask", "/jarvis/ask", "Future Custom GPT action disabled; Jarvis response must remain evidence-grounded and non-executing."),
+                _batch3_action("getKnowledgeArchitecture", "GET", "/relay/echo/knowledge/architecture", "/echo/knowledge/architecture", "Future Custom GPT action disabled; architecture evidence only."),
+                _batch3_action("getModuleRegistry", "GET", "/relay/echo/knowledge/modules", "/echo/knowledge/modules", "Future Custom GPT action disabled; module registry evidence only."),
+                _batch3_action("getIntegrationProof", "GET", "/relay/echo/proof/integration", "/echo/proof/integration", "Future Custom GPT action disabled; proof report evidence only."),
+                _batch3_action("getEvolutionProof", "GET", "/relay/echo/proof/evolution", "/echo/proof/evolution", "Future Custom GPT action disabled; proof report evidence only."),
+                _batch3_action("getAutoReport", "GET", "/relay/echo/report/auto", "/echo/report/auto", "Future Custom GPT action disabled; auto report evidence only."),
+                _batch3_action("getPermissions", "GET", "/relay/chatgpt/permissions", "/chatgpt/permissions", "Future Custom GPT action disabled; permission matrix evidence only."),
+                _batch3_action("getSessionStatus", "GET", "/relay/chatgpt/session/status", "/chatgpt/session/status", "Future Custom GPT action disabled; session state evidence only."),
+            ],
+            **disabled_flags,
+            "safety": safety,
+        },
+        PERMISSION_MATRIX_PATH: {
+            "schema": "titan.echo.permission_matrix.v1",
+            "status": "PERMISSION_MATRIX_READY_DISABLED",
+            "permissions": {
+                "READ_ONLY_ALLOWED": ["titan status", "observer", "architecture", "knowledge", "proof reports", "auto report", "Jarvis ask"],
+                "REQUIRES_ARI_APPROVAL": ["mission preparation", "Codex request record", "verification plan"],
+                "DISABLED_FOR_NOW": [
+                    "Codex execution",
+                    "git push/pull",
+                    "deploy",
+                    "rollback",
+                    "service restart",
+                    "broker change",
+                    "risk change",
+                    "trade execution",
+                    "voice mode",
+                    "public exposure",
+                ],
+            },
+            **disabled_flags,
+            "safety": safety,
+        },
+        SESSION_STATE_PATH: {
+            "schema": "titan.echo.session_state.v1",
+            "status": "SESSION_STATE_LOCAL_ONLY",
+            "session_mode": "LOCAL_ONLY",
+            "custom_gpt_enabled": False,
+            "relay_enabled_local_only": False,
+            "relay_enabled": False,
+            "public_exposure_allowed": False,
+            "chatgpt_connection_enabled": False,
+            "active_user": "Ari",
+            "identity": "TITAN ECHO",
+            "safety": safety,
+        },
+        CONVERSATION_BRIDGE_PATH: {
+            "schema": "titan.echo.conversation_bridge.v1",
+            "status": "CONVERSATION_BRIDGE_READY_DISABLED",
+            "purpose": "Define how ChatGPT should speak as ECHO.",
+            "tone": "human, clear, ChatGPT-like, not robotic",
+            "truth_rule": "if evidence missing, say UNKNOWN_NOT_PROVEN",
+            "behavior": [
+                "reason through evidence",
+                "explain tradeoffs",
+                "suggest safe next steps",
+                "avoid overclaiming",
+                "ask approval before dangerous actions",
+                "remember TITAN architecture from ECHO memory",
+                "do not expose secrets",
+            ],
+            **disabled_flags,
+            "safety": safety,
+        },
+        RELAY_READINESS_PATH: {
+            "schema": "titan.echo.relay_readiness.v1",
+            "status": "RELAY_READY_LOCAL_ONLY",
+            "checks": {
+                "echo_relay_skeleton_exists": True,
+                "relay_health_route_exists": True,
+                "allowlist_exists": True,
+                "blocked_prefixes_exist": True,
+                "public_exposure_disabled": True,
+                "relay_enabled_only_local_manual": True,
+                "echo_localhost_only": True,
+            },
+            **disabled_flags,
+            "safety": safety,
+        },
+        VOICE_READINESS_PATH: {
+            "schema": "titan.echo.voice_readiness.v1",
+            "status": "VOICE_NOT_ENABLED_FUTURE_ONLY",
+            "purpose": "Document voice is future only.",
+            "voice_enabled": False,
+            **disabled_flags,
+            "safety": safety,
+        },
+        CUSTOM_GPT_OPENAPI_SKELETON_PATH: {
+            "schema": "titan.echo.custom_gpt_openapi_skeleton.v1",
+            "status": "CUSTOM_GPT_OPENAPI_SKELETON_READY_DISABLED",
+            "purpose": "Generate a future OpenAPI action schema for Custom GPT.",
+            "description": "Disabled future OpenAPI action schema skeleton for safe Custom GPT read-only actions.",
+            "excluded_endpoints": [
+                "execution endpoints",
+                "approval endpoints",
+                "deploy endpoints",
+                "rollback endpoints",
+                "Codex runner execution endpoints",
+                "broker/risk endpoints",
+            ],
+            "openapi_skeleton": {
+                "openapi": "3.1.0",
+                "info": {"title": "TITAN ECHO Custom GPT Actions", "version": "0.1.0-disabled"},
+                "paths": {
+                    "/relay/titan/status": {"get": {"operationId": "getTitanStatus", "summary": "Read TITAN status evidence."}},
+                    "/relay/jarvis/ask": {"post": {"operationId": "askJarvis", "summary": "Ask Jarvis for evidence-grounded status without execution."}},
+                    "/relay/echo/knowledge/architecture": {"get": {"operationId": "getKnowledgeArchitecture", "summary": "Read TITAN architecture knowledge evidence."}},
+                    "/relay/echo/knowledge/modules": {"get": {"operationId": "getModuleRegistry", "summary": "Read TITAN module registry evidence."}},
+                    "/relay/echo/proof/integration": {"get": {"operationId": "getIntegrationProof", "summary": "Read ECHO integration proof report."}},
+                    "/relay/echo/proof/evolution": {"get": {"operationId": "getEvolutionProof", "summary": "Read ECHO evolution proof report."}},
+                    "/relay/echo/report/auto": {"get": {"operationId": "getAutoReport", "summary": "Read ECHO auto report."}},
+                    "/relay/chatgpt/permissions": {"get": {"operationId": "getPermissions", "summary": "Read ECHO permission matrix."}},
+                    "/relay/chatgpt/session/status": {"get": {"operationId": "getSessionStatus", "summary": "Read disabled Custom GPT session and integration status."}},
+                },
+            },
+            **disabled_flags,
+            "safety": safety,
+        },
+    }
+
+
+def build_batch3_artifacts() -> dict[str, Any]:
+    written = []
+    for path, payload in _batch3_artifact_payloads().items():
+        _write_echo_json(path, payload)
+        written.append(_relative(path))
+    return {
+        "schema": "titan.echo.batch3_artifacts.v1",
+        "status": "BATCH3_ARTIFACTS_READY_DISABLED",
+        "written": written,
+        "safety": _batch3_safety(),
+    }
+
+
+def _batch3_file_invalid(path: Path) -> bool:
+    payload = _read_json(path)
+    return not isinstance(payload, dict) or payload.get("safety") != _batch3_safety()
+
+
 def _batch3_payload(path: Path, missing_status: str = "UNKNOWN_NOT_PROVEN") -> dict[str, Any]:
+    if _batch3_file_invalid(path):
+        build_batch3_artifacts()
     data = _sanitize(_read_json(path))
     status = data.get("status") if isinstance(data, dict) and data.get("status") else missing_status
     return {
@@ -3106,6 +3319,7 @@ __all__ = [
     "get_chatgpt_conversation_status",
     "get_chatgpt_voice_readiness",
     "get_chatgpt_relay_readiness",
+    "build_batch3_artifacts",
     "get_codex_runner_status",
     "get_codex_runner_policy",
     "post_codex_runner_request",

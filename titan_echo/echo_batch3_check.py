@@ -12,6 +12,7 @@ from typing import Any
 
 from titan_echo.echo_api import (
     app,
+    build_batch3_artifacts,
     get_chatgpt_action_catalog,
     get_chatgpt_conversation_status,
     get_chatgpt_custom_gpt_status,
@@ -40,6 +41,8 @@ EXPECTED_SAFETY = {
     "public_exposure_allowed": False,
     "external_api_calls_enabled": False,
     "chatgpt_connection_enabled": False,
+    "custom_gpt_enabled": False,
+    "relay_enabled": False,
     "voice_enabled": False,
 }
 
@@ -127,7 +130,7 @@ def _response_ok(response: Any) -> bool:
     if response.get("safety") != EXPECTED_SAFETY:
         return False
     data = response.get("data")
-    return data is None or _safety_ok(data)
+    return isinstance(data, dict) and _safety_ok(data)
 
 
 def _openapi_skeleton_ok(payload: Any) -> bool:
@@ -146,6 +149,8 @@ def _openapi_skeleton_ok(payload: Any) -> bool:
 
 
 def run_check() -> dict[str, Any]:
+    build_batch3_artifacts()
+
     failures: list[str] = []
     file_results: dict[str, dict[str, Any]] = {}
 
