@@ -66,6 +66,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GenericRelayResponse"
+  /relay/titan/status/summary:
+    get:
+      operationId: getTitanStatusSummary
+      summary: Read compact TITAN status summary.
+      description: Compact read-only status endpoint for Custom GPT use; excludes raw evidence payloads.
+      responses:
+        "200":
+          description: Compact TITAN status summary payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericRelayResponse"
   /relay/chatgpt/integration/status:
     get:
       operationId: getChatGPTIntegrationStatus

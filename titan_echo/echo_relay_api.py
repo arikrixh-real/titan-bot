@@ -127,6 +127,13 @@ def relay_titan_status(x_echo_relay_key: str | None = None) -> dict[str, Any]:
     return _forward_to_echo("GET", "/titan/status")
 
 
+def relay_titan_status_summary(x_echo_relay_key: str | None = None) -> dict[str, Any]:
+    if not relay_enabled():
+        return _disabled_payload()
+    require_relay_key(x_echo_relay_key)
+    return _forward_to_echo("GET", "/titan/status/summary")
+
+
 def relay_chatgpt_integration_status(x_echo_relay_key: str | None = None) -> dict[str, Any]:
     if not relay_enabled():
         return _disabled_payload()
@@ -171,6 +178,12 @@ if FASTAPI_AVAILABLE:
     def route_relay_titan_status(x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME)) -> dict[str, Any]:
         return relay_titan_status(x_echo_relay_key)
 
+    @app.get("/relay/titan/status/summary")
+    def route_relay_titan_status_summary(
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        return relay_titan_status_summary(x_echo_relay_key)
+
     @app.get("/relay/chatgpt/integration/status")
     def route_relay_chatgpt_integration_status(
         x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
@@ -199,4 +212,5 @@ __all__ = [
     "relay_health",
     "relay_jarvis_ask",
     "relay_titan_status",
+    "relay_titan_status_summary",
 ]

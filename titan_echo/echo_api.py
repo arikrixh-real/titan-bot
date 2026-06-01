@@ -611,6 +611,52 @@ def get_titan_status() -> dict[str, Any]:
     return build_titan_runtime_context()
 
 
+def _compact_titan_status(summary: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": summary.get("schema", "UNKNOWN_NOT_PROVEN"),
+        "status": summary.get("status", "UNKNOWN_NOT_PROVEN"),
+    }
+
+
+def build_titan_status_summary() -> dict[str, Any]:
+    health = build_titan_health_summary()
+    workers = build_titan_worker_summary()
+    scanner = build_titan_scanner_summary()
+    trades = build_titan_trade_summary()
+    brain = build_titan_brain_summary()
+    runtime_status = _read_runtime_source(TITAN_RUNTIME_EVIDENCE_FILES["titan_runtime_status"])
+    titan_runtime_status = _record_status({"data": runtime_status})
+    summaries = {
+        "titan_runtime_status": titan_runtime_status,
+        "health_status": health.get("status", "UNKNOWN_NOT_PROVEN"),
+        "worker_status": workers.get("status", "UNKNOWN_NOT_PROVEN"),
+        "scanner_status": scanner.get("status", "UNKNOWN_NOT_PROVEN"),
+        "trade_status": trades.get("status", "UNKNOWN_NOT_PROVEN"),
+        "brain_status": brain.get("status", "UNKNOWN_NOT_PROVEN"),
+    }
+    unknowns = sorted(
+        key
+        for key, value in summaries.items()
+        if value in (None, "", "UNKNOWN", "UNKNOWN_NOT_PROVEN")
+    )
+    return {
+        "schema": "titan.echo.titan_status_summary.v1",
+        "status": "EVIDENCE_PRESENT" if not unknowns else "UNKNOWN_NOT_PROVEN",
+        "titan_runtime_status": titan_runtime_status,
+        "health_status": _compact_titan_status(health),
+        "worker_status": _compact_titan_status(workers),
+        "scanner_status": _compact_titan_status(scanner),
+        "trade_status": _compact_titan_status(trades),
+        "brain_status": _compact_titan_status(brain),
+        "unknowns": unknowns,
+        "safety": _jarvis_core_safety(),
+    }
+
+
+def get_titan_status_summary() -> dict[str, Any]:
+    return build_titan_status_summary()
+
+
 def get_titan_health() -> dict[str, Any]:
     return build_titan_health_summary()
 
@@ -3120,6 +3166,7 @@ jarvis_explain = get_jarvis_explain
 jarvis_investigate = get_jarvis_investigate
 jarvis_mission = get_jarvis_mission
 titan_status = get_titan_status
+titan_status_summary = get_titan_status_summary
 titan_health = get_titan_health
 titan_workers = get_titan_workers
 titan_scanner = get_titan_scanner
@@ -3213,6 +3260,7 @@ if FASTAPI_AVAILABLE:
     app.get("/jarvis/investigate", dependencies=auth_dependency)(get_jarvis_investigate)
     app.get("/jarvis/mission", dependencies=auth_dependency)(get_jarvis_mission)
     app.get("/titan/status", dependencies=auth_dependency)(get_titan_status)
+    app.get("/titan/status/summary", dependencies=auth_dependency)(get_titan_status_summary)
     app.get("/titan/health", dependencies=auth_dependency)(get_titan_health)
     app.get("/titan/workers", dependencies=auth_dependency)(get_titan_workers)
     app.get("/titan/scanner", dependencies=auth_dependency)(get_titan_scanner)
@@ -3297,6 +3345,7 @@ __all__ = [
     "get_jarvis_investigate",
     "get_jarvis_mission",
     "get_titan_status",
+    "get_titan_status_summary",
     "get_titan_health",
     "get_titan_workers",
     "get_titan_scanner",
@@ -3371,6 +3420,7 @@ __all__ = [
     "jarvis_investigate",
     "jarvis_mission",
     "titan_status",
+    "titan_status_summary",
     "titan_health",
     "titan_workers",
     "titan_scanner",

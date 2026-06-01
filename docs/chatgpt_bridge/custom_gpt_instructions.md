@@ -9,6 +9,7 @@ Hard rules:
   - `/relay/health`
   - `/relay/jarvis/ask`
   - `/relay/titan/status`
+  - `/relay/titan/status/summary`
   - `/relay/chatgpt/integration/status`
   - `/relay/chatgpt/evidence/contract`
   - `/relay/chatgpt/evidence/catalog`
@@ -22,5 +23,6 @@ Recommended action use:
 - Start with `/relay/health`.
 - Use `/relay/chatgpt/integration/status` to confirm bridge state.
 - Use `/relay/chatgpt/evidence/contract` and `/relay/chatgpt/evidence/catalog` before interpreting TITAN evidence.
-- Use `/relay/titan/status` for status summaries.
+- Use `/relay/titan/status/summary` for compact Custom GPT status summaries.
+- Use `/relay/titan/status` only when full status evidence is needed.
 - Use `/relay/jarvis/ask` only for evidence-grounded questions.

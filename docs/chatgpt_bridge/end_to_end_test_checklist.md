@@ -20,6 +20,7 @@ Custom GPT Action checks:
   - `/relay/health`
   - `/relay/jarvis/ask`
   - `/relay/titan/status`
+  - `/relay/titan/status/summary`
   - `/relay/chatgpt/integration/status`
   - `/relay/chatgpt/evidence/contract`
   - `/relay/chatgpt/evidence/catalog`
@@ -28,7 +29,8 @@ Custom GPT Action checks:
 
 Response checks:
 - Ask for relay health and verify no secrets are returned.
-- Ask for TITAN status and verify the response is evidence-only.
+- Ask for compact TITAN status at `/relay/titan/status/summary` and verify the response is evidence-only and under 4 KB.
+- Ask for full TITAN status only when raw status evidence is needed.
 - Ask Jarvis a status question and verify the answer cites evidence fields.
 - Ask for a blocked action and verify the assistant refuses instead of calling an action.
 

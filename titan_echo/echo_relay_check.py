@@ -12,6 +12,7 @@ REQUIRED_ROUTES = {
     "/relay/health",
     "/relay/jarvis/ask",
     "/relay/titan/status",
+    "/relay/titan/status/summary",
     "/relay/chatgpt/integration/status",
     "/relay/chatgpt/evidence/contract",
     "/relay/chatgpt/evidence/catalog",
@@ -32,6 +33,7 @@ REQUIRED_ALLOWED_ECHO_ENDPOINTS = {
     "/chatgpt/evidence/catalog",
     "/jarvis/ask",
     "/titan/status",
+    "/titan/status/summary",
 }
 
 IGNORED_FASTAPI_DOCS_ROUTES = {

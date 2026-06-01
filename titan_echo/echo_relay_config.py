@@ -20,6 +20,7 @@ ALLOWED_ECHO_ENDPOINTS = {
     "/chatgpt/evidence/catalog",
     "/jarvis/ask",
     "/titan/status",
+    "/titan/status/summary",
 }
 
 BLOCKED_PREFIXES = (
