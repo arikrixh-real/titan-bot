@@ -9,13 +9,13 @@ INSTALL_SCRIPT="tools/echo_relay/install_local_relay_service.sh"
 UNINSTALL_SCRIPT="tools/echo_relay/uninstall_local_relay_service.sh"
 ENV_EXAMPLE="tools/echo_relay/relay_env.example"
 
-python -m py_compile \
+python3 -m py_compile \
   titan_echo/echo_relay_api.py \
   titan_echo/echo_relay_auth.py \
   titan_echo/echo_relay_config.py \
   titan_echo/echo_relay_check.py
 
-python -m titan_echo.echo_relay_check
+python3 -m titan_echo.echo_relay_check
 
 grep -q -- "--host 127.0.0.1" "${INSTALL_SCRIPT}"
 grep -q -- "--port 8766" "${INSTALL_SCRIPT}"
@@ -34,7 +34,7 @@ if grep -n -E "ECHO_RELAY_ENABLED=true" "${INSTALL_SCRIPT}"; then
   exit 1
 fi
 
-python - <<'PY'
+python3 - <<'PY'
 from pathlib import Path
 import re
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from titan_echo import echo_relay_api
+from titan_echo.echo_relay_api import app
 from titan_echo.echo_relay_config import ALLOWED_ECHO_ENDPOINTS, BLOCKED_PREFIXES, relay_status_payload
 
 
@@ -34,16 +34,19 @@ REQUIRED_ALLOWED_ECHO_ENDPOINTS = {
     "/titan/status",
 }
 
+IGNORED_FASTAPI_DOCS_ROUTES = {
+    "/docs",
+    "/docs/oauth2-redirect",
+    "/openapi.json",
+    "/redoc",
+}
+
 
 def route_paths() -> list[str]:
-    app = getattr(echo_relay_api, "app", None)
-    if app is None:
-        return []
     return sorted(
         path
-        for route in getattr(app, "routes", [])
-        for path in [getattr(route, "path", "")]
-        if path.startswith("/relay/")
+        for path in (getattr(route, "path", "") for route in app.routes)
+        if path and path not in IGNORED_FASTAPI_DOCS_ROUTES
     )
 
 
@@ -80,7 +83,7 @@ if __name__ == "__main__":
     report = build_check()
     print("ECHO relay check complete.")
     print(f"status={report['status']}")
-    print("routes=" + ", ".join(report["routes"]))
     if report["failures"]:
+        print("discovered_relay_routes=" + ", ".join(report["routes"]))
         print("failures=" + "; ".join(report["failures"]))
         raise SystemExit(1)
