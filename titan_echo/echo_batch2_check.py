@@ -92,34 +92,37 @@ def _api_response_ok(response: Any) -> bool:
 
 
 def _route_auth_map() -> dict[str, dict[str, Any]]:
-    route_map: dict[str, dict[str, Any]] = {}
+    result: dict[str, dict[str, Any]] = {}
     if app is None:
-        return route_map
-    route_paths = [getattr(route, "path", None) for route in getattr(app, "routes", [])]
-    for route in getattr(app, "routes", []):
-        path = getattr(route, "path", None)
-        if path not in EXPECTED_ROUTES:
+        return result
+    route_map = {route.path: route for route in app.routes}
+    for path in EXPECTED_ROUTES:
+        route = route_map.get(path)
+        if route is None:
             continue
         dependency_attr = getattr(route, "dependencies", None)
         names = []
         for dependency in dependency_attr or []:
             call = getattr(dependency, "dependency", None)
             names.append(getattr(call, "__name__", str(call)))
-        route_map[path] = {
-            "methods": sorted(getattr(route, "methods", []) or []),
+        methods = getattr(route, "methods", set()) or set()
+        result[path] = {
+            "methods": sorted(methods),
             "protected": "require_echo_api_key" in names if dependency_attr is not None else None,
             "dependencies": names,
             "dependency_inspectable": dependency_attr is not None,
         }
-    for path in EXPECTED_ROUTES:
-        if path not in route_map and path in route_paths:
-            route_map[path] = {
-                "methods": [],
-                "protected": None,
-                "dependencies": [],
-                "dependency_inspectable": False,
-            }
-    return route_map
+    return result
+
+
+def _discovered_echo_paths() -> list[str]:
+    if app is None:
+        return []
+    return sorted(
+        path
+        for path in (getattr(route, "path", None) for route in app.routes)
+        if isinstance(path, str) and path.startswith("/echo/")
+    )
 
 
 def _source_safety_scan() -> list[str]:
@@ -192,6 +195,7 @@ def run_check() -> dict[str, Any]:
         "status": "PASS" if not failures else "FAIL",
         "outputs": outputs,
         "route_auth": route_auth,
+        "discovered_echo_paths": _discovered_echo_paths(),
         "api_responses": api_responses,
         "protected_endpoints_checked": sorted(EXPECTED_ROUTES),
         "failures": failures,
@@ -207,6 +211,9 @@ def main() -> int:
     print(f"Outputs checked: {len(report['outputs'])}")
     print(f"Routes checked: {len(report['protected_endpoints_checked'])}")
     if report["failures"]:
+        print("Discovered /echo/ paths:")
+        for path in report["discovered_echo_paths"]:
+            print(f"  {path}")
         for failure in report["failures"]:
             print(f"FAIL: {failure}")
     return 0 if report["status"] == "PASS" else 1
