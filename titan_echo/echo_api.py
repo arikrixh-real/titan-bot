@@ -23,6 +23,7 @@ from titan_echo.echo_codex_runner import (
 )
 from titan_echo.echo_api_auth import PROTECTED_ENDPOINTS, require_echo_api_key
 from titan_echo.echo_api_status import build_status, read_sources
+from titan_echo.echo_batch2_common import safety as batch2_safety
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -86,6 +87,14 @@ ECHO_KNOWLEDGE_MODULES_PATH = ECHO_DIR / "module_registry.json"
 ECHO_KNOWLEDGE_ENGINES_PATH = ECHO_DIR / "engine_registry.json"
 ECHO_KNOWLEDGE_ARCHITECTURE_PATH = ECHO_DIR / "architecture_map.json"
 ECHO_KNOWLEDGE_DANGER_PATH = ECHO_DIR / "danger_registry.json"
+BATCH2_OBSERVER_PATH = ECHO_DIR / "observations.json"
+BATCH2_ALERTS_PATH = ECHO_DIR / "alert_queue.json"
+BATCH2_INTEGRATION_PROOF_PATH = ECHO_DIR / "integration_proof_report.json"
+BATCH2_EVOLUTION_PROOF_PATH = ECHO_DIR / "evolution_proof_report.json"
+BATCH2_VERIFICATION_PLAN_PATH = ECHO_DIR / "verification_plan.json"
+BATCH2_DEPLOYMENT_PLAN_PATH = ECHO_DIR / "deployment_plan.json"
+BATCH2_ROLLBACK_PLAN_PATH = ECHO_DIR / "rollback_plan.json"
+BATCH2_AUTO_REPORT_PATH = ECHO_DIR / "auto_report.json"
 VALID_RISK_LEVELS = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
 SECRET_MARKERS = (
@@ -1766,6 +1775,49 @@ def get_alerts() -> dict[str, Any]:
     }
 
 
+def _batch2_payload(path: Path, missing_status: str = "UNKNOWN_NOT_PROVEN") -> dict[str, Any]:
+    data = _sanitize(_read_json(path))
+    status = data.get("status") if isinstance(data, dict) and data.get("status") else missing_status
+    return {
+        "source": _relative(path),
+        "status": status,
+        "data": data,
+        "safety": batch2_safety(),
+    }
+
+
+def get_echo_observer() -> dict[str, Any]:
+    return _batch2_payload(BATCH2_OBSERVER_PATH)
+
+
+def get_echo_alerts() -> dict[str, Any]:
+    return _batch2_payload(BATCH2_ALERTS_PATH, "ALERT_ENGINE_DRAFT_ONLY")
+
+
+def get_echo_integration_proof() -> dict[str, Any]:
+    return _batch2_payload(BATCH2_INTEGRATION_PROOF_PATH)
+
+
+def get_echo_evolution_proof() -> dict[str, Any]:
+    return _batch2_payload(BATCH2_EVOLUTION_PROOF_PATH)
+
+
+def get_echo_verify_plan() -> dict[str, Any]:
+    return _batch2_payload(BATCH2_VERIFICATION_PLAN_PATH, "VERIFIER_PLAN_ONLY")
+
+
+def get_echo_deploy_plan() -> dict[str, Any]:
+    return _batch2_payload(BATCH2_DEPLOYMENT_PLAN_PATH, "DEPLOYER_DISABLED_PLAN_ONLY")
+
+
+def get_echo_rollback_plan() -> dict[str, Any]:
+    return _batch2_payload(BATCH2_ROLLBACK_PLAN_PATH, "ROLLBACK_DISABLED_PLAN_ONLY")
+
+
+def get_echo_auto_report() -> dict[str, Any]:
+    return _batch2_payload(BATCH2_AUTO_REPORT_PATH, "AUTO_REPORT_READY")
+
+
 def get_missions() -> dict[str, Any]:
     sources = read_sources()
     return {
@@ -2807,6 +2859,14 @@ chatgpt_custom_action_plan = get_chatgpt_custom_action_plan
 codex_runner_status = get_codex_runner_status
 codex_runner_policy = get_codex_runner_policy
 codex_runner_request = post_codex_runner_request
+echo_observer = get_echo_observer
+echo_alerts = get_echo_alerts
+echo_integration_proof = get_echo_integration_proof
+echo_evolution_proof = get_echo_evolution_proof
+echo_verify_plan = get_echo_verify_plan
+echo_deploy_plan = get_echo_deploy_plan
+echo_rollback_plan = get_echo_rollback_plan
+echo_auto_report = get_echo_auto_report
 mission_prepare = post_mission_prepare
 approval_approve = post_approval_approve
 approval_reject = post_approval_reject
@@ -2851,6 +2911,14 @@ if FASTAPI_AVAILABLE:
     app.get("/echo/knowledge/engines", dependencies=auth_dependency)(get_echo_knowledge_engines)
     app.get("/echo/knowledge/architecture", dependencies=auth_dependency)(get_echo_knowledge_architecture)
     app.get("/echo/knowledge/danger", dependencies=auth_dependency)(get_echo_knowledge_danger)
+    app.get("/echo/observer", dependencies=auth_dependency)(get_echo_observer)
+    app.get("/echo/alerts", dependencies=auth_dependency)(get_echo_alerts)
+    app.get("/echo/proof/integration", dependencies=auth_dependency)(get_echo_integration_proof)
+    app.get("/echo/proof/evolution", dependencies=auth_dependency)(get_echo_evolution_proof)
+    app.get("/echo/verify/plan", dependencies=auth_dependency)(get_echo_verify_plan)
+    app.get("/echo/deploy/plan", dependencies=auth_dependency)(get_echo_deploy_plan)
+    app.get("/echo/rollback/plan", dependencies=auth_dependency)(get_echo_rollback_plan)
+    app.get("/echo/report/auto", dependencies=auth_dependency)(get_echo_auto_report)
     app.get("/jarvis/status", dependencies=auth_dependency)(get_jarvis_status)
     app.get("/jarvis/question", dependencies=auth_dependency)(get_jarvis_question)
     app.post("/jarvis/question", dependencies=auth_dependency)(post_jarvis_question)
