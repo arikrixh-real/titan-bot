@@ -18,21 +18,17 @@ ALLOWED_ECHO_ENDPOINTS = {
     "/chatgpt/integration/status",
     "/chatgpt/evidence/contract",
     "/chatgpt/evidence/catalog",
-    "/chatgpt/bridge/readiness",
     "/jarvis/ask",
     "/titan/status",
-    "/titan/health",
-    "/titan/scanner",
-    "/titan/workers",
-    "/titan/trades",
-    "/titan/brain",
-    "/titan/runtime/context",
 }
 
 BLOCKED_PREFIXES = (
-    "/mission/",
-    "/approval/",
-    "/execution/",
+    "/mission",
+    "/approval",
+    "/execution",
+    "/codex",
+    "/deploy",
+    "/rollback",
 )
 
 

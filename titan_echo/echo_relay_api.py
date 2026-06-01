@@ -113,13 +113,6 @@ def relay_health(x_echo_relay_key: str | None = None) -> dict[str, Any]:
     return relay_status_payload()
 
 
-def relay_allowlist(x_echo_relay_key: str | None = None) -> dict[str, Any]:
-    if not relay_enabled():
-        return _disabled_payload()
-    require_relay_key(x_echo_relay_key)
-    return relay_status_payload()
-
-
 def relay_jarvis_ask(payload: dict[str, Any], x_echo_relay_key: str | None = None) -> dict[str, Any]:
     if not relay_enabled():
         return _disabled_payload()
@@ -167,10 +160,6 @@ if FASTAPI_AVAILABLE:
     def route_relay_health(x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME)) -> dict[str, Any]:
         return relay_health(x_echo_relay_key)
 
-    @app.get("/relay/allowlist")
-    def route_relay_allowlist(x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME)) -> dict[str, Any]:
-        return relay_allowlist(x_echo_relay_key)
-
     @app.post("/relay/jarvis/ask")
     def route_relay_jarvis_ask(
         payload: dict[str, Any] | None = Body(default=None),
@@ -204,7 +193,6 @@ if FASTAPI_AVAILABLE:
 __all__ = [
     "FASTAPI_AVAILABLE",
     "app",
-    "relay_allowlist",
     "relay_chatgpt_evidence_catalog",
     "relay_chatgpt_evidence_contract",
     "relay_chatgpt_integration_status",

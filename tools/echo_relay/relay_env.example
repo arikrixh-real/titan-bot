@@ -1,0 +1,7 @@
+# Copy to /etc/titan/echo-relay.env and set real local secrets there.
+# Do not commit the copied env file.
+
+ECHO_RELAY_ENABLED=true
+ECHO_RELAY_API_KEY=replace-with-long-random-relay-key
+ECHO_INTERNAL_BASE_URL=http://127.0.0.1:8765
+ECHO_INTERNAL_API_KEY=replace-with-local-echo-api-key

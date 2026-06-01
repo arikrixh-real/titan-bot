@@ -14,7 +14,8 @@ grep -q -- "--port 8766" "$SERVICE_FILE"
 grep -q "ECHO_RELAY_ENABLED=false" "$SERVICE_FILE"
 grep -q "ECHO_INTERNAL_BASE_URL=http://127.0.0.1:8765" "$SERVICE_FILE"
 
-if grep -Eq -- "--host 0.0.0.0|--host ::|--host \\*" "$SERVICE_FILE"; then
+PUBLIC_BIND_PATTERN="--host 0[.]0[.]0[.]0|--host [][:][:]|--host [*]"
+if grep -Eq -- "$PUBLIC_BIND_PATTERN" "$SERVICE_FILE"; then
   echo "FAIL: service file contains a public bind"
   exit 1
 fi

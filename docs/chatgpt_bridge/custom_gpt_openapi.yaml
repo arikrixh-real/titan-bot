@@ -1,0 +1,101 @@
+openapi: 3.1.0
+info:
+  title: ECHO Local Relay
+  version: 1.0.0
+  description: Localhost-only ECHO relay action schema for read-only TITAN evidence.
+servers:
+  - url: https://YOUR-CLOUDFLARE-TUNNEL-HOSTNAME
+    description: Replace only after the localhost relay has passed local checks.
+components:
+  securitySchemes:
+    EchoRelayKey:
+      type: apiKey
+      in: header
+      name: X-ECHO-RELAY-KEY
+  schemas:
+    GenericRelayResponse:
+      type: object
+      additionalProperties: true
+security:
+  - EchoRelayKey: []
+paths:
+  /relay/health:
+    get:
+      operationId: getRelayHealth
+      summary: Read relay health.
+      responses:
+        "200":
+          description: Relay health payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericRelayResponse"
+  /relay/jarvis/ask:
+    post:
+      operationId: askJarvis
+      summary: Ask Jarvis for an evidence-grounded answer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                question:
+                  type: string
+                context:
+                  type: string
+              required:
+                - question
+      responses:
+        "200":
+          description: Jarvis answer payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericRelayResponse"
+  /relay/titan/status:
+    get:
+      operationId: getTitanStatus
+      summary: Read TITAN status evidence.
+      responses:
+        "200":
+          description: TITAN status payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericRelayResponse"
+  /relay/chatgpt/integration/status:
+    get:
+      operationId: getChatGPTIntegrationStatus
+      summary: Read ChatGPT bridge status.
+      responses:
+        "200":
+          description: Bridge status payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericRelayResponse"
+  /relay/chatgpt/evidence/contract:
+    get:
+      operationId: getEvidenceContract
+      summary: Read evidence contract.
+      responses:
+        "200":
+          description: Evidence contract payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericRelayResponse"
+  /relay/chatgpt/evidence/catalog:
+    get:
+      operationId: getEvidenceCatalog
+      summary: Read evidence catalog.
+      responses:
+        "200":
+          description: Evidence catalog payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericRelayResponse"
