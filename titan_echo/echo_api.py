@@ -23,7 +23,6 @@ from titan_echo.echo_codex_runner import (
 )
 from titan_echo.echo_api_auth import PROTECTED_ENDPOINTS, require_echo_api_key
 from titan_echo.echo_api_status import build_status, read_sources
-from titan_echo.echo_batch2_common import safety as batch2_safety
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -1782,7 +1781,6 @@ def _batch2_payload(path: Path, missing_status: str = "UNKNOWN_NOT_PROVEN") -> d
         "source": _relative(path),
         "status": status,
         "data": data,
-        "safety": batch2_safety(),
     }
 
 

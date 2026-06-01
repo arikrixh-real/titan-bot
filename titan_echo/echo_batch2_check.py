@@ -80,6 +80,15 @@ def _safety_ok(payload: dict[str, Any]) -> bool:
     return payload.get("safety") == safety()
 
 
+def _api_response_ok(response: Any) -> bool:
+    if not isinstance(response, dict):
+        return False
+    if set(response) != {"source", "status", "data"}:
+        return False
+    data = response.get("data")
+    return isinstance(data, dict) and data.get("safety") == safety()
+
+
 def _route_auth_map() -> dict[str, dict[str, Any]]:
     app = getattr(echo_api, "app", None)
     route_map: dict[str, dict[str, Any]] = {}
@@ -165,10 +174,14 @@ def run_check() -> dict[str, Any]:
     api_responses = {}
     for route, func in API_FUNCTIONS.items():
         response = func()
-        ok = isinstance(response, dict) and response.get("safety") == safety()
-        api_responses[route] = {"status": response.get("status") if isinstance(response, dict) else None, "safety_object_ok": ok}
+        ok = _api_response_ok(response)
+        api_responses[route] = {
+            "status": response.get("status") if isinstance(response, dict) else None,
+            "schema_ok": isinstance(response, dict) and set(response) == {"source", "status", "data"},
+            "safety_object_ok": ok,
+        }
         if not ok:
-            failures.append(f"{route} response missing safety object")
+            failures.append(f"{route} response schema or safety object invalid")
 
     failures.extend(_source_safety_scan())
     report = {
