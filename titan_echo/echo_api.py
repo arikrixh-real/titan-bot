@@ -75,6 +75,14 @@ CHATGPT_HANDSHAKE_STATUS_PATH = ECHO_DIR / "chatgpt_handshake_status.json"
 CHATGPT_EVIDENCE_CONTRACT_PATH = ECHO_DIR / "chatgpt_evidence_contract.json"
 SECURE_RELAY_PLAN_PATH = ECHO_DIR / "secure_relay_plan.json"
 CUSTOM_GPT_ACTION_PLAN_PATH = ECHO_DIR / "custom_gpt_action_plan.json"
+CUSTOM_GPT_CONTRACT_PATH = ECHO_DIR / "custom_gpt_contract.json"
+ACTION_REGISTRY_PATH = ECHO_DIR / "action_registry.json"
+PERMISSION_MATRIX_PATH = ECHO_DIR / "permission_matrix.json"
+SESSION_STATE_PATH = ECHO_DIR / "session_state.json"
+CONVERSATION_BRIDGE_PATH = ECHO_DIR / "conversation_bridge.json"
+RELAY_READINESS_PATH = ECHO_DIR / "relay_readiness.json"
+VOICE_READINESS_PATH = ECHO_DIR / "voice_readiness.json"
+CUSTOM_GPT_OPENAPI_SKELETON_PATH = ECHO_DIR / "custom_gpt_openapi_skeleton.json"
 TITAN_RUNTIME_CONTEXT_PATH = ECHO_DIR / "titan_runtime_context.json"
 TITAN_HEALTH_SUMMARY_PATH = ECHO_DIR / "titan_health_summary.json"
 TITAN_WORKER_SUMMARY_PATH = ECHO_DIR / "titan_worker_summary.json"
@@ -1478,6 +1486,66 @@ def get_chatgpt_custom_action_plan() -> dict[str, Any]:
     return build_custom_gpt_action_plan()
 
 
+def _batch3_safety() -> dict[str, bool]:
+    return {
+        "codex_execution": False,
+        "shell_execution": False,
+        "git_push_pull": False,
+        "deploy_or_restart": False,
+        "titan_runtime_changed": False,
+        "actual_execution_permitted": False,
+        "broker_changed": False,
+        "risk_changed": False,
+        "scanner_changed": False,
+        "master_brain_changed": False,
+        "runtime_workers_changed": False,
+        "trade_execution_permitted": False,
+        "public_exposure_allowed": False,
+        "external_api_calls_enabled": False,
+        "chatgpt_connection_enabled": False,
+        "voice_enabled": False,
+    }
+
+
+def _batch3_payload(path: Path, missing_status: str = "UNKNOWN_NOT_PROVEN") -> dict[str, Any]:
+    data = _sanitize(_read_json(path))
+    status = data.get("status") if isinstance(data, dict) and data.get("status") else missing_status
+    return {
+        "source": _relative(path),
+        "status": status,
+        "data": data,
+        "safety": _batch3_safety(),
+    }
+
+
+def get_chatgpt_custom_gpt_status() -> dict[str, Any]:
+    return _batch3_payload(CUSTOM_GPT_CONTRACT_PATH, "CUSTOM_GPT_CONTRACT_READY_DISABLED")
+
+
+def get_chatgpt_action_catalog() -> dict[str, Any]:
+    return _batch3_payload(ACTION_REGISTRY_PATH, "ACTION_REGISTRY_READY_DISABLED")
+
+
+def get_chatgpt_session_status() -> dict[str, Any]:
+    return _batch3_payload(SESSION_STATE_PATH, "SESSION_STATE_LOCAL_ONLY")
+
+
+def get_chatgpt_permissions() -> dict[str, Any]:
+    return _batch3_payload(PERMISSION_MATRIX_PATH, "PERMISSION_MATRIX_READY_DISABLED")
+
+
+def get_chatgpt_conversation_status() -> dict[str, Any]:
+    return _batch3_payload(CONVERSATION_BRIDGE_PATH, "CONVERSATION_BRIDGE_READY_DISABLED")
+
+
+def get_chatgpt_voice_readiness() -> dict[str, Any]:
+    return _batch3_payload(VOICE_READINESS_PATH, "VOICE_NOT_ENABLED_FUTURE_ONLY")
+
+
+def get_chatgpt_relay_readiness() -> dict[str, Any]:
+    return _batch3_payload(RELAY_READINESS_PATH)
+
+
 def build_jarvis_ask_response(question: str = "") -> dict[str, Any]:
     category = _interpret_jarvis_ask_category(question)
     runtime_intelligence = build_jarvis_runtime_intelligence()
@@ -2854,6 +2922,13 @@ chatgpt_evidence_catalog = get_chatgpt_evidence_catalog
 chatgpt_integration_status = get_chatgpt_integration_status
 chatgpt_secure_relay_plan = get_chatgpt_secure_relay_plan
 chatgpt_custom_action_plan = get_chatgpt_custom_action_plan
+chatgpt_custom_gpt_status = get_chatgpt_custom_gpt_status
+chatgpt_action_catalog = get_chatgpt_action_catalog
+chatgpt_session_status = get_chatgpt_session_status
+chatgpt_permissions = get_chatgpt_permissions
+chatgpt_conversation_status = get_chatgpt_conversation_status
+chatgpt_voice_readiness = get_chatgpt_voice_readiness
+chatgpt_relay_readiness = get_chatgpt_relay_readiness
 codex_runner_status = get_codex_runner_status
 codex_runner_policy = get_codex_runner_policy
 codex_runner_request = post_codex_runner_request
@@ -2940,6 +3015,13 @@ if FASTAPI_AVAILABLE:
     app.get("/chatgpt/integration/status", dependencies=auth_dependency)(get_chatgpt_integration_status)
     app.get("/chatgpt/secure-relay/plan", dependencies=auth_dependency)(get_chatgpt_secure_relay_plan)
     app.get("/chatgpt/custom-action/plan", dependencies=auth_dependency)(get_chatgpt_custom_action_plan)
+    app.get("/chatgpt/custom-gpt/status", dependencies=auth_dependency)(get_chatgpt_custom_gpt_status)
+    app.get("/chatgpt/action/catalog", dependencies=auth_dependency)(get_chatgpt_action_catalog)
+    app.get("/chatgpt/session/status", dependencies=auth_dependency)(get_chatgpt_session_status)
+    app.get("/chatgpt/permissions", dependencies=auth_dependency)(get_chatgpt_permissions)
+    app.get("/chatgpt/conversation/status", dependencies=auth_dependency)(get_chatgpt_conversation_status)
+    app.get("/chatgpt/voice/readiness", dependencies=auth_dependency)(get_chatgpt_voice_readiness)
+    app.get("/chatgpt/relay/readiness", dependencies=auth_dependency)(get_chatgpt_relay_readiness)
     app.get("/codex/runner/status", dependencies=auth_dependency)(get_codex_runner_status)
     app.get("/codex/runner/policy", dependencies=auth_dependency)(get_codex_runner_policy)
     app.post("/codex/runner/request", dependencies=auth_dependency)(post_codex_runner_request)
@@ -3017,6 +3099,13 @@ __all__ = [
     "get_chatgpt_integration_status",
     "get_chatgpt_secure_relay_plan",
     "get_chatgpt_custom_action_plan",
+    "get_chatgpt_custom_gpt_status",
+    "get_chatgpt_action_catalog",
+    "get_chatgpt_session_status",
+    "get_chatgpt_permissions",
+    "get_chatgpt_conversation_status",
+    "get_chatgpt_voice_readiness",
+    "get_chatgpt_relay_readiness",
     "get_codex_runner_status",
     "get_codex_runner_policy",
     "post_codex_runner_request",
@@ -3083,6 +3172,13 @@ __all__ = [
     "chatgpt_integration_status",
     "chatgpt_secure_relay_plan",
     "chatgpt_custom_action_plan",
+    "chatgpt_custom_gpt_status",
+    "chatgpt_action_catalog",
+    "chatgpt_session_status",
+    "chatgpt_permissions",
+    "chatgpt_conversation_status",
+    "chatgpt_voice_readiness",
+    "chatgpt_relay_readiness",
     "codex_runner_status",
     "codex_runner_policy",
     "codex_runner_request",
