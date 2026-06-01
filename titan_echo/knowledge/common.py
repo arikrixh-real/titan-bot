@@ -4,21 +4,18 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ECHO_RUNTIME = REPO_ROOT / "data" / "runtime" / "echo"
 
 INDEX_EXTENSIONS = {
-    ".bat",
-    ".csv",
-    ".ini",
     ".json",
-    ".jsonl",
     ".md",
     ".py",
     ".txt",
@@ -33,14 +30,30 @@ EXCLUDED_PARTS = {
     ".ruff_cache",
     ".venv",
     "__pycache__",
+    "backups",
     "node_modules",
+    "reports",
 }
 
 EXCLUDED_PREFIXES = {
     ("data", "cache"),
     ("data", "historical"),
     ("data", "historical_longterm"),
+    ("data", "journals"),
+    ("data", "report_vault"),
+    ("data", "runtime"),
 }
+
+MAX_FILE_SIZE_BYTES = 500 * 1024
+MAX_INDEXED_FILES = 3000
+
+_SAFE_MODE = False
+_SCAN_STATS = {
+    "files_seen": 0,
+    "files_indexed": 0,
+    "files_skipped": 0,
+}
+_SAFE_FILE_CACHE: list[Path] | None = None
 
 RUNTIME_GENERATED_NAMES = {
     "live_price_cache.json",
@@ -146,28 +159,109 @@ def write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def set_safe_mode(enabled: bool) -> None:
+    global _SAFE_MODE
+    _SAFE_MODE = enabled
+
+
+def reset_scan_stats() -> None:
+    global _SAFE_FILE_CACHE
+    for key in _SCAN_STATS:
+        _SCAN_STATS[key] = 0
+    _SAFE_FILE_CACHE = None
+
+
+def get_scan_stats() -> dict[str, int]:
+    return dict(_SCAN_STATS)
+
+
+def _is_excluded_parts(parts: tuple[str, ...]) -> bool:
+    if any(part in EXCLUDED_PARTS for part in parts):
+        return True
+    return any(parts[: len(prefix)] == prefix for prefix in EXCLUDED_PREFIXES)
+
+
 def should_exclude(path: Path) -> bool:
     try:
         parts = tuple(part.lower() for part in path.relative_to(REPO_ROOT).parts)
     except ValueError:
         return True
-    if any(part in EXCLUDED_PARTS for part in parts):
-        return True
     if path.name in RUNTIME_GENERATED_NAMES:
         return True
-    return any(parts[: len(prefix)] == prefix for prefix in EXCLUDED_PREFIXES)
+    return _is_excluded_parts(parts)
 
 
-def iter_files(extensions: Iterable[str] | None = None) -> list[Path]:
-    allowed = {ext.lower() for ext in extensions} if extensions else INDEX_EXTENSIONS
-    files: list[Path] = []
-    for path in REPO_ROOT.rglob("*"):
-        if not path.is_file() or should_exclude(path):
+def _iter_repo_paths() -> Iterator[Path]:
+    for root, dirs, files in os.walk(REPO_ROOT):
+        root_path = Path(root)
+        try:
+            root_parts = tuple(part.lower() for part in root_path.relative_to(REPO_ROOT).parts)
+        except ValueError:
+            dirs[:] = []
             continue
-        if path.suffix.lower() not in allowed:
+        kept_dirs = []
+        for dirname in dirs:
+            dir_parts = root_parts + (dirname.lower(),)
+            if not _is_excluded_parts(dir_parts):
+                kept_dirs.append(dirname)
+        dirs[:] = kept_dirs
+        for filename in files:
+            yield root_path / filename
+
+
+def _safe_file_cache() -> list[Path]:
+    global _SAFE_FILE_CACHE
+    if _SAFE_FILE_CACHE is not None:
+        return _SAFE_FILE_CACHE
+    files: list[Path] = []
+    for path in _iter_repo_paths():
+        _SCAN_STATS["files_seen"] += 1
+        if not path.is_file() or should_exclude(path):
+            _SCAN_STATS["files_skipped"] += 1
+            continue
+        if path.suffix.lower() not in INDEX_EXTENSIONS:
+            _SCAN_STATS["files_skipped"] += 1
+            continue
+        try:
+            size_bytes = path.stat().st_size
+        except OSError:
+            _SCAN_STATS["files_skipped"] += 1
+            continue
+        if size_bytes > MAX_FILE_SIZE_BYTES:
+            _SCAN_STATS["files_skipped"] += 1
+            continue
+        if len(files) >= MAX_INDEXED_FILES:
+            _SCAN_STATS["files_skipped"] += 1
             continue
         files.append(path)
-    return sorted(files, key=relative)
+    _SCAN_STATS["files_indexed"] = len(files)
+    _SAFE_FILE_CACHE = files
+    return files
+
+
+def iter_files(extensions: Iterable[str] | None = None, *, safe: bool | None = None) -> Iterator[Path]:
+    use_safe = _SAFE_MODE if safe is None else safe
+    allowed = {ext.lower() for ext in extensions} if extensions else INDEX_EXTENSIONS
+    if use_safe:
+        for path in _safe_file_cache():
+            if path.suffix.lower() in allowed:
+                yield path
+        return
+    for path in _iter_repo_paths():
+        _SCAN_STATS["files_seen"] += 1
+        if not path.is_file() or should_exclude(path):
+            _SCAN_STATS["files_skipped"] += 1
+            continue
+        if path.suffix.lower() not in allowed:
+            _SCAN_STATS["files_skipped"] += 1
+            continue
+        try:
+            size_bytes = path.stat().st_size
+        except OSError:
+            _SCAN_STATS["files_skipped"] += 1
+            continue
+        _SCAN_STATS["files_indexed"] += 1
+        yield path
 
 
 def parse_ast(path: Path) -> ast.Module | None:

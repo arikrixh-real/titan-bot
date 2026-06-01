@@ -69,7 +69,19 @@ def build_file_index() -> dict[str, Any]:
             "module_counts": dict(sorted(module_counts.items())),
             "danger_counts": danger_counts,
         },
-        "excluded": [".venv", ".git", "node_modules", "__pycache__", "runtime generated temporary/cache files"],
+        "excluded": [
+            ".venv",
+            ".git",
+            "__pycache__",
+            "data/cache",
+            "data/historical_longterm",
+            "data/runtime",
+            "data/journals",
+            "data/report_vault",
+            "reports",
+            "backups",
+            "node_modules",
+        ],
         "files": files,
     }
 
