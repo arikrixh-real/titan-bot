@@ -81,6 +81,11 @@ TITAN_WORKER_SUMMARY_PATH = ECHO_DIR / "titan_worker_summary.json"
 TITAN_SCANNER_SUMMARY_PATH = ECHO_DIR / "titan_scanner_summary.json"
 TITAN_TRADE_SUMMARY_PATH = ECHO_DIR / "titan_trade_summary.json"
 TITAN_BRAIN_SUMMARY_PATH = ECHO_DIR / "titan_brain_summary.json"
+ECHO_KNOWLEDGE_FILES_PATH = ECHO_DIR / "file_index.json"
+ECHO_KNOWLEDGE_MODULES_PATH = ECHO_DIR / "module_registry.json"
+ECHO_KNOWLEDGE_ENGINES_PATH = ECHO_DIR / "engine_registry.json"
+ECHO_KNOWLEDGE_ARCHITECTURE_PATH = ECHO_DIR / "architecture_map.json"
+ECHO_KNOWLEDGE_DANGER_PATH = ECHO_DIR / "danger_registry.json"
 VALID_RISK_LEVELS = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
 SECRET_MARKERS = (
@@ -788,6 +793,7 @@ def build_echo_context() -> dict[str, Any]:
         "schema": "titan.echo.context.v1",
         "status": "ECHO_CONTEXT_LOCAL_ONLY",
         "runtime_intelligence": _runtime_intelligence_summary(evidence),
+        "knowledge": _echo_knowledge_context(),
         "sources": {name: {"source": record["source"], "status": record["status"]} for name, record in evidence.items()},
         "truth_rule": "UNKNOWN_NOT_PROVEN when unavailable from runtime evidence files.",
         "safety": _jarvis_safety(),
@@ -824,6 +830,26 @@ def build_echo_evidence_context() -> dict[str, Any]:
     return payload
 
 
+def _echo_knowledge_context() -> dict[str, Any]:
+    sources = {
+        "file_index": ECHO_KNOWLEDGE_FILES_PATH,
+        "module_registry": ECHO_KNOWLEDGE_MODULES_PATH,
+        "engine_registry": ECHO_KNOWLEDGE_ENGINES_PATH,
+        "architecture_map": ECHO_KNOWLEDGE_ARCHITECTURE_PATH,
+        "danger_registry": ECHO_KNOWLEDGE_DANGER_PATH,
+        "ownership_map": ECHO_DIR / "ownership_map.json",
+        "connection_graph": ECHO_DIR / "connection_graph.json",
+    }
+    return {
+        name: {
+            "source": _relative(path),
+            "status": "EVIDENCE_PRESENT" if path.exists() else "UNKNOWN_NOT_PROVEN",
+            "summary": (_read_json(path) or {}).get("summary", {}) if isinstance(_read_json(path), dict) else {},
+        }
+        for name, path in sources.items()
+    }
+
+
 def get_echo_context() -> dict[str, Any]:
     return build_echo_context()
 
@@ -834,6 +860,41 @@ def get_echo_runtime() -> dict[str, Any]:
 
 def get_echo_evidence() -> dict[str, Any]:
     return build_echo_evidence_context()
+
+
+def _knowledge_payload(name: str, path: Path) -> dict[str, Any]:
+    data = _sanitize(_read_json(path))
+    return {
+        "schema": "titan.echo.knowledge_endpoint.v1",
+        "name": name,
+        "source": _relative(path),
+        "status": "EVIDENCE_PRESENT" if data is not None else "UNKNOWN_NOT_PROVEN",
+        "read_only": True,
+        "execution_permitted": False,
+        "data": data,
+        "safety": _jarvis_safety(),
+        "generated_at_ist": _timestamp_ist(),
+    }
+
+
+def get_echo_knowledge_files() -> dict[str, Any]:
+    return _knowledge_payload("files", ECHO_KNOWLEDGE_FILES_PATH)
+
+
+def get_echo_knowledge_modules() -> dict[str, Any]:
+    return _knowledge_payload("modules", ECHO_KNOWLEDGE_MODULES_PATH)
+
+
+def get_echo_knowledge_engines() -> dict[str, Any]:
+    return _knowledge_payload("engines", ECHO_KNOWLEDGE_ENGINES_PATH)
+
+
+def get_echo_knowledge_architecture() -> dict[str, Any]:
+    return _knowledge_payload("architecture", ECHO_KNOWLEDGE_ARCHITECTURE_PATH)
+
+
+def get_echo_knowledge_danger() -> dict[str, Any]:
+    return _knowledge_payload("danger", ECHO_KNOWLEDGE_DANGER_PATH)
 
 
 QUESTION_CATEGORY_KEYWORDS = {
@@ -2715,6 +2776,11 @@ chat_session_create = post_chat_session_create
 echo_context = get_echo_context
 echo_runtime = get_echo_runtime
 echo_evidence = get_echo_evidence
+echo_knowledge_files = get_echo_knowledge_files
+echo_knowledge_modules = get_echo_knowledge_modules
+echo_knowledge_engines = get_echo_knowledge_engines
+echo_knowledge_architecture = get_echo_knowledge_architecture
+echo_knowledge_danger = get_echo_knowledge_danger
 jarvis_status = get_jarvis_status
 jarvis_question = get_jarvis_question
 jarvis_question_post = post_jarvis_question
@@ -2780,6 +2846,11 @@ if FASTAPI_AVAILABLE:
     app.get("/echo/context", dependencies=auth_dependency)(get_echo_context)
     app.get("/echo/runtime", dependencies=auth_dependency)(get_echo_runtime)
     app.get("/echo/evidence", dependencies=auth_dependency)(get_echo_evidence)
+    app.get("/echo/knowledge/files", dependencies=auth_dependency)(get_echo_knowledge_files)
+    app.get("/echo/knowledge/modules", dependencies=auth_dependency)(get_echo_knowledge_modules)
+    app.get("/echo/knowledge/engines", dependencies=auth_dependency)(get_echo_knowledge_engines)
+    app.get("/echo/knowledge/architecture", dependencies=auth_dependency)(get_echo_knowledge_architecture)
+    app.get("/echo/knowledge/danger", dependencies=auth_dependency)(get_echo_knowledge_danger)
     app.get("/jarvis/status", dependencies=auth_dependency)(get_jarvis_status)
     app.get("/jarvis/question", dependencies=auth_dependency)(get_jarvis_question)
     app.post("/jarvis/question", dependencies=auth_dependency)(post_jarvis_question)
@@ -2852,6 +2923,11 @@ __all__ = [
     "get_echo_context",
     "get_echo_runtime",
     "get_echo_evidence",
+    "get_echo_knowledge_files",
+    "get_echo_knowledge_modules",
+    "get_echo_knowledge_engines",
+    "get_echo_knowledge_architecture",
+    "get_echo_knowledge_danger",
     "get_jarvis_status",
     "get_jarvis_question",
     "post_jarvis_question",
@@ -2913,6 +2989,11 @@ __all__ = [
     "echo_context",
     "echo_runtime",
     "echo_evidence",
+    "echo_knowledge_files",
+    "echo_knowledge_modules",
+    "echo_knowledge_engines",
+    "echo_knowledge_architecture",
+    "echo_knowledge_danger",
     "jarvis_status",
     "jarvis_question",
     "jarvis_question_post",
