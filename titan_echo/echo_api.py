@@ -1865,6 +1865,67 @@ def post_jarvis_ask(payload: dict[str, Any]) -> dict[str, Any]:
     return build_jarvis_ask_response(str(body.get("question") or ""))
 
 
+def build_jarvis_ask_compact_response(question: str = "", context: str = "") -> dict[str, Any]:
+    combined_question = f"{question} {context}".strip()
+    category = _interpret_jarvis_ask_category(combined_question)
+    evidence_used = _evidence_names_for_category(category)
+    titan_evidence = _titan_runtime_evidence_map()
+    echo_evidence = _phase_omega_evidence_map()
+    titan_names = set(TITAN_RUNTIME_EVIDENCE_FILES)
+    echo_names = set(PHASE_OMEGA_EVIDENCE_FILES)
+    unknowns: list[str] = []
+    present: list[str] = []
+    if category == "unknown":
+        unknowns.append("unsupported_question_category")
+    elif category != "safety_status":
+        for name in evidence_used:
+            if name in titan_names:
+                if titan_evidence.get(name, {}).get("status") == "EVIDENCE_PRESENT":
+                    present.append(name)
+                else:
+                    unknowns.append(name)
+            elif name in echo_names:
+                if echo_evidence.get(name, {}).get("status") == "EVIDENCE_PRESENT":
+                    present.append(name)
+                else:
+                    unknowns.append(name)
+            elif name == "endpoint_safety_policy":
+                present.append(name)
+            else:
+                unknowns.append(name)
+    else:
+        present.append("endpoint_safety_policy")
+
+    unknowns = sorted(set(unknowns))
+    present = sorted(set(present))
+    status = _ask_status_from_unknowns(unknowns, evidence_used)
+    blockers = _ask_blockers(category, unknowns, {})
+    return {
+        "schema": "titan.echo.jarvis_ask_compact.v1",
+        "status": status,
+        "question": question,
+        "interpreted_category": category,
+        "answer_summary": _ask_summary_for_category(category, status),
+        "evidence_status": {
+            "status": status,
+            "evidence_used": evidence_used,
+            "present": present,
+            "missing": unknowns,
+        },
+        "unknowns": unknowns,
+        "recommended_next_step": _ask_next_safe_step(category, status, blockers),
+        "safety": _jarvis_core_safety(),
+    }
+
+
+def post_jarvis_ask_compact(payload: dict[str, Any]) -> dict[str, Any]:
+    body = payload if isinstance(payload, dict) else {}
+    return build_jarvis_ask_compact_response(
+        str(body.get("question") or ""),
+        str(body.get("context") or ""),
+    )
+
+
 def _unknown_titan_answer() -> str:
     return "ECHO does not have verified TITAN runtime evidence for this yet."
 
@@ -3162,6 +3223,7 @@ jarvis_status = get_jarvis_status
 jarvis_question = get_jarvis_question
 jarvis_question_post = post_jarvis_question
 jarvis_ask = post_jarvis_ask
+jarvis_ask_compact = post_jarvis_ask_compact
 jarvis_explain = get_jarvis_explain
 jarvis_investigate = get_jarvis_investigate
 jarvis_mission = get_jarvis_mission
@@ -3256,6 +3318,7 @@ if FASTAPI_AVAILABLE:
     app.get("/jarvis/question", dependencies=auth_dependency)(get_jarvis_question)
     app.post("/jarvis/question", dependencies=auth_dependency)(post_jarvis_question)
     app.post("/jarvis/ask", dependencies=auth_dependency)(post_jarvis_ask)
+    app.post("/jarvis/ask/compact", dependencies=auth_dependency)(post_jarvis_ask_compact)
     app.get("/jarvis/explain", dependencies=auth_dependency)(get_jarvis_explain)
     app.get("/jarvis/investigate", dependencies=auth_dependency)(get_jarvis_investigate)
     app.get("/jarvis/mission", dependencies=auth_dependency)(get_jarvis_mission)
@@ -3341,6 +3404,7 @@ __all__ = [
     "get_jarvis_question",
     "post_jarvis_question",
     "post_jarvis_ask",
+    "post_jarvis_ask_compact",
     "get_jarvis_explain",
     "get_jarvis_investigate",
     "get_jarvis_mission",
@@ -3416,6 +3480,7 @@ __all__ = [
     "jarvis_question",
     "jarvis_question_post",
     "jarvis_ask",
+    "jarvis_ask_compact",
     "jarvis_explain",
     "jarvis_investigate",
     "jarvis_mission",

@@ -19,6 +19,7 @@ ALLOWED_ECHO_ENDPOINTS = {
     "/chatgpt/evidence/contract",
     "/chatgpt/evidence/catalog",
     "/jarvis/ask",
+    "/jarvis/ask/compact",
     "/titan/status",
     "/titan/status/summary",
 }

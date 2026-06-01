@@ -55,6 +55,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GenericRelayResponse"
+  /relay/jarvis/ask/compact:
+    post:
+      operationId: askJarvisCompact
+      summary: Ask Jarvis for a compact evidence-grounded answer.
+      description: Compact read-only Jarvis endpoint for Custom GPT use; excludes large details and raw runtime payloads.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                question:
+                  type: string
+                context:
+                  type: string
+              required:
+                - question
+      responses:
+        "200":
+          description: Compact Jarvis answer payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericRelayResponse"
   /relay/titan/status:
     get:
       operationId: getTitanStatus

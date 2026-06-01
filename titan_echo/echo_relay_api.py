@@ -120,6 +120,13 @@ def relay_jarvis_ask(payload: dict[str, Any], x_echo_relay_key: str | None = Non
     return _forward_to_echo("POST", "/jarvis/ask", payload if isinstance(payload, dict) else {})
 
 
+def relay_jarvis_ask_compact(payload: dict[str, Any], x_echo_relay_key: str | None = None) -> dict[str, Any]:
+    if not relay_enabled():
+        return _disabled_payload()
+    require_relay_key(x_echo_relay_key)
+    return _forward_to_echo("POST", "/jarvis/ask/compact", payload if isinstance(payload, dict) else {})
+
+
 def relay_titan_status(x_echo_relay_key: str | None = None) -> dict[str, Any]:
     if not relay_enabled():
         return _disabled_payload()
@@ -174,6 +181,13 @@ if FASTAPI_AVAILABLE:
     ) -> dict[str, Any]:
         return relay_jarvis_ask(payload or {}, x_echo_relay_key)
 
+    @app.post("/relay/jarvis/ask/compact")
+    def route_relay_jarvis_ask_compact(
+        payload: dict[str, Any] | None = Body(default=None),
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        return relay_jarvis_ask_compact(payload or {}, x_echo_relay_key)
+
     @app.get("/relay/titan/status")
     def route_relay_titan_status(x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME)) -> dict[str, Any]:
         return relay_titan_status(x_echo_relay_key)
@@ -211,6 +225,7 @@ __all__ = [
     "relay_chatgpt_integration_status",
     "relay_health",
     "relay_jarvis_ask",
+    "relay_jarvis_ask_compact",
     "relay_titan_status",
     "relay_titan_status_summary",
 ]

@@ -8,6 +8,7 @@ Hard rules:
 - Use only these action paths:
   - `/relay/health`
   - `/relay/jarvis/ask`
+  - `/relay/jarvis/ask/compact`
   - `/relay/titan/status`
   - `/relay/titan/status/summary`
   - `/relay/chatgpt/integration/status`
@@ -25,4 +26,5 @@ Recommended action use:
 - Use `/relay/chatgpt/evidence/contract` and `/relay/chatgpt/evidence/catalog` before interpreting TITAN evidence.
 - Use `/relay/titan/status/summary` for compact Custom GPT status summaries.
 - Use `/relay/titan/status` only when full status evidence is needed.
-- Use `/relay/jarvis/ask` only for evidence-grounded questions.
+- Use `/relay/jarvis/ask/compact` for evidence-grounded Custom GPT questions.
+- Use `/relay/jarvis/ask` only when full Jarvis details are explicitly needed.

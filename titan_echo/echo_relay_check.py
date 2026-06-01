@@ -11,6 +11,7 @@ from titan_echo.echo_relay_config import ALLOWED_ECHO_ENDPOINTS, BLOCKED_PREFIXE
 REQUIRED_ROUTES = {
     "/relay/health",
     "/relay/jarvis/ask",
+    "/relay/jarvis/ask/compact",
     "/relay/titan/status",
     "/relay/titan/status/summary",
     "/relay/chatgpt/integration/status",
@@ -32,6 +33,7 @@ REQUIRED_ALLOWED_ECHO_ENDPOINTS = {
     "/chatgpt/evidence/contract",
     "/chatgpt/evidence/catalog",
     "/jarvis/ask",
+    "/jarvis/ask/compact",
     "/titan/status",
     "/titan/status/summary",
 }
