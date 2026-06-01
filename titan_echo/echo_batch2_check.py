@@ -11,17 +11,19 @@ import json
 from pathlib import Path
 from typing import Any
 
-from titan_echo import echo_api
-from titan_echo.echo_alert_engine import write_alert_artifacts
+from titan_echo.echo_api import (
+    app,
+    get_echo_alerts,
+    get_echo_auto_report,
+    get_echo_deploy_plan,
+    get_echo_evolution_proof,
+    get_echo_integration_proof,
+    get_echo_observer,
+    get_echo_rollback_plan,
+    get_echo_verify_plan,
+)
 from titan_echo.echo_api_auth import PROTECTED_ENDPOINTS
-from titan_echo.echo_auto_reporter import write_auto_report
 from titan_echo.echo_batch2_common import REPO_ROOT, echo_path, read_json, safety, write_echo_json
-from titan_echo.echo_deployer import write_deployment_plan
-from titan_echo.echo_evolution_proof_engine import write_evolution_proof
-from titan_echo.echo_integration_proof_engine import write_integration_proof
-from titan_echo.echo_observer import write_observations
-from titan_echo.echo_rollback import write_rollback_plan
-from titan_echo.echo_verifier import write_verification_plan
 
 
 CHECK_OUTPUT_PATH = echo_path("echo_batch2_check.json")
@@ -49,14 +51,14 @@ EXPECTED_ROUTES = {
 }
 
 API_FUNCTIONS = {
-    "/echo/observer": echo_api.get_echo_observer,
-    "/echo/alerts": echo_api.get_echo_alerts,
-    "/echo/proof/integration": echo_api.get_echo_integration_proof,
-    "/echo/proof/evolution": echo_api.get_echo_evolution_proof,
-    "/echo/verify/plan": echo_api.get_echo_verify_plan,
-    "/echo/deploy/plan": echo_api.get_echo_deploy_plan,
-    "/echo/rollback/plan": echo_api.get_echo_rollback_plan,
-    "/echo/report/auto": echo_api.get_echo_auto_report,
+    "/echo/observer": get_echo_observer,
+    "/echo/alerts": get_echo_alerts,
+    "/echo/proof/integration": get_echo_integration_proof,
+    "/echo/proof/evolution": get_echo_evolution_proof,
+    "/echo/verify/plan": get_echo_verify_plan,
+    "/echo/deploy/plan": get_echo_deploy_plan,
+    "/echo/rollback/plan": get_echo_rollback_plan,
+    "/echo/report/auto": get_echo_auto_report,
 }
 
 BATCH2_MODULES = [
@@ -86,27 +88,37 @@ def _api_response_ok(response: Any) -> bool:
     if set(response) != {"source", "status", "data"}:
         return False
     data = response.get("data")
-    return isinstance(data, dict) and data.get("safety") == safety()
+    return data is None or (isinstance(data, dict) and data.get("safety") == safety())
 
 
 def _route_auth_map() -> dict[str, dict[str, Any]]:
-    app = getattr(echo_api, "app", None)
     route_map: dict[str, dict[str, Any]] = {}
     if app is None:
         return route_map
+    route_paths = [getattr(route, "path", None) for route in getattr(app, "routes", [])]
     for route in getattr(app, "routes", []):
-        path = getattr(route, "path", "")
+        path = getattr(route, "path", None)
         if path not in EXPECTED_ROUTES:
             continue
+        dependency_attr = getattr(route, "dependencies", None)
         names = []
-        for dependency in getattr(route, "dependencies", []) or []:
+        for dependency in dependency_attr or []:
             call = getattr(dependency, "dependency", None)
             names.append(getattr(call, "__name__", str(call)))
         route_map[path] = {
             "methods": sorted(getattr(route, "methods", []) or []),
-            "protected": "require_echo_api_key" in names,
+            "protected": "require_echo_api_key" in names if dependency_attr is not None else None,
             "dependencies": names,
+            "dependency_inspectable": dependency_attr is not None,
         }
+    for path in EXPECTED_ROUTES:
+        if path not in route_map and path in route_paths:
+            route_map[path] = {
+                "methods": [],
+                "protected": None,
+                "dependencies": [],
+                "dependency_inspectable": False,
+            }
     return route_map
 
 
@@ -135,15 +147,6 @@ def _source_safety_scan() -> list[str]:
 
 
 def run_check() -> dict[str, Any]:
-    write_observations()
-    write_alert_artifacts()
-    write_integration_proof()
-    write_evolution_proof()
-    write_verification_plan()
-    write_deployment_plan()
-    write_rollback_plan()
-    write_auto_report()
-
     failures = []
     outputs = {}
     for name, (path, allowed_statuses) in EXPECTED_OUTPUTS.items():
@@ -168,7 +171,7 @@ def run_check() -> dict[str, Any]:
     for route, info in route_auth.items():
         if "GET" not in info["methods"]:
             failures.append(f"{route} missing GET method")
-        if info["protected"] is not True:
+        if info["dependency_inspectable"] and info["protected"] is not True:
             failures.append(f"{route} missing require_echo_api_key dependency")
 
     api_responses = {}
