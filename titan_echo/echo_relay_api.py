@@ -36,6 +36,64 @@ else:  # pragma: no cover - depends on local dependency set
     Header = None  # type: ignore[assignment, misc]
 
 
+
+def _codex_prompt_safety_check(prompt: str) -> dict[str, Any]:
+    lowered = prompt.lower()
+
+    blocked_terms = [
+        "rm -rf",
+        "sudo ",
+        "systemctl",
+        "restart",
+        "deploy",
+        "git push",
+        "git pull",
+        "broker",
+        "live order",
+        "place order",
+        "api key",
+        ".env",
+        "delete ",
+        "chmod",
+        "chown",
+        "kill ",
+        "pkill",
+    ]
+
+    hits = [term for term in blocked_terms if term in lowered]
+
+    allowed_prefixes = [
+        "create a harmless proof file",
+        "inspect",
+        "read",
+        "summarize",
+        "verify",
+        "report",
+    ]
+
+    prefix_ok = any(lowered.strip().startswith(x) for x in allowed_prefixes)
+
+    if hits:
+        return {
+            "allowed": False,
+            "reason": "blocked_terms_present",
+            "hits": hits,
+        }
+
+    if not prefix_ok:
+        return {
+            "allowed": False,
+            "reason": "prompt_does_not_match_safe_prefix",
+            "allowed_prefixes": allowed_prefixes,
+        }
+
+    return {
+        "allowed": True,
+        "reason": "safe_prompt_shape",
+        "hits": [],
+    }
+
+
 def _disabled_payload() -> dict[str, Any]:
     payload = relay_status_payload()
     payload["status"] = "RELAY_DISABLED"
@@ -288,6 +346,15 @@ if FASTAPI_AVAILABLE:
             return {"status": "CODEX_BLOCKED", "reason": "approval_id required"}
         if not prompt:
             return {"status": "CODEX_BLOCKED", "reason": "prompt required"}
+
+        safety_check = _codex_prompt_safety_check(prompt)
+        if not safety_check.get("allowed"):
+            return {
+                "status": "CODEX_BLOCKED",
+                "reason": "prompt_safety_check_failed",
+                "safety_check": safety_check,
+                "execution_performed": False,
+            }
 
         cmd = [
             "codex", "exec",
