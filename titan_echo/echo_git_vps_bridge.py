@@ -186,5 +186,48 @@ def push_committed_changes() -> dict[str, Any]:
             "execution_performed": False,
         }
 
+
+def pull_committed_changes() -> dict[str, Any]:
+    """
+    Pull remote committed changes only.
+    Uses git pull --ff-only.
+    Does not restart services.
+    Does not deploy.
+    Does not run TITAN.
+    """
+    import subprocess
+
+    try:
+        r = subprocess.run(
+            ["git", "pull", "--ff-only"],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        return {
+            "schema": "titan.echo.vps_pull_approved.v1",
+            "status": "VPS_PULL_OK" if r.returncode == 0 else "VPS_PULL_FAILED",
+            "returncode": r.returncode,
+            "stdout": r.stdout[-3000:],
+            "stderr": r.stderr[-3000:],
+            "execution_performed": True,
+            "safety": {
+                "git_push_pull": True,
+                "deploy_or_restart": False,
+                "runtime_changed": False,
+                "services_restarted": False,
+                "daemon_restarted": False
+            },
+        }
+    except Exception as e:
+        return {
+            "schema": "titan.echo.vps_pull_approved.v1",
+            "status": "VPS_PULL_EXCEPTION",
+            "error": type(e).__name__,
+            "detail": str(e),
+            "execution_performed": False,
+        }
+
 if __name__ == "__main__":
     print(json.dumps({"policy": get_policy()}, indent=2))
