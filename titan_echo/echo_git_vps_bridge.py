@@ -126,7 +126,8 @@ def verify_request() -> dict[str, Any]:
             "schema": "titan.echo.git_vps_bridge_verify.v1",
             "status": "VERIFY_OK",
             "execution_performed": True,
-            "git_status": git.stdout.splitlines()[:30],
+            "git_status_count": len(git.stdout.splitlines()),
+            "git_status_sample": "compact_output_hidden",
             "safety": {
                 "git_push_pull": False,
                 "deploy_or_restart": False,
