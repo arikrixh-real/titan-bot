@@ -141,13 +141,19 @@ def _mission_exists(mission_id: str) -> bool:
     mission_plan = _read_json(MISSION_PLAN_PATH)
     if not isinstance(mission_plan, dict):
         return False
+
+    if str(mission_plan.get("mission_id") or "") == mission_id:
+        return True
+
     current = mission_plan.get("current_mission")
     if isinstance(current, dict) and str(current.get("mission_id") or "") == mission_id:
         return True
+
     for key in ("mission", "active_mission"):
         item = mission_plan.get(key)
         if isinstance(item, dict) and str(item.get("mission_id") or "") == mission_id:
             return True
+
     return False
 
 
@@ -156,7 +162,18 @@ def _approval_exists(approval_id: str) -> bool:
     approvals = queue.get("approvals") if isinstance(queue, dict) else None
     if not isinstance(approvals, list):
         return False
-    return any(isinstance(item, dict) and str(item.get("approval_id") or "") == approval_id for item in approvals)
+
+    for item in approvals:
+        if not isinstance(item, dict):
+            continue
+
+        if str(item.get("approval_id") or "") == approval_id:
+            return True
+
+        if str(item.get("mission_id") or "") == approval_id:
+            return True
+
+    return False
 
 
 def _dict_present(path: Path) -> bool:
