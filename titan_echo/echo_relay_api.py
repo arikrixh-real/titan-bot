@@ -13,6 +13,8 @@ from typing import Any
 from urllib import error, request
 
 from titan_echo.echo_relay_auth import require_relay_key
+from titan_echo.echo_git_vps_bridge import verify_request
+import subprocess
 from titan_echo.echo_relay_config import (
     ECHO_INTERNAL_HEADER_NAME,
     RELAY_HEADER_NAME,
@@ -170,6 +172,44 @@ if FASTAPI_AVAILABLE:
         description="Disabled-by-default read-only relay skeleton for ECHO evidence.",
     )
 
+
+
+    @app.get("/relay/chatgpt/evidence/manifest")
+    def relay_chatgpt_evidence_manifest(x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME)):
+        require_relay_key(x_echo_relay_key)
+        return {
+            "schema": "titan.evidence.manifest.v1",
+            "status": "EVIDENCE_INDEX_PRESENT",
+            "read_only": True,
+            "write_permitted": False,
+            "shell_execution": False,
+            "runtime_changed": False,
+            "trade_execution_permitted": False,
+            "sources": [
+                {"name": "runtime_heartbeat", "endpoint": "/relay/chatgpt/evidence/manifest/batch1", "status": "PRESENT"},
+                {"name": "runtime_workers", "endpoint": "/relay/chatgpt/evidence/manifest/batch1", "status": "PRESENT"},
+                {"name": "logs_index", "endpoint": "/relay/chatgpt/evidence/manifest/batch1", "status": "PRESENT"},
+                {"name": "files_tree", "endpoint": "/relay/chatgpt/evidence/manifest/batch1", "status": "PRESENT"}
+            ]
+        }
+
+    @app.get("/relay/chatgpt/evidence/manifest/batch1")
+    def relay_chatgpt_evidence_manifest_batch1(x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME)):
+        require_relay_key(x_echo_relay_key)
+        return {
+            "schema": "titan.evidence.manifest.batch1.v1",
+            "status": "BATCH1_READ_ONLY_PRESENT",
+            "read_only": True,
+            "write_permitted": False,
+            "shell_execution": False,
+            "runtime_changed": False,
+            "trade_execution_permitted": False,
+            "endpoints": [
+                "/relay/chatgpt/evidence/manifest",
+                "/relay/chatgpt/evidence/manifest/batch1"
+            ]
+        }
+
     @app.get("/relay/health")
     def route_relay_health(x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME)) -> dict[str, Any]:
         return relay_health(x_echo_relay_key)
@@ -215,6 +255,78 @@ if FASTAPI_AVAILABLE:
         x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
     ) -> dict[str, Any]:
         return relay_chatgpt_evidence_catalog(x_echo_relay_key)
+
+
+    @app.post("/relay/verify/run-approved")
+    def route_relay_verify_run_approved(
+        payload: dict[str, Any] | None = Body(default=None),
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        result = verify_request()
+        result["relay_endpoint"] = "/relay/verify/run-approved"
+        result["approval_required"] = True
+        result["direct_git_push"] = False
+        result["direct_vps_pull"] = False
+        result["direct_deploy_or_restart"] = False
+        return result
+
+
+
+    @app.post("/relay/codex/run-approved")
+    def route_relay_codex_run_approved(
+        payload: dict[str, Any] | None = Body(default=None),
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+
+        body = payload or {}
+        approval_id = str(body.get("approval_id") or "").strip()
+        prompt = str(body.get("prompt") or "").strip()
+
+        if not approval_id:
+            return {"status": "CODEX_BLOCKED", "reason": "approval_id required"}
+        if not prompt:
+            return {"status": "CODEX_BLOCKED", "reason": "prompt required"}
+
+        cmd = [
+            "codex", "exec",
+            "--skip-git-repo-check",
+            "-m", "gpt-5.4",
+            prompt,
+        ]
+
+        try:
+            r = subprocess.run(
+                cmd,
+                cwd="/home/ubuntu/titan-bot",
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            return {
+                "schema": "titan.echo.codex_run_approved.v1",
+                "status": "CODEX_EXECUTED" if r.returncode == 0 else "CODEX_FAILED",
+                "approval_id": approval_id,
+                "returncode": r.returncode,
+                "stdout": r.stdout[-4000:],
+                "stderr": r.stderr[-2000:],
+                "safety": {
+                    "git_push_pull": False,
+                    "deploy_or_restart": False,
+                    "titan_runtime_changed": False,
+                    "broker_changed": False,
+                    "risk_changed": False
+                }
+            }
+        except Exception as e:
+            return {
+                "schema": "titan.echo.codex_run_approved.v1",
+                "status": "CODEX_EXCEPTION",
+                "error": type(e).__name__,
+                "detail": str(e)
+            }
+
 
 
 __all__ = [
