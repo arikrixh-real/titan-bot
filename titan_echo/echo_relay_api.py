@@ -13,7 +13,7 @@ from typing import Any
 from urllib import error, request
 
 from titan_echo.echo_relay_auth import require_relay_key
-from titan_echo.echo_git_vps_bridge import verify_request
+from titan_echo.echo_git_vps_bridge import verify_request, push_committed_changes
 import subprocess
 from titan_echo.echo_relay_config import (
     ECHO_INTERNAL_HEADER_NAME,
@@ -326,6 +326,31 @@ if FASTAPI_AVAILABLE:
                 "error": type(e).__name__,
                 "detail": str(e)
             }
+
+
+
+    @app.post("/relay/git/push-approved")
+    def route_relay_git_push_approved(
+        payload: dict[str, Any] | None = Body(default=None),
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+
+        body = payload or {}
+        approval_id = str(body.get("approval_id") or "").strip()
+        confirm = str(body.get("confirm") or "").strip()
+
+        if not approval_id:
+            return {"status": "GIT_PUSH_BLOCKED", "reason": "approval_id required"}
+        if confirm != "I_APPROVE_GIT_PUSH":
+            return {"status": "GIT_PUSH_BLOCKED", "reason": "confirm must be I_APPROVE_GIT_PUSH"}
+
+        result = push_committed_changes()
+        result["relay_endpoint"] = "/relay/git/push-approved"
+        result["approval_required"] = True
+        result["direct_vps_pull"] = False
+        result["direct_deploy_or_restart"] = False
+        return result
 
 
 

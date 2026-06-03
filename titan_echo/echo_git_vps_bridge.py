@@ -143,5 +143,48 @@ def verify_request() -> dict[str, Any]:
             "execution_performed": False,
         }
 
+
+def push_committed_changes() -> dict[str, Any]:
+    """
+    Push already-committed changes only.
+    Does not stage files.
+    Does not commit.
+    Does not pull.
+    Does not deploy or restart.
+    """
+    import subprocess
+
+    try:
+        r = subprocess.run(
+            ["git", "push", "origin", "main"],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        return {
+            "schema": "titan.echo.git_push_approved.v1",
+            "status": "GIT_PUSH_OK" if r.returncode == 0 else "GIT_PUSH_FAILED",
+            "returncode": r.returncode,
+            "stdout": r.stdout[-3000:],
+            "stderr": r.stderr[-3000:],
+            "execution_performed": True,
+            "safety": {
+                "git_push_pull": True,
+                "deploy_or_restart": False,
+                "runtime_changed": False,
+                "staged_files_changed": False,
+                "commit_created": False
+            },
+        }
+    except Exception as e:
+        return {
+            "schema": "titan.echo.git_push_approved.v1",
+            "status": "GIT_PUSH_EXCEPTION",
+            "error": type(e).__name__,
+            "detail": str(e),
+            "execution_performed": False,
+        }
+
 if __name__ == "__main__":
     print(json.dumps({"policy": get_policy()}, indent=2))
