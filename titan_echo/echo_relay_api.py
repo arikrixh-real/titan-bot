@@ -24,6 +24,15 @@ from titan_echo.echo_mission_brain import (
     rollback_run_approved,
     rollback_status,
 )
+from titan_echo.echo_inspection_layer import (
+    inspect_connections,
+    inspect_file,
+    inspect_git,
+    inspect_health,
+    inspect_runtime,
+    inspect_search,
+    inspect_tree,
+)
 import subprocess
 from titan_echo.echo_relay_config import (
     ECHO_INTERNAL_HEADER_NAME,
@@ -481,6 +490,64 @@ if FASTAPI_AVAILABLE:
     def route_relay_health(x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME)) -> dict[str, Any]:
         return relay_health(x_echo_relay_key)
 
+    @app.get("/relay/inspect/tree")
+    def route_relay_inspect_tree(
+        path: str | None = ".",
+        depth: int = 2,
+        max_entries: int = 250,
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return inspect_tree(path, depth, max_entries)
+
+    @app.get("/relay/inspect/file")
+    def route_relay_inspect_file(
+        path: str,
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return inspect_file(path)
+
+    @app.get("/relay/inspect/runtime")
+    def route_relay_inspect_runtime(
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return inspect_runtime()
+
+    @app.get("/relay/inspect/health")
+    def route_relay_inspect_health(
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return inspect_health()
+
+    @app.get("/relay/inspect/git")
+    def route_relay_inspect_git(
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return inspect_git()
+
+    @app.get("/relay/inspect/search")
+    def route_relay_inspect_search(
+        q: str,
+        path: str | None = ".",
+        max_results: int = 100,
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return inspect_search(q, path, max_results)
+
+    @app.get("/relay/inspect/connections")
+    def route_relay_inspect_connections(
+        path: str | None = ".",
+        max_edges: int = 250,
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return inspect_connections(path, max_edges)
+
     @app.post("/relay/jarvis/ask")
     def route_relay_jarvis_ask(
         payload: dict[str, Any] | None = Body(default=None),
@@ -755,6 +822,13 @@ if FASTAPI_AVAILABLE:
 __all__ = [
     "FASTAPI_AVAILABLE",
     "app",
+    "inspect_connections",
+    "inspect_file",
+    "inspect_git",
+    "inspect_health",
+    "inspect_runtime",
+    "inspect_search",
+    "inspect_tree",
     "relay_chatgpt_evidence_catalog",
     "relay_chatgpt_evidence_contract",
     "relay_chatgpt_evidence_manifest",

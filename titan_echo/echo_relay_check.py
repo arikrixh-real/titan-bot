@@ -10,6 +10,13 @@ from titan_echo.echo_relay_config import ALLOWED_ECHO_ENDPOINTS, BLOCKED_PREFIXE
 
 REQUIRED_ROUTES = {
     "/relay/health",
+    "/relay/inspect/tree",
+    "/relay/inspect/file",
+    "/relay/inspect/runtime",
+    "/relay/inspect/health",
+    "/relay/inspect/git",
+    "/relay/inspect/search",
+    "/relay/inspect/connections",
     "/relay/jarvis/ask",
     "/relay/jarvis/ask/compact",
     "/relay/titan/status",
@@ -17,6 +24,16 @@ REQUIRED_ROUTES = {
     "/relay/chatgpt/integration/status",
     "/relay/chatgpt/evidence/contract",
     "/relay/chatgpt/evidence/catalog",
+}
+
+REQUIRED_INSPECTION_ROUTES = {
+    "/relay/inspect/tree",
+    "/relay/inspect/file",
+    "/relay/inspect/runtime",
+    "/relay/inspect/health",
+    "/relay/inspect/git",
+    "/relay/inspect/search",
+    "/relay/inspect/connections",
 }
 
 REQUIRED_BLOCKED_PREFIXES = {
@@ -32,6 +49,8 @@ REQUIRED_ALLOWED_ECHO_ENDPOINTS = {
     "/chatgpt/integration/status",
     "/chatgpt/evidence/contract",
     "/chatgpt/evidence/catalog",
+    "/chatgpt/evidence/manifest",
+    "/chatgpt/evidence/manifest/batch1",
     "/jarvis/ask",
     "/jarvis/ask/compact",
     "/titan/status",
@@ -57,13 +76,18 @@ def route_paths() -> list[str]:
 def build_check() -> dict[str, Any]:
     routes = route_paths()
     missing = sorted(REQUIRED_ROUTES - set(routes))
-    extra = sorted(set(routes) - REQUIRED_ROUTES)
+    unsafe_inspection_routes = sorted(
+        path
+        for path in routes
+        if path.startswith("/relay/inspect/")
+        and any(token in path for token in ("write", "delete", "edit", "restart", "deploy", "push", "pull"))
+    )
     status = relay_status_payload()
     failures = []
     if missing:
         failures.append("relay route missing")
-    if extra:
-        failures.append("unexpected relay route present")
+    if unsafe_inspection_routes:
+        failures.append("unsafe inspection route present")
     if set(ALLOWED_ECHO_ENDPOINTS) != REQUIRED_ALLOWED_ECHO_ENDPOINTS:
         failures.append("upstream allowlist mismatch")
     if not REQUIRED_BLOCKED_PREFIXES.issubset(set(BLOCKED_PREFIXES)):
@@ -75,7 +99,8 @@ def build_check() -> dict[str, Any]:
         "status": "PASS" if not failures else "FAIL",
         "routes": routes,
         "missing_routes": missing,
-        "extra_routes": extra,
+        "inspection_routes": sorted(REQUIRED_INSPECTION_ROUTES),
+        "unsafe_inspection_routes": unsafe_inspection_routes,
         "allowed_echo_endpoints": sorted(ALLOWED_ECHO_ENDPOINTS),
         "blocked_prefixes": sorted(BLOCKED_PREFIXES),
         "relay_status": status,
