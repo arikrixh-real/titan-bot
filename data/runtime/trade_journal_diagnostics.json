@@ -1,0 +1,43 @@
+{
+  "active_trade_rows": 3,
+  "duplicate_active_trade_keys": [
+    "RELIANCE|BUY|1334.1|1327.4295|1347.441"
+  ],
+  "duplicates_prevented": false,
+  "final_setup_count": 24,
+  "journal_key_count": 1173,
+  "journal_rows": 7769,
+  "journal_write_status": "DISABLED_READONLY_SCANNER",
+  "journal_writes_enabled_in_runtime_scanner": false,
+  "reason": "JOURNAL_AND_ACTIVE_TRADE_CSV_PARSED",
+  "safety": {
+    "broker_execution": false,
+    "deploy_or_restart": false,
+    "live_price_fetch": false,
+    "read_only_diagnostics": true,
+    "risk_change": false,
+    "scanner_execution": false,
+    "trade_placement": false
+  },
+  "sample_setup_key_count": 20,
+  "schema": "titan.echo.trade_journal_diagnostics.v1",
+  "source_files": {
+    "active_trades": {
+      "exists": true,
+      "path": "data/journals/active_trades.csv"
+    },
+    "scanner_status": {
+      "exists": true,
+      "path": "data/runtime/scanner_status.json"
+    },
+    "trade_journal": {
+      "exists": true,
+      "path": "data/journals/trade_journal.csv"
+    }
+  },
+  "status": "EVIDENCE_PRESENT",
+  "status_fields": [
+    "CLOSED"
+  ],
+  "timestamp_ist": "2026-06-04T14:04:47.006403+05:30"
+}

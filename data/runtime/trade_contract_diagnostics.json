@@ -1,0 +1,269 @@
+{
+  "final_setup_count": 24,
+  "reason": "FILTER_DIAGNOSTICS_PARSED",
+  "safety": {
+    "broker_execution": false,
+    "deploy_or_restart": false,
+    "live_price_fetch": false,
+    "read_only_diagnostics": true,
+    "risk_change": false,
+    "scanner_execution": false,
+    "trade_placement": false
+  },
+  "scanner_cycle_id": "2026-05-29T13:28:53.568624+05:30-099eebcd-03b0-4aca-9bf1-c2e47df3cd05",
+  "schema": "titan.echo.trade_contract_diagnostics.v1",
+  "setups_sample": [
+    {
+      "entry": 1183.4,
+      "final_score": 5.08,
+      "rr": 1.4872,
+      "side": "BUY",
+      "source": "filter_engine_diagnostics",
+      "symbol": "HCLTECH",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 1194.2,
+      "final_score": 4.72,
+      "rr": null,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "TATACONSUM",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 132.25,
+      "final_score": 4.38,
+      "rr": null,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "CANBK",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 288.5,
+      "final_score": 4.41,
+      "rr": 0.2,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "FEDERALBNK",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 267.65,
+      "final_score": 4.29,
+      "rr": 0.0577,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "ONGC",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 245.7,
+      "final_score": 3.69,
+      "rr": null,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "RVNL",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 354.1,
+      "final_score": 4.85,
+      "rr": null,
+      "side": "BUY",
+      "source": "filter_engine_diagnostics",
+      "symbol": "VEDL",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 13.91,
+      "final_score": 3.13,
+      "rr": null,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "IDEA",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 142.06,
+      "final_score": 4.44,
+      "rr": null,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "IOC",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 156.72,
+      "final_score": 3.12,
+      "rr": null,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "ASHOKLEY",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 398.3,
+      "final_score": 4.2,
+      "rr": null,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "HINDPETRO",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 1296.2,
+      "final_score": 4.21,
+      "rr": null,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "AXISBANK",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 10558.0,
+      "final_score": 4.72,
+      "rr": null,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "BAJAJ-AUTO",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 919.5,
+      "final_score": 4.0,
+      "rr": null,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "BAJFINANCE",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 1801.0,
+      "final_score": 4.81,
+      "rr": 0.0941,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "BAJAJFINSV",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 7186.5,
+      "final_score": 4.04,
+      "rr": null,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "EICHERMOT",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 753.7,
+      "final_score": 4.41,
+      "rr": null,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "HDFCBANK",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 1275.9,
+      "final_score": 4.58,
+      "rr": null,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "ICICIBANK",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 920.15,
+      "final_score": 3.99,
+      "rr": null,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "INDUSINDBK",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    },
+    {
+      "entry": 1334.1,
+      "final_score": 4.46,
+      "rr": 0.0098,
+      "side": "SELL",
+      "source": "filter_engine_diagnostics",
+      "symbol": "RELIANCE",
+      "validation": {
+        "reason": "Read-only setup contract evidence from filter diagnostics; no trade levels recalculated.",
+        "status": "EVIDENCE_PRESENT"
+      }
+    }
+  ],
+  "source_files": {
+    "filter_engine_diagnostics": {
+      "exists": true,
+      "path": "data/runtime/filter_engine_diagnostics.json"
+    },
+    "scanner_status": {
+      "exists": true,
+      "path": "data/runtime/scanner_status.json"
+    }
+  },
+  "status": "EVIDENCE_PRESENT",
+  "timestamp_ist": "2026-06-04T14:04:46.909356+05:30"
+}

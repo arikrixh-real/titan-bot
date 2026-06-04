@@ -1,0 +1,33 @@
+{
+  "active_trade_rows": 3,
+  "closed_active_trade_count": 3,
+  "monitored_count": 0,
+  "open_trade_count": 0,
+  "reason": "ACTIVE_TRADES_AND_OUTCOMES_PARSED_NO_LIVE_PRICE_CHECK",
+  "safety": {
+    "broker_execution": false,
+    "deploy_or_restart": false,
+    "live_price_fetch": false,
+    "read_only_diagnostics": true,
+    "risk_change": false,
+    "scanner_execution": false,
+    "trade_placement": false
+  },
+  "schema": "titan.echo.outcome_tracker_diagnostics.v1",
+  "sl_hit_count": 1,
+  "source_files": {
+    "active_trades": {
+      "exists": true,
+      "path": "data/journals/active_trades.csv"
+    },
+    "trade_outcomes": {
+      "exists": true,
+      "path": "data/journals/trade_outcomes.csv"
+    }
+  },
+  "status": "EVIDENCE_PRESENT",
+  "timestamp_ist": "2026-06-04T14:04:47.012478+05:30",
+  "tp_hit_count": 2,
+  "tp_sl_check_status": "NO_OPEN_TRADES",
+  "trade_outcome_rows": 3
+}

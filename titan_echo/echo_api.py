@@ -21,6 +21,7 @@ from titan_echo.echo_codex_runner import (
     get_codex_runner_status,
     post_codex_runner_request,
 )
+from titan_echo.echo_trade_diagnostics import ensure_trade_diagnostics
 from titan_echo.echo_api_auth import PROTECTED_ENDPOINTS, require_echo_api_key
 from titan_echo.echo_api_status import build_status, read_sources
 
@@ -423,10 +424,14 @@ def _phase_omega_evidence_map() -> dict[str, dict[str, Any]]:
 
 def _titan_evidence_record(name: str, path: Path) -> dict[str, Any]:
     data = _sanitize(_read_runtime_source(path))
+    parsed_status, reason = _parsed_record_status_and_reason(data)
     return {
         "name": name,
         "source": _relative(path),
         "status": "EVIDENCE_PRESENT" if data is not None else "UNKNOWN_NOT_PROVEN",
+        "exists": path.exists(),
+        "parsed_status": parsed_status,
+        "reason": reason,
         "data": data,
     }
 
@@ -439,6 +444,100 @@ def _titan_runtime_evidence_map() -> dict[str, dict[str, Any]]:
 
 
 def _record_status(record: dict[str, Any]) -> str:
+    return str(record.get("parsed_status") or _parsed_record_status_and_reason(record.get("data"))[0])
+
+
+def _parsed_record_status_and_reason(data: Any) -> tuple[str, str]:
+    if isinstance(data, list):
+        return ("ROWS_PRESENT" if data else "NO_ROWS", "CSV_OR_JSONL_ROW_COUNT_PARSED")
+    if not isinstance(data, dict):
+        return "UNKNOWN_NOT_PROVEN", "FILE_MISSING_OR_UNREADABLE"
+    candidates = [
+        ("status", data.get("status")),
+        ("health", data.get("health")),
+        ("state", data.get("state")),
+        ("runtime_status", data.get("runtime_status")),
+        ("overall_status", data.get("overall_status")),
+        ("paper_trading_status", data.get("paper_trading_status")),
+        ("journal_write_status", data.get("journal_write_status")),
+        ("tp_sl_check_status", data.get("tp_sl_check_status")),
+        ("authoritative_runtime_health.overall_status", (data.get("authoritative_runtime_health") or {}).get("overall_status") if isinstance(data.get("authoritative_runtime_health"), dict) else None),
+        ("scanner_loop_health", data.get("scanner_loop_health")),
+        ("scanner_publication_health", data.get("scanner_publication_health")),
+        ("dashboard_runtime_sync_health", data.get("dashboard_runtime_sync_health")),
+        ("mode", data.get("mode")),
+    ]
+    for key, value in candidates:
+        if value not in (None, ""):
+            return str(value), f"parsed key {key}"
+    if data:
+        return "EVIDENCE_PRESENT", "JSON parsed but no recognized status key"
+    return "UNKNOWN_NOT_PROVEN", "JSON empty or no recognized evidence fields"
+
+
+def _record_reason(record: dict[str, Any]) -> str:
+    return str(record.get("reason") or _parsed_record_status_and_reason(record.get("data"))[1])
+
+
+def _source_status_detail(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "source": record["source"],
+        "exists": bool(record.get("exists")),
+        "file_status": record["status"],
+        "parsed_status": _record_status(record),
+        "reason": _record_reason(record),
+    }
+
+
+def _status_unknown(record: dict[str, Any]) -> bool:
+    return _record_status(record) in ("UNKNOWN", "UNKNOWN_NOT_PROVEN")
+
+
+def _parser_unknown_sources(evidence: dict[str, dict[str, Any]], names: list[str]) -> list[str]:
+    return [name for name in names if name in evidence and evidence[name].get("status") == "EVIDENCE_PRESENT" and _status_unknown(evidence[name])]
+
+
+def _evidence_unknown_reasons(evidence: dict[str, dict[str, Any]], names: list[str]) -> dict[str, str]:
+    reasons: dict[str, str] = {}
+    for name in names:
+        record = evidence.get(name)
+        if not record:
+            reasons[name] = "evidence name not configured"
+        elif record.get("status") != "EVIDENCE_PRESENT":
+            reasons[name] = f"missing file {record.get('source')}"
+        elif _status_unknown(record):
+            reasons[name] = _record_reason(record)
+    return reasons
+
+
+def _evidence_depth_report(names: list[str]) -> dict[str, Any]:
+    if any(
+        name in {
+            "trade_contract_diagnostics",
+            "trade_journal_diagnostics",
+            "outcome_tracker_diagnostics",
+        }
+        for name in names
+    ):
+        ensure_trade_diagnostics()
+    evidence = _titan_runtime_evidence_map()
+    selected = {name: _source_status_detail(evidence[name]) for name in names if name in evidence}
+    return {
+        "status": "EVIDENCE_PRESENT" if not _evidence_unknown_reasons(evidence, names) else "UNKNOWN_NOT_PROVEN",
+        "files": selected,
+        "unknown_reasons": _evidence_unknown_reasons(evidence, names),
+    }
+
+
+def _file_evidence_present(record: dict[str, Any]) -> bool:
+    return record.get("status") == "EVIDENCE_PRESENT"
+
+
+def _all_files_present(evidence: dict[str, dict[str, Any]], names: list[str]) -> bool:
+    return all(_file_evidence_present(evidence.get(name, {})) for name in names)
+
+
+def _record_status_legacy(record: dict[str, Any]) -> str:
     data = record.get("data")
     if not isinstance(data, dict):
         return "UNKNOWN_NOT_PROVEN"
@@ -448,10 +547,7 @@ def _record_status(record: dict[str, Any]) -> str:
 
 def _source_statuses(evidence: dict[str, dict[str, Any]], names: list[str]) -> dict[str, dict[str, Any]]:
     return {
-        name: {
-            "source": evidence[name]["source"],
-            "status": evidence[name]["status"],
-        }
+        name: _source_status_detail(evidence[name])
         for name in names
         if name in evidence
     }
@@ -462,7 +558,7 @@ def _missing_sources(evidence: dict[str, dict[str, Any]], names: list[str]) -> l
 
 
 def _titan_summary_status(evidence: dict[str, dict[str, Any]], names: list[str]) -> str:
-    return "EVIDENCE_PRESENT" if not _missing_sources(evidence, names) else "UNKNOWN_NOT_PROVEN"
+    return "EVIDENCE_PRESENT" if _all_files_present(evidence, names) else "UNKNOWN_NOT_PROVEN"
 
 
 def _count_rows(value: Any) -> int | str:
@@ -490,6 +586,8 @@ def build_titan_health_summary() -> dict[str, Any]:
         "filter_engine_diagnostics_status": _record_status(evidence["filter_engine_diagnostics"]),
         "source_files": _source_statuses(evidence, names),
         "unknowns": _missing_sources(evidence, names),
+        "parser_unknowns": _parser_unknown_sources(evidence, names),
+        "unknown_reasons": _evidence_unknown_reasons(evidence, names),
         "safety": _jarvis_safety(),
         "generated_at_ist": _timestamp_ist(),
     }
@@ -506,6 +604,8 @@ def build_titan_worker_summary() -> dict[str, Any]:
         "worker_health": evidence["worker_health"]["data"] if evidence["worker_health"]["status"] == "EVIDENCE_PRESENT" else "UNKNOWN_NOT_PROVEN",
         "source_files": _source_statuses(evidence, names),
         "unknowns": _missing_sources(evidence, names),
+        "parser_unknowns": _parser_unknown_sources(evidence, names),
+        "unknown_reasons": _evidence_unknown_reasons(evidence, names),
         "safety": _jarvis_safety(),
         "generated_at_ist": _timestamp_ist(),
     }
@@ -531,6 +631,8 @@ def build_titan_scanner_summary() -> dict[str, Any]:
         "near_pass_setup_count": _count_rows(evidence["near_pass_setups"]["data"]),
         "source_files": _source_statuses(evidence, names),
         "unknowns": _missing_sources(evidence, names),
+        "parser_unknowns": _parser_unknown_sources(evidence, names),
+        "unknown_reasons": _evidence_unknown_reasons(evidence, names),
         "safety": _jarvis_safety(),
         "generated_at_ist": _timestamp_ist(),
     }
@@ -539,6 +641,7 @@ def build_titan_scanner_summary() -> dict[str, Any]:
 
 
 def build_titan_trade_summary() -> dict[str, Any]:
+    ensure_trade_diagnostics()
     evidence = _titan_runtime_evidence_map()
     names = [
         "trade_contract_diagnostics",
@@ -559,6 +662,8 @@ def build_titan_trade_summary() -> dict[str, Any]:
         "outcome_tracker_diagnostics_status": _record_status(evidence["outcome_tracker_diagnostics"]),
         "source_files": _source_statuses(evidence, names),
         "unknowns": _missing_sources(evidence, names),
+        "parser_unknowns": _parser_unknown_sources(evidence, names),
+        "unknown_reasons": _evidence_unknown_reasons(evidence, names),
         "safety": _jarvis_safety(),
         "generated_at_ist": _timestamp_ist(),
     }
@@ -577,6 +682,8 @@ def build_titan_brain_summary() -> dict[str, Any]:
         "outcome_tracker_status": _record_status(evidence["outcome_tracker_status"]),
         "source_files": _source_statuses(evidence, names),
         "unknowns": _missing_sources(evidence, names),
+        "parser_unknowns": _parser_unknown_sources(evidence, names),
+        "unknown_reasons": _evidence_unknown_reasons(evidence, names),
         "safety": _jarvis_safety(),
         "generated_at_ist": _timestamp_ist(),
     }
@@ -649,6 +756,14 @@ def build_titan_status_summary() -> dict[str, Any]:
         "trade_status": _compact_titan_status(trades),
         "brain_status": _compact_titan_status(brain),
         "unknowns": unknowns,
+        "evidence": {
+            "runtime": health.get("source_files", {}).get("titan_runtime_status"),
+            "trade": trades.get("source_files", {}),
+        },
+        "unknown_reasons": {
+            **health.get("unknown_reasons", {}),
+            **trades.get("unknown_reasons", {}),
+        },
         "safety": _jarvis_core_safety(),
     }
 
@@ -2189,7 +2304,16 @@ def get_echo_evolution_proof() -> dict[str, Any]:
 
 
 def get_echo_verify_plan() -> dict[str, Any]:
-    return _batch2_payload(BATCH2_VERIFICATION_PLAN_PATH, "VERIFIER_PLAN_ONLY")
+    payload = _batch2_payload(BATCH2_VERIFICATION_PLAN_PATH, "VERIFIER_PLAN_ONLY")
+    payload["evidence_depth"] = _evidence_depth_report(
+        [
+            "titan_runtime_status",
+            "trade_contract_diagnostics",
+            "trade_journal_diagnostics",
+            "outcome_tracker_diagnostics",
+        ]
+    )
+    return payload
 
 
 def get_echo_deploy_plan() -> dict[str, Any]:
