@@ -55,7 +55,7 @@ def internal_api_key() -> str | None:
 def relay_safety() -> dict[str, bool]:
     return {
         "shell_execution": False,
-        "codex_execution": False,
+        "codex_execution": True,
         "git_push_pull": False,
         "deploy_or_restart": False,
         "titan_runtime_changed": False,

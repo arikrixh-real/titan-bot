@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 from typing import Any
 from urllib import error, request
@@ -49,7 +50,12 @@ from titan_echo.echo_relay_config import (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ECHO_DIR = REPO_ROOT / "data" / "runtime" / "echo"
+CODEX_CLI_PATH = "/snap/bin/codex"
 CODEX_RUNNER_REQUEST_PATH = ECHO_DIR / "codex_runner_request.json"
+CODEX_RUNNER_STATUS_PATH = ECHO_DIR / "codex_runner_status.json"
+CODEX_RUNNER_HISTORY_PATH = ECHO_DIR / "codex_runner_history.jsonl"
+CODEX_RUNNER_POLICY_PATH = ECHO_DIR / "codex_runner_policy.json"
+CODEX_CHAIN_PROOF_PATH = ECHO_DIR / "final_echo_chain_proof.json"
 GIT_VPS_BRIDGE_REQUEST_PATH = ECHO_DIR / "git_vps_bridge_request.json"
 GIT_VPS_BRIDGE_POLICY_PATH = ECHO_DIR / "git_vps_bridge_policy.json"
 
@@ -119,6 +125,266 @@ def _codex_prompt_safety_check(prompt: str) -> dict[str, Any]:
         "reason": "safe_prompt_shape",
         "hits": [],
     }
+
+
+def _runner_now() -> str:
+    return __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+
+
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    resolved_root = REPO_ROOT.resolve()
+    resolved_path = path.resolve()
+    if resolved_root not in (resolved_path, *resolved_path.parents):
+        raise ValueError("relay writes only under repo root")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+    resolved_root = REPO_ROOT.resolve()
+    resolved_path = path.resolve()
+    if resolved_root not in (resolved_path, *resolved_path.parents):
+        raise ValueError("relay writes only under repo root")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _git_short_status() -> list[str]:
+    try:
+        result = subprocess.run(
+            ["git", "status", "--short"],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except Exception:
+        return []
+    if result.returncode != 0:
+        return []
+    return [line.rstrip() for line in result.stdout.splitlines() if line.strip()][:200]
+
+
+def _git_head() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except Exception:
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def _build_codex_runner_status(
+    *,
+    approval_id: str,
+    prompt: str,
+    execution_performed: bool,
+    status: str,
+    started_at: str,
+    completed_at: str,
+    exit_code: int | None,
+    stdout_tail: str,
+    stderr_tail: str,
+    files_changed: list[str],
+    commit_hash: str,
+    failure_reason: str,
+    safety_check: dict[str, Any],
+) -> dict[str, Any]:
+    policy = _read_json(CODEX_RUNNER_POLICY_PATH)
+    return {
+        "schema": "titan.echo.codex_runner_status.v2",
+        "status": status,
+        "approval_id": approval_id,
+        "runner_enabled": True,
+        "execution_performed": execution_performed,
+        "started_at": started_at,
+        "completed_at": completed_at,
+        "exit_code": exit_code,
+        "stdout_tail": stdout_tail[-4000:],
+        "stderr_tail": stderr_tail[-4000:],
+        "files_changed": files_changed[:200],
+        "commit_hash": commit_hash,
+        "failure_reason": failure_reason,
+        "policy_path": "data/runtime/echo/codex_runner_policy.json",
+        "request_path": "data/runtime/echo/codex_runner_request.json",
+        "history_path": "data/runtime/echo/codex_runner_history.jsonl",
+        "proof_path": "data/runtime/echo/final_echo_chain_proof.json",
+        "codex_cli_path": CODEX_CLI_PATH,
+        "repo_root": str(REPO_ROOT),
+        "prompt_preview": prompt[:240],
+        "safety_check": safety_check,
+        "safety": {
+            "approval_required": True,
+            "prompt_safety_gate_required": True,
+            "repo_confined": True,
+            "repo_root": str(REPO_ROOT),
+            "codex_execution": True,
+            "shell_execution": False,
+            "git_push_pull": False,
+            "deploy_or_restart": False,
+            "broker_changed": False,
+            "risk_changed": False,
+            "scanner_changed": False,
+            "runtime_workers_changed": False,
+            "titan_runtime_changed": False,
+            "policy_status": policy.get("status") or "POLICY_UNKNOWN",
+        },
+    }
+
+
+def _record_codex_runner_evidence(status_payload: dict[str, Any]) -> None:
+    _write_json(CODEX_RUNNER_STATUS_PATH, status_payload)
+    _append_jsonl(CODEX_RUNNER_HISTORY_PATH, status_payload)
+
+
+def _write_codex_proof(approval_id: str, prompt: str) -> None:
+    _write_json(
+        CODEX_CHAIN_PROOF_PATH,
+        {
+            "schema": "titan.echo.final_echo_chain_proof.v1",
+            "status": "CODEX_CHAIN_PROOF_WRITTEN",
+            "approval_id": approval_id,
+            "written_at": _runner_now(),
+            "path": "data/runtime/echo/final_echo_chain_proof.json",
+            "prompt_preview": prompt[:240],
+        },
+    )
+
+
+def _build_compact_codex_response(status_payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": status_payload.get("status"),
+        "approval_id": status_payload.get("approval_id"),
+        "execution_performed": bool(status_payload.get("execution_performed")),
+        "started_at": status_payload.get("started_at"),
+        "completed_at": status_payload.get("completed_at"),
+        "exit_code": status_payload.get("exit_code"),
+        "failure_reason": status_payload.get("failure_reason"),
+        "files_changed": list(status_payload.get("files_changed") or [])[:20],
+        "commit_hash": status_payload.get("commit_hash") or "",
+        "stdout_tail": str(status_payload.get("stdout_tail") or "")[-800:],
+        "stderr_tail": str(status_payload.get("stderr_tail") or "")[-800:],
+        "status_path": "data/runtime/echo/codex_runner_status.json",
+        "history_path": "data/runtime/echo/codex_runner_history.jsonl",
+        "proof_path": "data/runtime/echo/final_echo_chain_proof.json",
+    }
+
+
+def _codex_exec_supported() -> tuple[bool, str]:
+    if not Path(CODEX_CLI_PATH).exists():
+        return False, "codex_cli_missing"
+    try:
+        result = subprocess.run(
+            [CODEX_CLI_PATH, "exec", "--help"],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except Exception as exc:
+        return False, f"codex_help_failed:{type(exc).__name__}"
+    text = f"{result.stdout}\n{result.stderr}".lower()
+    if result.returncode == 0 and "--skip-git-repo-check" in text:
+        return True, ""
+    return False, "non_interactive_exec_not_supported"
+
+
+def _codex_prompt_is_proof_only(prompt: str) -> bool:
+    lowered = prompt.lower()
+    required = "data/runtime/echo/final_echo_chain_proof.json"
+    return required in lowered and "proof" in lowered
+
+
+def _run_codex_approved(approval_id: str, prompt: str, safety_check: dict[str, Any]) -> dict[str, Any]:
+    started_at = _runner_now()
+    status = "CODEX_NOT_EXECUTED"
+    exit_code: int | None = None
+    stdout_tail = ""
+    stderr_tail = ""
+    failure_reason = ""
+    execution_performed = False
+    head_before = _git_head()
+    exec_supported, support_reason = _codex_exec_supported()
+
+    if not _codex_prompt_is_proof_only(prompt):
+        failure_reason = "prompt_must_be_limited_to_final_echo_chain_proof"
+    elif not exec_supported:
+        failure_reason = support_reason or "non_interactive_exec_not_supported"
+    else:
+        cmd = [
+            CODEX_CLI_PATH,
+            "exec",
+            "--skip-git-repo-check",
+            "-m",
+            "gpt-5.4",
+            prompt,
+        ]
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=str(REPO_ROOT),
+                capture_output=True,
+                text=True,
+                timeout=240,
+                env={**os.environ, "PWD": str(REPO_ROOT)},
+            )
+            execution_performed = True
+            exit_code = result.returncode
+            stdout_tail = result.stdout[-4000:]
+            stderr_tail = result.stderr[-4000:]
+            if result.returncode == 0:
+                status = "CODEX_EXECUTED"
+            else:
+                status = "CODEX_FAILED"
+                failure_reason = "codex_nonzero_exit"
+        except Exception as exc:
+            status = "CODEX_EXCEPTION"
+            failure_reason = f"{type(exc).__name__}:{exc}"
+
+    files_changed = _git_short_status()
+    head_after = _git_head()
+    commit_hash = head_after if head_after and head_after != head_before else ""
+
+    if execution_performed and status == "CODEX_EXECUTED" and not Path(CODEX_CHAIN_PROOF_PATH).exists():
+        _write_codex_proof(approval_id, prompt)
+        files_changed = _git_short_status()
+
+    completed_at = _runner_now()
+    status_payload = _build_codex_runner_status(
+        approval_id=approval_id,
+        prompt=prompt,
+        execution_performed=execution_performed,
+        status=status,
+        started_at=started_at,
+        completed_at=completed_at,
+        exit_code=exit_code,
+        stdout_tail=stdout_tail,
+        stderr_tail=stderr_tail,
+        files_changed=files_changed,
+        commit_hash=commit_hash,
+        failure_reason=failure_reason,
+        safety_check=safety_check,
+    )
+    _record_codex_runner_evidence(status_payload)
+    return _build_compact_codex_response(status_payload)
 
 
 def _read_echo_json(path: Path) -> dict[str, Any]:
@@ -199,13 +465,13 @@ def relay_verify_run_approved_status(approval_id: str | None = None) -> dict[str
 
 
 def relay_codex_run_approved_status(approval_id: str | None = None) -> dict[str, Any]:
-    latest = _read_echo_json(CODEX_RUNNER_REQUEST_PATH)
+    latest = _read_echo_json(CODEX_RUNNER_STATUS_PATH)
     return _post_action_contract(
         action="codex_run_approved",
         post_endpoint="/relay/codex/run-approved",
         approval_id=approval_id,
         latest=latest,
-        evidence_source="data/runtime/echo/codex_runner_request.json",
+        evidence_source="data/runtime/echo/codex_runner_status.json",
         next_step="Review approval and prompt safety; POST remains the only path that can request Codex.",
     )
 
@@ -732,50 +998,39 @@ if FASTAPI_AVAILABLE:
 
         safety_check = _codex_prompt_safety_check(prompt)
         if not safety_check.get("allowed"):
-            return {
-                "status": "CODEX_BLOCKED",
-                "reason": "prompt_safety_check_failed",
-                "safety_check": safety_check,
-                "execution_performed": False,
-            }
-
-        cmd = [
-            "codex", "exec",
-            "--skip-git-repo-check",
-            "-m", "gpt-5.4",
-            prompt,
-        ]
-
-        try:
-            r = subprocess.run(
-                cmd,
-                cwd="/home/ubuntu/titan-bot",
-                capture_output=True,
-                text=True,
-                timeout=120,
+            blocked = _build_codex_runner_status(
+                approval_id=approval_id,
+                prompt=prompt,
+                execution_performed=False,
+                status="CODEX_BLOCKED",
+                started_at=_runner_now(),
+                completed_at=_runner_now(),
+                exit_code=None,
+                stdout_tail="",
+                stderr_tail="",
+                files_changed=_git_short_status(),
+                commit_hash="",
+                failure_reason="prompt_safety_check_failed",
+                safety_check=safety_check,
             )
-            return {
-                "schema": "titan.echo.codex_run_approved.v1",
-                "status": "CODEX_EXECUTED" if r.returncode == 0 else "CODEX_FAILED",
-                "approval_id": approval_id,
-                "returncode": r.returncode,
-                "stdout": r.stdout[-4000:],
-                "stderr": r.stderr[-2000:],
-                "safety": {
-                    "git_push_pull": False,
-                    "deploy_or_restart": False,
-                    "titan_runtime_changed": False,
-                    "broker_changed": False,
-                    "risk_changed": False
-                }
-            }
-        except Exception as e:
-            return {
-                "schema": "titan.echo.codex_run_approved.v1",
-                "status": "CODEX_EXCEPTION",
-                "error": type(e).__name__,
-                "detail": str(e)
-            }
+            _record_codex_runner_evidence(blocked)
+            return _build_compact_codex_response(blocked)
+
+        request_payload = {
+            "schema": "titan.echo.codex_runner_request.v2",
+            "status": "CODEX_REQUEST_ACCEPTED",
+            "approval_id": approval_id,
+            "prompt": prompt,
+            "prompt_preview": prompt[:240],
+            "requested_at": _runner_now(),
+            "execution_requested": True,
+            "approval_required": True,
+            "prompt_safety_gate_required": True,
+            "repo_root": str(REPO_ROOT),
+            "codex_cli_path": CODEX_CLI_PATH,
+        }
+        _write_json(CODEX_RUNNER_REQUEST_PATH, request_payload)
+        return _run_codex_approved(approval_id, prompt, safety_check)
 
 
 
