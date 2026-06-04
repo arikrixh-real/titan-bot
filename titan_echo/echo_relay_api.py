@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+from pathlib import Path
 from typing import Any
 from urllib import error, request
 
@@ -25,6 +26,13 @@ from titan_echo.echo_relay_config import (
     relay_safety,
     relay_status_payload,
 )
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+ECHO_DIR = REPO_ROOT / "data" / "runtime" / "echo"
+CODEX_RUNNER_REQUEST_PATH = ECHO_DIR / "codex_runner_request.json"
+GIT_VPS_BRIDGE_REQUEST_PATH = ECHO_DIR / "git_vps_bridge_request.json"
+GIT_VPS_BRIDGE_POLICY_PATH = ECHO_DIR / "git_vps_bridge_policy.json"
 
 
 FASTAPI_AVAILABLE = importlib.util.find_spec("fastapi") is not None
@@ -93,6 +101,151 @@ def _codex_prompt_safety_check(prompt: str) -> dict[str, Any]:
         "hits": [],
     }
 
+
+def _read_echo_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _compact_evidence(payload: dict[str, Any], source: str) -> dict[str, Any]:
+    if not payload:
+        return {"source": source, "present": False}
+    return {
+        "source": source,
+        "present": True,
+        "status": payload.get("status"),
+        "request_id": payload.get("request_id"),
+        "execution_performed": bool(payload.get("execution_performed")),
+        "blockers": list(payload.get("blockers") or [])[:8],
+    }
+
+
+def _post_action_contract(
+    *,
+    action: str,
+    post_endpoint: str,
+    approval_id: str | None = None,
+    latest: dict[str, Any] | None = None,
+    evidence_source: str = "",
+    next_step: str = "",
+) -> dict[str, Any]:
+    latest = latest if isinstance(latest, dict) else {}
+    latest_status = str(latest.get("status") or "")
+    blocked = any(token in latest_status.upper() for token in ("BLOCKED", "FAILED", "EXCEPTION", "NOT_RECORDED"))
+    accepted = bool(latest) and not blocked and any(
+        token in latest_status.upper()
+        for token in ("OK", "RECORDED", "EXECUTED")
+    )
+    resolved_approval_id = approval_id or str(latest.get("approval_id") or "").strip() or None
+    return {
+        "status": "ACTION_STATUS_PRESENT" if latest else "ACTION_STATUS_NO_RESULT_RECORDED",
+        "action": action,
+        "accepted": accepted,
+        "blocked": blocked,
+        "approval_required": True,
+        "approval_id": resolved_approval_id,
+        "next_step": next_step or f"Use POST {post_endpoint} only after explicit approval; this GET endpoint is read-only.",
+        "evidence_summary": _compact_evidence(latest, evidence_source or post_endpoint),
+        "safety": {
+            "read_only_get_fallback": True,
+            "execution_allowed": False,
+            "codex_execution": False,
+            "git_push_pull": False,
+            "deploy_or_restart": False,
+            "broker_changed": False,
+            "risk_changed": False,
+            "runtime_workers_changed": False,
+        },
+    }
+
+
+def relay_verify_run_approved_status(approval_id: str | None = None) -> dict[str, Any]:
+    return _post_action_contract(
+        action="verify_run_approved",
+        post_endpoint="/relay/verify/run-approved",
+        approval_id=approval_id,
+        latest={
+            "status": "VERIFY_POST_BACKEND_AVAILABLE",
+            "approval_id": approval_id,
+            "execution_performed": False,
+        },
+        evidence_source="relay_verify_status_fallback",
+        next_step="If approved, call POST /relay/verify/run-approved; use this GET only for compact UI status.",
+    )
+
+
+def relay_codex_run_approved_status(approval_id: str | None = None) -> dict[str, Any]:
+    latest = _read_echo_json(CODEX_RUNNER_REQUEST_PATH)
+    return _post_action_contract(
+        action="codex_run_approved",
+        post_endpoint="/relay/codex/run-approved",
+        approval_id=approval_id,
+        latest=latest,
+        evidence_source="data/runtime/echo/codex_runner_request.json",
+        next_step="Review approval and prompt safety; POST remains the only path that can request Codex.",
+    )
+
+
+def relay_git_push_approved_status(approval_id: str | None = None) -> dict[str, Any]:
+    latest = _read_echo_json(GIT_VPS_BRIDGE_REQUEST_PATH)
+    if latest.get("action") not in ("git_push", ""):
+        latest = {}
+    policy = _read_echo_json(GIT_VPS_BRIDGE_POLICY_PATH)
+    payload = _post_action_contract(
+        action="git_push_approved",
+        post_endpoint="/relay/git/push-approved",
+        approval_id=approval_id,
+        latest=latest,
+        evidence_source="data/runtime/echo/git_vps_bridge_request.json",
+        next_step="Confirm approval token, then use POST /relay/git/push-approved only if push is explicitly approved.",
+    )
+    payload["evidence_summary"]["policy_status"] = policy.get("status") if policy else "POLICY_FILE_NOT_PRESENT"
+    return payload
+
+
+def relay_vps_pull_approved_status(approval_id: str | None = None) -> dict[str, Any]:
+    latest = _read_echo_json(GIT_VPS_BRIDGE_REQUEST_PATH)
+    if latest.get("action") not in ("vps_pull", ""):
+        latest = {}
+    policy = _read_echo_json(GIT_VPS_BRIDGE_POLICY_PATH)
+    payload = _post_action_contract(
+        action="vps_pull_approved",
+        post_endpoint="/relay/vps/pull-approved",
+        approval_id=approval_id,
+        latest=latest,
+        evidence_source="data/runtime/echo/git_vps_bridge_request.json",
+        next_step="Confirm approval token, then use POST /relay/vps/pull-approved only after approved push workflow.",
+    )
+    payload["evidence_summary"]["policy_status"] = policy.get("status") if policy else "POLICY_FILE_NOT_PRESENT"
+    return payload
+
+
+def relay_post_action_status(action: str = "all", approval_id: str | None = None) -> dict[str, Any]:
+    actions = {
+        "verify": relay_verify_run_approved_status,
+        "codex": relay_codex_run_approved_status,
+        "git_push": relay_git_push_approved_status,
+        "vps_pull": relay_vps_pull_approved_status,
+    }
+    selected = str(action or "all").strip().lower()
+    if selected in actions:
+        return actions[selected](approval_id)
+    return {
+        "status": "ACTION_STATUS_PRESENT",
+        "action": "all",
+        "accepted": False,
+        "blocked": False,
+        "approval_required": True,
+        "approval_id": approval_id,
+        "next_step": "Choose one compact fallback: verify, codex, git_push, or vps_pull.",
+        "evidence_summary": {name: fn(approval_id)["evidence_summary"] for name, fn in actions.items()},
+        "safety": relay_safety(),
+    }
 
 def _disabled_payload() -> dict[str, Any]:
     payload = relay_status_payload()
@@ -315,6 +468,47 @@ if FASTAPI_AVAILABLE:
         return relay_chatgpt_evidence_catalog(x_echo_relay_key)
 
 
+    @app.get("/relay/actions/status")
+    def route_relay_post_action_status(
+        action: str = "all",
+        approval_id: str | None = None,
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return relay_post_action_status(action, approval_id)
+
+    @app.get("/relay/verify/run-approved/status")
+    def route_relay_verify_run_approved_status(
+        approval_id: str | None = None,
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return relay_verify_run_approved_status(approval_id)
+
+    @app.get("/relay/codex/run-approved/status")
+    def route_relay_codex_run_approved_status(
+        approval_id: str | None = None,
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return relay_codex_run_approved_status(approval_id)
+
+    @app.get("/relay/git/push-approved/status")
+    def route_relay_git_push_approved_status(
+        approval_id: str | None = None,
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return relay_git_push_approved_status(approval_id)
+
+    @app.get("/relay/vps/pull-approved/status")
+    def route_relay_vps_pull_approved_status(
+        approval_id: str | None = None,
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return relay_vps_pull_approved_status(approval_id)
+
     @app.post("/relay/verify/run-approved")
     def route_relay_verify_run_approved(
         payload: dict[str, Any] | None = Body(default=None),
@@ -452,9 +646,14 @@ __all__ = [
     "relay_chatgpt_evidence_catalog",
     "relay_chatgpt_evidence_contract",
     "relay_chatgpt_integration_status",
+    "relay_codex_run_approved_status",
+    "relay_git_push_approved_status",
     "relay_health",
     "relay_jarvis_ask",
     "relay_jarvis_ask_compact",
+    "relay_post_action_status",
     "relay_titan_status",
     "relay_titan_status_summary",
+    "relay_verify_run_approved_status",
+    "relay_vps_pull_approved_status",
 ]
