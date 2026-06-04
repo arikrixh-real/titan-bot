@@ -15,6 +15,15 @@ from urllib import error, request
 
 from titan_echo.echo_relay_auth import require_relay_key
 from titan_echo.echo_git_vps_bridge import verify_request, push_committed_changes, pull_committed_changes
+from titan_echo.echo_mission_brain import (
+    approve_step,
+    create_mission,
+    mission_status,
+    resume_mission,
+    rollback_request,
+    rollback_run_approved,
+    rollback_status,
+)
 import subprocess
 from titan_echo.echo_relay_config import (
     ECHO_INTERNAL_HEADER_NAME,
@@ -247,6 +256,7 @@ def relay_post_action_status(action: str = "all", approval_id: str | None = None
         "safety": relay_safety(),
     }
 
+
 def _disabled_payload() -> dict[str, Any]:
     payload = relay_status_payload()
     payload["status"] = "RELAY_DISABLED"
@@ -375,6 +385,52 @@ def relay_chatgpt_evidence_catalog(x_echo_relay_key: str | None = None) -> dict[
     return _forward_to_echo("GET", "/chatgpt/evidence/catalog")
 
 
+def relay_chatgpt_evidence_manifest() -> dict[str, Any]:
+    return {
+        "schema": "titan.evidence.manifest.v1",
+        "status": "EVIDENCE_INDEX_PRESENT",
+        "read_only": True,
+        "write_permitted": False,
+    }
+
+
+def relay_chatgpt_evidence_manifest_batch1() -> dict[str, Any]:
+    return {
+        "schema": "titan.evidence.manifest.v1",
+        "status": "EVIDENCE_INDEX_PRESENT",
+        "read_only": True,
+        "write_permitted": False,
+    }
+
+
+def relay_mission_create(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    return create_mission(payload or {})
+
+
+def relay_mission_status(mission_id: str | None = None) -> dict[str, Any]:
+    return mission_status(mission_id)
+
+
+def relay_mission_resume(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    return resume_mission(payload or {})
+
+
+def relay_mission_approve_step(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    return approve_step(payload or {})
+
+
+def relay_rollback_status(mission_id: str | None = None) -> dict[str, Any]:
+    return rollback_status(mission_id)
+
+
+def relay_rollback_request(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    return rollback_request(payload or {})
+
+
+def relay_rollback_run_approved(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    return rollback_run_approved(payload or {})
+
+
 app = None
 if FASTAPI_AVAILABLE:
     app = FastAPI(
@@ -467,7 +523,6 @@ if FASTAPI_AVAILABLE:
     ) -> dict[str, Any]:
         return relay_chatgpt_evidence_catalog(x_echo_relay_key)
 
-
     @app.get("/relay/actions/status")
     def route_relay_post_action_status(
         action: str = "all",
@@ -508,6 +563,63 @@ if FASTAPI_AVAILABLE:
     ) -> dict[str, Any]:
         require_relay_key(x_echo_relay_key)
         return relay_vps_pull_approved_status(approval_id)
+
+    @app.post("/relay/mission/create")
+    def route_relay_mission_create(
+        payload: dict[str, Any] | None = Body(default=None),
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return relay_mission_create(payload or {})
+
+    @app.get("/relay/mission/status")
+    def route_relay_mission_status(
+        mission_id: str | None = None,
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return relay_mission_status(mission_id)
+
+    @app.post("/relay/mission/resume")
+    def route_relay_mission_resume(
+        payload: dict[str, Any] | None = Body(default=None),
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return relay_mission_resume(payload or {})
+
+    @app.post("/relay/mission/approve-step")
+    def route_relay_mission_approve_step(
+        payload: dict[str, Any] | None = Body(default=None),
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return relay_mission_approve_step(payload or {})
+
+    @app.get("/relay/rollback/status")
+    def route_relay_rollback_status(
+        mission_id: str | None = None,
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return relay_rollback_status(mission_id)
+
+    @app.post("/relay/rollback/request")
+    def route_relay_rollback_request(
+        payload: dict[str, Any] | None = Body(default=None),
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return relay_rollback_request(payload or {})
+
+    @app.post("/relay/rollback/run-approved")
+    def route_relay_rollback_run_approved(
+        payload: dict[str, Any] | None = Body(default=None),
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return relay_rollback_run_approved(payload or {})
+
 
     @app.post("/relay/verify/run-approved")
     def route_relay_verify_run_approved(
@@ -645,13 +757,22 @@ __all__ = [
     "app",
     "relay_chatgpt_evidence_catalog",
     "relay_chatgpt_evidence_contract",
+    "relay_chatgpt_evidence_manifest",
+    "relay_chatgpt_evidence_manifest_batch1",
     "relay_chatgpt_integration_status",
     "relay_codex_run_approved_status",
     "relay_git_push_approved_status",
     "relay_health",
     "relay_jarvis_ask",
     "relay_jarvis_ask_compact",
+    "relay_mission_approve_step",
+    "relay_mission_create",
+    "relay_mission_resume",
+    "relay_mission_status",
     "relay_post_action_status",
+    "relay_rollback_request",
+    "relay_rollback_run_approved",
+    "relay_rollback_status",
     "relay_titan_status",
     "relay_titan_status_summary",
     "relay_verify_run_approved_status",
