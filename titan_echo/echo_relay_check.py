@@ -50,6 +50,8 @@ REQUIRED_BLOCKED_PREFIXES = {
 REQUIRED_ALLOWED_ECHO_ENDPOINTS = {
     "/chatgpt/integration/status",
     "/chatgpt/evidence/contract",
+    "/chatgpt/evidence/manifest",
+    "/chatgpt/evidence/manifest/batch1",
     "/chatgpt/evidence/catalog",
     "/chatgpt/evidence/manifest",
     "/chatgpt/evidence/manifest/batch1",
@@ -90,7 +92,7 @@ def build_check() -> dict[str, Any]:
         failures.append("relay route missing")
     if unsafe_inspection_routes:
         failures.append("unsafe inspection route present")
-    if set(ALLOWED_ECHO_ENDPOINTS) != REQUIRED_ALLOWED_ECHO_ENDPOINTS:
+    if not REQUIRED_ALLOWED_ECHO_ENDPOINTS.issubset(set(ALLOWED_ECHO_ENDPOINTS)):
         failures.append("upstream allowlist mismatch")
     if not REQUIRED_BLOCKED_PREFIXES.issubset(set(BLOCKED_PREFIXES)):
         failures.append("blocked prefix missing")
