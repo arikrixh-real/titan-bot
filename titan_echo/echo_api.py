@@ -453,15 +453,15 @@ def _parsed_record_status_and_reason(data: Any) -> tuple[str, str]:
     if not isinstance(data, dict):
         return "UNKNOWN_NOT_PROVEN", "FILE_MISSING_OR_UNREADABLE"
     candidates = [
+        ("authoritative_runtime_health.overall_status", (data.get("authoritative_runtime_health") or {}).get("overall_status") if isinstance(data.get("authoritative_runtime_health"), dict) else None),
+        ("overall_status", data.get("overall_status")),
         ("status", data.get("status")),
         ("health", data.get("health")),
         ("state", data.get("state")),
         ("runtime_status", data.get("runtime_status")),
-        ("overall_status", data.get("overall_status")),
         ("paper_trading_status", data.get("paper_trading_status")),
         ("journal_write_status", data.get("journal_write_status")),
         ("tp_sl_check_status", data.get("tp_sl_check_status")),
-        ("authoritative_runtime_health.overall_status", (data.get("authoritative_runtime_health") or {}).get("overall_status") if isinstance(data.get("authoritative_runtime_health"), dict) else None),
         ("scanner_loop_health", data.get("scanner_loop_health")),
         ("scanner_publication_health", data.get("scanner_publication_health")),
         ("dashboard_runtime_sync_health", data.get("dashboard_runtime_sync_health")),

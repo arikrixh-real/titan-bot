@@ -5,13 +5,30 @@ def test_runtime_status_parser_reads_authoritative_runtime_health():
     status, reason = _parsed_record_status_and_reason(
         {
             "mode": "WEEKEND_MODE",
+            "status": None,
+            "overall_status": None,
             "authoritative_runtime_health": {
-                "overall_status": "FAIL",
+                "overall_status": "WARNING",
             },
         }
     )
 
-    assert status == "FAIL"
+    assert status == "WARNING"
+    assert reason == "parsed key authoritative_runtime_health.overall_status"
+
+
+def test_runtime_status_parser_prefers_authoritative_runtime_health():
+    status, reason = _parsed_record_status_and_reason(
+        {
+            "status": "STALE_TOP_LEVEL",
+            "overall_status": "WARNING_TOP_LEVEL",
+            "authoritative_runtime_health": {
+                "overall_status": "WARNING",
+            },
+        }
+    )
+
+    assert status == "WARNING"
     assert reason == "parsed key authoritative_runtime_health.overall_status"
 
 
