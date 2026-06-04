@@ -12,6 +12,7 @@ REQUIRED_ROUTES = {
     "/relay/health",
     "/relay/inspect/tree",
     "/relay/inspect/file",
+    "/relay/inspect/json-path",
     "/relay/inspect/runtime",
     "/relay/inspect/health",
     "/relay/inspect/git",
@@ -29,6 +30,7 @@ REQUIRED_ROUTES = {
 REQUIRED_INSPECTION_ROUTES = {
     "/relay/inspect/tree",
     "/relay/inspect/file",
+    "/relay/inspect/json-path",
     "/relay/inspect/runtime",
     "/relay/inspect/health",
     "/relay/inspect/git",

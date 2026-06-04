@@ -29,6 +29,7 @@ from titan_echo.echo_inspection_layer import (
     inspect_file,
     inspect_git,
     inspect_health,
+    inspect_json_path,
     inspect_runtime,
     inspect_search,
     inspect_tree,
@@ -508,6 +509,15 @@ if FASTAPI_AVAILABLE:
         require_relay_key(x_echo_relay_key)
         return inspect_file(path)
 
+    @app.get("/relay/inspect/json-path")
+    def route_relay_inspect_json_path(
+        path: str,
+        json_path: str,
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return inspect_json_path(path, json_path)
+
     @app.get("/relay/inspect/runtime")
     def route_relay_inspect_runtime(
         x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
@@ -826,6 +836,7 @@ __all__ = [
     "inspect_file",
     "inspect_git",
     "inspect_health",
+    "inspect_json_path",
     "inspect_runtime",
     "inspect_search",
     "inspect_tree",

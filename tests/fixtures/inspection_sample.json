@@ -1,0 +1,12 @@
+{
+  "authoritative_runtime_health": {
+    "stale_artifacts": 3,
+    "worker": {
+      "status": "OK"
+    }
+  },
+  "credentials": {
+    "api_key": "should_not_escape"
+  },
+  "large_value": "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"
+}

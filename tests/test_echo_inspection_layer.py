@@ -2,6 +2,7 @@ from titan_echo.echo_inspection_layer import (
     inspect_file,
     inspect_git,
     inspect_health,
+    inspect_json_path,
     inspect_search,
     inspect_tree,
 )
@@ -13,6 +14,7 @@ def test_inspection_routes_are_registered():
 
     assert "/relay/inspect/tree" in routes
     assert "/relay/inspect/file" in routes
+    assert "/relay/inspect/json-path" in routes
     assert "/relay/inspect/runtime" in routes
     assert "/relay/inspect/health" in routes
     assert "/relay/inspect/git" in routes
@@ -65,3 +67,58 @@ def test_health_inspection_has_no_mutation_flags():
     assert payload["status"] == "OK"
     assert payload["safety"]["write_delete_edit_restart_deploy"] is False
     assert payload["audit"]["recorded_in_response"] is True
+
+
+def test_json_path_reads_valid_nested_path_compactly():
+    payload = inspect_json_path(
+        "tests/fixtures/inspection_sample.json",
+        "authoritative_runtime_health.stale_artifacts",
+    )
+
+    assert payload["status"] == "OK"
+    assert payload["path"] == "tests/fixtures/inspection_sample.json"
+    assert payload["json_path"] == "authoritative_runtime_health.stale_artifacts"
+    assert payload["found"] is True
+    assert payload["value"] == 3
+    assert payload["value_type"] == "int"
+    assert payload["audit"]["persistent_write_performed"] is False
+
+
+def test_json_path_missing_path_reports_not_found():
+    payload = inspect_json_path(
+        "tests/fixtures/inspection_sample.json",
+        "authoritative_runtime_health.missing",
+    )
+
+    assert payload["status"] == "OK"
+    assert payload["found"] is False
+    assert payload["value"] is None
+    assert payload["value_type"] == "missing"
+
+
+def test_json_path_blocks_traversal():
+    payload = inspect_json_path("../outside.json", "anything")
+
+    assert payload["status"] == "BLOCKED"
+    assert payload["found"] is False
+    assert payload["safety"]["traversal_blocked"] is True
+    assert payload["audit"]["persistent_write_performed"] is False
+
+
+def test_json_path_blocks_sensitive_file():
+    payload = inspect_json_path(".env", "anything")
+
+    assert payload["status"] == "BLOCKED"
+    assert payload["found"] is False
+    assert payload["value"] is None
+    assert payload["safety"]["secrets_redacted"] is True
+
+
+def test_json_path_oversized_value_is_compacted():
+    payload = inspect_json_path("tests/fixtures/inspection_sample.json", "large_value")
+
+    assert payload["status"] == "OK"
+    assert payload["found"] is True
+    assert payload["value_type"] == "str"
+    assert payload["value"]["truncated"] is True
+    assert len(payload["value"]["preview"]) == 300
