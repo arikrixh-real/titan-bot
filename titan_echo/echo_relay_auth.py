@@ -6,7 +6,7 @@ import hmac
 import importlib.util
 from typing import Any
 
-from titan_echo.echo_relay_config import RELAY_HEADER_NAME, relay_api_key, relay_enabled
+from titan_echo.echo_relay_config import RELAY_HEADER_NAME, relay_api_key
 
 
 FASTAPI_AVAILABLE = importlib.util.find_spec("fastapi") is not None
@@ -24,8 +24,6 @@ def validate_relay_key(provided_key: str | None, expected_key: str | None = None
 
 
 def require_relay_key(provided_key: str | None) -> bool:
-    if not relay_enabled():
-        return True
     if validate_relay_key(provided_key):
         return True
     if HTTPException is None:  # pragma: no cover - FastAPI unavailable path

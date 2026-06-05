@@ -19,6 +19,7 @@ from titan_echo.echo_git_vps_bridge import verify_request, push_committed_change
 from titan_echo.echo_mission_brain import (
     approve_step,
     create_mission,
+    load_mission,
     mission_status,
     resume_mission,
     rollback_request,
@@ -63,10 +64,12 @@ GIT_VPS_BRIDGE_POLICY_PATH = ECHO_DIR / "git_vps_bridge_policy.json"
 FASTAPI_AVAILABLE = importlib.util.find_spec("fastapi") is not None
 if FASTAPI_AVAILABLE:
     from fastapi import Body, FastAPI, Header
+    from starlette.responses import JSONResponse
 else:  # pragma: no cover - depends on local dependency set
     Body = None  # type: ignore[assignment, misc]
     FastAPI = None  # type: ignore[assignment, misc]
     Header = None  # type: ignore[assignment, misc]
+    JSONResponse = None  # type: ignore[assignment, misc]
 
 
 
@@ -540,6 +543,81 @@ def _disabled_payload() -> dict[str, Any]:
     return payload
 
 
+def _action_blocked_payload(action: str, reason: str, **extra: Any) -> dict[str, Any]:
+    payload = {
+        "status": f"{action.upper()}_BLOCKED",
+        "reason": reason,
+        "execution_performed": False,
+        "approval_validated": False,
+        "safety": relay_safety(),
+    }
+    payload.update(extra)
+    return payload
+
+
+def _validate_persisted_step_approval(
+    *,
+    action: str,
+    required_step: str,
+    mission_id: str,
+    approval_id: str,
+) -> dict[str, Any]:
+    if not mission_id:
+        return _action_blocked_payload(action, "mission_id required")
+    if not approval_id:
+        return _action_blocked_payload(action, "approval_id required", mission_id=mission_id)
+
+    state = load_mission(mission_id)
+    if not state:
+        return _action_blocked_payload(action, "MISSION_NOT_FOUND", mission_id=mission_id, approval_id=approval_id)
+
+    current_step = str(state.get("current_step") or "")
+    approvals = state.get("approvals") if isinstance(state.get("approvals"), dict) else {}
+    approval = approvals.get(required_step) if isinstance(approvals, dict) else None
+    if current_step != required_step:
+        return _action_blocked_payload(
+            action,
+            "STEP_NOT_CURRENT",
+            mission_id=mission_id,
+            approval_id=approval_id,
+            current_step=current_step,
+            required_step=required_step,
+        )
+    if not isinstance(approval, dict):
+        return _action_blocked_payload(
+            action,
+            "PERSISTED_APPROVAL_NOT_FOUND",
+            mission_id=mission_id,
+            approval_id=approval_id,
+            required_step=required_step,
+        )
+    if str(approval.get("approval_id") or "") != approval_id:
+        return _action_blocked_payload(
+            action,
+            "APPROVAL_ID_MISMATCH",
+            mission_id=mission_id,
+            approval_id=approval_id,
+            required_step=required_step,
+        )
+    if approval.get("status") != "APPROVED":
+        return _action_blocked_payload(
+            action,
+            "PERSISTED_APPROVAL_NOT_APPROVED",
+            mission_id=mission_id,
+            approval_id=approval_id,
+            approval_status=approval.get("status"),
+            required_step=required_step,
+        )
+
+    return {
+        "status": "APPROVAL_VALIDATED",
+        "mission_id": mission_id,
+        "approval_id": approval_id,
+        "required_step": required_step,
+        "approval_validated": True,
+    }
+
+
 def _blocked_payload(path: str) -> dict[str, Any]:
     return {
         "status": "RELAY_BLOCKED",
@@ -714,6 +792,12 @@ if FASTAPI_AVAILABLE:
         version="0.1.0",
         description="Disabled-by-default read-only relay skeleton for ECHO evidence.",
     )
+
+    @app.middleware("http")
+    async def relay_disabled_mode_guard(request, call_next):
+        if request.url.path != "/relay/health" and not relay_enabled():
+            return JSONResponse(_disabled_payload())
+        return await call_next(request)
 
 
 
@@ -985,16 +1069,25 @@ if FASTAPI_AVAILABLE:
         payload: dict[str, Any] | None = Body(default=None),
         x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
     ) -> dict[str, Any]:
+        if not relay_enabled():
+            return _disabled_payload()
         require_relay_key(x_echo_relay_key)
 
         body = payload or {}
+        mission_id = str(body.get("mission_id") or "").strip()
         approval_id = str(body.get("approval_id") or "").strip()
         prompt = str(body.get("prompt") or "").strip()
 
-        if not approval_id:
-            return {"status": "CODEX_BLOCKED", "reason": "approval_id required"}
+        approval_check = _validate_persisted_step_approval(
+            action="codex",
+            required_step="codex",
+            mission_id=mission_id,
+            approval_id=approval_id,
+        )
+        if not approval_check.get("approval_validated"):
+            return approval_check
         if not prompt:
-            return {"status": "CODEX_BLOCKED", "reason": "prompt required"}
+            return _action_blocked_payload("codex", "prompt required", mission_id=mission_id, approval_id=approval_id)
 
         safety_check = _codex_prompt_safety_check(prompt)
         if not safety_check.get("allowed"):
@@ -1013,6 +1106,7 @@ if FASTAPI_AVAILABLE:
                 failure_reason="prompt_safety_check_failed",
                 safety_check=safety_check,
             )
+<<<<<<< HEAD
             _record_codex_runner_evidence(blocked)
             return _build_compact_codex_response(blocked)
 
@@ -1031,6 +1125,32 @@ if FASTAPI_AVAILABLE:
         }
         _write_json(CODEX_RUNNER_REQUEST_PATH, request_payload)
         return _run_codex_approved(approval_id, prompt, safety_check)
+=======
+            return {
+                "schema": "titan.echo.codex_run_approved.v1",
+                "status": "CODEX_EXECUTED" if r.returncode == 0 else "CODEX_FAILED",
+                "mission_id": mission_id,
+                "approval_id": approval_id,
+                "approval_validated": True,
+                "returncode": r.returncode,
+                "stdout": r.stdout[-4000:],
+                "stderr": r.stderr[-2000:],
+                "safety": {
+                    "git_push_pull": False,
+                    "deploy_or_restart": False,
+                    "titan_runtime_changed": False,
+                    "broker_changed": False,
+                    "risk_changed": False
+                }
+            }
+        except Exception as e:
+            return {
+                "schema": "titan.echo.codex_run_approved.v1",
+                "status": "CODEX_EXCEPTION",
+                "error": type(e).__name__,
+                "detail": str(e)
+            }
+>>>>>>> b548e5f (harden echo relay launch safety gates)
 
 
 
@@ -1039,20 +1159,36 @@ if FASTAPI_AVAILABLE:
         payload: dict[str, Any] | None = Body(default=None),
         x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
     ) -> dict[str, Any]:
+        if not relay_enabled():
+            return _disabled_payload()
         require_relay_key(x_echo_relay_key)
 
         body = payload or {}
+        mission_id = str(body.get("mission_id") or "").strip()
         approval_id = str(body.get("approval_id") or "").strip()
         confirm = str(body.get("confirm") or "").strip()
 
-        if not approval_id:
-            return {"status": "GIT_PUSH_BLOCKED", "reason": "approval_id required"}
+        approval_check = _validate_persisted_step_approval(
+            action="git_push",
+            required_step="push",
+            mission_id=mission_id,
+            approval_id=approval_id,
+        )
+        if not approval_check.get("approval_validated"):
+            return approval_check
         if confirm != "I_APPROVE_GIT_PUSH":
-            return {"status": "GIT_PUSH_BLOCKED", "reason": "confirm must be I_APPROVE_GIT_PUSH"}
+            return _action_blocked_payload(
+                "git_push",
+                "confirm must be I_APPROVE_GIT_PUSH",
+                mission_id=mission_id,
+                approval_id=approval_id,
+            )
 
         result = push_committed_changes()
         result["relay_endpoint"] = "/relay/git/push-approved"
         result["approval_required"] = True
+        result["approval_validated"] = True
+        result["mission_id"] = mission_id
         result["direct_vps_pull"] = False
         result["direct_deploy_or_restart"] = False
         return result
@@ -1064,20 +1200,36 @@ if FASTAPI_AVAILABLE:
         payload: dict[str, Any] | None = Body(default=None),
         x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
     ) -> dict[str, Any]:
+        if not relay_enabled():
+            return _disabled_payload()
         require_relay_key(x_echo_relay_key)
 
         body = payload or {}
+        mission_id = str(body.get("mission_id") or "").strip()
         approval_id = str(body.get("approval_id") or "").strip()
         confirm = str(body.get("confirm") or "").strip()
 
-        if not approval_id:
-            return {"status": "VPS_PULL_BLOCKED", "reason": "approval_id required"}
+        approval_check = _validate_persisted_step_approval(
+            action="vps_pull",
+            required_step="vps_pull",
+            mission_id=mission_id,
+            approval_id=approval_id,
+        )
+        if not approval_check.get("approval_validated"):
+            return approval_check
         if confirm != "I_APPROVE_VPS_PULL":
-            return {"status": "VPS_PULL_BLOCKED", "reason": "confirm must be I_APPROVE_VPS_PULL"}
+            return _action_blocked_payload(
+                "vps_pull",
+                "confirm must be I_APPROVE_VPS_PULL",
+                mission_id=mission_id,
+                approval_id=approval_id,
+            )
 
         result = pull_committed_changes()
         result["relay_endpoint"] = "/relay/vps/pull-approved"
         result["approval_required"] = True
+        result["approval_validated"] = True
+        result["mission_id"] = mission_id
         result["direct_deploy_or_restart"] = False
         result["services_restarted"] = False
         return result
