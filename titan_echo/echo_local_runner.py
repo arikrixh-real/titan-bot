@@ -77,7 +77,7 @@ def run_once(
     if not step:
         return _blocked(mission_id, "NO_SAFE_NEXT_STEP", mission)
 
-    git_policy = validate_git_step_policy(mission, step)
+    git_policy = validate_git_step_policy(mission, step, dry_run=dry_run)
     if not git_policy["allowed"]:
         _block_state(mission, git_policy["reason"])
         _write_block_evidence(mission, step, git_policy["reason"])
@@ -172,9 +172,11 @@ def validate_mission_paths(mission: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def validate_git_step_policy(mission: dict[str, Any], step: str) -> dict[str, Any]:
+def validate_git_step_policy(mission: dict[str, Any], step: str, *, dry_run: bool = False) -> dict[str, Any]:
     if step not in {"push", "pull"}:
         return {"allowed": True, "reason": ""}
+    if mission.get("dry_run") is True and dry_run:
+        return {"allowed": True, "reason": "DRY_RUN_SIMULATION"}
     approved = _flag(mission, "git_push_pull_approved") or _flag(mission, f"git_{step}_approved")
     return {"allowed": approved, "reason": "" if approved else "GIT_PUSH_PULL_APPROVAL_REQUIRED"}
 

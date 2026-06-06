@@ -1,5 +1,3 @@
-import json
-
 import pytest
 
 from titan_echo import echo_mission_state as state_store
@@ -108,6 +106,48 @@ def test_git_push_blocked_without_approval_flag(echo_runtime):
 
     assert result["status"] == "BLOCKED"
     assert result["reason"] == "GIT_PUSH_PULL_APPROVAL_REQUIRED"
+
+
+def test_dry_run_mission_reaches_pushed_without_git_approval(echo_runtime):
+    mission = _mission(echo_runtime, status="COMMITTED", next_step="push", dry_run=True)
+
+    result = runner.run_once(mission_id=mission["mission_id"], dry_run=True)
+    evidence = _evidence(mission["mission_id"])
+
+    assert result["status"] == "PUSHED"
+    assert state_store.load_mission_state(mission["mission_id"])["next_step"] == "pull"
+    assert evidence[-1]["command"] == "SIMULATED_PUSH_DRY_RUN"
+    assert "SIMULATED_PUSH_DRY_RUN" in evidence[-1]["stdout_tail"]
+
+
+def test_dry_run_mission_reaches_pulled_without_git_approval(echo_runtime):
+    mission = _mission(echo_runtime, status="PUSHED", next_step="pull", dry_run=True)
+
+    result = runner.run_once(mission_id=mission["mission_id"], dry_run=True)
+    evidence = _evidence(mission["mission_id"])
+
+    assert result["status"] == "PULLED"
+    assert state_store.load_mission_state(mission["mission_id"])["next_step"] == "report"
+    assert evidence[-1]["command"] == "SIMULATED_PULL_DRY_RUN"
+    assert "SIMULATED_PULL_DRY_RUN" in evidence[-1]["stdout_tail"]
+
+
+def test_dry_run_push_pull_do_not_execute_subprocess(echo_runtime, monkeypatch):
+    calls = []
+
+    def fail_if_called(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("subprocess.run must not execute during dry-run push/pull")
+
+    monkeypatch.setattr("titan_echo.echo_git_adapter.subprocess.run", fail_if_called)
+    mission = _mission(echo_runtime, status="COMMITTED", next_step="push", dry_run=True)
+
+    push = runner.run_once(mission_id=mission["mission_id"], dry_run=True)
+    pull = runner.run_once(mission_id=mission["mission_id"], dry_run=True)
+
+    assert push["status"] == "PUSHED"
+    assert pull["status"] == "PULLED"
+    assert calls == []
 
 
 def test_git_push_runs_with_approval_flag(echo_runtime):

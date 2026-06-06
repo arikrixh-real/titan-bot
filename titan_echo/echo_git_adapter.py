@@ -17,14 +17,14 @@ def commit_changes(mission: dict[str, Any], *, repo_root: Path, dry_run: bool = 
 
 def push_changes(mission: dict[str, Any], *, repo_root: Path, dry_run: bool = True) -> dict[str, Any]:
     if dry_run:
-        return _dry("PUSHED", "git push dry-run", "push step accepted by local runner dry-run")
+        return _dry("PUSHED", "SIMULATED_PUSH_DRY_RUN", "SIMULATED_PUSH_DRY_RUN: no git push executed")
     result = subprocess.run(["git", "push"], cwd=str(repo_root), capture_output=True, text=True, timeout=180)
     return _result("PUSHED", "PUSH_FAILED", "git push", result)
 
 
 def pull_changes(mission: dict[str, Any], *, repo_root: Path, dry_run: bool = True) -> dict[str, Any]:
     if dry_run:
-        return _dry("PULLED", "git pull dry-run", "pull step accepted by local runner dry-run")
+        return _dry("PULLED", "SIMULATED_PULL_DRY_RUN", "SIMULATED_PULL_DRY_RUN: no git pull executed")
     result = subprocess.run(["git", "pull", "--ff-only"], cwd=str(repo_root), capture_output=True, text=True, timeout=180)
     return _result("PULLED", "PULL_FAILED", "git pull --ff-only", result)
 
