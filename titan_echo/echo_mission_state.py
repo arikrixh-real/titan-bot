@@ -334,11 +334,11 @@ def _validate_diagnostics_status_only_text(title_text: str, instructions_text: s
             "hits": disallowed_paths,
         }
 
-    protected_text = _strip_diagnostics_negative_safety_phrases(" ".join((title_text, instructions_text)))
+    cleaned_text = _strip_diagnostics_negative_safety_phrases(" ".join((title_text, instructions_text)))
     for path in INTAKE_OUTPUT_DIAGNOSTIC_JSON_PATHS:
-        protected_text = protected_text.replace(path, "")
+        cleaned_text = cleaned_text.replace(path, "")
 
-    hits = [pattern for pattern in INTAKE_DIAGNOSTICS_BLOCKED_PATTERNS if re.search(pattern, protected_text)]
+    hits = [pattern for pattern in INTAKE_DIAGNOSTICS_BLOCKED_PATTERNS if re.search(pattern, cleaned_text, flags=re.IGNORECASE)]
     if hits:
         return {"allowed": False, "reason": "TRADING_OR_PROTECTED_SCOPE_BLOCKED", "hits": hits}
 
@@ -348,7 +348,7 @@ def _validate_diagnostics_status_only_text(title_text: str, instructions_text: s
 def _strip_diagnostics_negative_safety_phrases(text: str) -> str:
     sanitized = text
     for phrase in INTAKE_DIAGNOSTICS_NEGATIVE_SAFETY_PHRASES:
-        sanitized = sanitized.replace(phrase, "")
+        sanitized = re.sub(re.escape(phrase), "", sanitized, flags=re.IGNORECASE)
     return sanitized
 
 

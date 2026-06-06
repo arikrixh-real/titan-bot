@@ -291,6 +291,26 @@ def test_diagnostics_status_only_full_mission_004_text_passes(client, monkeypatc
     assert calls == [["sudo", "systemctl", "start", "titan-echo-runner"]]
 
 
+def test_diagnostics_status_only_direct_mission_004_vps_text_passes():
+    instructions = """
+No broker calls.
+No live trades.
+No scanner changes.
+No setup engine changes.
+No master brain changes.
+No external APIs.
+No service restart.
+
+Create:
+data/runtime/authoritative_runtime_truth.json
+"""
+
+    validation = state_store._validate_diagnostics_status_only_text("Mission 004", instructions)
+
+    assert validation["allowed"] is True
+    assert validation["reason"] == "SCOPE_ALLOWED"
+
+
 @pytest.mark.parametrize(
     "phrase",
     [
@@ -325,6 +345,28 @@ def test_diagnostics_status_only_negative_safety_phrases_pass(client, monkeypatc
     assert response.json()["status"] == "APPROVED"
     assert response.json()["runner_triggered"] is True
     assert calls == [["sudo", "systemctl", "start", "titan-echo-runner"]]
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "broker calls",
+        "live trades",
+        "scanner changes",
+        "setup engine changes",
+        "master brain changes",
+        "external APIs",
+        "service restart",
+    ],
+)
+def test_diagnostics_status_only_direct_positive_phrases_still_block(phrase):
+    validation = state_store._validate_diagnostics_status_only_text(
+        "Mission 004",
+        f"Inspect diagnostics status only and perform {phrase}.",
+    )
+
+    assert validation["allowed"] is False
+    assert validation["reason"] == "TRADING_OR_PROTECTED_SCOPE_BLOCKED"
 
 
 def test_harmless_dry_run_still_passes(client, monkeypatch):
