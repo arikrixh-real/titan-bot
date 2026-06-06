@@ -82,6 +82,7 @@ EXTERNAL_BLOCKED_PREFIXES = (
     "/relay/verify/run-approved",
     "/relay/vps",
 )
+INTAKE_OUTPUT_DIAGNOSTIC_JSON_PATHS = mission_state_store.INTAKE_OUTPUT_DIAGNOSTIC_JSON_PATHS
 
 
 FASTAPI_AVAILABLE = importlib.util.find_spec("fastapi") is not None

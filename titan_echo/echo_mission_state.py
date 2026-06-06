@@ -77,8 +77,29 @@ INTAKE_UNSAFE_TERMS = (
     "master brain",
     "execution mutation",
     "execution_mutation",
+    "execution changes",
+    "execution change",
+    "change execution",
+    "mutate execution",
+    "strategy",
+    "external api",
+    "external apis",
+    "external_api",
+    "external_apis",
+    "service restart",
+    "restart service",
     "live order",
+    "live orders",
+    "live trade",
+    "live trades",
     "place order",
+    "place orders",
+    "orders",
+)
+INTAKE_OUTPUT_DIAGNOSTIC_JSON_PATHS = (
+    "data/runtime/trade_contract_diagnostics.json",
+    "data/runtime/trade_journal_diagnostics.json",
+    "data/runtime/outcome_tracker_diagnostics.json",
 )
 
 
@@ -245,15 +266,39 @@ def validate_intake_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if scope not in INTAKE_SCOPE_ALLOWLIST:
         return {"allowed": False, "reason": "UNSAFE_SCOPE", "allowed_scopes": list(INTAKE_SCOPE_ALLOWLIST)}
 
-    scope_text = " ".join(
-        str(payload.get(key) or "")
-        for key in ("execution_scope", "title", "instructions")
-    ).lower()
+    title_text = str(payload.get("title") or "").lower()
+    instructions_text = str(payload.get("instructions") or "").lower()
+    if scope == "diagnostics_status_only":
+        instructions_text = _strip_allowed_output_diagnostic_paths(instructions_text)
+
+    scope_text = " ".join((scope.lower(), title_text, instructions_text))
     hits = [term for term in INTAKE_UNSAFE_TERMS if term in scope_text]
     if hits:
         return {"allowed": False, "reason": "TRADING_OR_PROTECTED_SCOPE_BLOCKED", "hits": hits}
 
     return {"allowed": True, "reason": "SCOPE_ALLOWED", "allowed_scopes": list(INTAKE_SCOPE_ALLOWLIST)}
+
+
+def _strip_allowed_output_diagnostic_paths(instructions_text: str) -> str:
+    sanitized = instructions_text
+    for path in INTAKE_OUTPUT_DIAGNOSTIC_JSON_PATHS:
+        if path in sanitized and not _diagnostic_path_has_output_context(sanitized, path):
+            continue
+        sanitized = sanitized.replace(path, "")
+    return sanitized
+
+
+def _diagnostic_path_has_output_context(instructions_text: str, path: str) -> bool:
+    output_terms = ("output", "write", "save", "emit", "generate", "record")
+    start = 0
+    while True:
+        index = instructions_text.find(path, start)
+        if index < 0:
+            return True
+        context = instructions_text[max(0, index - 80):index + len(path) + 40]
+        if not any(term in context for term in output_terms):
+            return False
+        start = index + len(path)
 
 
 def load_mission_state(mission_id: str | None) -> dict[str, Any]:

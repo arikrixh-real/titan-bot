@@ -196,6 +196,80 @@ def test_trading_scope_blocks(client, monkeypatch):
     assert calls == []
 
 
+def test_diagnostics_status_only_allows_output_diagnostic_filenames(client, monkeypatch):
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return Completed()
+
+    monkeypatch.setattr("titan_echo.echo_relay_api.subprocess.run", fake_run)
+
+    instructions = (
+        "Inspect status only and write output diagnostic JSON to "
+        "data/runtime/trade_contract_diagnostics.json, "
+        "data/runtime/trade_journal_diagnostics.json, and "
+        "data/runtime/outcome_tracker_diagnostics.json."
+    )
+    response = client.post(
+        "/relay/mission/intake-approved",
+        headers=headers(),
+        json=valid_payload(execution_scope="diagnostics_status_only", instructions=instructions),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "APPROVED"
+    assert response.json()["runner_triggered"] is True
+    assert calls == [["sudo", "systemctl", "start", "titan-echo-runner"]]
+
+
+@pytest.mark.parametrize(
+    "instructions",
+    [
+        "Inspect diagnostics then call broker APIs.",
+        "Inspect diagnostics then place live trades and orders.",
+        "Inspect diagnostics then apply scanner changes.",
+        "Inspect diagnostics then mutate master brain settings.",
+        "Inspect diagnostics then change strategy and risk execution.",
+        "Inspect diagnostics then call external APIs.",
+        "Inspect diagnostics then perform a service restart.",
+    ],
+)
+def test_diagnostics_status_only_blocks_protected_mutation_wording(client, monkeypatch, instructions):
+    calls = []
+    monkeypatch.setattr("titan_echo.echo_relay_api.subprocess.run", lambda *args, **kwargs: calls.append(args))
+
+    response = client.post(
+        "/relay/mission/intake-approved",
+        headers=headers(),
+        json=valid_payload(execution_scope="diagnostics_status_only", instructions=instructions),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "BLOCKED"
+    assert response.json()["reason"] == "TRADING_OR_PROTECTED_SCOPE_BLOCKED"
+    assert calls == []
+
+
+def test_non_diagnostics_scope_blocks_trade_diagnostic_filenames(client, monkeypatch):
+    calls = []
+    monkeypatch.setattr("titan_echo.echo_relay_api.subprocess.run", lambda *args, **kwargs: calls.append(args))
+
+    response = client.post(
+        "/relay/mission/intake-approved",
+        headers=headers(),
+        json=valid_payload(
+            execution_scope="echo_only",
+            instructions="Write output diagnostic JSON to data/runtime/trade_contract_diagnostics.json.",
+        ),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "BLOCKED"
+    assert response.json()["reason"] == "TRADING_OR_PROTECTED_SCOPE_BLOCKED"
+    assert calls == []
+
+
 def test_arbitrary_command_impossible(client, monkeypatch):
     calls = []
     monkeypatch.setattr("titan_echo.echo_relay_api.subprocess.run", lambda *args, **kwargs: calls.append(args))
