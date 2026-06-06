@@ -14,17 +14,26 @@ from pathlib import Path
 from typing import Any
 from urllib import error, request
 
-from titan_echo.echo_relay_auth import require_relay_key
+from titan_echo.echo_relay_auth import (
+    relay_execution_hardening_status,
+    require_relay_execution_allowed,
+    require_relay_key,
+)
 from titan_echo.echo_git_vps_bridge import verify_request, push_committed_changes, pull_committed_changes
 from titan_echo.echo_mission_brain import (
-    approve_step,
-    create_mission,
     load_mission,
-    mission_status,
-    resume_mission,
+    approve_step as legacy_approve_step,
+    resume_mission as legacy_resume_mission,
     rollback_request,
     rollback_run_approved,
     rollback_status,
+)
+from titan_echo.echo_mission_runner import (
+    approve_mission as runner_approve_mission,
+    create_mission as runner_create_mission,
+    mission_report as runner_mission_report,
+    mission_status as runner_mission_status,
+    run_next as runner_run_next,
 )
 from titan_echo.echo_inspection_layer import (
     inspect_connections,
@@ -63,7 +72,7 @@ GIT_VPS_BRIDGE_POLICY_PATH = ECHO_DIR / "git_vps_bridge_policy.json"
 
 FASTAPI_AVAILABLE = importlib.util.find_spec("fastapi") is not None
 if FASTAPI_AVAILABLE:
-    from fastapi import Body, FastAPI, Header
+    from fastapi import Body, FastAPI, Header, Request
     from starlette.responses import JSONResponse
 else:  # pragma: no cover - depends on local dependency set
     Body = None  # type: ignore[assignment, misc]
@@ -540,6 +549,11 @@ def _disabled_payload() -> dict[str, Any]:
     payload = relay_status_payload()
     payload["status"] = "RELAY_DISABLED"
     payload["relay_enabled"] = False
+    payload["hardening"] = relay_execution_hardening_status(
+        provided_key=None,
+        client_host=None,
+        execution_requested=True,
+    )
     return payload
 
 
@@ -553,6 +567,11 @@ def _action_blocked_payload(action: str, reason: str, **extra: Any) -> dict[str,
     }
     payload.update(extra)
     return payload
+
+
+def _client_host(request_obj: Any) -> str:
+    client = getattr(request_obj, "client", None)
+    return str(getattr(client, "host", "") or "")
 
 
 def _validate_persisted_step_approval(
@@ -690,6 +709,18 @@ def relay_health(x_echo_relay_key: str | None = None) -> dict[str, Any]:
     return relay_status_payload()
 
 
+def relay_hardening_status(
+    x_echo_relay_key: str | None = None,
+    client_host: str | None = None,
+    execution_requested: bool = True,
+) -> dict[str, Any]:
+    return relay_execution_hardening_status(
+        provided_key=x_echo_relay_key,
+        client_host=client_host,
+        execution_requested=execution_requested,
+    )
+
+
 def relay_jarvis_ask(payload: dict[str, Any], x_echo_relay_key: str | None = None) -> dict[str, Any]:
     if not relay_enabled():
         return _disabled_payload()
@@ -758,19 +789,41 @@ def relay_chatgpt_evidence_manifest_batch1() -> dict[str, Any]:
 
 
 def relay_mission_create(payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    return create_mission(payload or {})
+    if not relay_enabled():
+        return _disabled_payload()
+    return runner_create_mission(payload or {})
+
+
+def relay_mission_approve(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    if not relay_enabled():
+        return _disabled_payload()
+    return runner_approve_mission(payload or {})
+
+
+def relay_mission_run_next(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    if not relay_enabled():
+        return _disabled_payload()
+    return runner_run_next(payload or {})
 
 
 def relay_mission_status(mission_id: str | None = None) -> dict[str, Any]:
-    return mission_status(mission_id)
+    if not relay_enabled():
+        return _disabled_payload()
+    return runner_mission_status(mission_id)
+
+
+def relay_mission_report(mission_id: str | None = None) -> dict[str, Any]:
+    if not relay_enabled():
+        return _disabled_payload()
+    return runner_mission_report(mission_id)
 
 
 def relay_mission_resume(payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    return resume_mission(payload or {})
+    return legacy_resume_mission(payload or {})
 
 
 def relay_mission_approve_step(payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    return approve_step(payload or {})
+    return legacy_approve_step(payload or {})
 
 
 def relay_rollback_status(mission_id: str | None = None) -> dict[str, Any]:
@@ -840,6 +893,13 @@ if FASTAPI_AVAILABLE:
     @app.get("/relay/health")
     def route_relay_health(x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME)) -> dict[str, Any]:
         return relay_health(x_echo_relay_key)
+
+    @app.get("/relay/hardening/status")
+    def route_relay_hardening_status(
+        request: Request,
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        return relay_hardening_status(x_echo_relay_key, _client_host(request), execution_requested=True)
 
     @app.get("/relay/inspect/tree")
     def route_relay_inspect_tree(
@@ -999,6 +1059,23 @@ if FASTAPI_AVAILABLE:
         require_relay_key(x_echo_relay_key)
         return relay_mission_create(payload or {})
 
+    @app.post("/relay/mission/approve")
+    def route_relay_mission_approve(
+        payload: dict[str, Any] | None = Body(default=None),
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return relay_mission_approve(payload or {})
+
+    @app.post("/relay/mission/run_next")
+    def route_relay_mission_run_next(
+        request: Request,
+        payload: dict[str, Any] | None = Body(default=None),
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_execution_allowed(x_echo_relay_key, _client_host(request))
+        return relay_mission_run_next(payload or {})
+
     @app.get("/relay/mission/status")
     def route_relay_mission_status(
         mission_id: str | None = None,
@@ -1006,6 +1083,22 @@ if FASTAPI_AVAILABLE:
     ) -> dict[str, Any]:
         require_relay_key(x_echo_relay_key)
         return relay_mission_status(mission_id)
+
+    @app.get("/relay/mission/status/{mission_id}")
+    def route_relay_mission_status_by_id(
+        mission_id: str,
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return relay_mission_status(mission_id)
+
+    @app.get("/relay/mission/report/{mission_id}")
+    def route_relay_mission_report_by_id(
+        mission_id: str,
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_key(x_echo_relay_key)
+        return relay_mission_report(mission_id)
 
     @app.post("/relay/mission/resume")
     def route_relay_mission_resume(
@@ -1041,19 +1134,21 @@ if FASTAPI_AVAILABLE:
 
     @app.post("/relay/rollback/run-approved")
     def route_relay_rollback_run_approved(
+        request: Request,
         payload: dict[str, Any] | None = Body(default=None),
         x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
     ) -> dict[str, Any]:
-        require_relay_key(x_echo_relay_key)
+        require_relay_execution_allowed(x_echo_relay_key, _client_host(request))
         return relay_rollback_run_approved(payload or {})
 
 
     @app.post("/relay/verify/run-approved")
     def route_relay_verify_run_approved(
+        request: Request,
         payload: dict[str, Any] | None = Body(default=None),
         x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
     ) -> dict[str, Any]:
-        require_relay_key(x_echo_relay_key)
+        require_relay_execution_allowed(x_echo_relay_key, _client_host(request))
         result = verify_request()
         result["relay_endpoint"] = "/relay/verify/run-approved"
         result["approval_required"] = True
@@ -1066,12 +1161,13 @@ if FASTAPI_AVAILABLE:
 
     @app.post("/relay/codex/run-approved")
     def route_relay_codex_run_approved(
+        request: Request,
         payload: dict[str, Any] | None = Body(default=None),
         x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
     ) -> dict[str, Any]:
         if not relay_enabled():
             return _disabled_payload()
-        require_relay_key(x_echo_relay_key)
+        require_relay_execution_allowed(x_echo_relay_key, _client_host(request))
 
         body = payload or {}
         mission_id = str(body.get("mission_id") or "").strip()
@@ -1106,7 +1202,6 @@ if FASTAPI_AVAILABLE:
                 failure_reason="prompt_safety_check_failed",
                 safety_check=safety_check,
             )
-
             _record_codex_runner_evidence(blocked)
             return _build_compact_codex_response(blocked)
 
@@ -1130,12 +1225,13 @@ if FASTAPI_AVAILABLE:
 
     @app.post("/relay/git/push-approved")
     def route_relay_git_push_approved(
+        request: Request,
         payload: dict[str, Any] | None = Body(default=None),
         x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
     ) -> dict[str, Any]:
         if not relay_enabled():
             return _disabled_payload()
-        require_relay_key(x_echo_relay_key)
+        require_relay_execution_allowed(x_echo_relay_key, _client_host(request))
 
         body = payload or {}
         mission_id = str(body.get("mission_id") or "").strip()
@@ -1171,12 +1267,13 @@ if FASTAPI_AVAILABLE:
 
     @app.post("/relay/vps/pull-approved")
     def route_relay_vps_pull_approved(
+        request: Request,
         payload: dict[str, Any] | None = Body(default=None),
         x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
     ) -> dict[str, Any]:
         if not relay_enabled():
             return _disabled_payload()
-        require_relay_key(x_echo_relay_key)
+        require_relay_execution_allowed(x_echo_relay_key, _client_host(request))
 
         body = payload or {}
         mission_id = str(body.get("mission_id") or "").strip()
@@ -1231,9 +1328,12 @@ __all__ = [
     "relay_health",
     "relay_jarvis_ask",
     "relay_jarvis_ask_compact",
+    "relay_mission_approve",
     "relay_mission_approve_step",
     "relay_mission_create",
+    "relay_mission_report",
     "relay_mission_resume",
+    "relay_mission_run_next",
     "relay_mission_status",
     "relay_post_action_status",
     "relay_rollback_request",
