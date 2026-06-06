@@ -1,6 +1,8 @@
 {
-  "active_trade_rows": 3,
-  "closed_active_trade_count": 3,
+  "active_trade_count": 0,
+  "active_trade_ids_sample": [],
+  "active_trade_rows": 0,
+  "closed_active_trade_count": 0,
   "monitored_count": 0,
   "open_trade_count": 0,
   "reason": "ACTIVE_TRADES_AND_OUTCOMES_PARSED_NO_LIVE_PRICE_CHECK",
@@ -26,8 +28,12 @@
     }
   },
   "status": "EVIDENCE_PRESENT",
-  "timestamp_ist": "2026-06-04T14:04:47.012478+05:30",
-  "tp_hit_count": 2,
+  "timestamp_ist": "2026-06-06T23:09:30.540489+05:30",
+  "tp_hit_count": 1,
   "tp_sl_check_status": "NO_OPEN_TRADES",
-  "trade_outcome_rows": 3
+  "trade_outcome_ids_sample": [
+    "e4379483-2c7c-405b-87e3-b43e461a7ac4|TATASTEEL|SHORT|212.34|212.62|211.78",
+    "e4379483-2c7c-405b-87e3-b43e461a7ac4|TCS|SHORT|2432.4|2436.7|2423.8"
+  ],
+  "trade_outcome_rows": 2
 }

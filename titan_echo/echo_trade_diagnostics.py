@@ -97,6 +97,10 @@ def _trade_key(row: dict[str, Any]) -> str:
     )
 
 
+def _trade_id(row: dict[str, Any]) -> str:
+    return str(row.get("trade_id") or row.get("paper_trade_id") or "").strip()
+
+
 def _final_setup_symbols(filter_payload: dict[str, Any]) -> list[dict[str, Any]]:
     final: list[dict[str, Any]] = []
     for item in filter_payload.get("symbols") or []:
@@ -170,6 +174,8 @@ def build_trade_journal_diagnostics(contract_payload: dict[str, Any] | None = No
         "final_setup_count": contract_payload.get("final_setup_count", 0),
         "journal_rows": len(journal_rows),
         "active_trade_rows": len(active_rows),
+        "active_trade_count": len(active_rows),
+        "active_trade_ids_sample": [_trade_id(row) for row in active_rows if _trade_id(row)][:50],
         "journal_writes_enabled_in_runtime_scanner": journal_writes_enabled,
         "journal_write_status": "ENABLED" if journal_writes_enabled else "DISABLED_READONLY_SCANNER",
         "sample_setup_key_count": len(setup_keys),
@@ -199,9 +205,12 @@ def build_outcome_tracker_diagnostics() -> dict[str, Any]:
         "reason": "ACTIVE_TRADES_AND_OUTCOMES_PARSED_NO_LIVE_PRICE_CHECK",
         "timestamp_ist": _timestamp_ist(),
         "active_trade_rows": len(active_rows),
+        "active_trade_count": len(active_rows),
+        "active_trade_ids_sample": [_trade_id(row) for row in active_rows if _trade_id(row)][:50],
         "open_trade_count": len(open_rows),
         "closed_active_trade_count": len(closed_rows),
         "trade_outcome_rows": len(outcome_rows),
+        "trade_outcome_ids_sample": [_trade_id(row) for row in outcome_rows if _trade_id(row)][:50],
         "tp_hit_count": sum(1 for row in outcome_rows if str(row.get("outcome") or "").upper() == "TP"),
         "sl_hit_count": sum(1 for row in outcome_rows if str(row.get("outcome") or "").upper() == "SL"),
         "tp_sl_check_status": "NO_OPEN_TRADES" if not open_rows else "OPEN_TRADES_PRESENT_READ_ONLY",

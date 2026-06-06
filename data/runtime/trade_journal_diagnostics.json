@@ -1,9 +1,9 @@
 {
-  "active_trade_rows": 3,
-  "duplicate_active_trade_keys": [
-    "RELIANCE|BUY|1334.1|1327.4295|1347.441"
-  ],
-  "duplicates_prevented": false,
+  "active_trade_count": 0,
+  "active_trade_ids_sample": [],
+  "active_trade_rows": 0,
+  "duplicate_active_trade_keys": [],
+  "duplicates_prevented": true,
   "final_setup_count": 24,
   "journal_key_count": 1173,
   "journal_rows": 7769,
@@ -36,8 +36,6 @@
     }
   },
   "status": "EVIDENCE_PRESENT",
-  "status_fields": [
-    "CLOSED"
-  ],
-  "timestamp_ist": "2026-06-04T14:04:47.006403+05:30"
+  "status_fields": [],
+  "timestamp_ist": "2026-06-06T23:09:30.518253+05:30"
 }
