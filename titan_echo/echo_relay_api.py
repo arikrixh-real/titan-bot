@@ -1106,7 +1106,7 @@ if FASTAPI_AVAILABLE:
                 failure_reason="prompt_safety_check_failed",
                 safety_check=safety_check,
             )
-<<<<<<< HEAD
+
             _record_codex_runner_evidence(blocked)
             return _build_compact_codex_response(blocked)
 
@@ -1125,32 +1125,6 @@ if FASTAPI_AVAILABLE:
         }
         _write_json(CODEX_RUNNER_REQUEST_PATH, request_payload)
         return _run_codex_approved(approval_id, prompt, safety_check)
-=======
-            return {
-                "schema": "titan.echo.codex_run_approved.v1",
-                "status": "CODEX_EXECUTED" if r.returncode == 0 else "CODEX_FAILED",
-                "mission_id": mission_id,
-                "approval_id": approval_id,
-                "approval_validated": True,
-                "returncode": r.returncode,
-                "stdout": r.stdout[-4000:],
-                "stderr": r.stderr[-2000:],
-                "safety": {
-                    "git_push_pull": False,
-                    "deploy_or_restart": False,
-                    "titan_runtime_changed": False,
-                    "broker_changed": False,
-                    "risk_changed": False
-                }
-            }
-        except Exception as e:
-            return {
-                "schema": "titan.echo.codex_run_approved.v1",
-                "status": "CODEX_EXCEPTION",
-                "error": type(e).__name__,
-                "detail": str(e)
-            }
->>>>>>> b548e5f (harden echo relay launch safety gates)
 
 
 
