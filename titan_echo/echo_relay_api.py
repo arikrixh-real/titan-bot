@@ -15,6 +15,7 @@ from typing import Any
 from urllib import error, request
 
 from titan_echo.echo_relay_auth import (
+    is_localhost_client,
     relay_execution_hardening_status,
     require_relay_execution_allowed,
     require_relay_key,
@@ -70,6 +71,17 @@ CODEX_CHAIN_PROOF_PATH = ECHO_DIR / "final_echo_chain_proof.json"
 GIT_VPS_BRIDGE_REQUEST_PATH = ECHO_DIR / "git_vps_bridge_request.json"
 GIT_VPS_BRIDGE_POLICY_PATH = ECHO_DIR / "git_vps_bridge_policy.json"
 ECHO_RUNNER_TRIGGER_COMMAND = ["sudo", "systemctl", "start", "titan-echo-runner"]
+EXTERNAL_MISSION_INTAKE_PATH = "/relay/mission/intake-approved"
+EXTERNAL_BLOCKED_PREFIXES = (
+    "/relay/actions",
+    "/relay/codex",
+    "/relay/deploy",
+    "/relay/execution",
+    "/relay/git",
+    "/relay/rollback",
+    "/relay/verify/run-approved",
+    "/relay/vps",
+)
 
 
 FASTAPI_AVAILABLE = importlib.util.find_spec("fastapi") is not None
@@ -576,6 +588,26 @@ def _client_host(request_obj: Any) -> str:
     return str(getattr(client, "host", "") or "")
 
 
+def _external_relay_route_blocked(path: str, method: str, client_host: str) -> bool:
+    if is_localhost_client(client_host):
+        return False
+    if method.upper() == "POST" and path == EXTERNAL_MISSION_INTAKE_PATH:
+        return False
+    if path.startswith("/relay/mission/") and path != "/relay/mission/run_next":
+        return True
+    return any(path.startswith(prefix) for prefix in EXTERNAL_BLOCKED_PREFIXES)
+
+
+def _external_route_blocked_payload(path: str) -> dict[str, Any]:
+    return {
+        "status": "RELAY_EXTERNAL_ROUTE_BLOCKED",
+        "reason": "ONLY_MISSION_INTAKE_APPROVED_EXPOSED",
+        "path": path,
+        "allowed_endpoint": EXTERNAL_MISSION_INTAKE_PATH,
+        "safety": relay_safety(),
+    }
+
+
 def _validate_persisted_step_approval(
     *,
     action: str,
@@ -918,6 +950,8 @@ if FASTAPI_AVAILABLE:
     async def relay_disabled_mode_guard(request, call_next):
         if request.url.path != "/relay/health" and not relay_enabled():
             return JSONResponse(_disabled_payload())
+        if relay_enabled() and _external_relay_route_blocked(request.url.path, request.method, _client_host(request)):
+            return JSONResponse(_external_route_blocked_payload(request.url.path), status_code=403)
         return await call_next(request)
 
 
@@ -1141,7 +1175,7 @@ if FASTAPI_AVAILABLE:
         payload: dict[str, Any] | None = Body(default=None),
         x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
     ) -> dict[str, Any]:
-        require_relay_execution_allowed(x_echo_relay_key, _client_host(request))
+        require_relay_key(x_echo_relay_key)
         return relay_mission_intake_approved(payload or {})
 
     @app.post("/relay/mission/run_next")

@@ -35,6 +35,13 @@ def client(echo_runtime):
     return TestClient(app)
 
 
+@pytest.fixture()
+def external_client(echo_runtime):
+    from fastapi.testclient import TestClient
+
+    return TestClient(app, client=("203.0.113.44", 50000))
+
+
 def headers():
     return {"X-ECHO-RELAY-KEY": "test-relay-key"}
 
@@ -84,6 +91,61 @@ def test_invalid_auth_blocks_intake(client):
     )
 
     assert response.status_code == 401
+
+
+def test_external_intake_approved_reachable_with_valid_auth(external_client, monkeypatch):
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return Completed()
+
+    monkeypatch.setattr("titan_echo.echo_relay_api.subprocess.run", fake_run)
+
+    response = external_client.post("/relay/mission/intake-approved", headers=headers(), json=valid_payload())
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "APPROVED"
+    assert response.json()["runner_triggered"] is True
+    assert calls == [["sudo", "systemctl", "start", "titan-echo-runner"]]
+
+
+def test_external_intake_approved_blocks_invalid_auth(external_client):
+    response = external_client.post(
+        "/relay/mission/intake-approved",
+        headers={"X-ECHO-RELAY-KEY": "wrong"},
+        json=valid_payload(),
+    )
+
+    assert response.status_code == 401
+
+
+def test_external_other_mission_routes_remain_blocked(external_client):
+    for path in (
+        "/relay/mission/create",
+        "/relay/mission/approve",
+        "/relay/mission/status",
+        "/relay/mission/resume",
+        "/relay/mission/approve-step",
+    ):
+        response = external_client.post(path, headers=headers(), json={"objective": "blocked"})
+        assert response.status_code == 403
+        assert response.json()["reason"] == "ONLY_MISSION_INTAKE_APPROVED_EXPOSED"
+
+
+def test_external_execution_codex_deploy_rollback_remain_blocked(external_client):
+    paths = (
+        "/relay/execution/authorize",
+        "/relay/codex/run-approved",
+        "/relay/deploy/run-approved",
+        "/relay/rollback/request",
+        "/relay/actions/status",
+    )
+
+    for path in paths:
+        response = external_client.post(path, headers=headers(), json={"mission_id": "blocked"})
+        assert response.status_code == 403
+        assert response.json()["status"] == "RELAY_EXTERNAL_ROUTE_BLOCKED"
 
 
 def test_missing_approval_blocks(client, monkeypatch):
