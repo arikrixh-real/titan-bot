@@ -50,6 +50,36 @@ TRANSITIONS: dict[str, tuple[str, ...]] = {
 }
 
 MISSION_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,96}$")
+INTAKE_SCOPE_ALLOWLIST = ("echo_only", "diagnostics_status_only", "harmless_dry_run")
+INTAKE_REQUIRED_FIELDS = ("approved_by", "approval_id", "title", "instructions", "execution_scope", "dry_run")
+INTAKE_COMMAND_FIELDS = (
+    "command",
+    "shell_command",
+    "subprocess",
+    "codex_command",
+    "verify_command",
+    "git_command",
+    "runner_command",
+)
+INTAKE_UNSAFE_TERMS = (
+    "trading",
+    "trade",
+    "broker",
+    "risk",
+    "scanner",
+    "setup_engine",
+    "setup engine",
+    "trade_journal",
+    "trade journal",
+    "outcome_tracker",
+    "outcome tracker",
+    "master_brain",
+    "master brain",
+    "execution mutation",
+    "execution_mutation",
+    "live order",
+    "place order",
+)
 
 
 class MissionStateError(ValueError):
@@ -131,6 +161,99 @@ def create_mission_state(payload: dict[str, Any] | None = None) -> dict[str, Any
     save_mission_state(state)
     transition_state(state, "APPROVAL_REQUIRED", step="create", action="approval required")
     return state
+
+
+def create_approved_intake_mission(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    body = payload if isinstance(payload, dict) else {}
+    validation = validate_intake_payload(body)
+    if not validation["allowed"]:
+        return fail_closed(str(body.get("mission_id") or ""), validation["reason"])
+
+    requested_id = str(body.get("mission_id") or "").strip()
+    mission_id = requested_id or new_mission_id()
+    if not valid_mission_id(mission_id):
+        return fail_closed(mission_id, "INVALID_MISSION_ID")
+
+    now = utc_now()
+    approval_id = str(body.get("approval_id") or "").strip()
+    title = str(body.get("title") or "").strip()
+    instructions = str(body.get("instructions") or "").strip()
+    execution_scope = str(body.get("execution_scope") or "").strip()
+    approved_by = str(body.get("approved_by") or "").strip()
+    dry_run = bool(body.get("dry_run"))
+
+    state = {
+        "schema": "titan.echo.mission_state.v2",
+        "mission_id": mission_id,
+        "status": "APPROVED",
+        "created_at": now,
+        "updated_at": now,
+        "title": title,
+        "objective": title,
+        "instructions": instructions,
+        "execution_scope": execution_scope,
+        "dry_run": dry_run,
+        "execution_allowed": True,
+        "approval_id": approval_id,
+        "approved_at": now,
+        "approval": {
+            "approved_by": approved_by,
+            "approval_id": approval_id,
+            "approved_at": now,
+            "source": "relay_mission_intake_approved",
+        },
+        "last_step": "intake",
+        "next_step": "codex",
+        "files": ["titan_echo/"],
+        "files_touched": [],
+        "history": [{"timestamp": now, "from": "", "to": "APPROVED", "step": "intake", "action": "approved intake"}],
+        "error": "",
+        "safety": {
+            "echo_only": True,
+            "direct_codex_call": False,
+            "direct_git_command": False,
+            "arbitrary_subprocess_command": False,
+            "runner_trigger_command": "sudo systemctl start titan-echo-runner",
+            "scope_allowlist": list(INTAKE_SCOPE_ALLOWLIST),
+        },
+    }
+    save_mission_state(state)
+    append_evidence(
+        mission_id,
+        step="intake",
+        status="APPROVED",
+        command="mission intake approved",
+        return_code=0,
+        stdout_tail=f"approved_by={approved_by}; execution_scope={execution_scope}; dry_run={dry_run}",
+        files_touched=[f"data/runtime/echo/missions/{mission_id}.json"],
+    )
+    return state
+
+
+def validate_intake_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    missing = [field for field in INTAKE_REQUIRED_FIELDS if field not in payload or payload.get(field) in ("", None)]
+    if missing:
+        return {"allowed": False, "reason": "MISSING_APPROVAL_FIELDS", "missing": missing}
+    if not isinstance(payload.get("dry_run"), bool):
+        return {"allowed": False, "reason": "DRY_RUN_BOOL_REQUIRED"}
+
+    command_fields = [field for field in INTAKE_COMMAND_FIELDS if field in payload]
+    if command_fields:
+        return {"allowed": False, "reason": "ARBITRARY_COMMAND_NOT_ALLOWED", "fields": command_fields}
+
+    scope = str(payload.get("execution_scope") or "").strip()
+    if scope not in INTAKE_SCOPE_ALLOWLIST:
+        return {"allowed": False, "reason": "UNSAFE_SCOPE", "allowed_scopes": list(INTAKE_SCOPE_ALLOWLIST)}
+
+    scope_text = " ".join(
+        str(payload.get(key) or "")
+        for key in ("execution_scope", "title", "instructions")
+    ).lower()
+    hits = [term for term in INTAKE_UNSAFE_TERMS if term in scope_text]
+    if hits:
+        return {"allowed": False, "reason": "TRADING_OR_PROTECTED_SCOPE_BLOCKED", "hits": hits}
+
+    return {"allowed": True, "reason": "SCOPE_ALLOWED", "allowed_scopes": list(INTAKE_SCOPE_ALLOWLIST)}
 
 
 def load_mission_state(mission_id: str | None) -> dict[str, Any]:
@@ -238,6 +361,7 @@ __all__ = [
     "MISSIONS_DIR",
     "MissionStateError",
     "append_evidence",
+    "create_approved_intake_mission",
     "create_mission_state",
     "evidence_path",
     "fail_closed",
@@ -246,5 +370,6 @@ __all__ = [
     "read_evidence",
     "save_mission_state",
     "transition_state",
+    "validate_intake_payload",
     "valid_mission_id",
 ]

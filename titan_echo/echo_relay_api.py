@@ -28,6 +28,7 @@ from titan_echo.echo_mission_brain import (
     rollback_run_approved,
     rollback_status,
 )
+from titan_echo import echo_mission_state as mission_state_store
 from titan_echo.echo_mission_runner import (
     approve_mission as runner_approve_mission,
     create_mission as runner_create_mission,
@@ -68,6 +69,7 @@ CODEX_RUNNER_POLICY_PATH = ECHO_DIR / "codex_runner_policy.json"
 CODEX_CHAIN_PROOF_PATH = ECHO_DIR / "final_echo_chain_proof.json"
 GIT_VPS_BRIDGE_REQUEST_PATH = ECHO_DIR / "git_vps_bridge_request.json"
 GIT_VPS_BRIDGE_POLICY_PATH = ECHO_DIR / "git_vps_bridge_policy.json"
+ECHO_RUNNER_TRIGGER_COMMAND = ["sudo", "systemctl", "start", "titan-echo-runner"]
 
 
 FASTAPI_AVAILABLE = importlib.util.find_spec("fastapi") is not None
@@ -637,6 +639,47 @@ def _validate_persisted_step_approval(
     }
 
 
+def _trigger_echo_runner(mission_id: str) -> dict[str, Any]:
+    command_text = " ".join(ECHO_RUNNER_TRIGGER_COMMAND)
+    try:
+        result = subprocess.run(
+            ECHO_RUNNER_TRIGGER_COMMAND,
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        triggered = result.returncode == 0
+        mission_state_store.append_evidence(
+            mission_id,
+            step="runner_trigger",
+            status="RUNNER_TRIGGERED" if triggered else "RUNNER_TRIGGER_FAILED",
+            command=command_text,
+            return_code=result.returncode,
+            stdout_tail=result.stdout,
+            stderr_tail=result.stderr,
+        )
+        return {
+            "runner_triggered": triggered,
+            "reason": "RUNNER_TRIGGERED" if triggered else "SYSTEMCTL_FAILED",
+            "return_code": result.returncode,
+        }
+    except Exception as exc:
+        mission_state_store.append_evidence(
+            mission_id,
+            step="runner_trigger",
+            status="RUNNER_TRIGGER_FAILED",
+            command=command_text,
+            return_code=None,
+            error=f"{type(exc).__name__}:{exc}",
+        )
+        return {
+            "runner_triggered": False,
+            "reason": "SYSTEMCTL_EXCEPTION",
+            "return_code": None,
+        }
+
+
 def _blocked_payload(path: str) -> dict[str, Any]:
     return {
         "status": "RELAY_BLOCKED",
@@ -792,6 +835,31 @@ def relay_mission_create(payload: dict[str, Any] | None = None) -> dict[str, Any
     if not relay_enabled():
         return _disabled_payload()
     return runner_create_mission(payload or {})
+
+
+def relay_mission_intake_approved(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    if not relay_enabled():
+        return _disabled_payload()
+
+    mission = mission_state_store.create_approved_intake_mission(payload or {})
+    if mission.get("status") != "APPROVED":
+        return {
+            "status": "BLOCKED",
+            "mission_id": mission.get("mission_id", ""),
+            "mission_path": "",
+            "runner_triggered": False,
+            "reason": mission.get("error") or "INTAKE_BLOCKED",
+        }
+
+    mission_id = str(mission["mission_id"])
+    trigger = _trigger_echo_runner(mission_id)
+    return {
+        "mission_id": mission_id,
+        "mission_path": str(mission_state_store.mission_path(mission_id)),
+        "runner_triggered": bool(trigger["runner_triggered"]),
+        "status": mission.get("status"),
+        "reason": trigger["reason"],
+    }
 
 
 def relay_mission_approve(payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1067,6 +1135,15 @@ if FASTAPI_AVAILABLE:
         require_relay_key(x_echo_relay_key)
         return relay_mission_approve(payload or {})
 
+    @app.post("/relay/mission/intake-approved")
+    def route_relay_mission_intake_approved(
+        request: Request,
+        payload: dict[str, Any] | None = Body(default=None),
+        x_echo_relay_key: str | None = Header(default=None, alias=RELAY_HEADER_NAME),
+    ) -> dict[str, Any]:
+        require_relay_execution_allowed(x_echo_relay_key, _client_host(request))
+        return relay_mission_intake_approved(payload or {})
+
     @app.post("/relay/mission/run_next")
     def route_relay_mission_run_next(
         request: Request,
@@ -1331,6 +1408,7 @@ __all__ = [
     "relay_mission_approve",
     "relay_mission_approve_step",
     "relay_mission_create",
+    "relay_mission_intake_approved",
     "relay_mission_report",
     "relay_mission_resume",
     "relay_mission_run_next",
