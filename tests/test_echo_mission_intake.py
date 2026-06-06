@@ -223,12 +223,104 @@ def test_diagnostics_status_only_allows_output_diagnostic_filenames(client, monk
     assert calls == [["sudo", "systemctl", "start", "titan-echo-runner"]]
 
 
+def test_diagnostics_status_only_core_truth_mission_passes(client, monkeypatch):
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return Completed()
+
+    monkeypatch.setattr("titan_echo.echo_relay_api.subprocess.run", fake_run)
+
+    instructions = (
+        "Build diagnostics status-only evidence for runtime truth, component freshness, "
+        "git cleanliness, and runtime error summary. Write output JSON only to "
+        "data/runtime/authoritative_runtime_truth.json, "
+        "data/runtime/component_freshness_summary.json, "
+        "data/runtime/git_cleanliness.json, and "
+        "data/runtime/runtime_error_summary.json. Include row counts, CSV files, "
+        "freshness, STALE, MISSING, and UNKNOWN where present. No broker calls. "
+        "No live trades. No scanner changes. No master brain changes."
+    )
+    response = client.post(
+        "/relay/mission/intake-approved",
+        headers=headers(),
+        json=valid_payload(execution_scope="diagnostics_status_only", instructions=instructions),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "APPROVED"
+    assert response.json()["runner_triggered"] is True
+    assert calls == [["sudo", "systemctl", "start", "titan-echo-runner"]]
+
+
+def test_diagnostics_status_only_full_mission_004_text_passes(client, monkeypatch):
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return Completed()
+
+    monkeypatch.setattr("titan_echo.echo_relay_api.subprocess.run", fake_run)
+
+    instructions = (
+        "Mission 004 diagnostics status-only evidence: inspect runtime truth, component "
+        "freshness, git cleanliness, runtime error summary, trade contract diagnostics, "
+        "trade journal diagnostics, and outcome tracker diagnostics. Report row counts "
+        "for CSV files and classify freshness as STALE, MISSING, UNKNOWN, or current. "
+        "Write output diagnostic JSON files only: "
+        "data/runtime/authoritative_runtime_truth.json, "
+        "data/runtime/component_freshness_summary.json, "
+        "data/runtime/git_cleanliness.json, "
+        "data/runtime/runtime_error_summary.json, "
+        "data/runtime/trade_contract_diagnostics.json, "
+        "data/runtime/trade_journal_diagnostics.json, and "
+        "data/runtime/outcome_tracker_diagnostics.json. "
+        "No broker calls. No live trades. No scanner changes. No master brain changes."
+    )
+    response = client.post(
+        "/relay/mission/intake-approved",
+        headers=headers(),
+        json=valid_payload(execution_scope="diagnostics_status_only", instructions=instructions),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "APPROVED"
+    assert response.json()["runner_triggered"] is True
+    assert calls == [["sudo", "systemctl", "start", "titan-echo-runner"]]
+
+
+def test_harmless_dry_run_still_passes(client, monkeypatch):
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return Completed()
+
+    monkeypatch.setattr("titan_echo.echo_relay_api.subprocess.run", fake_run)
+
+    response = client.post(
+        "/relay/mission/intake-approved",
+        headers=headers(),
+        json=valid_payload(
+            execution_scope="harmless_dry_run",
+            instructions="Inspect ECHO mission status and write harmless dry-run evidence only.",
+        ),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "APPROVED"
+    assert response.json()["runner_triggered"] is True
+    assert calls == [["sudo", "systemctl", "start", "titan-echo-runner"]]
+
+
 @pytest.mark.parametrize(
     "instructions",
     [
-        "Inspect diagnostics then call broker APIs.",
-        "Inspect diagnostics then place live trades and orders.",
-        "Inspect diagnostics then apply scanner changes.",
+        "Inspect diagnostics then perform a broker call.",
+        "Inspect diagnostics then execute trade flow.",
+        "Inspect diagnostics then run a live trade.",
+        "Inspect diagnostics then modify scanner settings.",
         "Inspect diagnostics then mutate master brain settings.",
         "Inspect diagnostics then change strategy and risk execution.",
         "Inspect diagnostics then call external APIs.",

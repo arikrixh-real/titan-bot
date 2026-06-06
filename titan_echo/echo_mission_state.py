@@ -97,10 +97,49 @@ INTAKE_UNSAFE_TERMS = (
     "orders",
 )
 INTAKE_OUTPUT_DIAGNOSTIC_JSON_PATHS = (
+    "data/runtime/authoritative_runtime_truth.json",
+    "data/runtime/component_freshness_summary.json",
+    "data/runtime/git_cleanliness.json",
+    "data/runtime/runtime_error_summary.json",
     "data/runtime/trade_contract_diagnostics.json",
     "data/runtime/trade_journal_diagnostics.json",
     "data/runtime/outcome_tracker_diagnostics.json",
 )
+INTAKE_DIAGNOSTICS_BLOCKED_PATTERNS = (
+    r"\bplace\s+orders?\b",
+    r"\bexecute\s+trades?\b",
+    r"\blive\s+trades?\b",
+    r"\bbroker\s+calls?\b",
+    r"\bcall\s+broker\b",
+    r"\bbroker\s+apis?\b",
+    r"\bchange\s+strategy\b",
+    r"\bmodify\s+scanner\b",
+    r"\bapply\s+scanner\s+changes?\b",
+    r"\bscanner\s+changes?\b",
+    r"\bmodify\s+setup\s+engine\b",
+    r"\bmodify\s+setup_engine\b",
+    r"\bmodify\s+master\s+brain\b",
+    r"\bmutate\s+master\s+brain\b",
+    r"\bmaster\s+brain\s+changes?\b",
+    r"\bchange\s+risk\b",
+    r"\brestart\s+service\b",
+    r"\bservice\s+restart\b",
+    r"\bdeploy\b",
+    r"\bexternal\s+apis?\b",
+    r"\bdelete\s+files?\b",
+    r"\barbitrary\s+shell\b",
+)
+INTAKE_DIAGNOSTICS_NEGATIVE_SAFETY_PHRASES = (
+    "no broker calls",
+    "no broker call",
+    "no live trades",
+    "no live trade",
+    "no scanner changes",
+    "no scanner change",
+    "no master brain changes",
+    "no master brain change",
+)
+INTAKE_DIAGNOSTICS_OUTPUT_PATH_RE = re.compile(r"\bdata/runtime/[a-z0-9_./-]+\.json\b")
 
 
 class MissionStateError(ValueError):
@@ -269,7 +308,7 @@ def validate_intake_payload(payload: dict[str, Any]) -> dict[str, Any]:
     title_text = str(payload.get("title") or "").lower()
     instructions_text = str(payload.get("instructions") or "").lower()
     if scope == "diagnostics_status_only":
-        instructions_text = _strip_allowed_output_diagnostic_paths(instructions_text)
+        return _validate_diagnostics_status_only_text(title_text, instructions_text)
 
     scope_text = " ".join((scope.lower(), title_text, instructions_text))
     hits = [term for term in INTAKE_UNSAFE_TERMS if term in scope_text]
@@ -279,26 +318,32 @@ def validate_intake_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return {"allowed": True, "reason": "SCOPE_ALLOWED", "allowed_scopes": list(INTAKE_SCOPE_ALLOWLIST)}
 
 
-def _strip_allowed_output_diagnostic_paths(instructions_text: str) -> str:
-    sanitized = instructions_text
+def _validate_diagnostics_status_only_text(title_text: str, instructions_text: str) -> dict[str, Any]:
+    paths = INTAKE_DIAGNOSTICS_OUTPUT_PATH_RE.findall(instructions_text)
+    disallowed_paths = [path for path in paths if path not in INTAKE_OUTPUT_DIAGNOSTIC_JSON_PATHS]
+    if disallowed_paths:
+        return {
+            "allowed": False,
+            "reason": "TRADING_OR_PROTECTED_SCOPE_BLOCKED",
+            "hits": disallowed_paths,
+        }
+
+    protected_text = _strip_diagnostics_negative_safety_phrases(" ".join((title_text, instructions_text)))
     for path in INTAKE_OUTPUT_DIAGNOSTIC_JSON_PATHS:
-        if path in sanitized and not _diagnostic_path_has_output_context(sanitized, path):
-            continue
-        sanitized = sanitized.replace(path, "")
+        protected_text = protected_text.replace(path, "")
+
+    hits = [pattern for pattern in INTAKE_DIAGNOSTICS_BLOCKED_PATTERNS if re.search(pattern, protected_text)]
+    if hits:
+        return {"allowed": False, "reason": "TRADING_OR_PROTECTED_SCOPE_BLOCKED", "hits": hits}
+
+    return {"allowed": True, "reason": "SCOPE_ALLOWED", "allowed_scopes": list(INTAKE_SCOPE_ALLOWLIST)}
+
+
+def _strip_diagnostics_negative_safety_phrases(text: str) -> str:
+    sanitized = text
+    for phrase in INTAKE_DIAGNOSTICS_NEGATIVE_SAFETY_PHRASES:
+        sanitized = sanitized.replace(phrase, "")
     return sanitized
-
-
-def _diagnostic_path_has_output_context(instructions_text: str, path: str) -> bool:
-    output_terms = ("output", "write", "save", "emit", "generate", "record")
-    start = 0
-    while True:
-        index = instructions_text.find(path, start)
-        if index < 0:
-            return True
-        context = instructions_text[max(0, index - 80):index + len(path) + 40]
-        if not any(term in context for term in output_terms):
-            return False
-        start = index + len(path)
 
 
 def load_mission_state(mission_id: str | None) -> dict[str, Any]:
