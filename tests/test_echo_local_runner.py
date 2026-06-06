@@ -99,6 +99,40 @@ def test_resume_works_from_last_safe_step(echo_runtime):
     assert reloaded["next_step"] == "commit"
 
 
+def test_diagnostics_status_only_mission_reports_without_git(echo_runtime):
+    mission = _mission(echo_runtime, execution_scope="diagnostics_status_only")
+
+    codex = runner.run_once(mission_id=mission["mission_id"], dry_run=True)
+    verify = runner.run_once(mission_id=mission["mission_id"], dry_run=True)
+    report = runner.run_once(mission_id=mission["mission_id"], dry_run=True)
+    reloaded = state_store.load_mission_state(mission["mission_id"])
+    evidence = _evidence(mission["mission_id"])
+
+    assert codex["status"] == "CODEX_DONE"
+    assert verify["status"] == "VERIFY_DONE"
+    assert verify["next_step"] == "report"
+    assert report["status"] == "REPORTED"
+    assert reloaded["status"] == "REPORTED"
+    assert reloaded["next_step"] == ""
+    assert [item["step"] for item in evidence] == ["codex", "verify", "report"]
+    assert {item["step"] for item in evidence}.isdisjoint({"commit", "push", "pull"})
+
+
+def test_normal_mission_still_requires_git_after_verify(echo_runtime):
+    mission = _mission(echo_runtime, status="CODEX_DONE", next_step="verify")
+
+    verify = runner.run_once(mission_id=mission["mission_id"], dry_run=True)
+    commit = runner.run_once(mission_id=mission["mission_id"], dry_run=True)
+    blocked = runner.run_once(mission_id=mission["mission_id"], dry_run=True)
+
+    assert verify["status"] == "COMMIT_READY"
+    assert verify["next_step"] == "commit"
+    assert commit["status"] == "COMMITTED"
+    assert commit["next_step"] == "push"
+    assert blocked["status"] == "BLOCKED"
+    assert blocked["reason"] == "GIT_PUSH_PULL_APPROVAL_REQUIRED"
+
+
 def test_git_push_blocked_without_approval_flag(echo_runtime):
     mission = _mission(echo_runtime, status="COMMITTED", next_step="push")
 

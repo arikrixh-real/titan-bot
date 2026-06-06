@@ -193,6 +193,8 @@ def validate_deploy_restart_policy(mission: dict[str, Any]) -> dict[str, Any]:
 
 def next_step_for(mission: dict[str, Any]) -> str:
     requested = str(mission.get("next_step") or "").strip().lower()
+    if _diagnostics_status_only(mission) and str(mission.get("status") or "") == "VERIFY_DONE":
+        return "report" if requested in {"", "report", "commit"} else ""
     if requested in RUNNER_STEPS and requested == STATUS_TO_STEP.get(str(mission.get("status") or ""), requested):
         return requested
     return STATUS_TO_STEP.get(str(mission.get("status") or ""), "")
@@ -288,9 +290,31 @@ def _mark_step_done(mission: dict[str, Any], step: str, adapter_result: dict[str
     files = list(adapter_result.get("files_touched") or [])
     mission["files_touched"] = sorted(set(list(mission.get("files_touched") or []) + files))
     mission["next_step"] = _next_after(step)
+    if step == "report" and _diagnostics_status_only(mission):
+        previous_status = str(mission.get("status") or "")
+        mission["next_step"] = ""
+        mission["status"] = "REPORTED"
+        mission["last_step"] = step
+        mission["error"] = ""
+        mission.setdefault("history", []).append(
+            {
+                "timestamp": state_store.utc_now(),
+                "from": previous_status,
+                "to": "REPORTED",
+                "step": step,
+                "action": str(adapter_result.get("command") or step),
+                "error": "",
+            }
+        )
+        state_store.save_mission_state(mission)
+        return
     state_store.transition_state(mission, _success_status(step), step=step, action=str(adapter_result.get("command") or step))
     if step == "verify":
         reloaded = state_store.load_mission_state(mission_id)
+        if _diagnostics_status_only(reloaded):
+            reloaded["next_step"] = "report"
+            state_store.save_mission_state(reloaded)
+            return
         reloaded["next_step"] = "commit"
         state_store.transition_state(reloaded, "COMMIT_READY", step=step, action="commit ready")
         return
@@ -349,6 +373,10 @@ def _flag(mission: dict[str, Any], name: str) -> bool:
         return True
     flags = mission.get("approval_flags")
     return isinstance(flags, dict) and flags.get(name) is True
+
+
+def _diagnostics_status_only(mission: dict[str, Any]) -> bool:
+    return str(mission.get("execution_scope") or "").strip() == "diagnostics_status_only"
 
 
 def _block_state(mission: dict[str, Any], reason: str) -> None:
