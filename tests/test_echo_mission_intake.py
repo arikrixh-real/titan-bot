@@ -276,12 +276,49 @@ def test_diagnostics_status_only_full_mission_004_text_passes(client, monkeypatc
         "data/runtime/trade_contract_diagnostics.json, "
         "data/runtime/trade_journal_diagnostics.json, and "
         "data/runtime/outcome_tracker_diagnostics.json. "
-        "No broker calls. No live trades. No scanner changes. No master brain changes."
+        "No broker calls. No live trades. No scanner changes. No setup engine changes. "
+        "No master brain changes. No external APIs. No service restart."
     )
     response = client.post(
         "/relay/mission/intake-approved",
         headers=headers(),
         json=valid_payload(execution_scope="diagnostics_status_only", instructions=instructions),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "APPROVED"
+    assert response.json()["runner_triggered"] is True
+    assert calls == [["sudo", "systemctl", "start", "titan-echo-runner"]]
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "No broker calls.",
+        "No live trades.",
+        "No scanner changes.",
+        "No setup engine changes.",
+        "No master brain changes.",
+        "No external APIs.",
+        "No service restart.",
+    ],
+)
+def test_diagnostics_status_only_negative_safety_phrases_pass(client, monkeypatch, phrase):
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return Completed()
+
+    monkeypatch.setattr("titan_echo.echo_relay_api.subprocess.run", fake_run)
+
+    response = client.post(
+        "/relay/mission/intake-approved",
+        headers=headers(),
+        json=valid_payload(
+            execution_scope="diagnostics_status_only",
+            instructions=f"Inspect diagnostics status only. {phrase}",
+        ),
     )
 
     assert response.status_code == 200
@@ -321,7 +358,10 @@ def test_harmless_dry_run_still_passes(client, monkeypatch):
         "Inspect diagnostics then execute trade flow.",
         "Inspect diagnostics then run a live trade.",
         "Inspect diagnostics then modify scanner settings.",
+        "Inspect diagnostics then apply scanner changes.",
+        "Inspect diagnostics then perform setup engine changes.",
         "Inspect diagnostics then mutate master brain settings.",
+        "Inspect diagnostics then perform master brain changes.",
         "Inspect diagnostics then change strategy and risk execution.",
         "Inspect diagnostics then call external APIs.",
         "Inspect diagnostics then perform a service restart.",

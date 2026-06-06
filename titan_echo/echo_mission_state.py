@@ -118,6 +118,7 @@ INTAKE_DIAGNOSTICS_BLOCKED_PATTERNS = (
     r"\bscanner\s+changes?\b",
     r"\bmodify\s+setup\s+engine\b",
     r"\bmodify\s+setup_engine\b",
+    r"\bsetup\s+engine\s+changes?\b",
     r"\bmodify\s+master\s+brain\b",
     r"\bmutate\s+master\s+brain\b",
     r"\bmaster\s+brain\s+changes?\b",
@@ -136,8 +137,13 @@ INTAKE_DIAGNOSTICS_NEGATIVE_SAFETY_PHRASES = (
     "no live trade",
     "no scanner changes",
     "no scanner change",
+    "no setup engine changes",
+    "no setup engine change",
     "no master brain changes",
     "no master brain change",
+    "no external apis",
+    "no external api",
+    "no service restart",
 )
 INTAKE_DIAGNOSTICS_OUTPUT_PATH_RE = re.compile(r"\bdata/runtime/[a-z0-9_./-]+\.json\b")
 
