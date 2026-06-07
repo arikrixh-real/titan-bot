@@ -65,7 +65,7 @@ def _atomic_write_json(path, payload):
 
 
 def _precheck():
-    gate = _read_json(RUNTIME_DIR / "restart_readiness_gate.json")
+    gate = build_restart_readiness_gate(write=True)
     journal = _read_json(JOURNAL_TRUTH_PATH)
     master_guard = _read_json(MASTER_GUARD_PATH)
     broker_disabled = (

@@ -16,10 +16,10 @@ def _write_json(path, payload):
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
 
-def runtime_truth(scanner="STALE", ohlc="STALE", setup="STALE"):
+def runtime_truth(scanner="STALE", ohlc="STALE", setup="STALE", daemon="STOPPED", daemon_pid=None):
     return {
         "components": {
-            "daemon": {"status": "STOPPED"},
+            "daemon": {"status": daemon, "process_pid": daemon_pid},
             "workers": {"status": "STALE"},
             "scheduler": {"status": "STALE"},
             "scanner": {"status": scanner},
@@ -93,7 +93,7 @@ def test_live_daemon_lock_allows_worker_proof_gate(tmp_path):
     _write_json(lock_dir / "titan_daemon.lock", {"name": "titan_daemon", "pid": 1234, "acquired_at_ist": NOW.isoformat()})
 
     gate = build_restart_readiness_gate(
-        runtime_truth=runtime_truth("LIVE", "LIVE", "REAL_SETUP_ENGINE_CONNECTED") | {"components": {"daemon": {"status": "LIVE"}, "workers": {"status": "STALE"}, "scheduler": {"status": "STALE"}, "scanner": {"status": "LIVE"}, "ohlc_health": {"status": "LIVE"}, "setup_engine": {"status": "REAL_SETUP_ENGINE_CONNECTED"}}},
+        runtime_truth=runtime_truth("LIVE", "LIVE", "REAL_SETUP_ENGINE_CONNECTED", daemon="LIVE", daemon_pid=1234),
         journal_truth=journal_truth(0, False),
         dashboard_truth=dashboard_truth(),
         master_guard=master_guard(),
@@ -107,6 +107,76 @@ def test_live_daemon_lock_allows_worker_proof_gate(tmp_path):
 
     assert "active_locks_present" not in gate["blockers"]
     assert gate["safe_to_start_workers"] is True
+    assert [lock["name"] for lock in gate["worker_start_allowed_active_locks"]] == ["titan_daemon"]
+
+
+def test_task_runtime_status_lock_with_live_daemon_pid_allows_worker_proof_gate(tmp_path):
+    lock_dir = tmp_path / "locks"
+    _write_json(
+        lock_dir / "task_runtime_status.lock",
+        {"name": "task_runtime_status", "pid": 1234, "acquired_at_ist": NOW.isoformat()},
+    )
+
+    gate = build_restart_readiness_gate(
+        runtime_truth=runtime_truth("LIVE", "LIVE", "REAL_SETUP_ENGINE_CONNECTED", daemon="LIVE", daemon_pid=1234),
+        journal_truth=journal_truth(0, False),
+        dashboard_truth=dashboard_truth(),
+        master_guard=master_guard(),
+        scanner_truth=scanner_truth("LIVE", "LIVE", "REAL_SETUP_ENGINE_CONNECTED"),
+        lock_dir=lock_dir,
+        env={},
+        now=NOW,
+        write=False,
+        process_checker=lambda pid: True,
+    )
+
+    assert "active_locks_present" not in gate["blockers"]
+    assert gate["safe_to_start_workers"] is True
+    assert [lock["name"] for lock in gate["worker_start_allowed_active_locks"]] == ["task_runtime_status"]
+
+
+def test_unrelated_active_lock_still_blocks_worker_proof_gate(tmp_path):
+    lock_dir = tmp_path / "locks"
+    _write_json(lock_dir / "scanner.lock", {"name": "scanner", "pid": 1234, "acquired_at_ist": NOW.isoformat()})
+
+    gate = build_restart_readiness_gate(
+        runtime_truth=runtime_truth("LIVE", "LIVE", "REAL_SETUP_ENGINE_CONNECTED", daemon="LIVE", daemon_pid=1234),
+        journal_truth=journal_truth(0, False),
+        dashboard_truth=dashboard_truth(),
+        master_guard=master_guard(),
+        scanner_truth=scanner_truth("LIVE", "LIVE", "REAL_SETUP_ENGINE_CONNECTED"),
+        lock_dir=lock_dir,
+        env={},
+        now=NOW,
+        write=False,
+        process_checker=lambda pid: True,
+    )
+
+    assert "active_locks_present" in gate["blockers"]
+    assert gate["safe_to_start_workers"] is False
+    assert [lock["name"] for lock in gate["blocking_active_locks"]] == ["scanner"]
+
+
+def test_daemon_active_lock_without_visible_pid_blocks_worker_proof_gate(tmp_path):
+    lock_dir = tmp_path / "locks"
+    _write_json(lock_dir / "titan_daemon.lock", {"name": "titan_daemon", "pid": 1234, "acquired_at_ist": NOW.isoformat()})
+
+    gate = build_restart_readiness_gate(
+        runtime_truth=runtime_truth("LIVE", "LIVE", "REAL_SETUP_ENGINE_CONNECTED", daemon="LIVE", daemon_pid=1234),
+        journal_truth=journal_truth(0, False),
+        dashboard_truth=dashboard_truth(),
+        master_guard=master_guard(),
+        scanner_truth=scanner_truth("LIVE", "LIVE", "REAL_SETUP_ENGINE_CONNECTED"),
+        lock_dir=lock_dir,
+        env={},
+        now=NOW,
+        write=False,
+        process_checker=lambda pid: False,
+    )
+
+    assert gate["lock_status"] == "UNKNOWN_LOCK"
+    assert "unknown_locks_present" in gate["blockers"]
+    assert gate["safe_to_start_workers"] is False
 
 
 def test_unknown_lock_blocks_restart(tmp_path):

@@ -22,6 +22,7 @@ LOCK_TTL_SECONDS = 5 * 60
 SAFE_MASTER_GUARD_STATUSES = {"READ_ONLY", "ADVISORY_ONLY", "PAPER_ONLY", "REAL_BLOCKED", "DISABLED"}
 RESTART_OK_SCANNER_STATUSES = {"LIVE", "SCAN_LIVE", "SCAN_IDLE", "SCAN_WAITING_FOR_MARKET"}
 RESTART_OK_SETUP_STATUSES = {"REAL_SETUP_ENGINE_CONNECTED", "DIAGNOSTIC_SKIPPED"}
+WORKER_START_ALLOWED_ACTIVE_LOCKS = {"titan_daemon", "task_runtime_status"}
 
 
 def _now_ist():
@@ -147,6 +148,30 @@ def _component_status(runtime_truth, name):
     return str((record or {}).get("status") or "UNKNOWN").upper()
 
 
+def _component_record(runtime_truth, name):
+    components = runtime_truth.get("components") if isinstance(runtime_truth, dict) else {}
+    record = components.get(name) if isinstance(components, dict) else {}
+    return record if isinstance(record, dict) else {}
+
+
+def _daemon_pid(runtime_truth):
+    daemon = _component_record(runtime_truth, "daemon")
+    pid = daemon.get("process_pid") or daemon.get("pid")
+    return str(pid).strip() if pid not in (None, "") else None
+
+
+def _active_lock_allowed_for_worker_start(lock, *, daemon_status, daemon_pid):
+    lock_name = str(lock.get("name") or "").strip()
+    lock_pid = str(lock.get("pid") or "").strip()
+    return bool(
+        lock_name in WORKER_START_ALLOWED_ACTIVE_LOCKS
+        and daemon_status == "LIVE"
+        and daemon_pid
+        and lock_pid == daemon_pid
+        and lock.get("process_visible") is True
+    )
+
+
 def _scanner_setup_truth(scanner_truth, key):
     record = scanner_truth.get(key) if isinstance(scanner_truth, dict) else {}
     return str((record or {}).get("status") or "UNKNOWN").upper()
@@ -211,15 +236,13 @@ def build_restart_readiness_gate(
     runtime_loaded = bool(runtime_truth)
     dashboard_loaded = bool(dashboard_truth)
     broker_disabled, telegram_disabled = _execution_disabled(master_guard, env)
-    blocking_active_locks = [
+    daemon_pid = _daemon_pid(runtime_truth)
+    allowed_worker_active_locks = [
         lock
         for lock in active_locks
-        if not (
-            lock.get("name") == "titan_daemon"
-            and daemon_status == "LIVE"
-            and lock.get("process_visible") is True
-        )
+        if _active_lock_allowed_for_worker_start(lock, daemon_status=daemon_status, daemon_pid=daemon_pid)
     ]
+    blocking_active_locks = [lock for lock in active_locks if lock not in allowed_worker_active_locks]
 
     scanner_setup_stale = (
         scanner_status not in RESTART_OK_SCANNER_STATUSES
@@ -302,6 +325,8 @@ def build_restart_readiness_gate(
         "lock_status": "ACTIVE_LOCK" if active_locks else ("UNKNOWN_LOCK" if unknown_locks else ("STALE_LOCK" if stale_locks else "NO_LOCKS")),
         "stale_locks": stale_locks,
         "active_locks": active_locks,
+        "worker_start_allowed_active_locks": allowed_worker_active_locks,
+        "blocking_active_locks": blocking_active_locks,
         "unknown_locks": unknown_locks,
         "safe_to_clear_locks": safe_to_clear_locks,
         "safe_to_refresh_data": safe_to_refresh_data,
