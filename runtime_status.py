@@ -8,6 +8,7 @@ from market_data_health import run_market_data_health_check
 from runtime_engine_health import build_master_brain_runtime_health, build_setup_engine_runtime_health
 from runtime_fallback_resolver import run_runtime_fallback_resolution
 from runtime_health import run_authoritative_runtime_health_check
+from runtime_truth import build_authoritative_runtime_truth
 from runtime_mode_resolver import build_canonical_runtime_mode, build_runtime_warning_resolution_status
 from runtime_mode_router import runtime_mode_snapshot
 from scanner_publication_health import run_scanner_publication_health_check
@@ -1060,7 +1061,9 @@ def _historical_replay_status_summary():
 
 def _authoritative_runtime_health_summary():
     try:
-        return run_authoritative_runtime_health_check()
+        payload = run_authoritative_runtime_health_check()
+        payload["authoritative_runtime_truth"] = build_authoritative_runtime_truth(write=True)
+        return payload
     except Exception as exc:
         return {
             "overall_status": "FAIL",

@@ -26,8 +26,10 @@ class RuntimeMasterBrainReadOnlyTests(unittest.TestCase):
                 payload = runtime_master_brain._run_read_only_master_brain()
 
             written = json.loads(master_path.read_text(encoding="utf-8"))
-            self.assertEqual(payload["status"], "MASTER_BRAIN_READ_ONLY_NO_CANDIDATES")
-            self.assertEqual(written["status"], "MASTER_BRAIN_READ_ONLY_NO_CANDIDATES")
+            self.assertEqual(payload["status"], "READ_ONLY")
+            self.assertEqual(payload["runtime_detail_status"], "MASTER_BRAIN_READ_ONLY_NO_CANDIDATES")
+            self.assertEqual(written["status"], "READ_ONLY")
+            self.assertEqual(written["runtime_detail_status"], "MASTER_BRAIN_READ_ONLY_NO_CANDIDATES")
             self.assertFalse(written["scanner_status_available"])
             self.assertEqual(written["scanner_status_error"], "missing_scanner_status")
             self.assertEqual(written["input_candidates"], 0)
@@ -72,8 +74,9 @@ class RuntimeMasterBrainReadOnlyTests(unittest.TestCase):
             ):
                 payload = runtime_master_brain._run_read_only_master_brain()
 
-            self.assertEqual(payload["runtime_mode"], "RESEARCH_ONLY")
-            self.assertEqual(payload["status"], "MASTER_BRAIN_READ_ONLY_NO_CANDIDATES")
+            self.assertEqual(payload["runtime_mode"], "READ_ONLY")
+            self.assertEqual(payload["status"], "READ_ONLY")
+            self.assertEqual(payload["runtime_detail_status"], "MASTER_BRAIN_READ_ONLY_NO_CANDIDATES")
             self.assertFalse(payload["live_execution_enabled"])
             self.assertFalse(payload["telegram_enabled"])
             self.assertFalse(payload["lifecycle_mutation_enabled"])

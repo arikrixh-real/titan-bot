@@ -85,6 +85,8 @@ def _classify_runtime_health(payload, age_seconds):
     if age_seconds is None or age_seconds > FRESH_SECONDS:
         return "STALE"
     status = str(payload.get("status") or "").upper()
+    if payload.get("marker_only") is True or "MARKER" in status:
+        return "MARKER_ONLY"
     fallback = bool(payload.get("scan_only") or payload.get("fallback_reason") or payload.get("fallback_components"))
     if fallback or "FALLBACK" in status:
         return "FALLBACK_ACTIVE"

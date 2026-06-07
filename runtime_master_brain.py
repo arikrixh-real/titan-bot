@@ -12,6 +12,14 @@ from runtime_fallback_resolver import apply_off_hours_runtime_continuity
 from engines.risk_engine import calculate_rr
 from engines.phase38_test_mode_guard import evaluate_phase38_runtime_guard, write_phase38_runtime_status
 from engines.trade_levels import calculate_trade_levels
+from master_brain_activation_guard import (
+    MODE_ADVISORY_ONLY,
+    MODE_DISABLED,
+    MODE_PAPER_ONLY,
+    MODE_READ_ONLY,
+    MODE_REAL,
+    build_master_brain_activation_guard,
+)
 from titan_master_brain.setup_reasoning_engine import evaluate_setups
 from utils.market_hours import as_ist_datetime, is_trade_window
 
@@ -20,23 +28,12 @@ IST = timezone(timedelta(hours=5, minutes=30))
 SCANNER_STATUS_PATH = Path("data") / "runtime" / "scanner_status.json"
 MASTER_BRAIN_STATUS_PATH = Path("data") / "runtime" / "master_brain_status.json"
 RUNTIME_MODE_ENV = "TITAN_RUNTIME_MASTER_BRAIN_MODE"
-MODE_READ_ONLY = "READ_ONLY"
-MODE_HEALTH = "HEALTH"
-MODE_REAL = "REAL"
-MODE_LIVE = "LIVE"
-MODE_TEST = "TEST"
-MODE_RESEARCH_ONLY = "RESEARCH_ONLY"
-MODE_SHADOW = "SHADOW"
-MODE_PAPER = "PAPER"
 SUPPORTED_RUNTIME_MODES = {
+    MODE_DISABLED,
     MODE_READ_ONLY,
-    MODE_HEALTH,
+    MODE_ADVISORY_ONLY,
+    MODE_PAPER_ONLY,
     MODE_REAL,
-    MODE_LIVE,
-    MODE_TEST,
-    MODE_RESEARCH_ONLY,
-    MODE_SHADOW,
-    MODE_PAPER,
 }
 EXECUTION_OWNER_NONE = "NONE"
 EXECUTION_OWNER_GITHUB_HEALTH = "GITHUB_HEALTH_ONLY"
@@ -55,6 +52,7 @@ def _base_payload(scanner_status=None):
     off_hours = not is_trade_window(now_ist)
     return {
         "timestamp_ist": now_ist.isoformat(),
+        "generated_at": now_ist.isoformat(),
         "mode": scanner_status.get("mode", "READ_ONLY_MASTER_BRAIN"),
         "runtime_mode": runtime_contract["runtime_mode"],
         "execution_owner": runtime_contract["execution_owner"],
@@ -87,14 +85,11 @@ def _base_payload(scanner_status=None):
 
 
 def _runtime_contract(mode):
-    if mode in {MODE_LIVE, MODE_TEST, MODE_RESEARCH_ONLY, MODE_SHADOW, MODE_PAPER}:
+    if mode == MODE_DISABLED:
         return {
-            "runtime_mode": mode,
+            "runtime_mode": MODE_DISABLED,
             "execution_owner": EXECUTION_OWNER_NONE,
-            "execution_contract": (
-                f"{mode} mode is validated by Phase 38 and held read-only; "
-                "no live execution, Telegram, journaling, outcomes, or lifecycle mutation."
-            ),
+            "execution_contract": "Master Brain disabled by activation guard; no runtime work is allowed.",
             "live_execution_enabled": False,
             "telegram_enabled": False,
             "lifecycle_mutation_enabled": False,
@@ -102,14 +97,11 @@ def _runtime_contract(mode):
             "outcome_tracking_enabled": False,
         }
 
-    if mode == MODE_HEALTH:
+    if mode in {MODE_ADVISORY_ONLY, MODE_PAPER_ONLY}:
         return {
-            "runtime_mode": "HEALTH_ONLY",
-            "execution_owner": EXECUTION_OWNER_GITHUB_HEALTH,
-            "execution_contract": (
-                "Health check only; no live execution, no Telegram, "
-                "no journaling, no outcomes, no lifecycle mutation."
-            ),
+            "runtime_mode": mode,
+            "execution_owner": EXECUTION_OWNER_NONE,
+            "execution_contract": f"{mode} mode blocks live broker execution and live order mutation.",
             "live_execution_enabled": False,
             "telegram_enabled": False,
             "lifecycle_mutation_enabled": False,
@@ -229,20 +221,49 @@ def _write_status(payload, path=None):
 
 
 def _runtime_mode():
-    raw_mode = os.getenv(RUNTIME_MODE_ENV, MODE_READ_ONLY)
-    mode = str(raw_mode or MODE_READ_ONLY).strip().upper()
-
-    if mode not in SUPPORTED_RUNTIME_MODES:
-        print(
-            "[RuntimeMasterBrain] "
-            f"Unsupported {RUNTIME_MODE_ENV}={raw_mode!r}; using {MODE_READ_ONLY}"
-        )
-        return MODE_READ_ONLY
-
-    return mode
+    guard = build_master_brain_activation_guard(write=True)
+    return guard["effective_mode"]
 
 
-def _run_real_master_controller(*, health_check=False):
+def _guard_payload(requested_mode=None):
+    return build_master_brain_activation_guard(requested_mode=requested_mode, write=True)
+
+
+def _real_blocked_payload(guard):
+    payload = {
+        "timestamp_ist": _timestamp_ist(),
+        "generated_at": _timestamp_ist(),
+        "mode": "REAL_MASTER_BRAIN_BLOCKED_BY_ACTIVATION_GUARD",
+        "status": "REAL_BLOCKED",
+        **_runtime_contract(MODE_READ_ONLY),
+        "requested_mode": guard.get("requested_mode"),
+        "effective_mode": guard.get("effective_mode"),
+        "real_mode_allowed": False,
+        "real_mode_blockers": guard.get("real_mode_blockers", []),
+        "can_send_telegram": False,
+        "can_mutate_journal": False,
+        "can_write_supabase_trades": False,
+        "can_call_broker": False,
+        "can_execute_orders": False,
+        "reason": guard.get("reason") or "real_mode_blocked_by_activation_guard",
+        "observe_only": True,
+        "scan_only": True,
+        "trade_creation": False,
+        "telegram_alerts": False,
+        "supabase_writes": False,
+        "journal_writes": False,
+        "error_type": None,
+        "error_message": None,
+    }
+    _write_status(payload)
+    return payload
+
+
+def _run_real_master_controller(*, health_check=False, guard=None):
+    guard = guard or _guard_payload(MODE_REAL)
+    if not guard.get("real_mode_allowed"):
+        return _real_blocked_payload(guard)
+
     from titan_master_brain.master_controller import (
         run_master_brain as run_real_master_brain,
     )
@@ -275,9 +296,20 @@ def _run_real_master_controller(*, health_check=False):
     _write_status(
         {
             "timestamp_ist": _timestamp_ist(),
+            "generated_at": _timestamp_ist(),
             "mode": "REAL_MASTER_BRAIN_HANDOFF",
-            "status": "REAL_MASTER_CONTROLLER_HANDOFF",
+            "status": "LIVE",
             **runtime_contract,
+            "requested_mode": guard.get("requested_mode"),
+            "effective_mode": guard.get("effective_mode"),
+            "real_mode_allowed": True,
+            "real_mode_blockers": [],
+            "can_send_telegram": guard.get("can_send_telegram"),
+            "can_mutate_journal": guard.get("can_mutate_journal"),
+            "can_write_supabase_trades": guard.get("can_write_supabase_trades"),
+            "can_call_broker": guard.get("can_call_broker"),
+            "can_execute_orders": guard.get("can_execute_orders"),
+            "reason": "real_mode_guard_passed",
             "phase38_runtime_guard": phase38_guard,
             "observe_only": False,
             "scan_only": False,
@@ -293,20 +325,15 @@ def _run_real_master_controller(*, health_check=False):
 
 
 def _run_health_master_controller():
-    from titan_master_brain.master_controller import (
-        run_master_brain as run_real_master_brain,
-    )
-
-    result = run_real_master_brain(health_check=True)
-    if isinstance(result, dict):
-        payload = dict(result)
-        payload.update(_runtime_contract(MODE_HEALTH))
-        payload.setdefault("status", "HEALTH_CHECK_COMPLETE")
-        payload["timestamp_ist"] = _timestamp_ist()
-        _write_status(payload)
-        return payload
-
-    return result
+    guard = _guard_payload(MODE_READ_ONLY)
+    payload = _base_payload()
+    payload.update(_runtime_contract(MODE_READ_ONLY))
+    payload.update(guard)
+    payload["status"] = MODE_READ_ONLY
+    payload["runtime_detail_status"] = "LOCAL_HEALTH_CHECK_ONLY"
+    payload["reason"] = "health_helper_does_not_import_real_master_controller"
+    _write_status(payload)
+    return payload
 
 
 def _evaluated_trade_setups(evaluated):
@@ -345,18 +372,22 @@ def _read_scanner_status():
     }
 
 
-def _run_read_only_master_brain():
+def _run_read_only_master_brain(guard=None):
+    guard = guard or _guard_payload()
     scanner_status = None
 
     try:
         scanner_status, scanner_status_metadata = _read_scanner_status()
         payload = _base_payload(scanner_status)
-        payload.update(_runtime_contract(_runtime_mode()))
+        payload.update(_runtime_contract(guard["effective_mode"]))
+        payload.update(guard)
+        payload["status"] = guard["status"]
         payload.update(scanner_status_metadata)
         if not scanner_status_metadata["scanner_status_available"]:
             payload.update(
                 {
-                    "status": "MASTER_BRAIN_READ_ONLY_NO_CANDIDATES",
+                    "status": guard["status"],
+                    "runtime_detail_status": "MASTER_BRAIN_READ_ONLY_NO_CANDIDATES",
                     "input_candidates": 0,
                     "evaluated_count": 0,
                 }
@@ -389,6 +420,8 @@ def _run_read_only_master_brain():
 
         payload.update(
             {
+                "status": guard["status"],
+                "runtime_detail_status": "MASTER_BRAIN_READ_ONLY_COMPLETE",
                 "input_candidates": len(setups),
                 "evaluated_count": len(evaluated or []),
                 "top_symbols": top_symbols[:5],
@@ -407,7 +440,8 @@ def _run_read_only_master_brain():
 
     except Exception as exc:
         payload = _base_payload(scanner_status)
-        payload.update(_runtime_contract(_runtime_mode()))
+        payload.update(_runtime_contract(guard["effective_mode"]))
+        payload.update(guard)
         payload.update(
             {
                 "scanner_status_available": SCANNER_STATUS_PATH.exists(),
@@ -421,6 +455,7 @@ def _run_read_only_master_brain():
         payload.update(
             {
                 "status": "MASTER_BRAIN_READ_ONLY_ERROR",
+                "runtime_detail_status": "MASTER_BRAIN_READ_ONLY_ERROR",
                 "error_type": type(exc).__name__,
                 "error_message": str(exc),
             }
@@ -430,17 +465,22 @@ def _run_read_only_master_brain():
 
 
 def run_master_brain():
-    mode = _runtime_mode()
+    guard = _guard_payload()
+    mode = guard["effective_mode"]
     print(f"[RuntimeMasterBrain] mode={mode}", flush=True)
     _print_runtime_contract(mode)
 
-    if mode == MODE_HEALTH:
-        return _run_health_master_controller()
+    if mode == MODE_DISABLED:
+        payload = _base_payload()
+        payload.update(_runtime_contract(MODE_DISABLED))
+        payload.update(guard)
+        _write_status(payload)
+        return payload
 
     if mode == MODE_REAL:
-        return _run_real_master_controller()
+        return _run_real_master_controller(guard=guard)
 
-    return _run_read_only_master_brain()
+    return _run_read_only_master_brain(guard=guard)
 
 
 def main():

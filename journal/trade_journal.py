@@ -331,9 +331,9 @@ def _load_existing_open_keys():
     keys = set()
 
     try:
-        from data.active_trade_store import load_open_trades
+        from data.active_trade_store import load_canonical_open_trades
 
-        for row in load_open_trades():
+        for row in load_canonical_open_trades():
             if str(row.get("status", "")).upper().strip() == "OPEN":
                 keys.add(_active_key(row))
 

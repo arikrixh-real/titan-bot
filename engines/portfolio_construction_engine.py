@@ -14,6 +14,8 @@ from typing import Any, Dict, Iterable
 
 import pandas as pd
 
+from data.active_trade_store import load_canonical_open_trades
+
 try:
     from engines.pro_risk_engine import sector_for_symbol
 except Exception:
@@ -24,7 +26,6 @@ except Exception:
 CACHE_DIR = Path("data/cache")
 ACTIVE_TRADE_FILES = [
     Path("data/journals/active_trades.csv"),
-    Path("active_trades.csv"),
 ]
 MARKET_SYMBOLS = ["^NSEI", "NIFTYBEES"]
 
@@ -76,26 +77,16 @@ def _read_csv_rows(path: Path) -> list[dict[str, Any]]:
 def _open_trade_rows() -> list[dict[str, Any]]:
     rows = []
     seen = set()
-    files_to_read = ACTIVE_TRADE_FILES
+    for row in load_canonical_open_trades():
+        symbol = normalize_symbol(row.get("symbol"))
+        side = str(row.get("side", "")).upper().strip()
+        key = f"{symbol}|{side}"
 
-    if ACTIVE_TRADE_FILES and ACTIVE_TRADE_FILES[0].exists():
-        files_to_read = [ACTIVE_TRADE_FILES[0]]
+        if not symbol or key in seen:
+            continue
 
-    for path in files_to_read:
-        for row in _read_csv_rows(path):
-            status = str(row.get("status", "")).upper().strip()
-            if status not in {"OPEN", "ACTIVE", "LIVE"}:
-                continue
-
-            symbol = normalize_symbol(row.get("symbol"))
-            side = str(row.get("side", "")).upper().strip()
-            key = f"{symbol}|{side}"
-
-            if not symbol or key in seen:
-                continue
-
-            seen.add(key)
-            rows.append(row)
+        seen.add(key)
+        rows.append(row)
 
     return rows
 

@@ -33,7 +33,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from data.live_price import get_strict_fresh_price_debug
-from data.active_trade_store import close_open_trade, ensure_active_trade_store, load_open_trades
+from data.active_trade_store import close_open_trade, ensure_active_trade_store, load_canonical_open_trades
 from journal.trade_id import build_setup_signature
 from core.truth_gate import validate_outcome_check, write_status as write_truth_gate_status
 from utils.market_hours import is_trade_window, trade_window_text
@@ -479,7 +479,7 @@ def _expire_previous_day_open_trades():
     try:
         _ensure_files()
 
-        rows = load_open_trades()
+        rows = load_canonical_open_trades()
 
         today = datetime.now(IST).date()
         checked_at = _now()
@@ -927,7 +927,7 @@ def track_trade_outcomes(limit=None):
 
     _ensure_files()
 
-    rows = load_open_trades()
+    rows = load_canonical_open_trades()
 
     if not rows:
         print("[OutcomeTracker] No active trades found.")

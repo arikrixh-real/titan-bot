@@ -21,7 +21,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_DIR = PROJECT_ROOT / "data" / "runtime"
 ACTIVE_TRADES_CSV = PROJECT_ROOT / "data" / "journals" / "active_trades.csv"
 DEBUG_PATH = RUNTIME_DIR / "active_trade_store_debug.json"
+JOURNAL_TRUTH_UNIFICATION_PATH = RUNTIME_DIR / "journal_truth_unification.json"
 OPEN_STATUSES = {"OPEN", "ACTIVE", "LIVE"}
+LEGACY_ACTIVE_TRADE_FILES = [
+    PROJECT_ROOT / "data" / "journals" / "active_trades_old.csv",
+    PROJECT_ROOT / "data" / "journals" / "active_trades.backup.csv",
+    PROJECT_ROOT / "data" / "journals" / "open_trades.csv",
+    PROJECT_ROOT / "data" / "trade_journal.csv",
+    PROJECT_ROOT / "active_trades.csv",
+    PROJECT_ROOT / "journal" / "active_trades.csv",
+]
 
 """
 Authoritative active_trades storage owner.
@@ -61,11 +70,12 @@ def _is_open(row):
     return _status(row) in OPEN_STATUSES
 
 
-def _read_csv_rows():
-    if not ACTIVE_TRADES_CSV.exists():
+def _read_csv_rows(path=None):
+    path = Path(path or ACTIVE_TRADES_CSV)
+    if not path.exists():
         return [], []
     try:
-        with ACTIVE_TRADES_CSV.open("r", newline="", encoding="utf-8") as handle:
+        with path.open("r", newline="", encoding="utf-8") as handle:
             reader = csv.DictReader(handle)
             return list(reader.fieldnames or []), list(reader)
     except Exception:
@@ -234,10 +244,97 @@ def load_open_trades():
     return open_rows
 
 
+def load_canonical_open_trades():
+    fieldnames, local_rows = _read_csv_rows(ACTIVE_TRADES_CSV)
+    open_rows = []
+    for row in local_rows:
+        if _is_open(row):
+            item = dict(row)
+            item["_active_trade_source"] = "CANONICAL_ACTIVE_TRADES_CSV"
+            open_rows.append(item)
+    _write_debug(
+        write_destination=None,
+        read_sources_checked=[str(ACTIVE_TRADES_CSV)],
+        open_trades=open_rows,
+        schema_fields=fieldnames,
+        errors=[],
+    )
+    return open_rows
+
+
+def load_canonical_active_trade_rows():
+    _, rows = _read_csv_rows(ACTIVE_TRADES_CSV)
+    return [dict(row) for row in rows]
+
+
+def canonical_open_trade_count():
+    return len(load_canonical_open_trades())
+
+
+def _legacy_file_record(path):
+    path = Path(path)
+    _, rows = _read_csv_rows(path)
+    open_rows = [row for row in rows if _is_open(row)]
+    return {
+        "path": str(path.relative_to(PROJECT_ROOT)).replace("\\", "/") if path.is_absolute() else str(path).replace("\\", "/"),
+        "exists": path.exists(),
+        "classification": "LEGACY_QUARANTINED" if path.exists() else "ARCHIVE_ONLY",
+        "row_count": len(rows),
+        "open_row_count": len(open_rows),
+    }
+
+
+def classify_legacy_active_trade_files(paths=None):
+    records = []
+    for path in paths or LEGACY_ACTIVE_TRADE_FILES:
+        records.append(_legacy_file_record(path))
+    return records
+
+
+def write_journal_truth_unification(
+    *,
+    readers_checked=None,
+    readers_patched=None,
+    unsafe_fallbacks_removed=None,
+    remaining_unknowns=None,
+    output_path=None,
+):
+    canonical_rows = load_canonical_active_trade_rows()
+    canonical_open_rows = [row for row in canonical_rows if _is_open(row)]
+    legacy_records = classify_legacy_active_trade_files()
+    legacy_found = [record for record in legacy_records if record["exists"]]
+    legacy_open_rows = {
+        record["path"]: record["open_row_count"]
+        for record in legacy_found
+        if record["open_row_count"] > 0
+    }
+    payload = {
+        "generated_at": _timestamp_ist(),
+        "canonical_active_trade_file": str(ACTIVE_TRADES_CSV.relative_to(PROJECT_ROOT)).replace("\\", "/"),
+        "canonical_active_trade_count": len(canonical_rows),
+        "canonical_open_trade_count": len(canonical_open_rows),
+        "legacy_files_found": legacy_found,
+        "legacy_quarantined_file_count": len(legacy_found),
+        "legacy_open_rows_by_file": legacy_open_rows,
+        "legacy_open_rows_warning": bool(legacy_open_rows),
+        "readers_checked": list(readers_checked or []),
+        "readers_patched": list(readers_patched or []),
+        "unsafe_fallbacks_removed": list(unsafe_fallbacks_removed or []),
+        "remaining_unknowns": list(remaining_unknowns or []),
+        "restart_blocker": bool(remaining_unknowns),
+    }
+    path = Path(output_path or JOURNAL_TRUTH_UNIFICATION_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    tmp.replace(path)
+    return payload
+
+
 def find_open_trade(symbol, source=None, test_trade=None):
     wanted_symbol = _symbol(symbol)
     wanted_source = str(source or "").strip().upper()
-    open_rows = load_open_trades()
+    open_rows = load_canonical_open_trades()
     matches = []
     for row in open_rows:
         if wanted_symbol and _symbol(row.get("symbol")) != wanted_symbol:
@@ -249,7 +346,7 @@ def find_open_trade(symbol, source=None, test_trade=None):
         matches.append(row)
     _write_debug(
         write_destination=None,
-        read_sources_checked=[str(ACTIVE_TRADES_CSV), "SUPABASE_TRADES"],
+        read_sources_checked=[str(ACTIVE_TRADES_CSV)],
         open_trades=open_rows,
         synthetic_trade_found=bool(matches),
         errors=[],
@@ -283,10 +380,10 @@ def append_open_trade(row, *, client=None, prefer_supabase=True):
     else:
         schema_fields, _ = _read_csv_rows()
 
-    open_rows = load_open_trades()
+    open_rows = load_canonical_open_trades()
     _write_debug(
         write_destination="+".join(destinations),
-        read_sources_checked=[str(ACTIVE_TRADES_CSV), "SUPABASE_TRADES"],
+        read_sources_checked=[str(ACTIVE_TRADES_CSV)],
         open_trades=open_rows,
         synthetic_trade_found=bool(
             find_open_trade(

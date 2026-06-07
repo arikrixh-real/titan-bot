@@ -4,6 +4,7 @@ from datetime import datetime, time, timezone
 from pathlib import Path
 
 from runtime_dependency_graph import SAFETY_FLAGS
+from data.active_trade_store import classify_legacy_active_trade_files
 from utils.market_hours import IST, TRADE_WINDOW_END, as_ist_datetime, is_trading_day
 
 
@@ -220,15 +221,16 @@ def _build_trade_lifecycle_reconciliation(
     dashboard_live_trade_count,
     output_path=TRADE_LIFECYCLE_RECONCILIATION_PATH,
 ):
-    legacy_rows = []
-    for path in LEGACY_OPEN_TRADE_PATHS:
-        legacy_rows.extend(_source_rows(path, str(path).replace("\\", "/")))
-
     all_open_rows = _dedupe_trade_rows(
         [dict(row, _source=row.get("_source") or str(ACTIVE_TRADES_CSV).replace("\\", "/")) for row in active_rows if _open_status(row)]
-        + [row for row in legacy_rows if _open_status(row)]
     )
     all_unresolved = [_classified_open_trade(row, now_ist) for row in all_open_rows]
+    legacy_records = classify_legacy_active_trade_files(LEGACY_OPEN_TRADE_PATHS)
+    legacy_open_rows_by_file = {
+        record["path"]: record["open_row_count"]
+        for record in legacy_records
+        if record.get("exists") and record.get("open_row_count", 0) > 0
+    }
 
     active_live = [row for row in unresolved if row["lifecycle_status"] == "OPEN_PENDING"]
     learning_open = [row for row in all_unresolved if row["lifecycle_status"] == "LEARNING_OPEN"]
@@ -263,6 +265,12 @@ def _build_trade_lifecycle_reconciliation(
             "count": len(manual_required),
             "required": bool(manual_required or stale_open or eod_unresolved),
             "trades": manual_required,
+        },
+        "legacy_quarantine": {
+            "classification": "LEGACY_QUARANTINED",
+            "files": legacy_records,
+            "open_rows_by_file": legacy_open_rows_by_file,
+            "warning": bool(legacy_open_rows_by_file),
         },
         "dashboard_live_trade_count_source": dashboard_source,
         "performance_trade_count_source": performance_source,

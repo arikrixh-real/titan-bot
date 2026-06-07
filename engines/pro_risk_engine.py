@@ -12,10 +12,11 @@ import csv
 from pathlib import Path
 from typing import Any, Dict, Iterable
 
+from data.active_trade_store import load_canonical_open_trades
+
 
 ACTIVE_TRADE_FILES = [
     Path("data/journals/active_trades.csv"),
-    Path("active_trades.csv"),
 ]
 
 OUTCOME_FILES = [
@@ -133,26 +134,16 @@ def _read_csv_rows(path: Path) -> list[dict[str, Any]]:
 def _open_trade_rows() -> list[dict[str, Any]]:
     rows = []
     seen = set()
-    files_to_read = ACTIVE_TRADE_FILES
+    for row in load_canonical_open_trades():
+        symbol = normalize_symbol(row.get("symbol"))
+        side = str(row.get("side", "")).upper()
+        key = f"{symbol}|{side}"
 
-    if ACTIVE_TRADE_FILES and ACTIVE_TRADE_FILES[0].exists():
-        files_to_read = [ACTIVE_TRADE_FILES[0]]
+        if not symbol or key in seen:
+            continue
 
-    for path in files_to_read:
-        for row in _read_csv_rows(path):
-            status = str(row.get("status", "")).upper()
-            if status not in {"OPEN", "ACTIVE", "LIVE"}:
-                continue
-
-            symbol = normalize_symbol(row.get("symbol"))
-            side = str(row.get("side", "")).upper()
-            key = f"{symbol}|{side}"
-
-            if not symbol or key in seen:
-                continue
-
-            seen.add(key)
-            rows.append(row)
+        seen.add(key)
+        rows.append(row)
 
     return rows
 

@@ -6,6 +6,7 @@ from pathlib import Path
 from supabase import create_client
 from dotenv import load_dotenv
 from engines.time_filter import current_bot_mode
+from runtime_truth import build_authoritative_runtime_truth
 
 
 DASHBOARD_SYNC_STATUS_PATH = Path("data") / "runtime" / "dashboard_sync_status.json"
@@ -25,6 +26,7 @@ RUNTIME_RESILIENCE_STATUS_PATH = Path("data") / "runtime" / "runtime_resilience_
 PYRAMID_GOVERNANCE_STATUS_PATH = Path("data") / "runtime" / "pyramid_governance_status.json"
 WEEKEND_RESEARCH_MODE_STATUS_PATH = Path("data") / "runtime" / "weekend_research_mode_status.json"
 RUNTIME_STATUS_TABLE = "runtime_status"
+LOCAL_ONLY_ENV = "TITAN_DASHBOARD_SYNC_LOCAL_ONLY"
 IST = timezone(timedelta(hours=5, minutes=30))
 RUNTIME_FRESH_SECONDS = 15 * 60
 RUNTIME_FRESH_SECONDS_BY_MODE = {
@@ -197,6 +199,8 @@ def payload_fresh(payload, fresh_seconds=15 * 60):
 
 
 def get_supabase_client():
+    if str(os.getenv(LOCAL_ONLY_ENV, "")).strip() in {"1", "true", "True", "YES", "yes"}:
+        return None, ["LOCAL_ONLY"], None
     url = os.getenv("SUPABASE_URL")
     key = os.getenv("SUPABASE_KEY")
     missing_env_vars = []
@@ -279,6 +283,10 @@ def upsert_runtime_status_rows(payloads, dashboard_payload):
 
 
 def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
+    generated_at = datetime.now(IST).isoformat()
+    authoritative_truth = build_authoritative_runtime_truth(write=True)
+    component_truth = authoritative_truth.get("components") if isinstance(authoritative_truth, dict) else {}
+    component_truth = component_truth if isinstance(component_truth, dict) else {}
     runtime_payloads = {
         status_key: read_json_safe(source_path)
         for status_key, source_path in RUNTIME_STATUS_SOURCES.items()
@@ -308,15 +316,7 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
     if runtime_mode in {"UNKNOWN", "INTELLIGENCE_MODE", "CONTINUOUS_WORKERS", "HEALTH_ONLY"}:
         runtime_mode = normalized_runtime_mode()
     runtime_fresh_seconds = fresh_seconds_for_mode(runtime_mode)
-    daemon_alive = (
-        isinstance(daemon_health, dict)
-        and str(daemon_health.get("status") or "").upper() == "RUNNING"
-        and payload_fresh(daemon_health, runtime_fresh_seconds)
-    ) or (
-        isinstance(heartbeat, dict)
-        and str(heartbeat.get("status") or "").upper() == "ALIVE"
-        and payload_fresh(heartbeat, runtime_fresh_seconds)
-    )
+    daemon_alive = (component_truth.get("daemon") or {}).get("status") == "LIVE"
     open_paper_positions = get_nested_number(paper_engine_status, ("open_positions_count",))
     paper_equity = get_nested_number(paper_engine_status, ("paper_account_summary", "equity"), 0.0)
     market_workers_allowed_idle = runtime_mode in {"RESEARCH_MODE", "WEEKEND_MODE"}
@@ -327,15 +327,15 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
         "daemon_alive": (daemon_alive, "daemon_not_alive"),
         "runtime_status_fresh": (payload_fresh(runtime_status, runtime_fresh_seconds), "runtime_status_stale"),
         "scanner_active": (
-            True if market_workers_allowed_idle else is_active_status(scanner_status),
+            (component_truth.get("scanner") or {}).get("status") == "LIVE",
             "scanner_inactive",
         ),
         "master_brain_active": (
-            True if market_workers_allowed_idle else is_active_status(master_brain_status),
+            (component_truth.get("master_brain") or {}).get("status") == "LIVE",
             "master_brain_inactive",
         ),
         "paper_engine_active": (
-            True if not paper_engine_required else is_active_status(paper_engine_status),
+            (component_truth.get("paper_engine") or {}).get("status") == "LIVE",
             "paper_engine_inactive",
         ),
         "live_price_monitor_active": (
@@ -400,15 +400,9 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
     )
 
     payload = {
-        "timestamp_ist": latest_timestamp(
-            heartbeat,
-            runtime_status,
-            scanner_status,
-            master_brain_status,
-            paper_engine_status,
-            live_price_monitor_status,
-            daemon_health,
-        ),
+        "timestamp_ist": generated_at,
+        "generated_at": generated_at,
+        "authoritative_runtime_truth": authoritative_truth,
         "heartbeat": heartbeat or {},
         "telemetry_contract": dict(DASHBOARD_SYNC_TELEMETRY_CONTRACT),
         "diagnostic_only": True,
@@ -502,11 +496,21 @@ def run_dashboard_sync(path=DASHBOARD_SYNC_STATUS_PATH):
                 scanner_status.get("dashboard_status_message") if isinstance(scanner_status, dict) else None
             ),
             "setup_engine_marker_only": bool(
-                setup_engine_status.get("marker_only")
-            ) if isinstance(setup_engine_status, dict) else False,
+                (component_truth.get("setup_engine") or {}).get("status") == "MARKER_ONLY"
+            ),
             "setup_engine_real_run": bool(
-                setup_engine_status.get("real_setup_engine_called")
-            ) if isinstance(setup_engine_status, dict) else False,
+                (component_truth.get("setup_engine") or {}).get("status") == "LIVE"
+            ),
+            "component_truth_statuses": {
+                name: record.get("status")
+                for name, record in component_truth.items()
+                if isinstance(record, dict)
+            },
+            "component_truth_reasons": {
+                name: record.get("reason")
+                for name, record in component_truth.items()
+                if isinstance(record, dict)
+            },
         }
     }
 

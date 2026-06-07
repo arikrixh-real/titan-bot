@@ -20,6 +20,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import List, Dict, Any
 
+from data.active_trade_store import load_canonical_open_trades
+
 try:
     from engines.probabilistic_world_model import (
         build_probability_report,
@@ -135,13 +137,6 @@ NO_TRADE_WEIGHT = 0.05
 
 OPEN_TRADE_PATHS = [
     Path("data/journals/active_trades.csv"),
-    Path("active_trades.csv"),
-    Path("data/journals/trade_journal.csv"),
-    Path("data/journals/trade_journal.jsonl"),
-    Path("journal/trade_journal.json"),
-    Path("data/journals/trade_results.csv"),
-    Path("data/journals/trade_outcomes.csv"),
-    Path("data/journals/trade_outcomes.jsonl"),
 ]
 
 
@@ -751,7 +746,7 @@ def _context_open_trades(context: Dict[str, Any]) -> List[Dict[str, Any]]:
     if not isinstance(context, dict):
         return []
     rows = []
-    for key in ("open_trades", "active_trades", "trade_results", "journal_open_trades"):
+    for key in ("open_trades", "active_trades"):
         value = context.get(key)
         if isinstance(value, list):
             rows.extend(item for item in value if isinstance(item, dict))
@@ -763,13 +758,7 @@ def _context_open_trades(context: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def _local_open_trades() -> List[Dict[str, Any]]:
-    rows = []
-    for path in OPEN_TRADE_PATHS:
-        if path.suffix == ".csv":
-            rows.extend(_read_csv_open_rows(path))
-        elif path.suffix in {".json", ".jsonl"}:
-            rows.extend(_read_json_open_rows(path))
-    return _dedupe_open_trades(rows)
+    return _dedupe_open_trades(load_canonical_open_trades())
 
 
 def _supabase_open_trades() -> List[Dict[str, Any]]:
@@ -791,10 +780,7 @@ def _collect_open_trades(context: Dict[str, Any]) -> List[Dict[str, Any]]:
     rows = _context_open_trades(context)
     if rows:
         return rows
-    rows = _local_open_trades()
-    if rows:
-        return rows
-    return _supabase_open_trades()
+    return _local_open_trades()
 
 
 def _causal_adjusted_confidence(report: Dict[str, Any]) -> float:

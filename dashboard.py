@@ -10,6 +10,7 @@ import streamlit as st
 from supabase import create_client, Client
 from engines.time_filter import current_bot_mode
 from utils.market_hours import IST, is_trade_window
+from dashboard_truth import build_dashboard_truth_consolidation
 
 
 # =========================================================
@@ -36,6 +37,7 @@ REAL_PNL_SOURCE_LABEL = "REAL_STOCK_WISE_PNL | QTY_SYNC_ACTIVE"
 DASHBOARD_VISUAL_VERSION = "REAL_PNL_QTY_SYNC_FIX_V1"
 PAPER_ACCOUNT_PATH = "/".join(["data", "paper_trading", "paper_account.json"])
 DASHBOARD_SYNC_STATUS_PATH = "/".join(["data", "runtime", "dashboard_sync_status.json"])
+JOURNAL_TRUTH_UNIFICATION_PATH = "/".join(["data", "runtime", "journal_truth_unification.json"])
 PAPER_ENGINE_STATUS_PATH = "/".join(["data", "runtime", "paper_engine_status.json"])
 SCANNER_STATUS_PATH = "/".join(["data", "runtime", "scanner_status.json"])
 SCANNER_FILTER_TRUTH_STATUS_PATH = "/".join(["data", "runtime", "scanner_filter_truth_status.json"])
@@ -1548,11 +1550,7 @@ def get_master_brain_status(github_time=None, scan_time=None, outcome_time=None)
     Shows whether Master Brain / continuous evolution cycle is active.
     Uses local files produced by TITAN.
     """
-    active_df = read_csv_safe([
-        "data/journals/active_trades.csv",
-        "journal/active_trades.csv",
-        "active_trades.csv",
-    ])
+    active_df = get_canonical_active_trades_df()
 
     outcomes_df = read_csv_safe([
         "data/journals/trade_outcomes.csv",
@@ -2125,41 +2123,13 @@ def format_runtime_timestamp(value):
 
 
 def get_runtime_payload(runtime_key, local_path=None, authoritative_local=False):
-    supabase_data = build_runtime_status_from_supabase()
-    supabase_payload = (
-        supabase_data.get(runtime_key)
-        if isinstance(supabase_data, dict) and isinstance(supabase_data.get(runtime_key), dict)
-        else None
-    )
     local_payload = None
     if local_path:
         data = safe_read_json(local_path, {})
         if isinstance(data, dict):
             local_payload = data
-    if authoritative_local and isinstance(local_payload, dict):
-        return local_payload, "LOCAL_RUNTIME_JSON_AUTHORITATIVE"
-    if isinstance(supabase_payload, dict) and isinstance(local_payload, dict):
-        supabase_dt = parse_dt(
-            supabase_payload.get("timestamp_ist")
-            or supabase_payload.get("generated_at")
-            or supabase_payload.get("last_runtime_update")
-            or supabase_payload.get("updated_at")
-            or supabase_payload.get("timestamp")
-        )
-        local_dt = parse_dt(
-            local_payload.get("timestamp_ist")
-            or local_payload.get("generated_at")
-            or local_payload.get("last_runtime_update")
-            or local_payload.get("updated_at")
-            or local_payload.get("timestamp")
-        )
-        if local_dt and (not supabase_dt or local_dt >= supabase_dt):
-            return local_payload, "LOCAL_RUNTIME_JSON_NEWEST"
-        return supabase_payload, "SUPABASE_RUNTIME_STATUS_NEWEST"
-    if isinstance(supabase_payload, dict):
-        return supabase_payload, "SUPABASE_RUNTIME_STATUS"
     if isinstance(local_payload, dict):
-        return local_payload, "LOCAL_RUNTIME_JSON"
+        return local_payload, "LOCAL_RUNTIME_JSON_AUTHORITATIVE"
     return {}, "UNAVAILABLE"
 
 
@@ -2330,6 +2300,22 @@ def runtime_status_with_freshness(payload, active_status="ACTIVE", waiting_statu
 
 
 def get_dashboard_runtime_status():
+    authoritative_truth = safe_read_json("/".join(["data", "runtime", "authoritative_runtime_truth.json"]), {})
+    journal_truth = safe_read_json(JOURNAL_TRUTH_UNIFICATION_PATH, {})
+    dashboard_truth = build_dashboard_truth_consolidation(
+        authoritative_truth,
+        journal_truth,
+        write=True,
+    )
+    component_truth = authoritative_truth.get("components") if isinstance(authoritative_truth, dict) else {}
+    component_truth = component_truth if isinstance(component_truth, dict) else {}
+
+    def component_status(name):
+        record = component_truth.get(name)
+        if isinstance(record, dict):
+            return str(record.get("status") or "UNKNOWN").upper()
+        return ""
+
     daemon_health, _ = get_runtime_payload("daemon_health", "/".join(["data", "runtime", "daemon_health.json"]))
     heartbeat, _ = get_runtime_payload("heartbeat", "/".join(["data", "runtime", "titan_heartbeat.json"]))
     runtime_status, _ = get_runtime_payload("runtime_status", TITAN_RUNTIME_STATUS_PATH)
@@ -2347,15 +2333,20 @@ def get_dashboard_runtime_status():
     daemon_fresh = runtime_payload_is_fresh(daemon_health, runtime_fresh_seconds)
     heartbeat_fresh = runtime_payload_is_fresh(heartbeat, runtime_fresh_seconds)
     runtime_fresh = runtime_payload_is_fresh(runtime_status, runtime_fresh_seconds)
-    daemon_alive = (
+    classified_daemon_status = component_status("daemon")
+    daemon_alive = classified_daemon_status == "LIVE" or (
         daemon_fresh
         and runtime_payload_status(daemon_health) == "RUNNING"
+        and not classified_daemon_status
     ) or (
         heartbeat_fresh
         and runtime_payload_status(heartbeat) == "ALIVE"
+        and not classified_daemon_status
     )
 
-    if daemon_alive:
+    if classified_daemon_status:
+        daemon_status = classified_daemon_status
+    elif daemon_alive:
         daemon_status = runtime_payload_status(daemon_health) or runtime_payload_status(heartbeat)
     elif daemon_health or heartbeat or runtime_status:
         daemon_status = "STALE" if not (daemon_fresh or heartbeat_fresh or runtime_fresh) else "WAITING"
@@ -2413,24 +2404,22 @@ def get_dashboard_runtime_status():
     )
     defensive_runtime_healthy = governance_decision == "ALLOW" and worker_degraded_count == 0
     paper_engine_required = is_market_open_now() or open_paper_positions > 0
+    scanner_live = component_status("scanner") == "LIVE"
+    master_brain_live = component_status("master_brain") == "LIVE"
+    paper_engine_live = component_status("paper_engine") == "LIVE"
+    live_price_monitor_live = (
+        runtime_payload_is_fresh(live_price_monitor_status) and runtime_payload_active(live_price_monitor_status)
+    )
     runtime_checks = {
         "daemon_not_alive": daemon_alive,
         "runtime_status_stale": runtime_fresh,
-        "scanner_stale": True if market_workers_allowed_idle else scanner_fresh and runtime_payload_active(scanner_status),
-        "master_brain_stale": (
-            True
-            if market_workers_allowed_idle
-            else runtime_payload_is_fresh(master_brain_status) and runtime_payload_active(master_brain_status)
-        ),
-        "paper_engine_stale": (
-            True
-            if standby_runtime_healthy or not paper_engine_required
-            else runtime_payload_is_fresh(paper_engine_status) and runtime_payload_active(paper_engine_status)
-        ),
+        "scanner_stale": scanner_live if component_status("scanner") else scanner_fresh and runtime_payload_active(scanner_status),
+        "master_brain_stale": master_brain_live if component_status("master_brain") else runtime_payload_is_fresh(master_brain_status) and runtime_payload_active(master_brain_status),
+        "paper_engine_stale": paper_engine_live if component_status("paper_engine") else runtime_payload_is_fresh(paper_engine_status) and runtime_payload_active(paper_engine_status),
         "live_price_monitor_stale": (
-            True
+            live_price_monitor_live
             if market_workers_allowed_idle
-            else runtime_payload_is_fresh(live_price_monitor_status) and runtime_payload_active(live_price_monitor_status)
+            else live_price_monitor_live
         ),
     }
     attention_reasons = [reason for reason, ok in runtime_checks.items() if not ok]
@@ -2443,8 +2432,10 @@ def get_dashboard_runtime_status():
         autonomous_status = "NEEDS ATTENTION" if attention_reasons else "HEALTHY"
         autonomous_sub = ", ".join(attention_reasons) if attention_reasons else "Runtime attention checks clear"
 
+    truth_components = dashboard_truth.get("components_rendered_from_authoritative_truth", {})
+    daemon_display = (truth_components.get("daemon") or {}).get("status") or daemon_status
     return {
-        "daemon_status": daemon_status,
+        "daemon_status": daemon_display,
         "runtime_mode": normalized_runtime_mode,
         "normalized_runtime_mode": normalized_runtime_mode,
         "canonical_runtime_timestamp": runtime_status.get("canonical_runtime_timestamp") or heartbeat_timestamp,
@@ -2458,13 +2449,38 @@ def get_dashboard_runtime_status():
         "heartbeat_age": heartbeat_age,
         "heartbeat_timestamp": format_runtime_timestamp(heartbeat_timestamp),
         "ticks_completed": ticks_text,
-        "autonomous_runtime_status": autonomous_status,
-        "autonomous_runtime_sub": autonomous_sub,
-        "autonomous_runtime_needs_attention": bool(attention_reasons),
-        "autonomous_runtime_attention_reasons": attention_reasons,
+        "autonomous_runtime_status": dashboard_truth.get("dashboard_overall_status") or autonomous_status,
+        "autonomous_runtime_sub": (
+            "Authoritative runtime truth"
+            if dashboard_truth.get("dashboard_overall_status")
+            else autonomous_sub
+        ),
+        "autonomous_runtime_needs_attention": not bool(dashboard_truth.get("restart_allowed")),
+        "autonomous_runtime_attention_reasons": dashboard_truth.get("restart_blockers") or attention_reasons,
         "governance_decision": governance_decision,
         "block_reasons": block_reasons,
         "worker_degraded_count": worker_degraded_count,
+        "authoritative_runtime_truth": authoritative_truth,
+        "dashboard_truth_consolidation": dashboard_truth,
+        "journal_truth_unification": journal_truth if isinstance(journal_truth, dict) else {},
+        "canonical_active_trade_count": int(first_number(
+            journal_truth.get("canonical_open_trade_count") if isinstance(journal_truth, dict) else None,
+            default=get_live_trades_count(),
+        )),
+        "legacy_quarantined_file_count": int(first_number(
+            journal_truth.get("legacy_quarantined_file_count") if isinstance(journal_truth, dict) else None,
+            default=0,
+        )),
+        "legacy_open_rows_by_file": (
+            journal_truth.get("legacy_open_rows_by_file")
+            if isinstance(journal_truth, dict) and isinstance(journal_truth.get("legacy_open_rows_by_file"), dict)
+            else {}
+        ),
+        "component_truth_statuses": {
+            name: record.get("status")
+            for name, record in component_truth.items()
+            if isinstance(record, dict)
+        },
     }
 
 
@@ -2826,6 +2842,21 @@ def get_runtime_paper_open_positions_count():
     ))
 
 
+def get_canonical_active_trade_rows():
+    try:
+        from data.active_trade_store import load_canonical_open_trades
+
+        return [row for row in load_canonical_open_trades() if isinstance(row, dict)]
+    except Exception as exc:
+        _dashboard_debug(f"source=CANONICAL_ACTIVE_TRADE_STORE rows=0 fallback_reason=read_error:{exc}")
+        return []
+
+
+def get_canonical_active_trades_df():
+    rows = get_canonical_active_trade_rows()
+    return pd.DataFrame(rows) if rows else pd.DataFrame()
+
+
 def get_live_trades_count():
     """
     FINAL CANONICAL LIVE TRADE FIX:
@@ -2836,9 +2867,9 @@ def get_live_trades_count():
     trade_results is for CLOSED TP/SL performance only.
     """
     try:
-        from data.active_trade_store import load_open_trades
+        from data.active_trade_store import load_canonical_open_trades
 
-        return len([row for row in load_open_trades() if isinstance(row, dict)])
+        return len([row for row in load_canonical_open_trades() if isinstance(row, dict)])
     except Exception as exc:
         _dashboard_debug(f"source=ACTIVE_TRADE_STORE live_count=0 fallback_reason=read_error:{exc}")
         return 0
@@ -3268,6 +3299,9 @@ github_age = age_text_from_dt(github_data["last_run_time"])
 
 supabase_status = get_supabase_connection_status()
 runtime_status_data = get_dashboard_runtime_status()
+journal_truth_unification_data = runtime_status_data.get("journal_truth_unification", {})
+dashboard_truth_consolidation_data = runtime_status_data.get("dashboard_truth_consolidation", {})
+authoritative_components_data = dashboard_truth_consolidation_data.get("components_rendered_from_authoritative_truth", {})
 paper_engine_runtime_data = get_paper_engine_runtime_status()
 scanner_runtime_data = get_scanner_runtime_status()
 live_price_monitor_runtime_data = get_live_price_monitor_runtime_status()
@@ -3297,7 +3331,11 @@ stocks_passed = count_any_table(["setups"])
 if stocks_passed == 0:
     stocks_passed = telegram_alerts
 
-live_trades_count = get_live_trades_count()
+live_trades_count = int(first_number(
+    dashboard_truth_consolidation_data.get("active_trade_count"),
+    journal_truth_unification_data.get("canonical_open_trade_count") if isinstance(journal_truth_unification_data, dict) else None,
+    default=get_live_trades_count(),
+))
 trade_lifecycle_reconciliation = get_trade_lifecycle_reconciliation()
 active_live_trades_count = _reconciliation_count(trade_lifecycle_reconciliation, "active_live_trades")
 learning_open_trades_count = _reconciliation_count(trade_lifecycle_reconciliation, "learning_open_trades")
@@ -3318,7 +3356,7 @@ paper_trading_data = get_paper_trading_status(
 wins = trade_result_stats["wins"]
 losses = trade_result_stats["losses"]
 closed_trades = trade_result_stats["closed_total"]
-open_outcome_trades = max(supabase_trade_stats.get("open_total", 0), trade_result_stats.get("open_total", 0), live_trades_count)
+open_outcome_trades = live_trades_count
 
 # Dashboard should show CLOSED trades in performance
 total_trades = closed_trades
@@ -3333,7 +3371,18 @@ master_brain_data = get_master_brain_status(
     scan_time=latest_dt(real_latest_scan_time, latest_phase_report_time),
     outcome_time=trade_result_stats.get("latest_outcome_time"),
 )
+master_brain_data["master_status"] = (
+    dashboard_truth_consolidation_data.get("master_brain_display_status")
+    or master_brain_data.get("master_status")
+)
+if master_brain_data["master_status"] in {"STALE", "STOPPED", "UNKNOWN", "MARKER_ONLY", "DEGRADED"}:
+    master_brain_data["evolution_status"] = master_brain_data["master_status"]
+    master_brain_data["evolution_sub"] = "Authoritative runtime truth; progress files are not runtime health"
 master_shadow_data = get_master_shadow_dashboard_data()
+master_shadow_data["status"] = (
+    dashboard_truth_consolidation_data.get("shadow_command_center_status")
+    or master_shadow_data.get("status")
+)
 
 master_activity_time = latest_dt(
     master_brain_data.get("last_activity"),
@@ -3341,17 +3390,30 @@ master_activity_time = latest_dt(
     real_latest_scan_time,
 )
 
+def authoritative_component_status(name, fallback="UNKNOWN"):
+    record = authoritative_components_data.get(name)
+    if isinstance(record, dict):
+        return str(record.get("status") or fallback).upper()
+    return fallback
+
+
+def authoritative_component_sub(name, fallback=""):
+    record = authoritative_components_data.get(name)
+    if not isinstance(record, dict):
+        return fallback
+    source_file = record.get("source_file") or "unknown source"
+    timestamp = record.get("source_timestamp") or "unknown timestamp"
+    age = record.get("age_seconds")
+    reason = record.get("reason") or "no reason"
+    age_text = "unknown age" if age is None else f"{int(float(age))}s old"
+    return f"Source: {source_file} | Updated: {timestamp} | Age: {age_text} | Reason: {reason}"
+
+
 last_scan_age = scanner_runtime_data["age"]
-scan_status = scanner_runtime_data["status"]
-titan_status = derive_titan_status(master_activity_time, github_data, supabase_status, market_open)
-if (
-    not market_open
-    and not runtime_status_data.get("autonomous_runtime_needs_attention")
-    and runtime_status_data.get("runtime_mode") in {"WEEKEND_MODE", "RESEARCH_MODE"}
-):
-    titan_status = market_mode_label()
+scan_status = authoritative_component_status("scanner", scanner_runtime_data["status"])
+titan_status = dashboard_truth_consolidation_data.get("dashboard_overall_status") or runtime_status_data.get("autonomous_runtime_status")
 github_display_status = market_aware_status(github_status, market_open, "WAITING")
-master_brain_display_status = market_aware_status(master_brain_data["master_status"], market_open, "RESEARCH MODE")
+master_brain_display_status = dashboard_truth_consolidation_data.get("master_brain_display_status") or master_brain_data["master_status"]
 
 SUPABASE_STORAGE_LIMIT_MB = 500
 
@@ -3435,6 +3497,15 @@ scanner_truth_footer = (
     f"Signature: ...{scanner_signature_text} | "
     f"Age: {scanner_age_text}"
 )
+authoritative_freshness_lines = [
+    f"{name}: status={authoritative_component_status(component)} | {authoritative_component_sub(component)}"
+    for name, component in [
+        ("Scanner", "scanner"),
+        ("OHLC", "ohlc_health"),
+        ("Setup", "setup_engine"),
+        ("Master Brain", "master_brain"),
+    ]
+]
 if scan_breakdown.get("scanner_truth_status") and scan_breakdown.get("scanner_truth_status") != "ACTIVE":
     scanner_statuses = scan_breakdown.get("scanner_truth_statuses") or [scan_breakdown.get("scanner_truth_status")]
     scanner_truth_footer = f"{scanner_truth_footer} | {' | '.join(scanner_statuses)}"
@@ -3495,6 +3566,16 @@ st.markdown(
 
 st.markdown("<div class='subtitle'>Dashboard Real PnL Fix V1</div>", unsafe_allow_html=True)
 
+dashboard_restart_blockers = dashboard_truth_consolidation_data.get("restart_blockers") or []
+status_card(
+    "Dashboard Truth",
+    dashboard_truth_consolidation_data.get("dashboard_overall_status", "UNKNOWN"),
+    (
+        f"restart_allowed: {str(dashboard_truth_consolidation_data.get('restart_allowed', False)).lower()} | "
+        f"blockers: {', '.join(dashboard_restart_blockers) if dashboard_restart_blockers else 'none'}"
+    ),
+)
+
 
 # =========================================================
 # 1. TOP STATUS
@@ -3506,19 +3587,19 @@ st.markdown("<div class='section-title'>🧠 Top Control Status</div>", unsafe_a
 c1, c2, c3, c4 = st.columns(4)
 
 with c1:
-    status_card("TITAN Status", titan_status, market_mode_label())
+    status_card("TITAN Status", titan_status, "Authoritative runtime truth")
 
 with c2:
     status_card("GitHub 5-Min Runner", github_display_status, github_data["message"])
 
 with c3:
-    status_card("Supabase Status", supabase_status, "Memory database connection")
+    status_card("Supabase Connectivity", supabase_status, "Not runtime health")
 
 with c4:
     metric_card(
         "TITAN Heartbeat",
         runtime_status_data["heartbeat_age"],
-        "Supabase runtime_status / titan_heartbeat",
+        "Local authoritative runtime files",
     )
 
 if github_data["url"]:
@@ -3599,6 +3680,32 @@ with mb4:
         "Closed Learning Trades",
         f"{closed_trades:,}",
         "TP/SL results used for accuracy",
+    )
+
+legacy_open_rows_by_file = (
+    journal_truth_unification_data.get("legacy_open_rows_by_file")
+    if isinstance(journal_truth_unification_data, dict)
+    else {}
+)
+legacy_quarantined_count = int(first_number(
+    journal_truth_unification_data.get("legacy_quarantined_file_count")
+    if isinstance(journal_truth_unification_data, dict)
+    else None,
+    default=0,
+))
+if legacy_quarantined_count or legacy_open_rows_by_file:
+    legacy_open_total = sum(
+        int(first_number(value, default=0))
+        for value in (legacy_open_rows_by_file or {}).values()
+    )
+    small_status(
+        "Journal Legacy Quarantine",
+        "WARNING" if legacy_open_total else "ARCHIVE_ONLY",
+        (
+            f"Canonical active: {live_trades_count}, "
+            f"legacy files: {legacy_quarantined_count}, "
+            f"legacy OPEN rows ignored: {legacy_open_total}"
+        ),
     )
 
 st.markdown("<br>", unsafe_allow_html=True)
@@ -3730,11 +3837,12 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 
 # =========================================================
-# 5. ENGINE DEVELOPMENT PROGRESS
+# 5. CAPABILITY PROGRESS
 # =========================================================
 
 st.markdown("<div class='section'>", unsafe_allow_html=True)
-st.markdown("<div class='section-title'>⚙️ Engine Development Progress</div>", unsafe_allow_html=True)
+st.markdown("<div class='section-title'>Capability Progress</div>", unsafe_allow_html=True)
+st.caption("Capability progress is static readiness context only; it is not runtime health.")
 
 left, right = st.columns(2)
 
@@ -3762,10 +3870,10 @@ st.markdown("<div class='section-title'>🟢 Engine Running Status</div>", unsaf
 r1, r2 = st.columns([1, 1])
 
 with r1:
-    small_status("Scan Engine", scan_status, f"Last scan: {last_scan_age}")
+    small_status("Scan Engine", scan_status, authoritative_component_sub("scanner", f"Last scan: {last_scan_age}"))
     small_status("GitHub 5-Min Runner", github_display_status, f"Last run: {github_age}")
-    small_status("Supabase Memory", supabase_status, "Database connection")
-    small_status("Master Brain", master_brain_display_status, f"Last activity: {master_brain_data['last_activity_age']}")
+    small_status("Supabase Connectivity", supabase_status, "Not runtime health")
+    small_status("Master Brain", master_brain_display_status, authoritative_component_sub("master_brain", f"Last activity: {master_brain_data['last_activity_age']}"))
     small_status(
         "TITAN Runtime",
         runtime_status_data["daemon_status"],
@@ -3782,10 +3890,10 @@ with r2:
         runtime_status_data["autonomous_runtime_status"],
         runtime_status_data["autonomous_runtime_sub"],
     )
-    small_status("News Engine", news_status, f"News: {news_gathered:,} · Latest: {news_memory_data['age']}")
+    small_status("News Engine", authoritative_component_status("news_intelligence", news_status), f"News: {news_gathered:,} · Latest: {news_memory_data['age']}")
     small_status("Telegram Alert Engine", telegram_status, telegram_status_sub)
     small_status("Learning / Evolution", learning_status, master_brain_data["evolution_sub"])
-    small_status("Outcome Tracker", outcome_tracker_status, f"Open: {open_outcome_trades}, Closed: {closed_trades}")
+    small_status("Outcome Tracker", authoritative_component_status("outcome_tracker", outcome_tracker_status), f"Open: {open_outcome_trades}, Closed: {closed_trades}")
 
 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -3804,7 +3912,7 @@ if scan_breakdown.get("limited_runtime"):
         metric_card("Stocks Checked", f"{latest_stocks_checked:,}", "Latest VPS scanner runtime")
 
     with b2:
-        status_card("Scanner Status", scanner_runtime_data["status"], "VPS runtime scanner_status")
+        status_card("Scanner Status", scan_status, authoritative_component_sub("scanner", "Authoritative scanner truth"))
 
     with b3:
         metric_card("Last Scanner Update", latest_scan_health_age, "scanner_status timestamp")
@@ -3815,6 +3923,8 @@ if scan_breakdown.get("limited_runtime"):
     )
     st.caption(scanner_refresh_proof)
     st.caption(scanner_truth_footer)
+    for freshness_line in authoritative_freshness_lines:
+        st.caption(freshness_line)
     if scanner_input_warning:
         st.caption(scanner_input_warning)
 
@@ -3885,6 +3995,8 @@ elif scan_breakdown.get("has_data"):
 
     st.caption(scanner_refresh_proof)
     st.caption(scanner_truth_footer)
+    for freshness_line in authoritative_freshness_lines:
+        st.caption(freshness_line)
     if scanner_input_warning:
         st.caption(scanner_input_warning)
 
@@ -3915,6 +4027,8 @@ else:
 
     st.caption(scanner_refresh_proof)
     st.caption(scanner_truth_footer)
+    for freshness_line in authoritative_freshness_lines:
+        st.caption(freshness_line)
 
 st.markdown("</div>", unsafe_allow_html=True)
 

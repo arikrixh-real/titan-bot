@@ -26,7 +26,7 @@ except Exception:
 from data.active_trade_store import (
     append_open_trade,
     find_open_trade,
-    load_open_trades,
+    load_canonical_open_trades,
 )
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -195,6 +195,10 @@ def _open_trade_exists_local(symbol, side):
 
 
 def _get_supabase():
+    if str(os.getenv("TITAN_ACTIVE_STORE_DISABLE_SUPABASE", "")).strip().lower() in {"1", "true", "yes", "y"}:
+        return None
+    if str(os.getenv("TITAN_PAPER_JOURNAL_DISABLE_SUPABASE", "")).strip().lower() in {"1", "true", "yes", "y"}:
+        return None
     if create_client is None:
         return None
     url = os.getenv("SUPABASE_URL")
@@ -387,7 +391,7 @@ def latest_contract_payload(refresh=False):
 def _base_status(contract_payload=None):
     contract_payload = contract_payload or latest_contract_payload(refresh=False)
     valid = _valid_setups(contract_payload)
-    open_count = len(load_open_trades())
+    open_count = len(load_canonical_open_trades())
     return {
         "timestamp_ist": timestamp_ist(),
         "enabled": paper_journal_enabled(),
@@ -517,7 +521,7 @@ def maybe_write_paper_journal(
 
         written = False
         try:
-            store_result = append_open_trade(row, client=client, prefer_supabase=True)
+            store_result = append_open_trade(row, client=None if setup_is_test else client, prefer_supabase=not setup_is_test)
             written = bool(store_result.get("written"))
             if store_result.get("destination"):
                 destinations.add(store_result.get("destination"))

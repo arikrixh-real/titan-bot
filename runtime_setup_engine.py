@@ -17,9 +17,13 @@ SETUP_ENGINE_STATUS_PATH = Path("data") / "runtime" / "setup_engine_status.json"
 def run_setup_engine():
     now_ist = as_ist_datetime()
     payload = {
+        "generated_at": now_ist.isoformat(),
         "timestamp_ist": now_ist.isoformat(),
         "mode": current_bot_mode(now_ist),
-        "status": "OFF_HOURS_STANDBY" if not is_trade_window(now_ist) else "SETUP_ENGINE_MARKER_ONLY",
+        "status": "DIAGNOSTIC_SKIPPED",
+        "setup_engine_status": "DIAGNOSTIC_SKIPPED",
+        "setup_engine_connection": "DIAGNOSTIC_SKIPPED",
+        "reason": "setup_generation_intentionally_skipped_for_runtime_proof",
         "off_hours_runtime_continuity": not is_trade_window(now_ist),
         "setup_engine_research_freshness": "OFF_HOURS_STANDBY" if not is_trade_window(now_ist) else None,
         "engine_contract": "runtime marker only; does not call scan_for_setups",

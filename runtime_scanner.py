@@ -1678,6 +1678,7 @@ def _status_payload(
         missing_fields.append("final_passed")
 
     payload = {
+        "generated_at": scan_finished_at_ist,
         "timestamp_ist": scan_finished_at_ist,
         "scanner_timestamp": scan_finished_at_ist,
         "scanner_cycle_id": scanner_cycle_id,
@@ -1685,8 +1686,18 @@ def _status_payload(
         "scan_finished_at_ist": scan_finished_at_ist,
         "scan_duration_seconds": scan_duration_seconds,
         "mode": mode,
+        "scan_mode": mode,
+        "market_session": "TRADE_WINDOW" if is_trade_window() else "OFF_HOURS",
         "status": status,
+        "truth_status": "DEGRADED" if (ohlc_fallback_required or scan_only or fallback_reason or errors) else "LIVE",
+        "reason": fallback_reason or repeated_data_warning or dashboard_status_message,
         "source": "VPS_RUNTIME_SCANNER",
+        "source_files_used": [
+            "data/runtime/scanner_status.json",
+            "data/runtime/final_validated_setups.json",
+            "data/runtime/ohlc_health.json",
+            "data/cache/*.csv",
+        ],
         "scan_only": scan_only,
         "fallback_reason": fallback_reason,
         "fallback_components": fallback_components,
@@ -1706,6 +1717,7 @@ def _status_payload(
         "supabase_writes": False,
         "journal_writes": False,
         "stocks_checked": stocks_checked,
+        "symbols_scanned": stocks_checked,
         "trend_passed": trend_passed,
         "trend_passed_count": trend_passed,
         "strict_trend_passed": strict_trend_passed,
@@ -1763,6 +1775,8 @@ def _status_payload(
             "alerts_this_scan": "runtime_scanner.alerts_disabled_readonly_status",
         },
         "passed_setups": passed_setups,
+        "passed_count": passed_setups,
+        "final_setups_count": final_passed,
         "missing_fields": missing_fields,
         "candidate_symbols": candidate_symbols[:5],
         "candidate_details": candidate_details[:5],
@@ -2165,6 +2179,8 @@ def run_scanner(path=SCANNER_STATUS_PATH):
                 momentum_breakout_audit_record["pipeline_stop_reason"] = f"TREND:{reason}"
                 continue
             trend_passed += 1
+            momentum_breakout_audit_record["trend_passed"] = True
+            momentum_breakout_audit_record["side"] = side
             if strict_side is None:
                 adaptive_trend_passed += 1
             else:
@@ -2176,6 +2192,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
                 momentum_breakout_audit_record["pipeline_stop_reason"] = "STRUCTURE_FAIL"
                 continue
             structure_passed += 1
+            momentum_breakout_audit_record["structure_passed"] = True
 
             if not strong_momentum(data, side=side):
                 momentum_reasons["MOMENTUM_FAIL"] += 1
@@ -2183,6 +2200,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
                 momentum_breakout_audit_record["pipeline_stop_reason"] = "MOMENTUM_FAIL"
                 continue
             momentum_passed += 1
+            momentum_breakout_audit_record["momentum_passed"] = True
             momentum_breakout_audit_record["counted_momentum_passed"] = True
 
             if not breakout_ready(data, side=side):
@@ -2191,6 +2209,7 @@ def run_scanner(path=SCANNER_STATUS_PATH):
                 momentum_breakout_audit_record["pipeline_stop_reason"] = "NOT_READY"
                 continue
             breakout_ready_count += 1
+            momentum_breakout_audit_record["breakout_ready"] = True
             momentum_breakout_audit_record["counted_breakout_ready"] = True
             momentum_breakout_audit_record["pipeline_stop_reason"] = "PASSED_BREAKOUT_READY"
 

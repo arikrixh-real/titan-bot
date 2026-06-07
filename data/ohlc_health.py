@@ -9,6 +9,7 @@ import yfinance as yf
 
 from config.upstox_symbols import normalize_symbol
 from scripts.refresh_ohlc_cache import YFINANCE_SYMBOL_ALIASES
+from utils.market_hours import last_valid_market_session, market_state
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -82,6 +83,32 @@ def ownership_contract():
 
 def publish_ohlc_health(payload, path=AUTHORITATIVE_OHLC_STATUS_PATH):
     authoritative = dict(payload or {})
+    authoritative.setdefault("generated_at", authoritative.get("timestamp_ist") or _timestamp_ist())
+    authoritative.setdefault("source", "data.ohlc_health.ensure_fresh_ohlc")
+    authoritative.setdefault("symbols_checked", authoritative.get("requested_count", 0))
+    authoritative.setdefault("fresh_count", authoritative.get("valid_count", 0))
+    stale_count = 0
+    missing_count = 0
+    oldest_age_seconds = 0.0
+    for item in authoritative.get("symbol_results") or []:
+        freshness = item.get("freshness") if isinstance(item, dict) else {}
+        if freshness.get("market_cache_status") == "STALE":
+            stale_count += 1
+        elif freshness.get("status") == "FAIL":
+            missing_count += 1
+        try:
+            oldest_age_seconds = max(oldest_age_seconds, float(freshness.get("age_hours")) * 3600)
+        except (TypeError, ValueError):
+            continue
+    authoritative["stale_count"] = stale_count
+    authoritative["missing_count"] = missing_count
+    authoritative.setdefault("oldest_age_seconds", round(oldest_age_seconds, 3) if oldest_age_seconds else None)
+    source_status = str(authoritative.get("status") or "").upper()
+    authoritative["runtime_status"] = (
+        "LIVE"
+        if source_status == "PASS"
+        else ("DEGRADED" if source_status in {"DEGRADED", "FAIL", "FAILED", "ERROR"} else "UNKNOWN")
+    )
     authoritative["ownership_contract"] = ownership_contract()
     authoritative["authoritative"] = True
     authoritative["authoritative_status_path"] = "data/runtime/ohlc_health.json"
@@ -229,7 +256,42 @@ def _merge_with_existing_cache(symbol, new_df):
     return _write_cache_df(symbol, merged)
 
 
-def validate_ohlc_df(df, symbol, max_age_hours=24):
+def _market_freshness(latest_dt, now=None, holidays=None, max_age_hours=24):
+    now_ist = now.astimezone(IST) if isinstance(now, datetime) and now.tzinfo else (now.replace(tzinfo=IST) if isinstance(now, datetime) else _now_ist())
+    state = market_state(now_ist, holidays=holidays)
+    last_session_close = last_valid_market_session(now_ist, holidays=holidays)
+    if latest_dt is None:
+        return {
+            "status": "UNKNOWN",
+            "reason": "LATEST_CANDLE_TIMESTAMP_MISSING",
+            "market_state": state,
+            "last_valid_session": last_session_close.isoformat(),
+            "valid_until": None,
+        }
+    if latest_dt.date() >= last_session_close.date():
+        reason = "VALID_MARKET_CACHE"
+        if state == "MARKET_CLOSED" and now_ist.weekday() >= 5:
+            reason = "VALID_WEEKEND_CACHE"
+        elif state == "MARKET_CLOSED":
+            reason = "VALID_CLOSED_MARKET_CACHE"
+        return {
+            "status": "VALID_MARKET_CACHE",
+            "reason": reason,
+            "market_state": state,
+            "last_valid_session": last_session_close.isoformat(),
+            "valid_until": last_session_close.isoformat(),
+        }
+    age_hours = round((now_ist - latest_dt).total_seconds() / 3600.0, 4)
+    return {
+        "status": "STALE",
+        "reason": f"OHLC_STALE:{age_hours}h>{max_age_hours}h;LAST_VALID_SESSION:{last_session_close.date()}",
+        "market_state": state,
+        "last_valid_session": last_session_close.isoformat(),
+        "valid_until": last_session_close.isoformat(),
+    }
+
+
+def validate_ohlc_df(df, symbol, max_age_hours=24, now=None, holidays=None):
     reasons = []
     rows = 0 if df is None else len(df)
     columns = [] if df is None else [str(column).strip() for column in df.columns]
@@ -249,12 +311,14 @@ def validate_ohlc_df(df, symbol, max_age_hours=24):
 
     latest_dt = _latest_timestamp(df)
     age_hours = None
+    market_freshness = _market_freshness(latest_dt, now=now, holidays=holidays, max_age_hours=max_age_hours)
     if latest_dt is None:
         reasons.append("LATEST_CANDLE_TIMESTAMP_MISSING")
     else:
-        age_hours = round((_now_ist() - latest_dt).total_seconds() / 3600.0, 4)
-        if age_hours > max_age_hours:
-            reasons.append(f"OHLC_STALE:{age_hours}h>{max_age_hours}h")
+        check_now = now.astimezone(IST) if isinstance(now, datetime) and now.tzinfo else (now.replace(tzinfo=IST) if isinstance(now, datetime) else _now_ist())
+        age_hours = round((check_now - latest_dt).total_seconds() / 3600.0, 4)
+        if market_freshness["status"] == "STALE":
+            reasons.append(market_freshness["reason"])
 
     close_last = None
     if df is not None and "Close" in df.columns and not df.empty:
@@ -301,14 +365,19 @@ def validate_ohlc_df(df, symbol, max_age_hours=24):
         "latest_candle_timestamp": latest_dt.isoformat() if latest_dt else None,
         "age_hours": age_hours,
         "max_age_hours": max_age_hours,
+        "market_cache_status": market_freshness["status"],
+        "market_cache_reason": market_freshness["reason"],
+        "market_state": market_freshness["market_state"],
+        "last_valid_session": market_freshness["last_valid_session"],
+        "valid_until": market_freshness["valid_until"],
         "close_last": close_last,
         "volume_nonzero": volume_nonzero,
     }
 
 
-def get_ohlc_freshness(symbol, max_age_hours=24):
+def get_ohlc_freshness(symbol, max_age_hours=24, now=None, holidays=None):
     df, path, error = _read_cache_df(symbol)
-    result = validate_ohlc_df(df, symbol, max_age_hours=max_age_hours)
+    result = validate_ohlc_df(df, symbol, max_age_hours=max_age_hours, now=now, holidays=holidays)
     result["cache_file"] = str(path)
     result["file_exists"] = path.exists()
     if error:
@@ -417,7 +486,7 @@ def _refresh_from_yfinance(symbol):
         }
 
 
-def ensure_fresh_ohlc(symbols, max_age_hours=24):
+def ensure_fresh_ohlc(symbols, max_age_hours=24, now=None, holidays=None):
     clean_symbols = []
     seen = set()
     for symbol in symbols or []:
@@ -433,14 +502,14 @@ def ensure_fresh_ohlc(symbols, max_age_hours=24):
     refresh_attempted_count = 0
 
     for symbol in clean_symbols:
-        freshness = get_ohlc_freshness(symbol, max_age_hours=max_age_hours)
+        freshness = get_ohlc_freshness(symbol, max_age_hours=max_age_hours, now=now, holidays=holidays)
         refresh_result = None
         if freshness.get("status") != "PASS":
             refresh_result = refresh_ohlc_cache(symbol, force=True)
             refresh_attempted_count += 1
             if refresh_result.get("status") == "REFRESHED":
                 refreshed_count += 1
-            freshness = get_ohlc_freshness(symbol, max_age_hours=max_age_hours)
+            freshness = get_ohlc_freshness(symbol, max_age_hours=max_age_hours, now=now, holidays=holidays)
 
         valid = freshness.get("status") in {"PASS", "DEGRADED"}
         if valid:
@@ -496,5 +565,8 @@ def ensure_fresh_ohlc(symbols, max_age_hours=24):
         "valid_symbols": valid_symbols,
         "invalid_symbols": invalid_symbols,
         "symbol_results": results,
+        "market_state": market_state(now, holidays=holidays),
+        "last_valid_session": last_valid_market_session(now, holidays=holidays).isoformat(),
+        "ohlc_status": "VALID_MARKET_CACHE" if status == "PASS" else status,
     }
     return publish_ohlc_health(payload)
