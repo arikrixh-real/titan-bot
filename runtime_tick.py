@@ -55,6 +55,14 @@ def _is_due(now, mode, interval_name, interval_seconds, value_was_provided):
     return True
 
 
+def _safe_task_name(task_name):
+    if task_name != "scanner":
+        return task_name
+    from runtime_classic_engine import LEGACY_CLASSIC_FILTERS
+
+    return "scanner" if LEGACY_CLASSIC_FILTERS else "mode_scanner_status"
+
+
 def get_due_tasks(value=None):
     now = as_ist_datetime(value)
     value_was_provided = value is not None
@@ -75,7 +83,7 @@ def get_due_tasks(value=None):
             interval_seconds,
             value_was_provided,
         ):
-            due_tasks.extend(tasks)
+            due_tasks.extend(_safe_task_name(task) for task in tasks)
 
     return {
         "timestamp_ist": now.isoformat(),

@@ -9,6 +9,8 @@ from runtime_lock import acquire_lock, refresh_lock, release_lock
 from runtime_dispatcher import preview_dispatch
 from runtime_scheduler_map import get_scheduler_map
 from runtime_health import write_daemon_health
+from runtime_execution_mode import active_execution_mode
+from runtime_classic_engine import LEGACY_CLASSIC_FILTERS
 from runtime_error_log import log_runtime_error
 from engines.phase38_test_mode_guard import evaluate_phase38_runtime_guard, write_phase38_runtime_status
 from runtime_resilience_status import (
@@ -89,6 +91,8 @@ def _write_scanner_scheduler_status(path=SCANNER_SCHEDULER_STATUS_PATH, **update
         "trade_window": bool(updates.get("trade_window", previous.get("trade_window", False))),
         "research_mode": bool(updates.get("research_mode", previous.get("research_mode", False))),
         "last_skip_reason": updates.get("last_skip_reason", previous.get("last_skip_reason")),
+        "legacy_classic_filters_enabled": bool(LEGACY_CLASSIC_FILTERS),
+        "warning": "LEGACY_CLASSIC_FILTERS_ENABLED_TOIF_BYPASS" if LEGACY_CLASSIC_FILTERS else None,
         "safety_flags": dict(SAFETY_FLAGS),
     }
     safe_atomic_write_json(path, payload)
@@ -139,6 +143,24 @@ def run_scanner_scheduler_tick(
             **base,
             last_scanner_exception=None,
             last_skip_reason="scanner_scheduler_disabled_by_env",
+            next_expected_invocation=_next_expected_from(now_ist),
+        )
+
+    if active_execution_mode() != "CLASSIC":
+        return _write_scanner_scheduler_status(
+            status_path,
+            **base,
+            last_scanner_exception=None,
+            last_skip_reason="active_execution_mode_not_classic",
+            next_expected_invocation=_next_expected_from(now_ist),
+        )
+
+    if not LEGACY_CLASSIC_FILTERS:
+        return _write_scanner_scheduler_status(
+            status_path,
+            **base,
+            last_scanner_exception=None,
+            last_skip_reason="legacy_classic_filters_disabled_toif_active",
             next_expected_invocation=_next_expected_from(now_ist),
         )
 

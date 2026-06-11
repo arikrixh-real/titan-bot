@@ -66,7 +66,7 @@ def get_scheduler_map(mode):
             "market_pressure_check",
             "outcome_tracker",
             "ohlc_refresh",
-            "scanner",
+            "mode_scanner_status",
             "light_news_pulse",
             "setup_engine",
             "master_brain",
@@ -96,7 +96,7 @@ def get_scheduler_map(mode):
             "daily_review",
         ]
         scheduler_map["every_5_minutes"] = [
-            "scanner",
+            "mode_scanner_status",
             "runtime_snapshot_logger",
         ]
         scheduler_map["every_15_minutes"] = [

@@ -12,7 +12,6 @@ from runtime_synthetic_simulation import run_synthetic_simulation
 from runtime_memory_compression import run_memory_compression
 from runtime_weekly_report import run_weekly_report
 from runtime_dashboard_sync import run_dashboard_sync
-from runtime_scanner import run_scanner
 from runtime_ohlc_refresh import run_ohlc_refresh
 from runtime_journal import run_journal
 from runtime_master_brain import run_master_brain
@@ -25,12 +24,37 @@ from runtime_sector_strength import run_sector_strength
 from runtime_paper_engine import run_paper_engine
 from runtime_upstox_account import refresh_upstox_account
 from runtime_snapshot_logger import log_runtime_snapshot
-from tools.refresh_mode_scanner_status import refresh_mode_scanner_status
 from tools.refresh_live_price_cache import refresh_once as refresh_live_price_cache_once
 from tools.refresh_infrastructure_status import refresh_once as refresh_infrastructure_status_once
 
 
 CONSCIOUSNESS_CONTEXT_PATH = "data/consciousness_core/consciousness_context.json"
+
+
+def run_dispatcher_safe_scanner_handler():
+    from runtime_classic_engine import CLASSIC_ENGINE, LEGACY_CLASSIC_FILTERS
+
+    if LEGACY_CLASSIC_FILTERS:
+        from runtime_scanner import run_scanner
+
+        result = run_scanner()
+        if isinstance(result, dict):
+            result["legacy_classic_dispatcher_blocked"] = False
+            result["dispatcher_scanner_handler"] = "legacy_runtime_scanner_explicit"
+            result["legacy_classic_filters_enabled"] = True
+            result["warning"] = "LEGACY_CLASSIC_FILTERS_ENABLED_TOIF_BYPASS"
+        return result
+
+    from runtime_continuous_core import run_continuous_runtime_core
+
+    result = run_continuous_runtime_core(refresh_market=True, refresh_universe=False)
+    if not isinstance(result, dict):
+        result = {"status": "UPDATED"}
+    result["legacy_classic_dispatcher_blocked"] = True
+    result["dispatcher_scanner_handler"] = "runtime_continuous_core_canonical"
+    result["classic_engine"] = CLASSIC_ENGINE
+    result["legacy_classic_filters"] = LEGACY_CLASSIC_FILTERS
+    return result
 
 
 def run_knowledge_vault_runner_handler(state=None, state_path=None, intelligence_state=None):
@@ -174,7 +198,7 @@ PLACEHOLDER_TASKS = (
 def _make_placeholder_handler(task_name):
     def _placeholder_handler():
         return {
-            "status": "NOT_IMPLEMENTED",
+            "status": "INACTIVE_NOT_IMPLEMENTED",
             "executed": False,
             "placeholder": True,
             "task": task_name,
@@ -202,7 +226,7 @@ def get_engine_registry():
         "weekly_report": run_weekly_report,
         "dashboard_sync": run_dashboard_sync,
         "ohlc_refresh": run_ohlc_refresh,
-        "scanner": run_scanner,
+        "scanner": run_dispatcher_safe_scanner_handler,
         "journal": run_journal,
         "master_brain": run_master_brain,
         "volatility_check": run_volatility_check,
@@ -213,7 +237,7 @@ def get_engine_registry():
         "sector_strength": run_sector_strength,
         "paper_engine": run_paper_engine,
         "upstox_account": refresh_upstox_account,
-        "mode_scanner_status": refresh_mode_scanner_status,
+        "mode_scanner_status": run_dispatcher_safe_scanner_handler,
         "live_price_cache_refresh": refresh_live_price_cache_once,
         "runtime_snapshot_logger": log_runtime_snapshot,
         "infrastructure_status": refresh_infrastructure_status_once,

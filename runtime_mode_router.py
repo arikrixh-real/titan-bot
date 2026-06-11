@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 from engines.time_filter import current_bot_mode
 from engines.phase38_test_mode_guard import evaluate_phase38_runtime_guard, write_phase38_runtime_status
+from runtime_execution_mode import active_execution_mode
 
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -58,6 +59,20 @@ MARKET_MODE_TASKS = {
     "light_news_pulse",
     "outcome_tracker",
     "journal",
+    "paper_engine",
+    "pnl_refresh",
+}
+
+CLASSIC_EXECUTION_TASKS = {
+    "master_brain",
+    "scanner",
+    "setup_engine",
+}
+
+SHARED_EXECUTION_TASKS = {
+    "journal",
+    "mode_scanner_status",
+    "outcome_tracker",
     "paper_engine",
     "pnl_refresh",
 }
@@ -196,6 +211,15 @@ def get_runtime_mode():
 
 def should_run_task(task_name):
     task = str(task_name or "").strip()
+    execution_mode = active_execution_mode()
+
+    if task in CLASSIC_EXECUTION_TASKS and execution_mode != "CLASSIC":
+        runtime_mode_snapshot()
+        return False
+
+    if task in SHARED_EXECUTION_TASKS:
+        runtime_mode_snapshot()
+        return True
 
     if task in ALWAYS_ON_TASKS:
         runtime_mode_snapshot()
@@ -232,6 +256,7 @@ def runtime_mode_snapshot():
     now = _now_ist()
     is_market_open = is_market_open_now()
     current_mode = get_runtime_mode()
+    execution_mode = active_execution_mode()
 
     if is_market_open:
         current_open, current_close = _market_window_for(now)
@@ -243,6 +268,8 @@ def runtime_mode_snapshot():
     payload = {
         "generated_at": now.isoformat(),
         "current_mode": current_mode,
+        "active_execution_mode": execution_mode,
+        "execution_mode_source": "data/runtime/execution_mode.json",
         "is_market_open": is_market_open,
         "is_research_mode": not is_market_open,
         "is_weekend_mode": current_mode == "WEEKEND_MODE",

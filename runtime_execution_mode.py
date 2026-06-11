@@ -72,10 +72,15 @@ def _mode_from_payload(payload: Any) -> str | None:
 
 def _execution_mode_payload(mode: str) -> dict[str, Any]:
     timestamp = now_ist().isoformat()
+    normalized = normalize_mode(mode)
     return {
-        "active_execution_mode": normalize_mode(mode),
+        "active_execution_mode": normalized,
+        "mode": normalized,
+        "timestamp": timestamp,
+        "timestamp_ist": timestamp,
         "switch_in_progress": False,
         "updated_at_ist": timestamp,
+        "owner": "runtime_execution_mode",
         "source": "runtime_execution_mode",
     }
 
@@ -94,16 +99,54 @@ def write_hft_runtime_state(mode: str) -> dict[str, Any]:
     return payload
 
 
-def write_execution_mode(mode: Any, *, mirror_legacy: bool = True) -> dict[str, Any]:
+def _write_execution_mode_direct(mode: Any, *, mirror_legacy: bool = True) -> dict[str, Any]:
     normalized = normalize_mode(mode)
     if normalized not in ALLOWED_MODES:
         normalized = "CLASSIC"
     payload = _execution_mode_payload(normalized)
     atomic_write_json(EXECUTION_MODE_PATH, payload)
     if mirror_legacy:
-        atomic_write_json(LEGACY_MODE_PATH, {"mode": normalized, "updated_at_ist": payload["updated_at_ist"]})
+        atomic_write_json(
+            LEGACY_MODE_PATH,
+            {
+                "active_execution_mode": normalized,
+                "mode": normalized,
+                "timestamp": payload["timestamp"],
+                "timestamp_ist": payload["timestamp_ist"],
+                "updated_at_ist": payload["updated_at_ist"],
+                "owner": "runtime_execution_mode",
+                "source": "runtime_execution_mode_legacy_mirror",
+            },
+        )
     write_hft_runtime_state(normalized)
     return payload
+
+
+def write_execution_mode(mode: Any, *, mirror_legacy: bool = True, transactional: bool = True) -> dict[str, Any]:
+    normalized = normalize_mode(mode)
+    if normalized not in ALLOWED_MODES:
+        normalized = "CLASSIC"
+    current = _mode_from_payload(read_json(EXECUTION_MODE_PATH, {}))
+    if current is None:
+        legacy = read_json(LEGACY_MODE_PATH, {})
+        current = _mode_from_payload(legacy) or normalized
+    if transactional and current != normalized:
+        from runtime_mode_switch import request_mode_switch
+
+        switch_payload = request_mode_switch(
+            normalized,
+            old_mode=current,
+            writer=lambda target_mode: _write_execution_mode_direct(target_mode, mirror_legacy=mirror_legacy),
+        )
+        if switch_payload.get("state") == "COMPLETE":
+            return switch_payload.get("execution_mode") or read_execution_mode_payload(migrate=False)
+        failed = _execution_mode_payload(current)
+        failed["switch_in_progress"] = False
+        failed["switch_failed"] = True
+        failed["switch_failure_reason"] = switch_payload.get("reason")
+        failed["mode_switch_status_path"] = "data/runtime/mode_switch_status.json"
+        return failed
+    return _write_execution_mode_direct(normalized, mirror_legacy=mirror_legacy)
 
 
 def read_execution_mode_payload(*, migrate: bool = True) -> dict[str, Any]:
@@ -113,10 +156,10 @@ def read_execution_mode_payload(*, migrate: bool = True) -> dict[str, Any]:
         legacy = read_json(LEGACY_MODE_PATH, {})
         mode = _mode_from_payload(legacy) or "CLASSIC"
         if migrate:
-            return write_execution_mode(mode)
+            return write_execution_mode(mode, transactional=False)
     if not isinstance(payload, dict) or payload.get("active_execution_mode") != mode:
         if migrate:
-            return write_execution_mode(mode)
+            return write_execution_mode(mode, transactional=False)
     return payload if isinstance(payload, dict) else _execution_mode_payload(mode)
 
 

@@ -57,7 +57,7 @@ TASK_LOCK_STALE_SECONDS = {
     "master_brain": 720,
     "scanner": 420,
     "upstox_account": 30,
-    "mode_scanner_status": 30,
+    "mode_scanner_status": 1,
     "live_price_cache_refresh": 30,
 }
 MAX_RETRY_BACKOFF_SECONDS = 300

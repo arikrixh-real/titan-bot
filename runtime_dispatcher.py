@@ -19,11 +19,13 @@ TASK_TIMEOUT_SECONDS = {
     "setup_engine": 240,
     "master_brain": 240,
     "scanner": 120,
+    "mode_scanner_status": 120,
     "news_pulse": 45,
     "light_news_pulse": 45,
     "outcome_tracker": 45,
     "evolution_engine": 60,
 }
+SCANNER_DISPATCH_TASKS = {"scanner", "mode_scanner_status"}
 
 
 def rotate_dispatch_log_if_needed():
@@ -37,19 +39,17 @@ def append_dispatch_log(timestamp_ist, mode, dispatch_preview):
         rotate_dispatch_log_if_needed()
         with DISPATCH_LOG_PATH.open("a", encoding="utf-8") as log_file:
             for item in dispatch_preview:
-                log_file.write(
-                    json.dumps(
-                        {
-                            "timestamp_ist": timestamp_ist,
-                            "mode": mode,
-                            "task": item["task"],
-                            "action": item["action"],
-                            "executed": item["executed"],
-                        },
-                        separators=(",", ":"),
-                    )
-                    + "\n"
-                )
+                payload = {
+                    "timestamp_ist": timestamp_ist,
+                    "mode": mode,
+                    "task": item["task"],
+                    "action": item["action"],
+                    "executed": item["executed"],
+                }
+                for key in ("legacy_classic_dispatcher_blocked", "dispatcher_scanner_handler"):
+                    if key in item:
+                        payload[key] = item[key]
+                log_file.write(json.dumps(payload, separators=(",", ":")) + "\n")
     except OSError:
         pass
 
@@ -72,6 +72,19 @@ def append_scanner_debug_log(timestamp_ist, mode, event, reason=None):
             log_file.write(json.dumps(payload, separators=(",", ":")) + "\n")
     except OSError:
         pass
+
+
+def scanner_dispatch_guard(result):
+    guard = {
+        "legacy_classic_dispatcher_blocked": None,
+        "dispatcher_scanner_handler": "UNKNOWN",
+    }
+    if isinstance(result, dict):
+        payload = result.get("result") if isinstance(result.get("result"), dict) else result
+        if isinstance(payload, dict):
+            guard["legacy_classic_dispatcher_blocked"] = payload.get("legacy_classic_dispatcher_blocked")
+            guard["dispatcher_scanner_handler"] = payload.get("dispatcher_scanner_handler") or "UNKNOWN"
+    return guard
 
 
 def _task_timeout_seconds(task):
@@ -116,6 +129,7 @@ def preview_dispatch(value=None):
 
         handler = get_registered_handler(task)
 
+        guard = {}
         if handler:
             lock_name = f"task_{task}"
             lock_acquired = acquire_lock(lock_name)
@@ -143,6 +157,8 @@ def preview_dispatch(value=None):
                     else:
                         action = "ERROR"
                         executed = False
+                    if task in SCANNER_DISPATCH_TASKS:
+                        guard = scanner_dispatch_guard(result)
                 finally:
                     release_lock(lock_name)
         else:
@@ -164,13 +180,13 @@ def preview_dispatch(value=None):
                     action,
                 )
 
-        dispatch_preview.append(
-            {
-                "task": task,
-                "action": action,
-                "executed": executed,
-            }
-        )
+        item = {
+            "task": task,
+            "action": action,
+            "executed": executed,
+        }
+        item.update(guard)
+        dispatch_preview.append(item)
 
     append_dispatch_log(tick["timestamp_ist"], tick["mode"], dispatch_preview)
 
