@@ -7,6 +7,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+import sys
 
 
 ROOT = Path(__file__).resolve().parent
@@ -356,3 +357,23 @@ def request_mode_switch(new_mode: str, *, old_mode: str, writer) -> dict[str, An
             signal_allowed=False,
             reason=f"{type(exc).__name__}:{exc}",
         )
+
+
+def switch_mode(new_mode: str) -> dict[str, Any]:
+    from runtime_execution_mode import write_execution_mode
+
+    return write_execution_mode(new_mode, transactional=True)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if not args:
+        print(json.dumps(read_mode_switch_status(), indent=2, sort_keys=True))
+        return 0
+    payload = switch_mode(args[0])
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0 if not payload.get("switch_failed") else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

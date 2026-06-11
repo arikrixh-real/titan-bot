@@ -167,5 +167,9 @@ def active_execution_mode(*, migrate: bool = True) -> str:
     return normalize_mode(read_execution_mode_payload(migrate=migrate).get("active_execution_mode"))
 
 
+def get_active_mode(*, migrate: bool = True) -> str:
+    return active_execution_mode(migrate=migrate)
+
+
 def hft_mode_active(*, migrate: bool = True) -> bool:
     return active_execution_mode(migrate=migrate) == "HFT"

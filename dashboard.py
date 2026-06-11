@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import streamlit as st
-from runtime_execution_mode import active_execution_mode
+from runtime_execution_mode import active_execution_mode, write_execution_mode
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -29,7 +29,7 @@ FRESH_SECONDS = {
     "echo": 3600,
     "ltp": 180,
     "scanner": 900,
-    "account": 24 * 3600,
+    "account": 15 * 60,
     "news": 6 * 3600,
     "storage": 24 * 3600,
     "worker": 15 * 60,
@@ -328,6 +328,7 @@ def source_evidence(payloads, name, max_age=None):
     dt = payload_time(payload if isinstance(payload, dict) else {}) or (file_time(path) if path else None)
     age = age_seconds(dt)
     status = str(payload.get("status") or payload.get("paper_trading_status") or "") if isinstance(payload, dict) else ""
+    feed_status = str(payload.get("feed_status") or "") if isinstance(payload, dict) else ""
     fresh = bool(max_age is not None and age is not None and age <= max_age)
     if not exists or payload is None:
         health = "MISSING"
@@ -335,6 +336,9 @@ def source_evidence(payloads, name, max_age=None):
     elif max_age is not None and not fresh:
         health = "STALE"
         reason = f"age {fmt_age(age)} > ttl {fmt_age(max_age)}"
+    elif feed_status.upper() in {"STALE", "DEGRADED"}:
+        health = "STALE"
+        reason = f"feed_status_{feed_status.upper()}"
     elif status.upper() in {"INACTIVE", "STOPPED", "OFFLINE", "FAILED", "ERROR", "NETWORK_BLOCKED"}:
         health = "INACTIVE"
         reason = status.upper()
@@ -427,11 +431,7 @@ def read_mode():
 
 
 def write_mode(mode):
-    return {
-        "status": "READ_ONLY",
-        "requested_mode": normalize_mode(mode),
-        "reason": "dashboard_mode_mutation_disabled",
-    }
+    return write_execution_mode(normalize_mode(mode), transactional=True)
 
 
 def render_mode_control(active_mode, meta_html=""):
@@ -447,11 +447,11 @@ def render_mode_control(active_mode, meta_html=""):
         with st.container(key="mode_switch_row"):
             mode_cols = st.columns(2)
             with mode_cols[0]:
-                if st.button("CLASSIC MODE", key="mode_switch_classic", disabled=True, use_container_width=True):
+                if st.button("CLASSIC MODE", key="mode_switch_classic", disabled=active_mode == "CLASSIC", use_container_width=True):
                     write_mode("CLASSIC")
                     st.rerun()
             with mode_cols[1]:
-                if st.button("HFT MODE", key="mode_switch_hft", disabled=True, use_container_width=True):
+                if st.button("HFT MODE", key="mode_switch_hft", disabled=active_mode == "HFT", use_container_width=True):
                     write_mode("HFT")
                     st.rerun()
         st.markdown(meta_html, unsafe_allow_html=True)
@@ -911,13 +911,14 @@ def scanner_source_for_mode(mode, generic_scanner=None, generic_truth=None):
         truth = read_json(PATHS[truth_name], {}) if truth_name in PATHS else {}
         truth_counts = truth.get("exact_counts") if isinstance(truth, dict) and isinstance(truth.get("exact_counts"), dict) else {}
         payload_status = str(payload.get("status") or "").upper()
+        feed_status = str(payload.get("feed_status") or "").upper()
         if payload_status == "INACTIVE":
             return {"health": "INACTIVE", "payload": payload, "fields": fields, "source_name": payload_name, "truth_counts": truth_counts}
         if payload_status == "UNKNOWN":
             return {"health": "MISSING", "payload": payload, "fields": fields, "source_name": payload_name, "truth_counts": truth_counts}
         if not fields:
             return {"health": "MISSING", "payload": payload, "fields": [], "source_name": payload_name, "truth_counts": truth_counts}
-        if payload_status == "STALE" or not is_fresh(payload, path, FRESH_SECONDS["scanner"]):
+        if payload_status == "STALE" or feed_status in {"STALE", "DEGRADED"} or not is_fresh(payload, path, FRESH_SECONDS["scanner"]):
             return {"health": "STALE", "payload": payload, "fields": fields, "source_name": payload_name, "truth_counts": truth_counts}
         return {"health": "LIVE", "payload": payload, "fields": fields, "source_name": payload_name, "truth_counts": truth_counts}
 
@@ -1176,7 +1177,7 @@ def render_dashboard():
     )
 
     overall = trade_performance(rows)
-    trade_meta = source_meta_html(path_evidence("trade_outcomes", PATHS["trade_outcomes"]))
+    trade_meta = source_meta_html(path_evidence("trade_outcomes", PATHS["trade_outcomes"], FRESH_SECONDS["account"]))
     render_performance("OVERALL TRADING PERFORMANCE", overall, total_label="Total Trades Taken", meta_html=trade_meta)
 
     total_scanned_value, total_scanned_footer, classic_scan_part, hft_scan_part = total_stocks_scanned(payloads)
