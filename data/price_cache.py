@@ -123,7 +123,10 @@ def get_cached_price_debug(symbol, max_age_seconds=120):
     cache = load_cache()
     cache_meta = load_cache_meta()
 
-    price = _safe_float(cache.get(symbol))
+    cache_entry = cache.get(symbol)
+    price = _safe_float(cache_entry)
+    if price is None and isinstance(cache_entry, dict):
+        price = _safe_float(cache_entry.get("ltp") or cache_entry.get("price") or cache_entry.get("last_price"))
     meta = cache_meta.get(symbol)
 
     if price is None and isinstance(meta, dict):
@@ -139,6 +142,14 @@ def get_cached_price_debug(symbol, max_age_seconds=120):
             or meta.get("timestamp_ist")
         )
         source = meta.get("source") or source
+    if timestamp is None and isinstance(cache_entry, dict):
+        timestamp = _parse_cache_timestamp(
+            cache_entry.get("timestamp_ist")
+            or cache_entry.get("updated_at_ist")
+            or cache_entry.get("timestamp")
+            or cache_entry.get("updated_at")
+        )
+        source = cache_entry.get("source") or source
 
     now = datetime.now(timezone.utc)
     age_seconds = None

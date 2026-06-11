@@ -7,7 +7,8 @@ from typing import Any
 
 import requests
 
-from data.live_price import get_upstox_token, safe_float
+from data.live_price import safe_float
+from data.upstox_broker_auth import get_upstox_token
 from runtime_safe_json import safe_atomic_write_json
 from utils.market_hours import as_ist_datetime
 
@@ -156,6 +157,11 @@ def refresh_upstox_account() -> dict[str, Any]:
         unrealized = _sum_positions(positions, ("unrealised", "unrealized_pnl", "pnl", "day_pnl"))
         realized = _sum_positions(positions, ("realised", "realized_pnl"))
         daily_pnl = _sum_positions(positions, ("day_pnl", "pnl"))
+        if funds_payload.get("status") == "ACTIVE":
+            funds_payload["current_pnl"] = unrealized
+            funds_payload["unrealized_pnl"] = unrealized
+            funds_payload["daily_pnl"] = daily_pnl
+            funds_payload["realized_pnl"] = realized
         positions_payload = {
             "timestamp_ist": now,
             "status": "ACTIVE",

@@ -7,7 +7,7 @@ import pandas as pd
 import requests
 
 from config.upstox_symbols import get_instrument_key, normalize_symbol
-from data.live_price import get_upstox_token
+from data.upstox_auth import UpstoxMarketDataAuthError, market_data_headers, market_data_token_info
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -79,23 +79,20 @@ def fetch_upstox_intraday_ohlc(symbol, interval_minutes=15, timeout=10):
     if not instrument_key:
         return _result(clean_symbol, "UNMAPPED", "Instrument key missing")
 
-    access_token, token_type_used = get_upstox_token()
-    if not access_token:
+    try:
+        headers = market_data_headers(content_type="application/json")
+        token_type_used = market_data_token_info().get("token_type", "ANALYTICS_TOKEN")
+    except UpstoxMarketDataAuthError as exc:
         return _result(
             clean_symbol,
-            "TOKEN_MISSING",
-            "Upstox token missing",
+            "AUTH_REQUIRED",
+            str(exc),
             instrument_key=instrument_key,
-            token_type_used=token_type_used,
+            token_type_used="MISSING_ANALYTICS_TOKEN",
         )
 
     encoded_key = quote(instrument_key, safe="")
     url = f"{UPSTOX_INTRADAY_CANDLE_URL}/{encoded_key}/minutes/{int(interval_minutes)}"
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-    }
 
     try:
         response = requests.get(url, headers=headers, timeout=timeout)

@@ -2,6 +2,7 @@ import contextlib
 import io
 from pathlib import Path
 import yfinance as yf
+import json
 
 from config.universe import get_capital_adaptive_universe
 from intelligence.news_signal_engine import get_actionable_news_signals
@@ -183,8 +184,37 @@ def calculate_opportunity_score(symbol, df, news_bonus_map):
     }
 
 
+def _classic_selector_symbols(limit):
+    try:
+        from runtime_execution_mode import active_execution_mode
+
+        if active_execution_mode() != "CLASSIC":
+            return []
+    except Exception:
+        return []
+    try:
+        path = Path("data") / "classic_mode" / "classic_universe_cache.json"
+        if not path.exists():
+            return []
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if str(payload.get("status") or "").upper() not in {"ACTIVE", "PARTIAL"}:
+            return []
+        symbols = []
+        for item in payload.get("symbols") or []:
+            symbol = str(item.get("symbol") or "").strip().upper()
+            if symbol:
+                symbols.append(f"{symbol}.NS")
+        return symbols[:limit]
+    except Exception:
+        return []
+
+
 def get_dynamic_top_stocks(limit=50):
     print("TITAN dynamic selector started...")
+    classic_symbols = _classic_selector_symbols(limit)
+    if classic_symbols:
+        print(f"Using Classic universe selector cache: {len(classic_symbols)} symbols.")
+        return classic_symbols
 
     selected = []
     news_bonus_map = get_news_bonus()
