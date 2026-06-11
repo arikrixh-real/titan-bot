@@ -203,6 +203,28 @@ def age_seconds(dt):
     return max(0, (now_ist() - dt).total_seconds())
 
 
+def fmt_age(seconds):
+    if seconds is None:
+        return "UNKNOWN"
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes}m"
+    hours = minutes // 60
+    if hours < 48:
+        return f"{hours}h"
+    return f"{hours // 24}d"
+
+
+def fmt_dt(value):
+    dt = parse_dt(value) if not hasattr(value, "isoformat") else value
+    if dt is None:
+        return "UNKNOWN"
+    return dt.astimezone(IST).strftime("%d %b %H:%M:%S")
+
+
 def is_fresh(payload, path=None, max_age=300):
     dt = payload_time(payload)
     if dt is None and path is not None:
@@ -270,11 +292,11 @@ def first_number(payload, keys):
 
 def css_class(value):
     text = str(value or "").upper()
-    if text in {"ACTIVE", "CLEAN"}:
+    if text in {"ACTIVE", "CLEAN", "LIVE", "UPSTOX"}:
         return "good"
-    if text in {"DIRTY", "STALE", "CLOSED", "WAITING", "WAITING_FOR_MODE", "SCHEDULED"}:
+    if text in {"DIRTY", "STALE", "CLOSED", "WAITING", "WAITING_FOR_MODE", "SCHEDULED", "PARTIAL"}:
         return "warn"
-    if text in {"INACTIVE", "DISABLED"}:
+    if text in {"INACTIVE", "DISABLED", "MISSING", "DISCONNECTED"}:
         return "bad"
     return "muted"
 
@@ -287,6 +309,76 @@ def html_escape(value):
         .replace(">", "&gt;")
         .replace('"', "&quot;")
     )
+
+
+def source_evidence(payloads, name, max_age=None):
+    path = PATHS.get(name)
+    payload = payloads.get(name) if isinstance(payloads, dict) else None
+    exists = bool(path and path.exists())
+    dt = payload_time(payload if isinstance(payload, dict) else {}) or (file_time(path) if path else None)
+    age = age_seconds(dt)
+    status = str(payload.get("status") or payload.get("paper_trading_status") or "") if isinstance(payload, dict) else ""
+    fresh = bool(max_age is not None and age is not None and age <= max_age)
+    if not exists or payload is None:
+        health = "MISSING"
+        reason = "source missing"
+    elif max_age is not None and not fresh:
+        health = "STALE"
+        reason = f"age {fmt_age(age)} > ttl {fmt_age(max_age)}"
+    elif status.upper() in {"INACTIVE", "STOPPED", "OFFLINE", "FAILED", "ERROR", "NETWORK_BLOCKED"}:
+        health = "INACTIVE"
+        reason = status.upper()
+    else:
+        health = "LIVE"
+        reason = ""
+    return {"name": name, "path": path, "payload": payload, "dt": dt, "age": age, "status": status, "health": health, "reason": reason}
+
+
+def path_evidence(label, path, max_age=None):
+    exists = path.exists()
+    dt = file_time(path) if exists else None
+    age = age_seconds(dt)
+    if not exists:
+        health = "MISSING"
+        reason = "source missing"
+    elif max_age is not None and (age is None or age > max_age):
+        health = "STALE"
+        reason = f"age {fmt_age(age)} > ttl {fmt_age(max_age)}"
+    else:
+        health = "LIVE"
+        reason = ""
+    return {"name": label, "path": path, "dt": dt, "age": age, "health": health, "reason": reason}
+
+
+def source_meta_html(evidence_items):
+    items = evidence_items if isinstance(evidence_items, list) else [evidence_items]
+    items = [item for item in items if isinstance(item, dict)]
+    if not items:
+        return "<div class='source-meta muted'>Source: UNKNOWN | Updated: UNKNOWN | Age: UNKNOWN | Reason: source missing</div>"
+    labels = []
+    reasons = []
+    for item in items:
+        label = item.get("name") or "UNKNOWN"
+        health = item.get("health") or "UNKNOWN"
+        labels.append(f"{label}:{health}")
+        if item.get("reason"):
+            reasons.append(f"{label}: {item['reason']}")
+    newest = max((item.get("dt") for item in items if item.get("dt") is not None), default=None)
+    youngest_age = min((item.get("age") for item in items if item.get("age") is not None), default=None)
+    reason = "; ".join(reasons) if reasons else "OK"
+    return (
+        "<div class='source-meta'>"
+        f"Source: {html_escape(', '.join(labels))} | "
+        f"Updated: {html_escape(fmt_dt(newest))} | "
+        f"Age: {html_escape(fmt_age(youngest_age))} | "
+        f"Reason: {html_escape(reason)}"
+        "</div>"
+    )
+
+
+def metric_grid_card(title, items, columns=4, extra_class="", meta_html=""):
+    tiles = "".join(metric_tile(*item) for item in items)
+    return card_html(title, f"<div class='metric-grid cols-{columns}'>{tiles}</div>{meta_html}", extra_class)
 
 
 def metric_tile(label, value, value_class=None, subtext=None):
@@ -309,13 +401,8 @@ def card_html(title, body, extra_class=""):
     )
 
 
-def metric_grid_card(title, items, columns=4, extra_class=""):
-    tiles = "".join(metric_tile(*item) for item in items)
-    return card_html(title, f"<div class='metric-grid cols-{columns}'>{tiles}</div>", extra_class)
-
-
-def render_metric_grid_card(title, items, columns=4, extra_class=""):
-    st.markdown(metric_grid_card(title, items, columns, extra_class), unsafe_allow_html=True)
+def render_metric_grid_card(title, items, columns=4, extra_class="", meta_html=""):
+    st.markdown(metric_grid_card(title, items, columns, extra_class, meta_html), unsafe_allow_html=True)
 
 
 def atomic_write_json(path, payload):
@@ -351,34 +438,27 @@ def write_mode(mode):
     refresh_mode_scanner_status()
 
 
-def mode_control_card_html(active_mode):
-    classic_class = "active" if active_mode == "CLASSIC" else "inactive"
-    hft_class = "active" if active_mode == "HFT" else "inactive"
-    body = f"""
-    <div class="mode-current">
-      <div class="tile-label">Current Active Mode</div>
-      <div class="tile-value good">{html_escape(active_mode)}</div>
-    </div>
-    <div class="mode-pill static" role="group" aria-label="Mode Control">
-      <span class="mode-option {classic_class}">CLASSIC</span>
-      <span class="mode-option {hft_class}">HFT</span>
-    </div>
-    """
-    return card_html("MODE CONTROL", body, "mode-control-card")
-
-
-def render_mode_control(active_mode):
+def render_mode_control(active_mode, meta_html=""):
     with st.container(key="mode_control_shell"):
-        st.markdown(mode_control_card_html(active_mode), unsafe_allow_html=True)
-        mode_cols = st.columns(2)
-        with mode_cols[0]:
-            if st.button("CLASSIC", key="mode_switch_classic", disabled=active_mode == "CLASSIC", use_container_width=True):
-                write_mode("CLASSIC")
-                st.rerun()
-        with mode_cols[1]:
-            if st.button("HFT", key="mode_switch_hft", disabled=active_mode == "HFT", use_container_width=True):
-                write_mode("HFT")
-                st.rerun()
+        st.markdown(
+            "<div class='section-title'>MODE CONTROL</div>"
+            "<div class='mode-current'>"
+            "<div class='tile-label'>Current Active Mode</div>"
+            f"<div class='tile-value good'>{html_escape(active_mode)}</div>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        with st.container(key="mode_switch_row"):
+            mode_cols = st.columns(2)
+            with mode_cols[0]:
+                if st.button("CLASSIC MODE", key="mode_switch_classic", disabled=active_mode == "CLASSIC", use_container_width=True):
+                    write_mode("CLASSIC")
+                    st.rerun()
+            with mode_cols[1]:
+                if st.button("HFT MODE", key="mode_switch_hft", disabled=active_mode == "HFT", use_container_width=True):
+                    write_mode("HFT")
+                    st.rerun()
+        st.markdown(meta_html, unsafe_allow_html=True)
 
 
 def market_status():
@@ -448,6 +528,14 @@ def ltp_status(payloads):
             return "ACTIVE"
         return "STALE"
     return "UNKNOWN"
+
+
+def ltp_evidence(payloads):
+    for name in ("live_price_status", "live_price_cache_meta_runtime", "live_price_cache_meta", "live_price_cache"):
+        evidence = source_evidence(payloads, name, FRESH_SECONDS["ltp"])
+        if evidence["health"] == "LIVE":
+            return evidence
+    return source_evidence(payloads, "live_price_status", FRESH_SECONDS["ltp"])
 
 
 def storage_used(storage, supabase):
@@ -535,6 +623,23 @@ def account_metrics(payloads):
     return status, (fmt_money(balance), fmt_money(current_pnl), fmt_money(daily_pnl), fmt_pct(pct)), source_label
 
 
+def account_evidence(payloads):
+    source, status = freshest_account(payloads)
+    if source:
+        name, _payload, _path, source_label = source
+        evidence = source_evidence(payloads, name, FRESH_SECONDS["account"])
+        evidence["source_label"] = source_label
+        evidence["account_label"] = source_label if status == "ACTIVE" else status
+        return evidence
+    return {"name": "account", "dt": None, "age": None, "health": status, "reason": status, "source_label": "UNKNOWN", "account_label": status}
+
+
+def account_display_label(account_status, account_source):
+    if account_status == "ACTIVE":
+        return account_source if account_source in {"UPSTOX", "PAPER"} else "UNKNOWN"
+    return account_status if account_status in {"STALE", "MISSING", "UNKNOWN", "AUTH_REQUIRED", "INACTIVE"} else "STALE"
+
+
 def is_synthetic(row):
     text = " ".join(str(row.get(k, "")) for k in ("source", "trade_id", "paper_trade_id", "test_trade")).upper()
     return "SYNTHETIC" in text or str(row.get("test_trade", "")).strip().upper() in {"TRUE", "1", "YES"}
@@ -602,6 +707,64 @@ def news_source_status(payloads):
     if "STALE" in statuses:
         return "STALE"
     return "—"
+
+
+def news_evidence(payloads):
+    evidences = [
+        source_evidence(payloads, "news_pulse", FRESH_SECONDS["news"]),
+        source_evidence(payloads, "news_intelligence", FRESH_SECONDS["news"]),
+    ]
+    live = [item for item in evidences if item["health"] == "LIVE"]
+    return live[0] if live else evidences[0]
+
+
+def hft_truth_label(payloads, active_mode):
+    if normalize_mode(active_mode) != "HFT":
+        return "INACTIVE"
+    health = payloads.get("hft_health")
+    if not isinstance(health, dict):
+        return "MISSING"
+    if str(health.get("mode") or "").upper() == "SIMULATION_ONLY":
+        return "SIMULATION_ONLY"
+    if health.get("connected_to_titan_runtime") is False:
+        return "DISCONNECTED"
+    scanner = scanner_counts(payloads.get("scanner_status"), payloads.get("scanner_filter_truth"), active_mode, "HFT")
+    return "LIVE" if isinstance(scanner, dict) and scanner.get("health") == "LIVE" else "INACTIVE"
+
+
+def truth_summary(payloads, active_mode):
+    checks = [
+        source_evidence(payloads, "daemon_health", FRESH_SECONDS["daemon"]),
+        source_evidence(payloads, "worker_health", FRESH_SECONDS["worker"]),
+        source_evidence(payloads, "scanner_status", FRESH_SECONDS["scanner"]),
+        ltp_evidence(payloads),
+        account_evidence(payloads),
+        news_evidence(payloads),
+    ]
+    hft_label = hft_truth_label(payloads, active_mode)
+    states = []
+    for item in checks:
+        health = str(item.get("health") or "MISSING").upper()
+        states.append("LIVE" if health == "LIVE" else "MISSING" if health == "MISSING" else "STALE" if health == "STALE" else "PARTIAL")
+    if hft_label == "SIMULATION_ONLY":
+        states.append("SIMULATION")
+    elif hft_label in {"MISSING", "DISCONNECTED"}:
+        states.append("MISSING")
+    elif hft_label == "LIVE":
+        states.append("LIVE")
+    else:
+        states.append("PARTIAL")
+    if "MISSING" in states:
+        overall = "MISSING"
+    elif "STALE" in states:
+        overall = "STALE"
+    elif "SIMULATION" in states:
+        overall = "SIMULATION"
+    elif all(state == "LIVE" for state in states):
+        overall = "LIVE"
+    else:
+        overall = "PARTIAL"
+    return overall, {state: states.count(state) for state in ("LIVE", "PARTIAL", "STALE", "SIMULATION", "MISSING")}, checks
 
 
 def scanner_counts(scanner, truth, active_mode, target_mode):
@@ -694,16 +857,50 @@ def scanner_source_for_mode(mode, generic_scanner=None, generic_truth=None):
     return {"health": "MISSING", "payload": None, "fields": [], "source_name": None, "truth_counts": {}}
 
 
-def stocks_scanned(scanner, active_mode):
-    counts = scanner_counts(scanner, {}, active_mode, active_mode)
-    if isinstance(counts, dict):
-        if counts.get("health") == "STALE":
-            return "STALE"
-        if counts.get("health") == "LIVE":
-            for label, value in counts.get("metrics", []):
-                if label in {"Stocks Checked", "Stocks Scanned"}:
-                    return fmt_number(value)
-    return "—"
+def scanner_count_value(payload, keys):
+    if not isinstance(payload, dict):
+        return None
+    for key in keys:
+        value = first_number(payload, (key,))
+        if value is not None:
+            return value
+    return None
+
+
+def scanner_total_part(payloads, source_name, keys):
+    evidence = source_evidence(payloads, source_name, FRESH_SECONDS["scanner"])
+    status = str(evidence.get("status") or "").upper()
+    payload = evidence.get("payload")
+    raw_count = scanner_count_value(payload, keys)
+    fresh = evidence["health"] not in {"MISSING", "STALE"} and status != "STALE"
+    if evidence["health"] == "MISSING":
+        return {"label": source_name, "count": None, "raw": raw_count, "status": status or "MISSING", "fresh": False, "display": "MISSING", "excluded_reason": "MISSING"}
+    if not fresh:
+        return {"label": source_name, "count": None, "raw": raw_count, "status": status or "UNKNOWN", "fresh": False, "display": "STALE", "excluded_reason": "STALE"}
+    if raw_count is None:
+        if status in {"INACTIVE", "STOPPED", "OFFLINE", "FAILED", "ERROR"}:
+            return {"label": source_name, "count": None, "raw": raw_count, "status": status, "fresh": True, "display": "INACTIVE", "excluded_reason": "NO_NUMERIC_COUNT"}
+        return {"label": source_name, "count": None, "raw": raw_count, "status": status or "UNKNOWN", "fresh": True, "display": "MISSING", "excluded_reason": "MISSING_COUNT"}
+    return {"label": source_name, "count": raw_count, "raw": raw_count, "status": status or "UNKNOWN", "fresh": True, "display": fmt_number(raw_count), "excluded_reason": ""}
+
+
+def total_stocks_scanned(payloads):
+    classic = scanner_total_part(payloads, "classic_scanner_status", ("stocks_scanned", "stocks_checked"))
+    hft = scanner_total_part(payloads, "hft_mode_scanner_status", ("stocks_scanned", "stocks_checked"))
+    valid = [item for item in (classic, hft) if item["count"] is not None]
+    if valid:
+        value = fmt_number(sum(item["count"] for item in valid))
+    elif any(item["display"] == "STALE" for item in (classic, hft)):
+        value = "STALE"
+    else:
+        value = "MISSING"
+    footer = (
+        "<div class='source-meta scan-total-footer'>"
+        f"Classic: {html_escape(classic['display'])} | "
+        f"HFT: {html_escape(hft['display'])}"
+        "</div>"
+    )
+    return value, footer, classic, hft
 
 
 def worker_engines(worker_health, source_path=None):
@@ -755,11 +952,11 @@ def engine_tile_html(engine):
     )
 
 
-def render_performance(title, perf, total_label="Total Trades"):
-    st.markdown(performance_card_html(title, perf, total_label), unsafe_allow_html=True)
+def render_performance(title, perf, total_label="Total Trades", meta_html=""):
+    st.markdown(performance_card_html(title, perf, total_label, meta_html), unsafe_allow_html=True)
 
 
-def performance_card_html(title, perf, total_label="Total Trades"):
+def performance_card_html(title, perf, total_label="Total Trades", meta_html=""):
     if perf is None:
         values = [(total_label, "—", "muted"), ("Wins", "—", "muted"), ("Losses", "—", "muted"), ("Accuracy", "—", "muted")]
     else:
@@ -769,14 +966,14 @@ def performance_card_html(title, perf, total_label="Total Trades"):
             ("Losses", fmt_number(perf["losses"]), "bad"),
             ("Accuracy", fmt_pct(perf["accuracy"]), "warn"),
         ]
-    return metric_grid_card(title, [(label, value, cls) for label, value, cls in values], columns=4)
+    return metric_grid_card(title, [(label, value, cls) for label, value, cls in values], columns=4, meta_html=meta_html)
 
 
-def render_scanner_card(title, counts):
-    st.markdown(scanner_card_html(title, counts), unsafe_allow_html=True)
+def render_scanner_card(title, counts, meta_html=""):
+    st.markdown(scanner_card_html(title, counts, meta_html), unsafe_allow_html=True)
 
 
-def scanner_card_html(title, counts):
+def scanner_card_html(title, counts, meta_html=""):
     if not isinstance(counts, dict):
         counts = {"health": "MISSING", "metrics": []}
     health = str(counts.get("health") or "MISSING").upper()
@@ -792,6 +989,7 @@ def scanner_card_html(title, counts):
         tiles = [(label, "—", "muted") for label in labels]
     body = f"<div class='source-health {health_class}'>{health}</div>"
     body += f"<div class='metric-grid cols-4'>{''.join(metric_tile(*tile) for tile in tiles)}</div>"
+    body += meta_html
     return card_html(title, body, "scanner-card")
 
 
@@ -814,6 +1012,11 @@ def render_dashboard():
     scanner = payloads.get("scanner_status")
     truth = payloads.get("scanner_filter_truth")
     worker_health = payloads.get("worker_health")
+    ltp_truth = ltp_evidence(payloads)
+    account_truth = account_evidence(payloads)
+    news_truth = news_evidence(payloads)
+    hft_truth = hft_truth_label(payloads, active_mode)
+    overall_truth, truth_counts, truth_sources = truth_summary(payloads, active_mode)
 
     st.markdown(STYLE, unsafe_allow_html=True)
 
@@ -850,69 +1053,129 @@ def render_dashboard():
         ("DATABASE STORAGE", storage_value, storage_class),
         ("DATE & CLOCK", refresh_now.strftime("%d %b %Y"), "clock", refresh_now.strftime("%I:%M:%S %p")),
     ]
-    render_metric_grid_card("SYSTEM STATUS", row1, columns=7)
-
-    account_status, account, account_source = account_metrics(payloads)
     render_metric_grid_card(
-        "ACCOUNT SUMMARY",
-        [
-            ("Account Balance", account[0], "text" if account[0] != "—" else css_class(account_status), account_status if account_status != "ACTIVE" else None),
-            ("Current PNL", account[1], "good" if not account[1].startswith("-") and account[1] != "—" else "bad" if account[1].startswith("-") else "muted"),
-            ("Daily PNL", account[2], "good" if not account[2].startswith("-") and account[2] != "—" else "bad" if account[2].startswith("-") else "muted"),
-            ("Percentage", account[3], "warn" if account[3] != "—" else css_class(account_status), f"ACCOUNT SOURCE: {account_source}" if account_status == "ACTIVE" else account_status),
-        ],
-        columns=4,
-    )
-
-    overall = trade_performance(rows)
-    render_performance("OVERALL TRADING PERFORMANCE", overall, total_label="Total Trades Taken")
-
-    news_scan_card = metric_grid_card(
-        "NEWS & SCAN OVERVIEW",
-        [
-            ("Total Stocks Scanned", stocks_scanned(scanner, active_mode)),
-            ("No. of News Gathered", news_count(payloads)),
-        ],
-        columns=2,
-    )
-    mode_col, news_col = st.columns(2)
-    with mode_col:
-        render_mode_control(active_mode)
-    with news_col:
-        st.markdown(news_scan_card, unsafe_allow_html=True)
-
-    classic_counts = scanner_counts(scanner, truth, active_mode, "CLASSIC")
-    hft_counts = scanner_counts(scanner, truth, active_mode, "HFT")
-    st.markdown(
-        source_health_html(
+        "SYSTEM STATUS",
+        row1,
+        columns=7,
+        meta_html=source_meta_html(
             [
-                ("Account Source", account_source if account_status == "ACTIVE" else account_status),
-                ("Classic Scanner Source", classic_counts.get("health", "MISSING") if isinstance(classic_counts, dict) else "MISSING"),
-                ("HFT Scanner Source", hft_counts.get("health", "MISSING") if isinstance(hft_counts, dict) else "MISSING"),
-                ("News Source", news_source_status(payloads)),
-                ("LTP Source", ltp_status(payloads)),
+                source_evidence(payloads, "daemon_health", FRESH_SECONDS["daemon"]),
+                source_evidence(payloads, "echo_activity", FRESH_SECONDS["echo"]),
+                source_evidence(payloads, "git_cleanliness", FRESH_SECONDS["daemon"]),
+                source_evidence(payloads, "storage_status", FRESH_SECONDS["storage"]),
+                source_evidence(payloads, "supabase_status", FRESH_SECONDS["storage"]),
+                ltp_truth,
             ]
+        ),
+    )
+    st.markdown(
+        metric_grid_card(
+            "TRUTH SUMMARY",
+            [
+                ("Overall", overall_truth, css_class(overall_truth)),
+                ("LIVE", truth_counts.get("LIVE", 0), "good"),
+                ("PARTIAL", truth_counts.get("PARTIAL", 0), "warn"),
+                ("STALE", truth_counts.get("STALE", 0), "warn"),
+                ("SIMULATION", truth_counts.get("SIMULATION", 0), "muted"),
+                ("MISSING", truth_counts.get("MISSING", 0), "bad"),
+            ],
+            columns=6,
+            extra_class="truth-summary-card",
+            meta_html=source_meta_html(truth_sources),
         ),
         unsafe_allow_html=True,
     )
 
+    account_status, account, account_source = account_metrics(payloads)
+    account_label = account_display_label(account_status, account_source)
+    render_metric_grid_card(
+        "ACCOUNT SUMMARY",
+        [
+            ("Account Balance", account[0], "text" if account[0] != "—" else css_class(account_label), account_label),
+            ("Current PNL", account[1], "good" if not account[1].startswith("-") and account[1] != "—" else "bad" if account[1].startswith("-") else "muted"),
+            ("Daily PNL", account[2], "good" if not account[2].startswith("-") and account[2] != "—" else "bad" if account[2].startswith("-") else "muted"),
+            ("Percentage", account[3], "warn" if account[3] != "—" else css_class(account_label), f"ACCOUNT SOURCE: {account_label}"),
+        ],
+        columns=4,
+        meta_html=source_meta_html(account_truth),
+    )
+
+    overall = trade_performance(rows)
+    trade_meta = source_meta_html(path_evidence("trade_outcomes", PATHS["trade_outcomes"]))
+    render_performance("OVERALL TRADING PERFORMANCE", overall, total_label="Total Trades Taken", meta_html=trade_meta)
+
+    total_scanned_value, total_scanned_footer, classic_scan_part, hft_scan_part = total_stocks_scanned(payloads)
+    news_scan_card = metric_grid_card(
+        "NEWS & SCAN OVERVIEW",
+        [
+            ("Total Stocks Scanned", total_scanned_value),
+            ("No. of News Gathered", news_count(payloads)),
+        ],
+        columns=2,
+        extra_class="news-scan-card",
+        meta_html=total_scanned_footer,
+    )
+    with st.container(key="mode_news_row"):
+        mode_col, news_col = st.columns(2)
+        with mode_col:
+            render_mode_control(active_mode, source_meta_html(path_evidence("execution_mode", MODE_PATH)))
+        with news_col:
+            st.markdown(news_scan_card, unsafe_allow_html=True)
+
+    classic_counts = scanner_counts(scanner, truth, active_mode, "CLASSIC")
+    hft_counts = scanner_counts(scanner, truth, active_mode, "HFT")
+    with st.container(key="source_health_row"):
+        st.markdown(
+            source_health_html(
+                [
+                    ("Account Source", account_label),
+                    ("Classic Scanner Source", classic_counts.get("health", "MISSING") if isinstance(classic_counts, dict) else "MISSING"),
+                    ("HFT", hft_truth),
+                    ("News Source", news_source_status(payloads)),
+                    ("LTP Source", ltp_status(payloads)),
+                ]
+            ),
+            unsafe_allow_html=True,
+        )
+
     mode_has_column = overall.get("has_mode_column") if isinstance(overall, dict) else False
     classic_perf = trade_performance(rows, "CLASSIC") if mode_has_column else None
     hft_perf = trade_performance(rows, "HFT") if mode_has_column else None
-    st.markdown(
-        "<div class='dash-row two'>"
-        + performance_card_html("CLASSIC MODE PERFORMANCE", classic_perf)
-        + performance_card_html("HFT MODE PERFORMANCE", hft_perf)
-        + "</div>",
-        unsafe_allow_html=True,
-    )
+    with st.container(key="performance_row"):
+        perf_col, hft_perf_col = st.columns(2)
+        with perf_col:
+            st.markdown(
+                performance_card_html("CLASSIC MODE PERFORMANCE", classic_perf, meta_html=trade_meta),
+                unsafe_allow_html=True,
+            )
+        with hft_perf_col:
+            st.markdown(
+                performance_card_html(
+                    "HFT MODE PERFORMANCE",
+                    hft_perf,
+                    meta_html=trade_meta + source_meta_html(source_evidence(payloads, "hft_health", FRESH_SECONDS["scanner"])),
+                ),
+                unsafe_allow_html=True,
+            )
 
-    classic_scanner = scanner_card_html("CLASSIC MODE SCANNER FILTERS", classic_counts)
-    hft_scanner = scanner_card_html("HFT MODE SCANNER FILTERS", hft_counts)
-    st.markdown(
-        f"<div class='dash-row two scanner-row'>{classic_scanner}{hft_scanner}</div>",
-        unsafe_allow_html=True,
+    classic_source_name = classic_counts.get("source_name") if isinstance(classic_counts, dict) else "classic_scanner_status"
+    hft_source_name = hft_counts.get("source_name") if isinstance(hft_counts, dict) else "hft_mode_scanner_status"
+    classic_scanner = scanner_card_html(
+        "CLASSIC MODE SCANNER FILTERS",
+        classic_counts,
+        source_meta_html(source_evidence(payloads, classic_source_name, FRESH_SECONDS["scanner"])),
     )
+    hft_scanner = scanner_card_html(
+        "HFT MODE SCANNER FILTERS",
+        hft_counts,
+        source_meta_html([source_evidence(payloads, hft_source_name, FRESH_SECONDS["scanner"]), source_evidence(payloads, "hft_health", FRESH_SECONDS["scanner"])]),
+    )
+    with st.container(key="scanner_row"):
+        scanner_col, hft_scanner_col = st.columns(2)
+        with scanner_col:
+            st.markdown(classic_scanner, unsafe_allow_html=True)
+        with hft_scanner_col:
+            st.markdown(hft_scanner, unsafe_allow_html=True)
 
     engines = worker_engines(worker_health, PATHS["worker_health"])
     active_engines = [engine for engine in engines if engine["state"] == "ACTIVE"]
@@ -930,7 +1193,7 @@ def render_dashboard():
             tab_active, tab_inactive = st.columns(2)
             with tab_active:
                 if st.button(
-                    "ACTIVE ENGINES",
+                    f"ACTIVE ENGINES ({len(active_engines)})",
                     key="engine_tab_active",
                     disabled=st.session_state.engines_state_tab == "ACTIVE",
                     use_container_width=True,
@@ -939,7 +1202,7 @@ def render_dashboard():
                     st.rerun()
             with tab_inactive:
                 if st.button(
-                    "INACTIVE / WAITING",
+                    f"INACTIVE / WAITING ({len(inactive_engines)})",
                     key="engine_tab_inactive",
                     disabled=st.session_state.engines_state_tab == "INACTIVE",
                     use_container_width=True,
@@ -949,6 +1212,7 @@ def render_dashboard():
             selected_engines = active_engines if st.session_state.engines_state_tab == "ACTIVE" else inactive_engines
             engine_html = "".join(engine_tile_html(engine) for engine in selected_engines)
             st.markdown(f"<div class='engine-grid'>{engine_html}</div>", unsafe_allow_html=True)
+            st.markdown(source_meta_html(source_evidence(payloads, "worker_health", FRESH_SECONDS["worker"])), unsafe_allow_html=True)
     else:
         render_metric_grid_card("ENGINES STATE", [("Engines Active", "UNKNOWN", "muted")], columns=1, extra_class="engine-card")
 
@@ -970,103 +1234,173 @@ STYLE = """
 <style>
 section[data-testid="stSidebar"], [data-testid="stSidebar"] {display:none !important;}
 * {box-sizing:border-box;}
-.block-container {max-width: 100% !important; padding: 18px 22px 28px !important;}
+.block-container {max-width: 100% !important; padding: 16px 20px 20px !important; overflow-x:hidden;}
 body, .stApp {background:#020811; color:#eaf5ff; font-family: Inter, "Segoe UI", Arial, sans-serif;}
-div[data-testid="stVerticalBlock"] {gap: 18px;}
-.dashboard-shell {max-width:1600px; width:100%; margin:0 auto; display:block;}
+div[data-testid="stVerticalBlock"] {gap:16px !important;}
+div[data-testid="stHorizontalBlock"] {gap:16px !important;}
+.dashboard-shell {max-width:1600px; width:100%; margin:0 auto; display:flex; flex-direction:column; gap:16px; overflow-x:hidden;}
 .topbar {
-  display:flex; align-items:center; justify-content:space-between; gap:24px;
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
   padding:18px 20px; margin-bottom:16px; border:1px solid #14324a;
   border-radius:14px; background:linear-gradient(180deg,#091827 0%,#061321 100%);
   box-shadow:0 14px 34px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04);
 }
-.title {font-size:27px; font-weight:900; letter-spacing:0; color:#f4fbff;}
-.subtitle {font-size:13px; color:#7fa0b8; margin-top:4px; font-weight:650;}
+.title {font-size:27px; line-height:1.06; font-weight:900; letter-spacing:0; color:#f4fbff;}
+.subtitle {font-size:13px; line-height:1.35; color:#7fa0b8; margin-top:4px; font-weight:650;}
 .header-status {text-align:right; min-width:260px;}
 .header-label {font-size:11px; color:#7894a8; text-transform:uppercase; font-weight:800;}
 .header-value {font-size:23px; font-weight:950; margin-top:2px;}
 .header-time {font-size:12px; color:#6edcff; margin-top:4px; font-weight:700; opacity:.78;}
 .heartbeat {font-size:11px; color:#8fb3c8; margin-top:5px; font-weight:850; letter-spacing:.03em;}
 .source-health-strip {
-  display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin:18px 0 0;
+  display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:16px; margin:0;
+  position:static; clear:both; width:100%;
 }
 .source-chip {
   border:1px solid #14324a; border-radius:10px; background:#061321;
-  padding:10px 12px; min-height:46px; display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:10px 12px; min-height:50px; display:flex; align-items:center; justify-content:space-between; gap:10px;
+  min-width:0; overflow:hidden;
 }
-.source-chip span {font-size:11px; color:#7894a8; text-transform:uppercase; font-weight:850;}
-.source-chip strong {font-size:13px; font-weight:950;}
+.source-chip span {font-size:10px; line-height:1.2; color:#7894a8; text-transform:uppercase; font-weight:850; min-width:0; overflow:hidden; text-overflow:ellipsis;}
+.source-chip strong {font-size:13px; line-height:1.15; font-weight:950; min-width:0; overflow:hidden; text-overflow:ellipsis;}
 .dash-card {
   border:1px solid #14324a; border-radius:14px; background:#071522;
-  padding:16px; min-height:112px; width:100%;
+  padding:16px; min-height:unset; height:auto; width:100%; overflow:hidden;
   box-shadow:0 10px 26px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.035);
+  margin:0 0 16px 0;
 }
+section.dash-card {margin-bottom:16px;}
+div[data-testid="stMarkdownContainer"]:has(> section.dash-card) {margin-bottom:0;}
+div[data-testid="stMarkdownContainer"]:has(> section.dash-card) section.dash-card {margin-bottom:16px;}
 .dash-row {
-  display:grid; width:100%; row-gap:18px; column-gap:16px; margin:18px 0 0;
+  display:grid; width:100%; row-gap:16px; column-gap:16px; margin:0; align-items:start;
 }
 .dash-row.two {grid-template-columns:repeat(2,minmax(0,1fr));}
-.scanner-row {margin-bottom:18px;}
-.dashboard-shell > .dash-card {margin-top:18px;}
+.scanner-row {margin-bottom:0;}
+.dashboard-shell > .dash-card {margin-top:0;}
 .dashboard-shell > .dash-card:first-of-type {margin-top:0;}
-.dashboard-shell > div[data-testid="stMarkdownContainer"] + div[data-testid="stMarkdownContainer"] {margin-top:18px;}
+.dashboard-shell > div[data-testid="stMarkdownContainer"] + div[data-testid="stMarkdownContainer"] {margin-top:0;}
+.dashboard-shell > div[data-testid="stHorizontalBlock"] {gap:16px;}
+.dashboard-shell > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] > div[data-testid="stVerticalBlock"] {width:100%;}
+.st-key-mode_news_row {width:100%; margin:0;}
+.st-key-mode_news_row > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] {
+  display:grid !important;
+  grid-template-columns:1fr 1fr !important;
+  gap:16px !important;
+  width:100% !important;
+  align-items:stretch !important;
+}
+.st-key-mode_news_row > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+  width:100% !important;
+  min-width:0 !important;
+  display:flex !important;
+  align-items:stretch !important;
+}
+.st-key-mode_news_row > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] > div[data-testid="stVerticalBlock"] {
+  width:100% !important; height:100%;
+}
+.st-key-source_health_row {
+  width:100%;
+  margin:16px 0;
+  position:static;
+  clear:both;
+}
+.st-key-source_health_row div[data-testid="stMarkdownContainer"] {
+  margin:0 !important;
+}
+.st-key-performance_row,
+.st-key-scanner_row {
+  width:100%;
+  margin:0;
+}
+.st-key-performance_row > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"],
+.st-key-scanner_row > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] {
+  display:grid !important;
+  grid-template-columns:1fr 1fr !important;
+  gap:16px !important;
+  width:100% !important;
+  align-items:start !important;
+}
+.st-key-performance_row > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] > div[data-testid="column"],
+.st-key-scanner_row > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+  width:100% !important;
+  min-width:0 !important;
+}
+.st-key-performance_row section.dash-card,
+.st-key-scanner_row section.dash-card {
+  margin-bottom:0;
+}
 .dashboard-shell a {text-decoration:none;}
 .dashboard-shell a:visited {color:inherit;}
 .section-title {
-  color:#32d9ff; text-transform:uppercase; letter-spacing:.04em; font-size:14px;
-  font-weight:900; margin:0 0 13px;
+  color:#32d9ff; text-transform:uppercase; letter-spacing:.05em; font-size:13px;
+  line-height:1.2; font-weight:950; margin:0 0 13px;
 }
-.metric-grid {display:grid; gap:14px;}
+.metric-grid {display:grid; gap:16px; min-width:0;}
 .cols-1 {grid-template-columns:1fr;}
 .cols-2 {grid-template-columns:repeat(2,minmax(0,1fr));}
 .cols-4 {grid-template-columns:repeat(4,minmax(0,1fr));}
+.cols-6 {grid-template-columns:repeat(6,minmax(0,1fr));}
 .cols-7 {grid-template-columns:repeat(7,minmax(0,1fr));}
 .metric-tile {
-  min-height:78px; border:1px solid #173a56; border-radius:12px; background:#091827;
+  min-height:86px; border:1px solid #173a56; border-radius:10px; background:#091827;
   padding:12px 13px; display:flex; flex-direction:column; justify-content:center;
+  min-width:0; overflow:hidden;
 }
 .tile-label {
   font-size:11px; line-height:1.2; color:#7f98aa; text-transform:uppercase;
-  font-weight:850; margin-bottom:7px;
+  font-weight:850; margin-bottom:7px; overflow:hidden; text-overflow:ellipsis;
 }
 .tile-value {
-  font-size:25px; line-height:1.08; font-weight:950; overflow-wrap:anywhere;
+  font-size:23px; line-height:1.1; font-weight:950; overflow-wrap:anywhere; word-break:break-word;
 }
-.tile-sub {font-size:11px; margin-top:6px; font-weight:800;}
-.mode-control-card {min-height:174px; padding-bottom:16px;}
-.mode-current {
-  border:1px solid #173a56; border-radius:12px; background:#091827;
-  padding:12px 13px; margin-bottom:10px;
-}
-.mode-pill {
-  display:grid; grid-template-columns:1fr 1fr; gap:6px; width:100%;
-  border:1px solid #173a56; border-radius:999px; background:#040d17; padding:6px;
-}
-.mode-option {
-  display:flex; align-items:center; justify-content:center; min-height:44px; width:100%;
-  border-radius:999px; font-size:14px; font-weight:950; letter-spacing:.02em;
-  white-space:nowrap; overflow:visible; text-overflow:clip; color:#8ea9bc;
-  background:#081522; border:1px solid transparent;
-}
-.mode-option.inactive {color:#839aad; background:#081522;}
-.mode-option.active {
-  color:#eaffff; background:linear-gradient(180deg,#0f4c5e,#0a3548);
-  border-color:#32d9ff; box-shadow:0 0 0 1px rgba(50,217,255,.18) inset, 0 0 24px rgba(47,224,139,.08);
-}
+.tile-sub {font-size:11px; line-height:1.25; margin-top:6px; font-weight:800; overflow-wrap:anywhere;}
+.truth-summary-card {min-height:unset; height:auto;}
+.truth-summary-card .metric-grid {grid-template-columns:repeat(6,minmax(0,1fr)); gap:16px;}
+.truth-summary-card .metric-tile {min-height:64px; padding:9px 10px;}
+.truth-summary-card .tile-label {font-size:9px; margin-bottom:5px;}
+.truth-summary-card .tile-value {font-size:18px;}
+.truth-summary-card .source-meta {margin-top:9px; padding-top:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.mode-control-card {min-height:unset; height:auto; padding-bottom:16px;}
 .st-key-mode_control_shell {
-  position:relative;
+  border:1px solid #14324a; border-radius:14px; background:#071522;
+  padding:16px; min-height:190px; width:100%; height:100%; overflow:hidden;
+  display:flex; flex-direction:column;
+  box-shadow:0 10px 26px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.035);
+  margin:0;
 }
-.st-key-mode_control_shell div[data-testid="stHorizontalBlock"]:has(.st-key-mode_switch_classic),
-.st-key-mode_control_shell div[data-testid="stHorizontalBlock"]:has(.st-key-mode_switch_hft) {
-  position:absolute; left:16px; right:16px; bottom:16px; z-index:5; margin:0;
+.st-key-mode_control_shell div[data-testid="stVerticalBlock"] {height:100%;}
+.st-key-mode_switch_row {
+  width:100%;
+  margin:0;
+}
+.st-key-mode_switch_row > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] {
+  display:grid !important;
+  grid-template-columns:1fr 1fr !important;
+  gap:12px !important;
+  width:100% !important;
+}
+.st-key-mode_switch_row > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+  width:100% !important;
+  min-width:0 !important;
+}
+.mode-current {
+  border:1px solid #173a56; border-radius:10px; background:#091827;
+  padding:12px 13px; margin-bottom:12px; min-width:0; overflow:hidden;
 }
 .st-key-mode_control_shell .st-key-mode_switch_classic button,
 .st-key-mode_control_shell .st-key-mode_switch_hft button {
-  min-height:58px; width:100%; border-radius:999px; opacity:0;
-  color:transparent; background:transparent; border-color:transparent; box-shadow:none;
+  min-height:52px; width:100%; border-radius:8px;
+  color:#8ea9bc; background:#081522; border:1px solid #173a56; box-shadow:none;
   cursor:pointer;
+  font-size:13px; font-weight:950; letter-spacing:.02em;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 .st-key-mode_control_shell .st-key-mode_switch_classic button:disabled,
 .st-key-mode_control_shell .st-key-mode_switch_hft button:disabled {
+  color:#eaffff; background:#0b2a3d; border-color:#32d9ff; opacity:1;
   cursor:default;
 }
 .source-health {
@@ -1074,41 +1408,55 @@ div[data-testid="stVerticalBlock"] {gap: 18px;}
   border:1px solid #173a56; border-radius:999px; background:#081522;
   padding:5px 10px; font-size:11px; font-weight:950; letter-spacing:.04em;
 }
-.scanner-card {min-height:310px; display:flex; flex-direction:column;}
-.scanner-card .metric-grid {grid-template-columns:repeat(4,minmax(0,1fr)); align-items:stretch; flex:1;}
-.scanner-card .metric-tile {min-height:84px;}
+.source-meta {
+  margin-top:10px; padding-top:10px; border-top:1px solid #14324a;
+  color:#8da2b5; font-size:11px; font-weight:750; line-height:1.45;
+  overflow-wrap:anywhere; word-break:break-word;
+}
+.news-scan-card {min-height:190px; height:100%; display:flex; flex-direction:column; margin:0;}
+.news-scan-card .metric-grid {grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; flex:1;}
+.news-scan-card .metric-tile {min-height:86px;}
+.scan-total-footer {
+  min-height:48px; max-height:58px; overflow:hidden;
+  display:block; white-space:normal; line-height:1.35;
+}
+.scanner-card {min-height:unset; height:auto;}
+.scanner-card .metric-grid {grid-template-columns:repeat(4,minmax(0,1fr));}
+.scanner-card .metric-tile {min-height:90px;}
 .engine-card {margin-top:0;}
 .st-key-engines_state_card {
   border:1px solid #14324a; border-radius:14px; background:#071522;
-  padding:16px; min-height:112px; width:100%; margin-top:0;
+  padding:16px; min-height:unset; height:auto; width:100%; margin-top:0; overflow:hidden;
   box-shadow:0 10px 26px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.035);
 }
-.st-key-engines_state_card div[data-testid="stVerticalBlock"] {gap:10px;}
+.st-key-engines_state_card div[data-testid="stVerticalBlock"] {gap:12px;}
 .st-key-engine_tab_active button,
 .st-key-engine_tab_inactive button {
-  min-height:34px; border-radius:8px; border:1px solid #173a56;
+  min-height:38px; border-radius:8px; border:1px solid #173a56;
   background:#081522; color:#c8d9e8; font-size:12px; font-weight:950;
+  white-space:normal; line-height:1.15; padding:7px 10px;
 }
 .st-key-engine_tab_active button:disabled,
 .st-key-engine_tab_inactive button:disabled {
   border-color:#32d9ff; background:#0b2a3d; color:#eaf5ff; opacity:1;
 }
 .engine-summary {
-  font-size:24px; font-weight:900; color:#eaf5ff; margin-bottom:2px;
+  font-size:22px; line-height:1.15; font-weight:900; color:#eaf5ff; margin-bottom:2px;
 }
 .engine-summary span {color:#32d9ff;}
-.engine-grid {display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:14px; margin-top:4px;}
+.engine-grid {display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:12px; margin-top:4px; min-width:0;}
 .engine-tile {
-  border:1px solid #173a56; border-radius:12px; background:#091827;
-  min-height:62px; padding:10px 11px; display:flex; flex-direction:column; justify-content:center;
+  border:1px solid #173a56; border-radius:10px; background:#091827;
+  min-height:66px; padding:10px 11px; display:flex; flex-direction:column; justify-content:center;
+  min-width:0; overflow:hidden;
 }
 .engine-name {
-  color:#c8d9e8; font-size:12px; font-weight:850; text-transform:uppercase;
+  color:#c8d9e8; font-size:11px; line-height:1.2; font-weight:850; text-transform:uppercase;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
-.engine-state {font-size:14px; font-weight:950; margin-top:5px;}
+.engine-state {font-size:13px; line-height:1.15; font-weight:950; margin-top:5px;}
 .engine-reason {
-  color:#8796a5; font-size:10px; font-weight:850; margin-top:3px;
+  color:#8796a5; font-size:10px; line-height:1.2; font-weight:850; margin-top:3px;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .good {color:#2fe08b;}
@@ -1122,17 +1470,40 @@ button {font-family: Inter, "Segoe UI", Arial, sans-serif !important;}
 div[data-testid="stMarkdownContainer"] p {margin:0;}
 @media (max-width: 1200px) {
   .cols-7 {grid-template-columns:repeat(4,minmax(0,1fr));}
+  .truth-summary-card .metric-grid {grid-template-columns:repeat(3,minmax(0,1fr));}
   .dash-row.two {grid-template-columns:1fr;}
   .engine-grid {grid-template-columns:repeat(4,minmax(0,1fr));}
   .source-health-strip {grid-template-columns:repeat(3,minmax(0,1fr));}
 }
+@media (max-width: 900px) {
+  .st-key-performance_row > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"],
+  .st-key-scanner_row > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] {
+    grid-template-columns:1fr !important;
+  }
+}
 @media (max-width: 760px) {
+  .block-container {padding: 14px 12px 20px !important;}
   .topbar {align-items:flex-start; flex-direction:column;}
   .header-status {text-align:left; min-width:0;}
-  .cols-4, .cols-7, .cols-2 {grid-template-columns:1fr;}
+  .cols-4, .cols-7, .cols-2, .cols-6 {grid-template-columns:1fr;}
+  .truth-summary-card .metric-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+  .truth-summary-card .source-meta {white-space:normal;}
+  .news-scan-card .metric-grid {grid-template-columns:1fr;}
+  .scan-total-footer {max-height:none;}
   .engine-grid {grid-template-columns:1fr;}
   .source-health-strip {grid-template-columns:1fr;}
   .title {font-size:21px;}
+  .tile-value {font-size:21px;}
+  .dash-card, .scanner-card, .st-key-engines_state_card {min-height:0;}
+}
+@media (max-width: 430px) {
+  .block-container {padding: 12px 8px 20px !important;}
+  .metric-grid {gap:10px;}
+  .metric-tile {padding:10px 11px;}
+  .truth-summary-card .metric-grid {grid-template-columns:1fr;}
+  .source-chip {flex-direction:column; align-items:flex-start;}
+  .st-key-engine_tab_active button,
+  .st-key-engine_tab_inactive button {font-size:11px;}
 }
 </style>
 """

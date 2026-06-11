@@ -294,6 +294,7 @@ def run_hft_scanner_cycle() -> dict[str, Any]:
         "mode": "HFT",
         "timestamp": cycle_start.isoformat(),
         "timestamp_ist": cycle_start.isoformat(),
+        "updated_at": cycle_start.isoformat(),
         "status": "ACTIVE",
         "source_owner": "hft_mode_runtime",
         "stocks_scanned": len(universe),
@@ -308,11 +309,13 @@ def run_hft_scanner_cycle() -> dict[str, Any]:
     return payload
 
 
-def hft_counter_payload() -> dict[str, Any]:
+def hft_counter_payload(scan_payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    generated_at = now_ist().isoformat()
     payload: dict[str, Any] = {
         "mode": "HFT",
-        "timestamp": now_ist().isoformat(),
-        "timestamp_ist": now_ist().isoformat(),
+        "timestamp": generated_at,
+        "timestamp_ist": generated_at,
+        "updated_at": generated_at,
         "status": "STALE",
     }
     for output_key in HFT_COUNT_FIELDS:
@@ -321,24 +324,31 @@ def hft_counter_payload() -> dict[str, Any]:
         payload["status"] = "INACTIVE"
         payload["inactive_reason"] = "active_execution_mode_not_hft"
         return payload
-    if not hft_worker_heartbeat_fresh():
-        payload["inactive_reason"] = "hft_worker_heartbeat_missing_or_stale"
-        return payload
-
+    sources: list[tuple[str, dict[str, Any]]] = []
+    if isinstance(scan_payload, dict) and scan_payload:
+        sources.append(("current_hft_scanner_cycle", scan_payload))
     for path in HFT_COUNTER_SOURCE_PATHS:
         source = read_json(path, {})
         if not isinstance(source, dict) or not source:
             continue
+        sources.append((str(path.relative_to(ROOT)), source))
+
+    for source_name, source in sources:
         source_age = payload_age_seconds(source)
         if source_age is None or source_age > FRESH_SECONDS:
             payload["status"] = "STALE"
-        else:
-            payload["status"] = "ACTIVE"
+            payload["inactive_reason"] = "hft_scanner_source_missing_or_stale"
+            continue
+        payload["status"] = "ACTIVE"
+        payload["source_owner"] = source.get("source_owner") or source_name
+        payload["source_age_seconds"] = round(source_age, 3)
         for output_key, source_keys in HFT_COUNT_FIELDS.items():
             value = first_int(source, source_keys)
             if value is not None:
                 payload[output_key] = value
         break
+    else:
+        payload["inactive_reason"] = "hft_scanner_source_missing_or_stale"
 
     return payload
 
@@ -373,7 +383,7 @@ def refresh_mode_scanner_status() -> dict[str, Any]:
         result["classic_payload"] = classic_rest
         result["hft_scanner_payload"] = hft_scanner_payload
 
-    hft_payload = hft_counter_payload()
+    hft_payload = hft_counter_payload(result.get("hft_scanner_payload"))
     atomic_write_json(HFT_OUTPUT_PATH, hft_payload)
     result["written"].append(str(HFT_OUTPUT_PATH.relative_to(ROOT)))
     result["hft_status"] = hft_payload["status"]
