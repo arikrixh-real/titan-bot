@@ -12,11 +12,19 @@ env/
 # Logs
 logs/
 *.log
+streamlit_verify_*.log
+
+# Local browser/test temp artifacts
+.chrome-td-shot/
+.tmp_edge*/
+.pytest_cache/
 
 # Local data-provider cache
 data/yfinance_cache/
 data/cache/
 data/runtime/
+data/classic_mode/
+data/hft_mode/
 data/report_vault/
 data/consciousness_core/
 data/experience_vault/
@@ -27,6 +35,12 @@ data/journals/
 data/paper_trading/
 data/learning/
 data/research/
+data/live_price_cache.json
+data/live_price_cache_meta.json
+data/live_price_status.json
+data/common_market_snapshot.json
+data/universe_master.json
+data/upstox_nse_eq_instruments.json
 data/*/latest_*.json
 data/*/*_status.json
 state/
