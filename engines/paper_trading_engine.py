@@ -434,6 +434,9 @@ def prepare_paper_trade_fields(trade: Dict[str, Any], account: Dict[str, Any] | 
     paper_trade_id = safe_text(trade.get("paper_trade_id") or trade.get("trade_id") or trade.get("id"))
     if not paper_trade_id:
         paper_trade_id = f"PT-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+    mode = safe_text(trade.get("mode") or trade.get("execution_mode") or trade.get("trading_mode") or trade.get("active_mode")).upper()
+    if mode not in {"CLASSIC", "HFT"}:
+        mode = ""
     trade.update({
         "entry_price": entry,
         "entry": entry,
@@ -454,6 +457,7 @@ def prepare_paper_trade_fields(trade: Dict[str, Any], account: Dict[str, Any] | 
         "skip_reason": sizing["skip_reason"],
         "paper_trade_id": paper_trade_id,
         "is_paper_trade": True,
+        "mode": mode,
     })
     return trade
 
@@ -500,6 +504,7 @@ def place_paper_order(account: Dict[str, Any], trade: Dict[str, Any]) -> Dict[st
         "accepted": True,
         "live_order": False,
         "is_paper_trade": True,
+        "mode": trade.get("mode") or "",
     }
     generate_paper_audit_log({"event": "PAPER_ORDER_CREATED", "order": order})
     return order
@@ -573,6 +578,7 @@ def open_paper_position(account: Dict[str, Any], order: Dict[str, Any]) -> Dict[
         "open_pnl": 0.0,
         "live_order": False,
         "is_paper_trade": True,
+        "mode": order.get("mode") or "",
     }
     positions.append(position)
     account["open_positions"] = positions
@@ -1002,6 +1008,7 @@ def sync_paper_account_from_trade_results(trade_rows: Any = None) -> Dict[str, A
             "source": "TRADE_RESULTS_SYNC",
             "live_order": False,
             "is_paper_trade": True,
+            "mode": row.get("mode") or closed_position.get("mode") or "",
         })
 
         match_id = safe_text(closed_position.get("paper_position_id"))

@@ -1,110 +1,270 @@
-"""Static simulation-safe HFT universe rules."""
+"""Real cached HFT universe built from TITAN live price cache evidence."""
 
 from __future__ import annotations
 
+import json
+import os
+import sys
+import tempfile
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from data.universe_selectors import select_hft_universe
 from hft_mode.hft_candidate import MAX_PRICE, MIN_PRICE, PREFERRED_MAX_PRICE, PREFERRED_MIN_PRICE
 from hft_mode.hft_data_contracts import HFTSymbolState
 
+HFT_DIR = ROOT / "data" / "hft_mode"
+UNIVERSE_CACHE_PATH = HFT_DIR / "hft_universe_cache.json"
+LIVE_PRICE_CACHE_PATH = ROOT / "data" / "live_price_cache.json"
+RUNTIME_META_PATH = ROOT / "data" / "runtime" / "live_price_cache_meta.json"
+ROOT_META_PATH = ROOT / "data" / "live_price_cache_meta.json"
+IST = timezone(timedelta(hours=5, minutes=30))
 MIN_UNIVERSE_SIZE = 60
 MAX_UNIVERSE_SIZE = 80
-
-_STATIC_SYMBOLS = [
-    ("HFTHYDRO01", 24.8, 620000),
-    ("HFTGRID02", 24.6, 590000),
-    ("HFTMETAL03", 24.3, 580000),
-    ("HFTPOWER04", 24.0, 575000),
-    ("HFTTEXT05", 23.8, 560000),
-    ("HFTCHEM06", 23.6, 555000),
-    ("HFTAUTO07", 23.4, 550000),
-    ("HFTBANK08", 23.2, 545000),
-    ("HFTFMCG09", 23.0, 540000),
-    ("HFTINFRA10", 22.8, 535000),
-    ("HFTENERGY11", 22.6, 530000),
-    ("HFTCAP12", 22.4, 525000),
-    ("HFTPIPE13", 22.2, 520000),
-    ("HFTWIRE14", 22.0, 515000),
-    ("HFTPORT15", 21.8, 510000),
-    ("HFTMINE16", 21.6, 505000),
-    ("HFTMOB17", 21.4, 500000),
-    ("HFTFOOD18", 21.2, 495000),
-    ("HFTCEM19", 21.0, 490000),
-    ("HFTFERT20", 20.8, 485000),
-    ("HFTPUMP21", 20.6, 480000),
-    ("HFTCABLE22", 20.4, 475000),
-    ("HFTPACK23", 20.2, 470000),
-    ("HFTLOG24", 20.0, 465000),
-    ("HFTRETAIL25", 19.8, 460000),
-    ("HFTMEDIA26", 19.6, 455000),
-    ("HFTREALTY27", 19.4, 450000),
-    ("HFTSUGAR28", 19.2, 445000),
-    ("HFTPAPER29", 19.0, 440000),
-    ("HFTGAS30", 18.8, 435000),
-    ("HFTSOLAR31", 18.6, 430000),
-    ("HFTWIND32", 18.4, 425000),
-    ("HFTFIBER33", 18.2, 420000),
-    ("HFTSEED34", 18.0, 415000),
-    ("HFTTOOLS35", 17.8, 410000),
-    ("HFTGLASS36", 17.6, 405000),
-    ("HFTCERAM37", 17.4, 400000),
-    ("HFTPHARMA38", 17.2, 395000),
-    ("HFTLAB39", 17.0, 390000),
-    ("HFTPLAST40", 16.8, 385000),
-    ("HFTPAINT41", 16.6, 380000),
-    ("HFTTYRE42", 16.4, 375000),
-    ("HFTRAIL43", 16.2, 370000),
-    ("HFTSHIP44", 16.0, 365000),
-    ("HFTAGRI45", 15.8, 360000),
-    ("HFTCARBON46", 15.6, 355000),
-    ("HFTSALT47", 15.4, 350000),
-    ("HFTZINC48", 15.2, 345000),
-    ("HFTCOPPER49", 15.1, 340000),
-    ("HFTALLOY50", 20.5, 335000),
-    ("HFTMOTOR51", 21.5, 330000),
-    ("HFTVALVE52", 22.5, 325000),
-    ("HFTGEAR53", 23.5, 320000),
-    ("HFTBOLT54", 24.5, 315000),
-    ("HFTNUT55", 19.5, 310000),
-    ("HFTFAST56", 18.5, 305000),
-    ("HFTCAST57", 17.5, 300000),
-    ("HFTFORGE58", 16.5, 295000),
-    ("HFTDRIVE59", 15.5, 290000),
-    ("HFTNODE60", 20.1, 285000),
-    ("HFTEDGE61", 20.3, 280000),
-    ("HFTCORE62", 20.7, 275000),
-    ("HFTBASE63", 21.1, 270000),
-    ("HFTFLOW64", 21.3, 265000),
-    ("HFTLINK65", 21.7, 260000),
-]
+FRESH_SECONDS = 180
 
 
-def _symbol_state(symbol: str, price: float, volume: int) -> HFTSymbolState:
-    return HFTSymbolState(
-        symbol=symbol,
-        price=price,
-        volume=volume,
-        bid=round(price - 0.02, 2),
-        ask=round(price + 0.02, 2),
-        spread_pct=round((0.04 / price) * 100, 6),
-        source="static_simulation_universe",
-        is_fresh=True,
-        is_liquid=True,
-        is_circuit_prone=False,
-    )
+def now_ist() -> datetime:
+    return datetime.now(IST)
 
 
-def reject_reason_for_symbol(state: HFTSymbolState) -> str | None:
-    if state.price is None or state.price < MIN_PRICE or state.price > MAX_PRICE:
-        return "price_outside_15_25"
-    if not state.is_liquid or state.volume is None or state.volume < 250000:
-        return "illiquid"
-    if state.is_circuit_prone:
-        return "circuit_prone"
+def read_json(path: Path, default: Any = None) -> Any:
+    try:
+        if not path.exists():
+            return default
+        with path.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        return payload if payload is not None else default
+    except Exception:
+        return default
+
+
+def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        os.replace(tmp_name, path)
+    finally:
+        if os.path.exists(tmp_name):
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+
+
+def parse_dt(value: Any) -> datetime | None:
+    if value in (None, "", "null"):
+        return None
+    text = str(value).strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=IST)
+    return parsed.astimezone(IST)
+
+
+def payload_time(payload: dict[str, Any]) -> datetime | None:
+    for key in ("timestamp_ist", "generated_at_ist", "cache_last_updated", "updated_at_ist", "timestamp", "updated_at"):
+        parsed = parse_dt(payload.get(key))
+        if parsed is not None:
+            return parsed
     return None
 
 
+def age_seconds(dt: datetime | None) -> float | None:
+    if dt is None:
+        return None
+    return max(0.0, (now_ist() - dt.astimezone(IST)).total_seconds())
+
+
+def safe_float(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def safe_int(value: Any) -> int | None:
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 0 else None
+
+
+def latest_live_price_meta() -> tuple[dict[str, Any], float | None]:
+    runtime_meta = read_json(RUNTIME_META_PATH, {})
+    root_meta = read_json(ROOT_META_PATH, {})
+    candidates = [item for item in (runtime_meta, root_meta) if isinstance(item, dict) and item]
+    if not candidates:
+        return {}, None
+    candidates.sort(key=lambda item: payload_time(item) or datetime.fromtimestamp(0, tz=IST), reverse=True)
+    chosen = candidates[0]
+    return chosen, age_seconds(payload_time(chosen))
+
+
+def _entry_from_cache(symbol: str, raw: Any) -> dict[str, Any] | None:
+    if isinstance(raw, dict):
+        ltp = safe_float(raw.get("ltp") or raw.get("price") or raw.get("last_price"))
+        timestamp = raw.get("timestamp_ist") or raw.get("updated_at_ist") or raw.get("timestamp")
+        return {
+            "symbol": str(raw.get("symbol") or symbol).upper(),
+            "instrument_key": raw.get("instrument_key"),
+            "ltp": ltp,
+            "volume": safe_int(raw.get("volume")),
+            "spread": safe_float(raw.get("spread")),
+            "source": raw.get("source") or "upstox/live_price_cache",
+            "timestamp_ist": timestamp,
+        }
+    ltp = safe_float(raw)
+    return {
+        "symbol": str(symbol).upper(),
+        "instrument_key": None,
+        "ltp": ltp,
+        "volume": None,
+        "spread": None,
+        "source": "upstox/live_price_cache",
+        "timestamp_ist": None,
+    }
+
+
+def _eligible_symbols(cache: dict[str, Any]) -> list[dict[str, Any]]:
+    entries = []
+    for symbol, raw in cache.items():
+        entry = _entry_from_cache(symbol, raw)
+        if not entry or entry.get("ltp") is None:
+            continue
+        price = float(entry["ltp"])
+        if MIN_PRICE <= price <= MAX_PRICE:
+            entries.append(entry)
+    entries.sort(
+        key=lambda item: (
+            not (PREFERRED_MIN_PRICE <= float(item["ltp"]) <= PREFERRED_MAX_PRICE),
+            -(item.get("volume") or 0),
+            item["symbol"],
+        )
+    )
+    return entries[:MAX_UNIVERSE_SIZE]
+
+
+def build_hft_universe_cache(path: Path = UNIVERSE_CACHE_PATH) -> dict[str, Any]:
+    if path == UNIVERSE_CACHE_PATH:
+        return select_hft_universe(path=path)
+
+    generated_at = now_ist().isoformat()
+    meta, meta_age = latest_live_price_meta()
+    cache = read_json(LIVE_PRICE_CACHE_PATH, {})
+    meta_status = str(meta.get("status") or meta.get("cache_status") or "").upper() if isinstance(meta, dict) else ""
+    auth_required = meta_status in {"AUTH_REQUIRED", "TOKEN_MISSING", "INACTIVE"}
+    cache_fresh = bool(meta_age is not None and meta_age <= FRESH_SECONDS)
+
+    if not isinstance(cache, dict) or not cache:
+        status = "AUTH_REQUIRED" if auth_required else "MISSING"
+        payload = {
+            "status": status,
+            "timestamp_ist": generated_at,
+            "price_range": "20-25",
+            "fallback_range": "15-25",
+            "count": 0,
+            "symbols": [],
+            "source": "upstox/live_price_cache",
+            "reason": "live_price_cache_missing",
+            "live_price_cache_age_seconds": meta_age,
+        }
+        atomic_write_json(path, payload)
+        return payload
+
+    symbols = _eligible_symbols(cache) if cache_fresh else []
+    preferred_count = sum(1 for item in symbols if PREFERRED_MIN_PRICE <= float(item["ltp"]) <= PREFERRED_MAX_PRICE)
+    if auth_required:
+        status = "AUTH_REQUIRED"
+    elif not cache_fresh:
+        status = "STALE"
+    elif not symbols:
+        status = "MISSING"
+    elif len(symbols) < MIN_UNIVERSE_SIZE:
+        status = "PARTIAL"
+    else:
+        status = "ACTIVE"
+
+    payload = {
+        "status": status,
+        "timestamp_ist": generated_at,
+        "price_range": "20-25",
+        "fallback_range": "15-25",
+        "count": len(symbols),
+        "preferred_count": preferred_count,
+        "target_count": MIN_UNIVERSE_SIZE,
+        "max_count": MAX_UNIVERSE_SIZE,
+        "symbols": symbols,
+        "source": "upstox/live_price_cache",
+        "live_price_cache_age_seconds": round(meta_age, 3) if meta_age is not None else None,
+        "live_price_status": meta_status or None,
+        "reason": "" if status in {"ACTIVE", "PARTIAL"} else "live_price_cache_stale_or_unavailable",
+    }
+    atomic_write_json(path, payload)
+    return payload
+
+
+def read_hft_universe_cache(path: Path = UNIVERSE_CACHE_PATH, max_age_seconds: int = FRESH_SECONDS) -> dict[str, Any]:
+    payload = read_json(path, {})
+    if not isinstance(payload, dict):
+        return {}
+    dt = payload_time(payload)
+    if age_seconds(dt) is None or age_seconds(dt) > max_age_seconds:
+        stale = dict(payload)
+        stale["status"] = "STALE"
+        stale["reason"] = stale.get("reason") or "hft_universe_cache_stale"
+        return stale
+    return payload
+
+
+def cached_hft_symbol_states(limit: int = MAX_UNIVERSE_SIZE) -> list[HFTSymbolState]:
+    payload = read_hft_universe_cache()
+    if str(payload.get("status") or "").upper() not in {"ACTIVE", "PARTIAL"}:
+        return []
+    states = []
+    for item in (payload.get("symbols") or [])[: max(0, min(limit, MAX_UNIVERSE_SIZE))]:
+        if not isinstance(item, dict):
+            continue
+        price = safe_float(item.get("ltp"))
+        if price is None:
+            continue
+        spread = safe_float(item.get("spread"))
+        states.append(
+            HFTSymbolState(
+                symbol=str(item.get("symbol") or "").upper(),
+                price=price,
+                timestamp=parse_dt(item.get("timestamp_ist")) or payload_time(payload),
+                volume=safe_int(item.get("volume")),
+                bid=None,
+                ask=None,
+                spread_pct=spread,
+                source=item.get("source") or "upstox/live_price_cache",
+                is_fresh=True,
+                is_liquid=item.get("volume") is not None,
+                is_circuit_prone=False,
+            )
+        )
+    return states
+
+
 def get_static_hft_universe(limit: int = MAX_UNIVERSE_SIZE) -> list[HFTSymbolState]:
-    safe_limit = max(0, min(limit, MAX_UNIVERSE_SIZE))
-    states = [_symbol_state(symbol, price, volume) for symbol, price, volume in _STATIC_SYMBOLS]
-    accepted = [state for state in states if reject_reason_for_symbol(state) is None]
-    accepted.sort(key=lambda state: (not (PREFERRED_MIN_PRICE <= state.price <= PREFERRED_MAX_PRICE), -state.volume))
-    return accepted[:safe_limit]
+    return cached_hft_symbol_states(limit)
+
+
+if __name__ == "__main__":
+    print(json.dumps(build_hft_universe_cache(), indent=2, sort_keys=True))

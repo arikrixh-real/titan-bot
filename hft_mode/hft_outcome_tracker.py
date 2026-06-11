@@ -20,6 +20,7 @@ def compact_hft_outcome(closed_trade: dict[str, Any]) -> dict[str, Any]:
     exit_time = closed_trade["closed_at"]
     duration = int((_parse_time(exit_time) - _parse_time(entry_time)).total_seconds())
     return {
+        "mode": "HFT",
         "symbol": closed_trade["symbol"],
         "strategy_source": closed_trade.get("strategy_name"),
         "entry_price": closed_trade["entry_price"],

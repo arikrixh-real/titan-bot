@@ -1,4 +1,4 @@
-"""Simulation-only market feed skeleton for HFT mode."""
+"""Read-only HFT feed snapshot builder for real cached/depth ticks."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def is_tick_fresh(timestamp: datetime, now: datetime | None = None, max_age_seco
     return 0 <= age_seconds <= max_age_seconds
 
 
-def process_mock_tick(
+def process_real_hft_tick(
     tick: HFTPriceTick,
     now: datetime | None = None,
     max_age_seconds: int = MAX_TICK_AGE_SECONDS,
@@ -67,9 +67,9 @@ def process_mock_tick(
     )
 
 
-def process_mock_ticks(
+def process_real_hft_ticks(
     ticks: list[HFTPriceTick],
     now: datetime | None = None,
     max_age_seconds: int = MAX_TICK_AGE_SECONDS,
 ) -> list[HFTFeedSnapshot]:
-    return [process_mock_tick(tick, now=now, max_age_seconds=max_age_seconds) for tick in ticks]
+    return [process_real_hft_tick(tick, now=now, max_age_seconds=max_age_seconds) for tick in ticks]

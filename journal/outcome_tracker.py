@@ -348,6 +348,13 @@ def _attach_reinforcement_learning_fields(row, outcome_row):
     return result
 
 
+def _outcome_mode(row):
+    mode = str(row.get("mode") or row.get("execution_mode") or row.get("trading_mode") or row.get("active_mode") or "").upper()
+    if mode in {"CLASSIC", "HFT"}:
+        return mode
+    return ""
+
+
 def _ensure_files():
     JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
     LEARNING_DIR.mkdir(parents=True, exist_ok=True)
@@ -873,7 +880,7 @@ def _append_outcome(row, outcome, exit_price, pnl_points, reason):
         "rank_score": row.get("rank_score", ""),
         "alert_sent": row.get("alert_sent", ""),
         "market_status": row.get("market_status", ""),
-        "mode": row.get("mode") if str(row.get("mode") or "").upper() in {"CLASSIC", "HFT"} else "",
+        "mode": _outcome_mode(row),
         "outcome": outcome,
         "exit_price": exit_price,
         "realized_pnl": realized_pnl,
@@ -930,6 +937,26 @@ def track_trade_outcomes(limit=None):
     _ensure_files()
 
     rows = load_canonical_open_trades()
+    try:
+        from runtime_execution_mode import active_execution_mode
+        from runtime_mode_switch import read_mode_switch_status, switch_in_progress
+
+        active_mode = active_execution_mode()
+        switch_status = read_mode_switch_status()
+        if switch_in_progress():
+            old_mode = str(switch_status.get("old_mode") or active_mode).upper()
+            rows = [
+                row for row in rows
+                if str(row.get("mode") or "").upper() == old_mode
+            ]
+        else:
+            rows = [
+                row for row in rows
+                if str(row.get("mode") or active_mode).upper() == active_mode
+            ]
+    except Exception:
+        active_mode = None
+        switch_status = {}
 
     if not rows:
         print("[OutcomeTracker] No active trades found.")
@@ -1087,6 +1114,8 @@ def track_trade_outcomes(limit=None):
         "checked": checked,
         "closed": closed,
         "open": still_open,
+        "active_execution_mode": active_mode,
+        "mode_switch_status": switch_status,
         "backlog_size": backlog_size,
         "price_stale_skipped": price_stale_skipped,
         "deferred_open": deferred_open,

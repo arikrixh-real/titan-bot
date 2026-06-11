@@ -1,14 +1,12 @@
 import csv
 import json
 import os
-import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 import streamlit as st
-from runtime_execution_mode import active_execution_mode, write_execution_mode
-from tools.refresh_mode_scanner_status import refresh_mode_scanner_status
+from runtime_execution_mode import active_execution_mode
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -45,6 +43,18 @@ CLASSIC_SCANNER_COUNTER_FIELDS = [
     ("Raw Breakout Ready", ("raw_breakout_ready_count", "raw_breakout_ready")),
     ("Qualified Breakout Ready", ("qualified_breakout_ready_count", "qualified_breakout_ready", "breakout_ready_count")),
     ("Final Passed", ("final_passed", "final_passed_count")),
+]
+
+CLASSIC_TOIF_COUNTER_FIELDS = [
+    ("Universe / Classic Universe", ("universe_count", "stocks_checked", "stocks_scanned")),
+    ("Eligible", ("eligible_count", "live_feed_count")),
+    ("TOIF Alpha Checked", ("alpha_checked_count",)),
+    ("High Alpha", ("high_alpha_count", "alpha_passed")),
+    ("Rejected / Data Blocked", ("rejected_count",)),
+    ("Signal Allowed", ("signal_allowed",)),
+    ("Final Candidate", ("final_candidate_count", "final_passed")),
+    ("Alpha", ("alpha",)),
+    ("Reject Reason", ("reject_reason",)),
 ]
 
 HFT_SCANNER_COUNTER_FIELDS = [
@@ -405,22 +415,6 @@ def render_metric_grid_card(title, items, columns=4, extra_class="", meta_html="
     st.markdown(metric_grid_card(title, items, columns, extra_class, meta_html), unsafe_allow_html=True)
 
 
-def atomic_write_json(path, payload):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2, sort_keys=True)
-            handle.write("\n")
-        os.replace(tmp_name, path)
-    finally:
-        try:
-            if os.path.exists(tmp_name):
-                os.unlink(tmp_name)
-        except Exception:
-            pass
-
-
 def normalize_mode(value):
     text = str(value or "").strip().upper()
     if text in {"HFT", "HFT_MODE", "HIGH_FREQUENCY", "HIGH_FREQUENCY_TRADING"}:
@@ -433,9 +427,11 @@ def read_mode():
 
 
 def write_mode(mode):
-    mode = normalize_mode(mode)
-    write_execution_mode(mode)
-    refresh_mode_scanner_status()
+    return {
+        "status": "READ_ONLY",
+        "requested_mode": normalize_mode(mode),
+        "reason": "dashboard_mode_mutation_disabled",
+    }
 
 
 def render_mode_control(active_mode, meta_html=""):
@@ -451,11 +447,11 @@ def render_mode_control(active_mode, meta_html=""):
         with st.container(key="mode_switch_row"):
             mode_cols = st.columns(2)
             with mode_cols[0]:
-                if st.button("CLASSIC MODE", key="mode_switch_classic", disabled=active_mode == "CLASSIC", use_container_width=True):
+                if st.button("CLASSIC MODE", key="mode_switch_classic", disabled=True, use_container_width=True):
                     write_mode("CLASSIC")
                     st.rerun()
             with mode_cols[1]:
-                if st.button("HFT MODE", key="mode_switch_hft", disabled=active_mode == "HFT", use_container_width=True):
+                if st.button("HFT MODE", key="mode_switch_hft", disabled=True, use_container_width=True):
                     write_mode("HFT")
                     st.rerun()
         st.markdown(meta_html, unsafe_allow_html=True)
@@ -776,9 +772,31 @@ def scanner_counts(scanner, truth, active_mode, target_mode):
     truth_counts = source.get("truth_counts") or {}
     metrics = []
     for label, keys in source["fields"]:
-        value = first_number(truth_counts, keys) or first_number(payload, keys)
+        value = scanner_metric_value(payload, truth_counts, label, keys)
         metrics.append((label, value))
     return {**source, "metrics": metrics}
+
+
+def scanner_metric_value(payload, truth_counts, label, keys):
+    if label == "Alpha":
+        for key in keys:
+            if isinstance(payload, dict) and key in payload:
+                return "null" if payload.get(key) in (None, "") else payload.get(key)
+        return "null"
+    if label == "Reject Reason":
+        for key in keys:
+            if isinstance(payload, dict) and payload.get(key) not in (None, ""):
+                return payload.get(key)
+        return "UNKNOWN"
+    if label == "Signal Allowed":
+        for key in keys:
+            if isinstance(payload, dict) and key in payload:
+                return "true" if payload.get(key) is True else "false" if payload.get(key) is False else payload.get(key)
+        return "false"
+    value = first_number(truth_counts, keys)
+    if value is not None:
+        return value
+    return first_number(payload, keys)
 
 
 def source_health_html(items):
@@ -807,22 +825,70 @@ def scanner_field_definitions(mode):
     return HFT_SCANNER_COUNTER_FIELDS if normalize_mode(mode) == "HFT" else CLASSIC_SCANNER_COUNTER_FIELDS
 
 
+def is_classic_toif_payload(payload, mode=None):
+    if normalize_mode(mode or scanner_mode(payload) or "CLASSIC") != "CLASSIC":
+        return False
+    if not isinstance(payload, dict):
+        return True
+    engine = str(payload.get("engine") or payload.get("classic_engine") or "").upper()
+    if engine == "TOIF":
+        return True
+    if payload.get("legacy_classic_filters") is False:
+        return True
+    if str(payload.get("status") or "").upper() == "INACTIVE":
+        return True
+    return False
+
+
+def scanner_field_definitions_for_payload(mode, payload=None):
+    if normalize_mode(mode) == "HFT":
+        return HFT_SCANNER_COUNTER_FIELDS
+    if is_classic_toif_payload(payload, mode):
+        return CLASSIC_TOIF_COUNTER_FIELDS
+    return CLASSIC_SCANNER_COUNTER_FIELDS
+
+
 def scanner_field_candidates(payload, mode):
     if not isinstance(payload, dict):
         return []
     fields = []
-    for label, keys in scanner_field_definitions(mode):
-        if any(key in payload for key in keys):
+    prepared = prepared_scanner_payload(payload, mode)
+    for label, keys in scanner_field_definitions_for_payload(mode, prepared):
+        if any(key in prepared for key in keys):
             fields.append((label, keys))
     if fields:
         return fields
-    for key, value in payload.items():
+    for key, value in prepared.items():
         key_text = str(key).lower()
         if isinstance(value, (int, float)) and (
             "passed" in key_text or "scanned" in key_text or "checked" in key_text or "qualified" in key_text
         ):
             fields.append((readable_key(key), (key,)))
     return fields
+
+
+def prepared_scanner_payload(payload, mode):
+    if not isinstance(payload, dict):
+        return payload
+    prepared = dict(payload)
+    if is_classic_toif_payload(prepared, mode):
+        rejected = prepared.get("rejected") if isinstance(prepared.get("rejected"), list) else []
+        prepared.setdefault("rejected_count", len(rejected))
+        if "alpha" not in prepared:
+            alpha = None
+            candidates = prepared.get("paper_trade_candidates") if isinstance(prepared.get("paper_trade_candidates"), list) else []
+            if candidates and isinstance(candidates[0], dict):
+                alpha = candidates[0].get("alpha")
+            prepared["alpha"] = alpha
+        if "reject_reason" not in prepared:
+            reason = prepared.get("reason")
+            if not reason and rejected and isinstance(rejected[0], dict):
+                reason = rejected[0].get("reject_reason") or rejected[0].get("reason")
+            if not reason:
+                blockers = prepared.get("blockers") if isinstance(prepared.get("blockers"), list) else []
+                reason = ", ".join(str(item) for item in blockers) if blockers else None
+            prepared["reject_reason"] = reason
+    return prepared
 
 
 def scanner_source_for_mode(mode, generic_scanner=None, generic_truth=None):
@@ -840,6 +906,7 @@ def scanner_source_for_mode(mode, generic_scanner=None, generic_truth=None):
         payload = read_json(path, None)
         if not isinstance(payload, dict):
             continue
+        payload = prepared_scanner_payload(payload, mode)
         fields = scanner_field_candidates(payload, mode)
         truth = read_json(PATHS[truth_name], {}) if truth_name in PATHS else {}
         truth_counts = truth.get("exact_counts") if isinstance(truth, dict) and isinstance(truth.get("exact_counts"), dict) else {}
@@ -980,17 +1047,25 @@ def scanner_card_html(title, counts, meta_html=""):
     health_class = "good" if health == "LIVE" else "warn" if health == "STALE" else "bad" if health == "INACTIVE" else "muted"
     metrics = counts.get("metrics") if isinstance(counts.get("metrics"), list) else []
     metric_values = {label: value for label, value in metrics}
-    labels = [label for label, _ in scanner_field_definitions(counts.get("mode"))]
+    payload = counts.get("payload") if isinstance(counts.get("payload"), dict) else {}
+    labels = [label for label, _ in scanner_field_definitions_for_payload(counts.get("mode"), payload)]
     if health == "LIVE":
         tiles = [(label, fmt_number(metric_values.get(label)), "text" if metric_values.get(label) is not None else "muted") for label in labels]
     elif health == "STALE":
-        tiles = [(label, "STALE", "warn") for label in labels]
+        tiles = [(label, fmt_number(metric_values.get(label)) if metric_values.get(label) is not None else "STALE", "warn") for label in labels]
     else:
-        tiles = [(label, "—", "muted") for label in labels]
+        tiles = [(label, fmt_number(metric_values.get(label)) if metric_values.get(label) is not None else "—", "muted") for label in labels]
     body = f"<div class='source-health {health_class}'>{health}</div>"
     body += f"<div class='metric-grid cols-4'>{''.join(metric_tile(*tile) for tile in tiles)}</div>"
     body += meta_html
     return card_html(title, body, "scanner-card")
+
+
+def classic_scanner_panel_title(counts):
+    payload = counts.get("payload") if isinstance(counts, dict) and isinstance(counts.get("payload"), dict) else {}
+    if is_classic_toif_payload(payload, "CLASSIC"):
+        return "CLASSICAL-TOIF ENGINE"
+    return "CLASSIC MODE SCANNER FILTERS"
 
 
 def load_payloads():
@@ -1161,7 +1236,7 @@ def render_dashboard():
     classic_source_name = classic_counts.get("source_name") if isinstance(classic_counts, dict) else "classic_scanner_status"
     hft_source_name = hft_counts.get("source_name") if isinstance(hft_counts, dict) else "hft_mode_scanner_status"
     classic_scanner = scanner_card_html(
-        "CLASSIC MODE SCANNER FILTERS",
+        classic_scanner_panel_title(classic_counts),
         classic_counts,
         source_meta_html(source_evidence(payloads, classic_source_name, FRESH_SECONDS["scanner"])),
     )

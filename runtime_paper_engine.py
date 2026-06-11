@@ -4,10 +4,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from utils.market_hours import as_ist_datetime, is_trade_window
+from runtime_execution_mode import active_execution_mode
+from runtime_mode_switch import read_mode_switch_status, signal_allowed, switch_in_progress
+from runtime_signal_manager import approved_signals_for_mode
 
 
 IST = timezone(timedelta(hours=5, minutes=30))
 MASTER_BRAIN_STATUS_PATH = Path("data") / "runtime" / "master_brain_status.json"
+HFT_SCANNER_STATUS_PATH = Path("data") / "runtime" / "hft_mode_scanner_status.json"
 LIVE_PRICE_CACHE_PATH = Path("data") / "live_price_cache.json"
 PAPER_ENGINE_STATUS_PATH = Path("data") / "runtime" / "paper_engine_status.json"
 PAPER_TRADE_REGISTRY_PATH = Path("data") / "runtime" / "paper_trade_registry.json"
@@ -89,6 +93,7 @@ def _paper_key(setup):
             _format_price(setup.get("entry")),
             _format_price(setup.get("sl")),
             _format_price(setup.get("target")),
+            str(setup.get("mode") or ""),
         ]
     )
 
@@ -208,6 +213,7 @@ def _base_payload(
     trade_window=False,
     new_entries_allowed=False,
     paper_trade_creation=True,
+    journal_writes=False,
     stale_or_missing_prices=0,
     paper_account_summary=None,
     error_type=None,
@@ -220,8 +226,11 @@ def _base_payload(
     open_pnl = paper_account_summary.get("unrealized_pnl")
     daily_pnl = paper_performance_summary.get("total_realized_pnl", paper_account_summary.get("realized_pnl"))
     equity = paper_account_summary.get("equity")
+    mode = active_execution_mode()
     return {
         "timestamp_ist": _timestamp_ist(),
+        "mode": mode,
+        "active_execution_mode": mode,
         "status": status,
         "safety_gates_passed": bool(safety_gates_passed),
         "trade_window": bool(trade_window),
@@ -248,9 +257,12 @@ def _base_payload(
         "error_type": error_type,
         "error_message": error_message,
         "trade_creation": False,
+        "broker_orders": False,
+        "live_order_placement": False,
+        "live_execution_enabled": False,
         "telegram_alerts": False,
         "supabase_writes": False,
-        "journal_writes": False,
+        "journal_writes": bool(journal_writes),
     }
 
 
@@ -329,7 +341,102 @@ def _valid_setups(master_brain_status):
         target = _safe_float(setup.get("target"))
         if symbol and side and entry is not None and sl is not None and target is not None:
             normalized = dict(setup)
-            normalized.update({"symbol": symbol, "side": side, "entry": entry, "sl": sl, "target": target})
+            normalized.update(
+                {
+                    "symbol": symbol,
+                    "side": side,
+                    "entry": entry,
+                    "sl": sl,
+                    "target": target,
+                    "mode": "CLASSIC",
+                    "source": setup.get("source") or "classic_master_brain_status",
+                }
+            )
+            valid_setups.append(normalized)
+    return valid_setups
+
+
+def _valid_hft_setups(hft_scanner_status):
+    if not isinstance(hft_scanner_status, dict):
+        return []
+    if str(hft_scanner_status.get("mode") or "").upper() != "HFT":
+        return []
+    if str(hft_scanner_status.get("status") or "").upper() not in {"ACTIVE", "LIVE"}:
+        return []
+    candidates = hft_scanner_status.get("paper_trade_candidates")
+    if not isinstance(candidates, list):
+        return []
+
+    valid_setups = []
+    for setup in candidates:
+        if not isinstance(setup, dict):
+            continue
+        symbol = _normalize_symbol(setup.get("symbol"))
+        side = _normalize_side(setup.get("side") or "LONG")
+        entry = _safe_float(setup.get("entry") or setup.get("entry_price"))
+        sl = _safe_float(setup.get("sl") or setup.get("stop_loss") or setup.get("stop_loss_price"))
+        target = _safe_float(setup.get("target") or setup.get("tp") or setup.get("take_profit_price"))
+        if symbol and side and entry is not None and sl is not None and target is not None:
+            normalized = dict(setup)
+            normalized.update(
+                {
+                    "symbol": symbol,
+                    "side": side,
+                    "entry": entry,
+                    "sl": sl,
+                    "target": target,
+                    "mode": "HFT",
+                    "source": setup.get("source") or "hft_mode_scanner_status",
+                }
+            )
+            valid_setups.append(normalized)
+    return valid_setups
+
+
+def _valid_approved_signal_setups(signals, mode):
+    if not isinstance(signals, list):
+        return []
+    mode = str(mode or "").upper()
+    valid_setups = []
+    for setup in signals:
+        if not isinstance(setup, dict):
+            continue
+        if str(setup.get("status") or "").upper() != "APPROVED":
+            continue
+        if str(setup.get("mode") or "").upper() != mode:
+            continue
+        symbol = _normalize_symbol(setup.get("symbol"))
+        side = _normalize_side(setup.get("side") or "LONG")
+        entry = _safe_float(setup.get("entry") or setup.get("entry_price"))
+        sl = _safe_float(setup.get("sl") or setup.get("stop_loss") or setup.get("stop_loss_price"))
+        target = _safe_float(setup.get("target") or setup.get("tp") or setup.get("take_profit_price"))
+        if mode == "HFT":
+            bid = _safe_float(setup.get("bid"))
+            ask = _safe_float(setup.get("ask"))
+            spread = _safe_float(setup.get("spread"))
+            spread_pct = _safe_float(setup.get("spread_pct"))
+            if bid is None or ask is None or bid <= 0 or ask <= 0 or bid > ask:
+                continue
+            if spread is None or spread <= 0:
+                continue
+            if spread_pct is None or spread_pct > 0.75:
+                continue
+        if symbol and side and entry is not None and sl is not None and target is not None:
+            normalized = dict(setup)
+            normalized.update(
+                {
+                    "symbol": symbol,
+                    "side": side,
+                    "entry": entry,
+                    "sl": sl,
+                    "target": target,
+                    "mode": mode,
+                    "source": setup.get("source") or "runtime_signal_manager",
+                    "paper_only": True,
+                    "broker_orders": False,
+                    "live_order_placement": False,
+                }
+            )
             valid_setups.append(normalized)
     return valid_setups
 
@@ -559,6 +666,7 @@ def _open_new_positions(registry, setups):
             seen_keys.add(str(position.get("key")))
 
     opened = 0
+    opened_setups = []
     for setup in setups:
         if opened >= MAX_NEW_POSITIONS_PER_RUN:
             break
@@ -576,17 +684,41 @@ def _open_new_positions(registry, setups):
             "target": setup["target"],
             "quantity": 1,
             "rr": _safe_float(setup.get("rr")),
+            "mode": setup.get("mode") or active_execution_mode(),
+            "source": setup.get("source") or "",
+            "strategy": setup.get("strategy") or setup.get("strategy_name") or setup.get("source") or "",
+            "paper_only": True,
+            "live_order": False,
             "status": "OPEN",
             "opened_at_ist": _timestamp_ist(),
             "last_price": None,
             "unrealized_pnl": 0.0,
         }
         registry["open_positions"].append(position)
+        opened_setups.append(dict(setup))
         seen_keys.add(key)
         opened += 1
 
     registry["seen_keys"] = sorted(seen_keys)
-    return opened
+    return opened, opened_setups
+
+
+def _journal_opened_setups(opened_setups, mode):
+    if not opened_setups:
+        return 0
+    try:
+        from journal.trade_journal import journal_eligible_setups
+
+        return int(
+            journal_eligible_setups(
+                opened_setups,
+                scan_id=f"runtime_paper_engine_{mode.lower()}_{_timestamp_ist()}",
+                market_status={"mode": mode, "paper_only": True, "broker_orders": False},
+            )
+            or 0
+        )
+    except Exception:
+        return 0
 
 
 def run_paper_engine():
@@ -602,15 +734,38 @@ def run_paper_engine():
         price_cache = _load_price_cache()
         closed_this_run, stale_or_missing_prices = _update_open_positions(registry, price_cache)
         _write_json(PAPER_TRADE_REGISTRY_PATH, registry)
+        mode = active_execution_mode()
+        switch_status = read_mode_switch_status()
 
-        master_brain_status = _read_json(MASTER_BRAIN_STATUS_PATH)
-
-        input_candidates = master_brain_status.get("input_candidates", 0)
+        approved_signals = approved_signals_for_mode(mode)
+        input_candidates = len(approved_signals)
         setup_symbols = [
             _normalize_symbol(setup.get("symbol"))
-            for setup in master_brain_status.get("evaluated_trade_setups", [])
+            for setup in approved_signals
             if isinstance(setup, dict) and setup.get("symbol")
         ]
+
+        if switch_in_progress() or not signal_allowed():
+            payload = _base_payload(
+                "PAPER_ENGINE_BLOCKED_MODE_SWITCH",
+                False,
+                input_candidates,
+                f"Mode switch lock active: {switch_status.get('state')}",
+                setup_symbols,
+                new_paper_positions=0,
+                open_positions_count=len(registry.get("open_positions", [])),
+                closed_positions_count=len(registry.get("closed_positions", [])),
+                closed_this_run=closed_this_run,
+                stale_or_missing_prices=stale_or_missing_prices,
+                paper_performance_summary=_paper_performance_summary(registry),
+                paper_account_summary=_paper_account_summary(registry),
+                trade_window=trade_window_open,
+                new_entries_allowed=False,
+                paper_trade_creation=False,
+            )
+            payload["mode_switch_status"] = switch_status
+            _write_runtime_status(payload, registry)
+            return payload
 
         if not trade_window_open:
             payload = _base_payload(
@@ -633,29 +788,10 @@ def run_paper_engine():
             _write_runtime_status(payload, registry)
             return payload
 
-        failure_reason = _gate_failure(master_brain_status)
-        if failure_reason:
-            payload = _base_payload(
-                "PAPER_ENGINE_BLOCKED_SAFETY_GATE",
-                False,
-                input_candidates,
-                failure_reason,
-                setup_symbols,
-                open_positions_count=len(registry.get("open_positions", [])),
-                closed_positions_count=len(registry.get("closed_positions", [])),
-                closed_this_run=closed_this_run,
-                stale_or_missing_prices=stale_or_missing_prices,
-                paper_performance_summary=_paper_performance_summary(registry),
-                paper_account_summary=_paper_account_summary(registry),
-                trade_window=trade_window_open,
-                new_entries_allowed=new_entries_allowed,
-            )
-            _write_runtime_status(payload, registry)
-            return payload
-
         new_entries_allowed = True
-        valid_setups = _valid_setups(master_brain_status)
-        new_positions = _open_new_positions(registry, valid_setups)
+        valid_setups = _valid_approved_signal_setups(approved_signals, mode)
+        new_positions, opened_setups = _open_new_positions(registry, valid_setups)
+        journaled = _journal_opened_setups(opened_setups, mode)
         _refresh_paper_account(registry)
         _write_json(PAPER_TRADE_REGISTRY_PATH, registry)
 
@@ -674,6 +810,7 @@ def run_paper_engine():
             paper_account_summary=_paper_account_summary(registry),
             trade_window=trade_window_open,
             new_entries_allowed=new_entries_allowed,
+            journal_writes=journaled > 0,
         )
         _write_runtime_status(payload, registry)
         return payload

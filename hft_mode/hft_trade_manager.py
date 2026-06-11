@@ -37,6 +37,7 @@ def _close_trade(
 
     closed = {
         **trade,
+        "mode": "HFT",
         "status": "CLOSED",
         "outcome": outcome,
         "exit_price": exit_price,

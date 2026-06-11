@@ -22,6 +22,7 @@ from zoneinfo import ZoneInfo
 from journal.trade_id import build_canonical_trade_id
 from core.truth_gate import validate_trade_setup, write_status as write_truth_gate_status
 from utils.market_hours import is_trade_window, trade_window_text
+from runtime_execution_mode import active_execution_mode
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -386,9 +387,9 @@ def _build_rows(setup, scan_id, alert_sent, market_status):
 
     alert_text = "YES" if alert_sent else "NO"
     market_text = _text(market_status)
-    mode_text = _text(_safe_get(setup, "mode", "execution_mode", "trading_mode", "active_mode", default="CLASSIC")).upper()
+    mode_text = _text(_safe_get(setup, "mode", "execution_mode", "trading_mode", "active_mode", default="")).upper()
     if mode_text not in {"CLASSIC", "HFT"}:
-        mode_text = ""
+        mode_text = active_execution_mode()
 
     journal_row = {
         "timestamp": timestamp,
