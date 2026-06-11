@@ -58,10 +58,30 @@ def test_legacy_open_rows_are_reported_but_quarantined(monkeypatch, tmp_path):
     )
 
     assert payload["canonical_open_trade_count"] == 0
+    assert payload["canonical_active_trade_count"] == 0
+    assert payload["legacy_open_trade_interpretation_allowed"] is False
+    assert payload["journal_truth_status"] == "CANONICAL_ACTIVE_TRADES_ZERO_OPEN"
     assert payload["legacy_quarantined_file_count"] == 3
     assert payload["legacy_open_rows_warning"] is True
     assert set(payload["legacy_open_rows_by_file"].values()) == {1}
+    classifications = {record["path"]: record["classification"] for record in payload["legacy_files_found"]}
+    assert classifications["data/trade_journal.csv"] == "LEGACY_JOURNAL_HISTORY"
     assert payload["restart_blocker"] is False
+
+
+def test_canonical_active_trades_csv_controls_active_truth(monkeypatch, tmp_path):
+    canonical, legacy_old, legacy_backup, legacy_journal = _patch_active_store_paths(monkeypatch, tmp_path)
+    _write_csv(canonical, [{"symbol": "CANON", "side": "LONG", "status": "OPEN"}])
+    _write_csv(legacy_old, [{"symbol": "OLD", "side": "LONG", "status": "CLOSED"}])
+    _write_csv(legacy_backup, [{"symbol": "BAK", "side": "SHORT", "status": "CLOSED"}])
+    _write_csv(legacy_journal, [{"symbol": "ROOT", "side": "LONG"}])
+
+    payload = active_store.write_journal_truth_unification()
+
+    assert payload["canonical_active_trade_count"] == 1
+    assert payload["canonical_open_trade_count"] == 1
+    assert payload["journal_truth_status"] == "CANONICAL_ACTIVE_TRADES_OPEN"
+    assert payload["legacy_open_trade_interpretation_allowed"] is False
 
 
 def test_dashboard_does_not_count_legacy_open_rows_as_active_trades():

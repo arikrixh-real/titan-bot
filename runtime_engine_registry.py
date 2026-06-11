@@ -23,7 +23,11 @@ from runtime_market_pressure_check import run_market_pressure_check
 from runtime_market_regime_update import run_market_regime_update
 from runtime_sector_strength import run_sector_strength
 from runtime_paper_engine import run_paper_engine
+from runtime_upstox_account import refresh_upstox_account
 from runtime_snapshot_logger import log_runtime_snapshot
+from tools.refresh_mode_scanner_status import refresh_mode_scanner_status
+from tools.refresh_live_price_cache import refresh_once as refresh_live_price_cache_once
+from tools.refresh_infrastructure_status import refresh_once as refresh_infrastructure_status_once
 
 
 CONSCIOUSNESS_CONTEXT_PATH = "data/consciousness_core/consciousness_context.json"
@@ -208,7 +212,11 @@ def get_engine_registry():
         "market_regime_update": run_market_regime_update,
         "sector_strength": run_sector_strength,
         "paper_engine": run_paper_engine,
+        "upstox_account": refresh_upstox_account,
+        "mode_scanner_status": refresh_mode_scanner_status,
+        "live_price_cache_refresh": refresh_live_price_cache_once,
         "runtime_snapshot_logger": log_runtime_snapshot,
+        "infrastructure_status": refresh_infrastructure_status_once,
         "report_aggregator": run_report_aggregator_handler,
         "knowledge_vault_runner": run_knowledge_vault_runner_handler,
         "experience_vault_runner": run_experience_vault_runner_handler,

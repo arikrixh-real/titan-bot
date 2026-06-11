@@ -222,18 +222,10 @@ def classify_scanner_status(path=SCANNER_STATUS_PATH, final_setups_path=FINAL_VA
         status, reason = "UNKNOWN", f"scanner_status_read_error:{payload.get('_read_error')}"
     elif _is_stale(record):
         scanned = int(payload.get("stocks_checked") or payload.get("symbols_scanned") or 0)
-        idle_statuses = {
-            "FULL_RUNTIME_PIPELINE_COMPLETE",
-            "SCAN_ONLY_COMPLETE",
-            "COMPLETED",
-            "SCAN_LIVE",
-            "LIVE",
-            "WAITING_FOR_MARKET",
-            "MARKET_CLOSED",
-            "OFF_HOURS",
-        }
-        if not is_trade_window(now_ist) and scanned == 0 and source_status in idle_statuses:
-            status, reason = "SCAN_IDLE", "stale_scanner_timestamp_accepted_as_idle_outside_trade_window"
+        if not is_trade_window(now_ist) and scanned == 0 and source_status in {"WAITING_FOR_MARKET", "MARKET_CLOSED", "OFF_HOURS"}:
+            status, reason = "ASLEEP_EXPECTED", "stale_scanner_timestamp_matches_off_hours_idle_mode"
+        elif source_status in LIVE_SCANNER_STATUSES:
+            status, reason = "STALE_LIVE_CLAIM", "scanner_status_stale_with_historical_live_status"
         else:
             status, reason = "STALE", "scanner_status_timestamp_stale_or_missing"
     elif source_status in STOPPED_STATUSES:
@@ -253,7 +245,9 @@ def classify_scanner_status(path=SCANNER_STATUS_PATH, final_setups_path=FINAL_VA
     record.update(
         status=status,
         reason=reason,
-        restart_blocker=status not in ACCEPTABLE_SCANNER_STATUSES,
+        restart_blocker=status not in ACCEPTABLE_SCANNER_STATUSES and status != "ASLEEP_EXPECTED",
+        stale_live_claim=status == "STALE_LIVE_CLAIM",
+        historical_status=source_status or None,
         generated_at=payload.get("generated_at") or payload.get("timestamp_ist"),
         scan_mode=payload.get("scan_mode") or payload.get("mode"),
         market_session=payload.get("market_session") or ("TRADE_WINDOW" if is_trade_window(now_ist) else "OFF_HOURS"),
@@ -342,7 +336,7 @@ def build_scanner_ohlc_setup_truth(
     stale_files = [
         record["source_file"]
         for record in status_records.values()
-        if record.get("status") == "STALE"
+        if record.get("status") in {"STALE", "STALE_LIVE_CLAIM"}
     ]
     missing_files = [
         str(path).replace("\\", "/")

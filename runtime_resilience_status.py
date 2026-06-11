@@ -1,10 +1,10 @@
 import json
 import os
-import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from engines.time_filter import current_bot_mode
+from runtime_safe_json import safe_atomic_write_json
 
 
 RUNTIME_DIR = Path("data") / "runtime"
@@ -147,25 +147,7 @@ def refresh_execution_safety_status():
 
 
 def _atomic_write_json(path, payload):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=path.parent,
-            delete=False,
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-        ) as temp_file:
-            json.dump(payload, temp_file, indent=2, sort_keys=True, default=str)
-            temp_file.write("\n")
-            temp_path = Path(temp_file.name)
-        os.replace(temp_path, path)
-    finally:
-        if temp_path and temp_path.exists():
-            temp_path.unlink()
+    return safe_atomic_write_json(path, payload)
 
 
 def read_json_safe(path):

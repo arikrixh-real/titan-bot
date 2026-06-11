@@ -179,6 +179,18 @@ def _extract_ltp(data, instrument_key):
             )
 
     for item in payload.values():
+        if not isinstance(item, dict):
+            continue
+        item_token = item.get("instrument_token") or item.get("instrumentKey")
+        if item_token == instrument_key:
+            return (
+                item.get("last_price")
+                or item.get("ltp")
+                or item.get("lastPrice")
+            )
+
+    if len(payload) == 1:
+        item = next(iter(payload.values()))
         if isinstance(item, dict):
             price = (
                 item.get("last_price")

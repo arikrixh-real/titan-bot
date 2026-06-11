@@ -28,6 +28,7 @@ SCANNER_SCHEDULER_STATUS_PATH = Path("data") / "runtime" / "scanner_scheduler_st
 RUNTIME_MODE_ENV = "TITAN_RUNTIME_MASTER_BRAIN_MODE"
 CONTINUOUS_WORKERS_ENV = "TITAN_CONTINUOUS_WORKERS"
 SCANNER_SCHEDULER_ENABLED_ENV = "TITAN_SCANNER_SCHEDULER_ENABLED"
+DAEMON_PROOF_ONLY_ENV = "TITAN_DAEMON_PROOF_ONLY"
 SCANNER_INVOCATION_INTERVAL_SECONDS = 300
 
 SAFETY_FLAGS = {
@@ -96,6 +97,10 @@ def _write_scanner_scheduler_status(path=SCANNER_SCHEDULER_STATUS_PATH, **update
 
 def _scanner_scheduler_enabled():
     return str(os.getenv(SCANNER_SCHEDULER_ENABLED_ENV, "1")).strip() not in {"0", "false", "False", "NO", "no"}
+
+
+def _daemon_proof_only_enabled():
+    return str(os.getenv(DAEMON_PROOF_ONLY_ENV, "")).strip() in {"1", "true", "True", "YES", "yes"}
 
 
 def _next_expected_from(now_ist):
@@ -342,6 +347,7 @@ def main():
 
     intent = _runtime_intent()
     continuous_workers_enabled = os.getenv(CONTINUOUS_WORKERS_ENV) == "1"
+    daemon_proof_only = _daemon_proof_only_enabled()
     started_at_ist = _write_daemon_health(
         mode="STARTING",
         ticks_completed=0,
@@ -358,7 +364,8 @@ def main():
         f"live_execution_enabled={intent['live_execution_enabled']} "
         f"telegram_enabled={intent['telegram_enabled']} "
         f"lifecycle_mutation_enabled={intent['lifecycle_mutation_enabled']} "
-        f"continuous_workers_enabled={continuous_workers_enabled}",
+        f"continuous_workers_enabled={continuous_workers_enabled} "
+        f"daemon_proof_only={daemon_proof_only}",
         flush=True,
     )
     print(f"TITAN daemon contract: {intent['execution_contract']}", flush=True)
@@ -375,14 +382,21 @@ def main():
     shutdown_written = False
 
     try:
-        if continuous_workers_enabled:
+        if continuous_workers_enabled and not daemon_proof_only:
             from runtime_continuous_workers import start_continuous_workers
 
             start_continuous_workers(intent=intent)
 
         while True:
             try:
-                if continuous_workers_enabled:
+                if daemon_proof_only:
+                    from runtime_heartbeat import write_heartbeat
+
+                    write_heartbeat()
+                    ticks_completed += 1
+                    latest_mode = "DAEMON_PROOF_IDLE"
+                    last_dispatch_count = 0
+                elif continuous_workers_enabled:
                     ticks_completed += 1
                     last_dispatch_count = 0
                 else:
@@ -391,10 +405,11 @@ def main():
                     latest_mode = dispatch_result["mode"]
                     last_dispatch_count = len(dispatch_result["dispatch_preview"])
 
-                run_scanner_scheduler_tick(
-                    scheduler_mode=latest_mode,
-                    force=False,
-                )
+                if not daemon_proof_only:
+                    run_scanner_scheduler_tick(
+                        scheduler_mode=latest_mode,
+                        force=False,
+                    )
                 _write_daemon_health(
                     mode=latest_mode,
                     ticks_completed=ticks_completed,

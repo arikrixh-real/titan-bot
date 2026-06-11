@@ -107,6 +107,7 @@ OUTCOME_FIELDS = [
     "rank_score",
     "alert_sent",
     "market_status",
+    "mode",
     "outcome",
     "exit_price",
     "realized_pnl",
@@ -427,7 +428,7 @@ def _write_outcome_tracker_status(result):
                 "stale_open_trades": stale_count,
                 "eod_unresolved_trades": eod_count,
                 "learning_open_trades": learning_count,
-                "message": "Stale/EOD unresolved trades are visibility-only and were not fake closed.",
+                "message": "Stale/EOD unresolved trades are visibility-only and were not auto-closed.",
             }
     except Exception:
         payload["lifecycle_reconciliation_status"] = {
@@ -872,6 +873,7 @@ def _append_outcome(row, outcome, exit_price, pnl_points, reason):
         "rank_score": row.get("rank_score", ""),
         "alert_sent": row.get("alert_sent", ""),
         "market_status": row.get("market_status", ""),
+        "mode": row.get("mode") if str(row.get("mode") or "").upper() in {"CLASSIC", "HFT"} else "",
         "outcome": outcome,
         "exit_price": exit_price,
         "realized_pnl": realized_pnl,

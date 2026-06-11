@@ -27,6 +27,7 @@ from utils.market_hours import is_trade_window
 from engines.risk_engine import calculate_rr
 from engines.trade_levels import calculate_trade_levels
 from lineage.lineage_ids import build_setup_id_record
+from runtime_execution_mode import active_execution_mode
 
 try:
     from scanners.volume_scanner import volume_anomaly_score
@@ -2018,6 +2019,35 @@ def _publish_scanner_outputs(path, payload, data_signature, scanner_cycle_id, sc
 
 def run_scanner(path=SCANNER_STATUS_PATH):
     path = Path(path)
+    if active_execution_mode() == "HFT":
+        timestamp = _timestamp_ist()
+        payload = {
+            "mode": "CLASSIC",
+            "status": "INACTIVE",
+            "scanner_status": "INACTIVE",
+            "inactive_reason": "hft_active_classic_scanner_resting",
+            "timestamp_ist": timestamp,
+            "scan_started_at_ist": timestamp,
+            "scan_finished_at_ist": timestamp,
+            "stocks_checked": 0,
+            "trend_passed": 0,
+            "structure_passed": 0,
+            "momentum_passed": 0,
+            "raw_breakout_ready_count": 0,
+            "qualified_breakout_ready_count": 0,
+            "breakout_ready_count": 0,
+            "final_passed": 0,
+            "trade_placement_allowed": False,
+        }
+        _atomic_write_json(path, payload)
+        _write_scanner_heartbeat(
+            latest_cycle="classic-resting-hft-active",
+            publish_status="PUBLISHED",
+            scanner_runtime_mode="CLASSIC_RESTING_HFT_ACTIVE",
+            scanner_loop_health="INACTIVE",
+        )
+        return payload
+
     started_monotonic = time.monotonic()
     scan_started_at_ist = _timestamp_ist()
     scanner_cycle_id = f"{scan_started_at_ist}-{uuid4()}"

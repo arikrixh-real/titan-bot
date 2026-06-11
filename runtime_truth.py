@@ -14,6 +14,7 @@ from scanner_ohlc_setup_truth import (
 
 RUNTIME_DIR = Path("data") / "runtime"
 AUTHORITATIVE_RUNTIME_TRUTH_PATH = RUNTIME_DIR / "authoritative_runtime_truth.json"
+RUNTIME_OWNER_TRANSITION_PATH = RUNTIME_DIR / "runtime_owner_transition.json"
 
 DAEMON_HEALTH_PATH = RUNTIME_DIR / "daemon_health.json"
 HEARTBEAT_PATH = RUNTIME_DIR / "titan_heartbeat.json"
@@ -171,13 +172,19 @@ def _base_record(component, path, payload, now, ttl_seconds, timestamp_keys=None
     timestamp = _source_timestamp(path, payload, timestamp_keys)
     age = age_seconds(timestamp, now)
     exists = Path(path).exists()
+    filesystem_timestamp = file_timestamp(path)
+    filesystem_age = age_seconds(filesystem_timestamp, now)
     return {
         "component": component,
         "status": "UNKNOWN",
         "source_file": str(path).replace("\\", "/"),
         "source_timestamp": timestamp.isoformat() if timestamp else None,
         "age_seconds": round(age, 3) if age is not None else None,
+        "age_minutes": round(age / 60, 3) if age is not None else None,
+        "filesystem_mtime": filesystem_timestamp.isoformat() if filesystem_timestamp else None,
+        "filesystem_age_seconds": round(filesystem_age, 3) if filesystem_age is not None else None,
         "ttl_seconds": ttl_seconds,
+        "freshness_threshold_seconds": ttl_seconds,
         "reason": "unclassified",
         "confidence": "LOW",
         "restart_blocker": False,
@@ -212,7 +219,23 @@ def classify_status_file(
         record.update(status="UNKNOWN", reason=f"source_read_error:{payload.get('_read_error')}", confidence="LOW")
         return record
     if _is_stale(record):
-        record.update(status="STALE", reason="source_timestamp_stale_or_missing", confidence="HIGH", restart_blocker=True)
+        stale_claims_active = (
+            status_text
+            and status_text not in STOPPED_STATUSES
+            and not any(marker in status_text for marker in DEGRADED_MARKERS)
+            and status_text not in SAFETY_STATUSES
+        )
+        if stale_claims_active:
+            record.update(
+                status="STALE_LIVE_CLAIM",
+                reason="source_timestamp_stale_with_historical_live_status",
+                confidence="HIGH",
+                restart_blocker=True,
+                historical_status=status_text or None,
+                stale_live_claim=True,
+            )
+        else:
+            record.update(status="STALE", reason="source_timestamp_stale_or_missing", confidence="HIGH", restart_blocker=True)
         return record
     if marker_only or payload.get("marker_only") is True or "MARKER" in status_text:
         record.update(status="MARKER_ONLY", reason="marker_only_status_not_runtime_liveness", confidence="HIGH")
@@ -247,8 +270,143 @@ def classify_status_file(
     return record
 
 
-def classify_daemon(now=None):
+def _pid_value(payload):
+    pid = (payload or {}).get("pid")
+    return pid if pid not in (None, "") else None
+
+
+def _pid_int(pid):
+    try:
+        return int(pid)
+    except (TypeError, ValueError):
+        return None
+
+
+def _same_pid(left, right):
+    left_pid = _pid_int(left)
+    right_pid = _pid_int(right)
+    return left_pid is not None and right_pid is not None and left_pid == right_pid
+
+
+def _visible(process_checker, pid):
+    if pid in (None, ""):
+        return None
+    return process_checker(pid)
+
+
+def classify_daemon_process_tree(processes, lock_pid=None, runtime_writer_pid=None):
+    records = []
+    by_pid = {}
+    writer_pids = set()
+    lock_owner_pids = set()
+
+    for process in processes or []:
+        if not isinstance(process, dict):
+            continue
+        pid = _pid_int(process.get("pid"))
+        if pid is None:
+            continue
+        by_pid[pid] = process
+        if bool(process.get("lock_owner")) or _same_pid(pid, lock_pid):
+            lock_owner_pids.add(pid)
+        if process.get("writes_runtime") is True or _same_pid(pid, runtime_writer_pid):
+            writer_pids.add(pid)
+
+    independent_writers = set(writer_pids)
+    duplicate_conflict = len(independent_writers) >= 2 or len(lock_owner_pids) >= 2
+
+    for pid, process in by_pid.items():
+        ppid = _pid_int(process.get("ppid"))
+        command = str(process.get("command") or "")
+        lock_owner = pid in lock_owner_pids
+        writes_runtime = True if pid in writer_pids else process.get("writes_runtime")
+        evidence_paths = list(process.get("evidence_paths") or [])
+        classification = "UNKNOWN"
+        confidence = "LOW"
+
+        if duplicate_conflict and (lock_owner or writes_runtime is True):
+            classification = "DUPLICATE_OWNER"
+            confidence = "HIGH"
+        elif lock_owner and writes_runtime is True:
+            classification = "ACTIVE_OWNER"
+            confidence = "HIGH"
+        elif lock_owner:
+            classification = "ACTIVE_OWNER"
+            confidence = "MEDIUM"
+        elif writes_runtime is True:
+            classification = "RUNTIME_WRITER"
+            confidence = "MEDIUM"
+        elif any(_same_pid(child.get("ppid"), pid) for child in by_pid.values()) and "titan_daemon.py" in command:
+            classification = "WRAPPER_PARENT"
+            confidence = "HIGH"
+        elif ppid in by_pid and "titan_daemon.py" in command:
+            classification = "LAUNCHER_CHILD"
+            confidence = "MEDIUM"
+
+        records.append(
+            {
+                "pid": pid,
+                "ppid": ppid,
+                "command": command,
+                "lock_owner": lock_owner,
+                "writes_runtime": writes_runtime if writes_runtime in (True, False) else "unknown",
+                "classification": classification,
+                "confidence": confidence,
+                "evidence_paths": evidence_paths,
+            }
+        )
+
+    return {
+        "duplicate_owner_conflict": duplicate_conflict,
+        "active_owner_pids": sorted(lock_owner_pids),
+        "runtime_writer_pids": sorted(writer_pids),
+        "processes": sorted(records, key=lambda item: item["pid"]),
+    }
+
+
+def runtime_lock_weakness_diagnostic():
+    return {
+        "status": "THEORETICAL_WEAKNESS",
+        "lock_module": "runtime_lock.py",
+        "validates_live_pid_before_stale_overwrite": False,
+        "stale_time_overwrite_can_overwrite_live_lock": True,
+        "current_duplicate_daemon_cause": False,
+        "reason": "runtime_lock.acquire_lock uses timestamp staleness before overwrite and does not prove owner PID is dead",
+        "semantics_changed": False,
+    }
+
+
+def _transition_payload(record, now):
+    return {
+        "generated_at": now.isoformat(),
+        "runtime_owner": record.get("runtime_owner"),
+        "transition_reason": record.get("transition_reason"),
+        "old_daemon_pid": record.get("old_daemon_pid"),
+        "new_heartbeat_pid": record.get("new_heartbeat_pid"),
+        "daemon_pid_visible": record.get("daemon_pid_visible"),
+        "heartbeat_pid_visible": record.get("heartbeat_pid_visible"),
+        "daemon_status": record.get("source_status"),
+        "heartbeat_status": record.get("heartbeat_status"),
+        "daemon_source_timestamp": record.get("source_timestamp"),
+        "heartbeat_source_timestamp": record.get("heartbeat_timestamp"),
+        "daemon_age_seconds": record.get("age_seconds"),
+        "heartbeat_age_seconds": record.get("heartbeat_age_seconds"),
+        "status": record.get("status"),
+        "safety": {
+            "daemon_restart": False,
+            "daemon_stop": False,
+            "worker_start": False,
+            "broker_enabled": False,
+            "telegram_enabled": False,
+            "journal_mutation": False,
+            "hft_enabled": False,
+        },
+    }
+
+
+def classify_daemon(now=None, process_checker=None, write_transition=True):
     now_ist = as_ist_datetime(now).astimezone(IST)
+    process_checker = process_checker or process_visible
     daemon = read_json_safe(DAEMON_HEALTH_PATH)
     heartbeat = read_json_safe(HEARTBEAT_PATH)
     lock = read_json_safe(DAEMON_LOCK_PATH)
@@ -261,47 +419,154 @@ def classify_daemon(now=None):
     daemon_fresh = not _is_stale(daemon_record)
     heartbeat_fresh = not _is_stale(heartbeat_record)
     lock_fresh = lock_record["source_exists"] and not _is_stale(lock_record)
-    pid = daemon.get("pid") or heartbeat.get("pid") or lock.get("pid")
-    visible = process_visible(pid)
+    daemon_pid = _pid_value(daemon)
+    heartbeat_pid = _pid_value(heartbeat)
+    lock_pid = _pid_value(lock)
+    daemon_visible = _visible(process_checker, daemon_pid)
+    heartbeat_visible = _visible(process_checker, heartbeat_pid)
+    lock_visible = _visible(process_checker, lock_pid)
+    pid = daemon_pid or heartbeat_pid or lock_pid
+    visible = daemon_visible if daemon_pid is not None else (heartbeat_visible if heartbeat_pid is not None else lock_visible)
 
     record = dict(daemon_record)
     record["process_pid"] = pid
     record["process_visible"] = visible
+    record["runtime_owner"] = "unknown"
+    record["transition_reason"] = None
+    record["old_daemon_pid"] = daemon_pid
+    record["new_heartbeat_pid"] = heartbeat_pid
+    record["daemon_pid_visible"] = daemon_visible
+    record["heartbeat_pid_visible"] = heartbeat_visible
+    record["lock_pid"] = lock_pid
+    record["lock_pid_visible"] = lock_visible
     record["heartbeat_status"] = heartbeat.get("status")
     record["heartbeat_timestamp"] = heartbeat_record["source_timestamp"]
     record["heartbeat_age_seconds"] = heartbeat_record["age_seconds"]
     record["lock_fresh"] = lock_fresh
+    record["lock_owner_matches_daemon"] = _same_pid(lock_pid, daemon_pid)
+    record["lock_owner_matches_heartbeat"] = _same_pid(lock_pid, heartbeat_pid)
+    record["daemon_writes_runtime"] = bool(daemon_fresh and daemon_pid is not None)
+    record["heartbeat_writes_runtime"] = bool(heartbeat_fresh and heartbeat_pid is not None)
+    record["lock_weakness_diagnostic"] = runtime_lock_weakness_diagnostic()
 
-    if daemon_status in STOPPED_STATUSES and (not heartbeat_fresh or visible is False):
-        record.update(status="STOPPED", reason="daemon_health_stopped_overrides_heartbeat_without_process", confidence="HIGH", restart_blocker=True)
+    process_rows = []
+    if daemon_pid is not None:
+        process_rows.append(
+            {
+                "pid": daemon_pid,
+                "ppid": daemon.get("ppid"),
+                "command": daemon.get("command") or "titan_daemon.py",
+                "lock_owner": _same_pid(lock_pid, daemon_pid),
+                "writes_runtime": bool(daemon_fresh),
+                "evidence_paths": [str(DAEMON_HEALTH_PATH).replace("\\", "/")],
+            }
+        )
+    if heartbeat_pid is not None and not _same_pid(heartbeat_pid, daemon_pid):
+        process_rows.append(
+            {
+                "pid": heartbeat_pid,
+                "ppid": heartbeat.get("ppid"),
+                "command": heartbeat.get("command") or "titan_daemon.py",
+                "lock_owner": _same_pid(lock_pid, heartbeat_pid),
+                "writes_runtime": bool(heartbeat_fresh),
+                "evidence_paths": [str(HEARTBEAT_PATH).replace("\\", "/")],
+            }
+        )
+    if lock_pid is not None and not any(_same_pid(lock_pid, row.get("pid")) for row in process_rows):
+        process_rows.append(
+            {
+                "pid": lock_pid,
+                "ppid": None,
+                "command": "UNKNOWN",
+                "lock_owner": True,
+                "writes_runtime": "unknown",
+                "evidence_paths": [str(DAEMON_LOCK_PATH).replace("\\", "/")],
+            }
+        )
+    record["process_classification_summary"] = classify_daemon_process_tree(
+        process_rows,
+        lock_pid=lock_pid,
+        runtime_writer_pid=daemon_pid if daemon_fresh else (heartbeat_pid if heartbeat_fresh else None),
+    )
+
+    def finish(**updates):
+        record.update(**updates)
+        if write_transition:
+            _atomic_write_json(RUNTIME_OWNER_TRANSITION_PATH, _transition_payload(record, now_ist))
         return record
+
+    if (
+        daemon_pid is not None
+        and daemon_visible is False
+        and heartbeat_pid is not None
+        and heartbeat_visible is True
+        and heartbeat_fresh
+        and heartbeat_status in LIVE_STATUSES
+    ):
+        return finish(
+            process_pid=heartbeat_pid,
+            process_visible=True,
+            runtime_owner="heartbeat",
+            transition_reason="OWNER_ROTATED",
+            status="LIVE",
+            reason="dead_daemon_pid_rotated_to_fresh_heartbeat_owner",
+            confidence="HIGH",
+            restart_blocker=False,
+        )
+    if daemon_status in STOPPED_STATUSES and (not heartbeat_fresh or daemon_visible is False):
+        return finish(status="STOPPED", reason="daemon_health_stopped_overrides_heartbeat_without_process", confidence="HIGH", restart_blocker=True)
     if daemon_status in STOPPED_STATUSES and daemon_fresh:
-        record.update(status="STOPPED", reason="fresh_daemon_health_stopped", confidence="HIGH", restart_blocker=True)
-        return record
-    if daemon_fresh and daemon_status in LIVE_STATUSES.union({"RUNNING"}) and visible is True:
-        record.update(status="LIVE", reason="fresh_daemon_health_and_visible_process", confidence="HIGH")
-        return record
-    if heartbeat_fresh and heartbeat_status in LIVE_STATUSES and visible is True:
-        record.update(status="LIVE", reason="fresh_heartbeat_and_visible_process", confidence="HIGH")
-        return record
-    if daemon_fresh and daemon_status in LIVE_STATUSES.union({"RUNNING"}) and visible is None:
-        record.update(status="UNKNOWN", reason="fresh_daemon_health_but_process_evidence_unavailable", confidence="MEDIUM")
-        return record
-    if heartbeat_fresh and heartbeat_status in LIVE_STATUSES and visible is None:
-        record.update(status="UNKNOWN", reason="fresh_heartbeat_but_process_evidence_unavailable", confidence="MEDIUM")
-        return record
+        return finish(status="STOPPED", reason="fresh_daemon_health_stopped", confidence="HIGH", restart_blocker=True)
+    if (
+        daemon_fresh
+        and daemon_status in LIVE_STATUSES.union({"RUNNING"})
+        and daemon_visible is True
+        and lock_pid is not None
+        and lock_visible is True
+        and not _same_pid(lock_pid, daemon_pid)
+    ):
+        return finish(
+            status="CONFLICT",
+            reason="fresh_daemon_evidence_lock_owner_mismatch",
+            confidence="HIGH",
+            restart_blocker=True,
+        )
+    if daemon_fresh and daemon_status in LIVE_STATUSES.union({"RUNNING"}) and daemon_visible is True:
+        return finish(
+            runtime_owner="daemon_health",
+            transition_reason="OWNER_STABLE",
+            status="LIVE",
+            runtime_state="RUNNING_READ_ONLY_PROOF"
+            if str(daemon.get("runtime_mode") or daemon.get("mode") or "").upper() in {"READ_ONLY", "DAEMON_PROOF_IDLE"}
+            else "RUNNING_PROOF_ONLY",
+            classification="ACTIVE_OWNER",
+            reason="fresh_daemon_health_and_visible_process",
+            confidence="HIGH",
+        )
+    if heartbeat_fresh and heartbeat_status in LIVE_STATUSES and heartbeat_visible is True:
+        return finish(
+            process_pid=heartbeat_pid,
+            process_visible=True,
+            runtime_owner="heartbeat",
+            transition_reason="OWNER_HEARTBEAT_ONLY",
+            status="LIVE",
+            reason="fresh_heartbeat_and_visible_process",
+            confidence="HIGH",
+        )
+    if daemon_fresh and daemon_status in LIVE_STATUSES.union({"RUNNING"}) and daemon_visible is None:
+        return finish(status="UNKNOWN", reason="fresh_daemon_health_but_process_evidence_unavailable", confidence="MEDIUM")
+    if heartbeat_fresh and heartbeat_status in LIVE_STATUSES and heartbeat_visible is None:
+        return finish(status="UNKNOWN", reason="fresh_heartbeat_but_process_evidence_unavailable", confidence="MEDIUM")
     if daemon_status in LIVE_STATUSES.union({"RUNNING"}) or heartbeat_status in LIVE_STATUSES:
-        record.update(status="STALE", reason="active_marker_stale_or_process_missing", confidence="HIGH", restart_blocker=True)
-        return record
+        return finish(status="STALE", reason="active_marker_stale_or_process_missing", confidence="HIGH", restart_blocker=True)
     if _is_stale(daemon_record) and _is_stale(heartbeat_record):
-        record.update(status="STALE", reason="daemon_and_heartbeat_stale_or_missing", confidence="HIGH", restart_blocker=True)
-        return record
-    record.update(status="UNKNOWN", reason="daemon_liveness_not_proven", confidence="LOW", restart_blocker=True)
-    return record
+        return finish(status="STALE", reason="daemon_and_heartbeat_stale_or_missing", confidence="HIGH", restart_blocker=True)
+    return finish(status="UNKNOWN", reason="daemon_liveness_not_proven", confidence="LOW", restart_blocker=True)
 
 
-def classify_workers(now=None):
+def classify_workers(now=None, process_checker=None):
     now_ist = as_ist_datetime(now).astimezone(IST)
+    process_checker = process_checker or process_visible
     payload = read_json_safe(WORKER_HEALTH_PATH)
     record = _base_record("workers", WORKER_HEALTH_PATH, payload, now_ist, WORKER_TTL_SECONDS)
     if not record["source_exists"]:
@@ -316,20 +581,49 @@ def classify_workers(now=None):
     degraded = []
     fresh_live = []
     proof_live = []
+    stale_pid_workers = []
+    proof_expired_workers = []
     for name, worker in payload.items():
         if not isinstance(worker, dict):
             continue
         worker_record = _base_record(name, WORKER_HEALTH_PATH, worker, now_ist, WORKER_TTL_SECONDS)
         status_text = _status_text(worker)
         stale = _is_stale(worker_record)
+        active_pid = worker.get("active_pid") or worker.get("pid")
+        active_pid_visible = _visible(process_checker, active_pid)
+        expired_proof_pid = bool(
+            worker.get("proof_mode") is True
+            and stale
+            and active_pid not in (None, "")
+            and active_pid_visible is False
+        )
+        pid_missing_for_live_claim = (
+            active_pid not in (None, "")
+            and active_pid_visible is False
+            and status_text in {"RUNNING", "STARTING", "OK", "ALIVE"}
+            and not expired_proof_pid
+        )
+        if expired_proof_pid:
+            worker_status = "PROOF_EXPIRED"
+        elif pid_missing_for_live_claim:
+            worker_status = "STALE_PID"
+        else:
+            worker_status = "STALE" if stale else status_text or "UNKNOWN"
         worker_records[name] = {
-            "status": "STALE" if stale else status_text or "UNKNOWN",
+            "status": worker_status,
             "source_status": worker.get("status"),
             "age_seconds": worker_record["age_seconds"],
             "last_started_at": worker.get("last_started_at"),
             "last_finished_at": worker.get("last_finished_at"),
+            "active_pid": active_pid,
+            "active_pid_visible": active_pid_visible,
+            "proof_mode": bool(worker.get("proof_mode") is True),
         }
-        if stale and status_text in {"RUNNING", "STARTING", "OK", "ALIVE"}:
+        if expired_proof_pid:
+            proof_expired_workers.append(name)
+        elif pid_missing_for_live_claim:
+            stale_pid_workers.append(name)
+        elif stale and status_text in {"RUNNING", "STARTING", "OK", "ALIVE"}:
             stale_running.append(name)
         elif any(marker in status_text for marker in DEGRADED_MARKERS):
             degraded.append(name)
@@ -343,6 +637,8 @@ def classify_workers(now=None):
     record["degraded_workers"] = degraded
     record["fresh_live_workers"] = fresh_live
     record["fresh_proof_workers"] = proof_live
+    record["stale_pid_workers"] = stale_pid_workers
+    record["proof_expired_workers"] = proof_expired_workers
     required_proof_workers = {"heartbeat", "runtime_status", "dashboard_sync"}
     if required_proof_workers.issubset(set(proof_live)):
         record.update(
@@ -352,7 +648,11 @@ def classify_workers(now=None):
             restart_blocker=False,
         )
         return record
-    if stale_running:
+    if stale_pid_workers:
+        record.update(status="STALE_PID", reason="worker_active_pid_missing", confidence="HIGH", restart_blocker=True)
+    elif proof_expired_workers:
+        record.update(status="PROOF_EXPIRED", reason="controlled_worker_proof_pid_expired", confidence="HIGH", restart_blocker=False)
+    elif stale_running:
         record.update(status="STALE", reason="running_worker_timestamps_stale", confidence="HIGH", restart_blocker=True)
     elif degraded:
         record.update(status="DEGRADED", reason="worker_health_reports_degraded_workers", confidence="HIGH", restart_blocker=True)
@@ -366,7 +666,7 @@ def classify_workers(now=None):
 def build_authoritative_runtime_truth(path=AUTHORITATIVE_RUNTIME_TRUTH_PATH, now=None, write=True):
     now_ist = as_ist_datetime(now).astimezone(IST)
     components = {
-        "daemon": classify_daemon(now_ist),
+        "daemon": classify_daemon(now_ist, write_transition=write),
         "workers": classify_workers(now_ist),
         "scheduler": classify_status_file("scheduler", SCANNER_SCHEDULER_STATUS_PATH, now=now_ist),
         "scanner": classify_scanner_status(SCANNER_STATUS_PATH, FINAL_VALIDATED_SETUPS_PATH, now=now_ist),
@@ -385,8 +685,10 @@ def build_authoritative_runtime_truth(path=AUTHORITATIVE_RUNTIME_TRUTH_PATH, now
     restart_blockers = [name for name, record in components.items() if record.get("restart_blocker")]
     live_components = [name for name, record in components.items() if record.get("status") == "LIVE"]
     stale_components = [name for name, record in components.items() if record.get("status") == "STALE"]
+    stale_live_claim_components = [name for name, record in components.items() if record.get("status") == "STALE_LIVE_CLAIM"]
     stopped_components = [name for name, record in components.items() if record.get("status") == "STOPPED"]
     degraded_components = [name for name, record in components.items() if record.get("status") == "DEGRADED"]
+    conflict_components = [name for name, record in components.items() if str(record.get("status") or "").startswith("CONFLICT")]
     payload = {
         "generated_at": now_ist.isoformat(),
         "schema": "titan.runtime.authoritative_truth.v1",
@@ -395,10 +697,18 @@ def build_authoritative_runtime_truth(path=AUTHORITATIVE_RUNTIME_TRUTH_PATH, now
         "summary": {
             "live_components": live_components,
             "stale_components": stale_components,
+            "stale_live_claim_components": stale_live_claim_components,
             "stopped_components": stopped_components,
             "degraded_components": degraded_components,
+            "conflict_components": conflict_components,
             "restart_blockers": restart_blockers,
-            "overall_status": "DEGRADED" if degraded_components else ("STOPPED" if stopped_components else ("STALE" if stale_components else "LIVE")),
+            "overall_status": "CONFLICT"
+            if conflict_components
+            else (
+                "DEGRADED"
+                if degraded_components
+                else ("STOPPED" if stopped_components else ("STALE" if stale_components or stale_live_claim_components else "LIVE"))
+            ),
         },
         "safety": {
             "broker_calls": False,

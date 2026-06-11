@@ -1,0 +1,29 @@
+"""Sealed HFT mode foundation.
+
+HFT mode is intentionally offline and simulation-only until a future batch
+explicitly connects it.
+"""
+
+from hft_mode.hft_config import (
+    ACTIVE_RUNTIME_CONNECTION_ALLOWED,
+    BROKER_ALLOWED,
+    CLASSIC_JOURNAL_WRITE_ALLOWED,
+    CLASSIC_MEMORY_WRITE_ALLOWED,
+    HFT_ENABLED,
+    MASTER_BRAIN_ACCESS_ALLOWED,
+    MODE,
+    TELEGRAM_ALLOWED,
+    TITAN_EVOLUTION_WRITE_ALLOWED,
+)
+
+__all__ = [
+    "ACTIVE_RUNTIME_CONNECTION_ALLOWED",
+    "BROKER_ALLOWED",
+    "CLASSIC_JOURNAL_WRITE_ALLOWED",
+    "CLASSIC_MEMORY_WRITE_ALLOWED",
+    "HFT_ENABLED",
+    "MASTER_BRAIN_ACCESS_ALLOWED",
+    "MODE",
+    "TELEGRAM_ALLOWED",
+    "TITAN_EVOLUTION_WRITE_ALLOWED",
+]

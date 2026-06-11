@@ -275,12 +275,20 @@ def _legacy_file_record(path):
     path = Path(path)
     _, rows = _read_csv_rows(path)
     open_rows = [row for row in rows if _is_open(row)]
+    relative_path = str(path.relative_to(PROJECT_ROOT)).replace("\\", "/") if path.is_absolute() else str(path).replace("\\", "/")
+    if relative_path == "data/trade_journal.csv":
+        classification = "LEGACY_JOURNAL_HISTORY"
+    elif path.exists():
+        classification = "LEGACY_NON_CANONICAL"
+    else:
+        classification = "ARCHIVE_ONLY"
     return {
-        "path": str(path.relative_to(PROJECT_ROOT)).replace("\\", "/") if path.is_absolute() else str(path).replace("\\", "/"),
+        "path": relative_path,
         "exists": path.exists(),
-        "classification": "LEGACY_QUARANTINED" if path.exists() else "ARCHIVE_ONLY",
+        "classification": classification,
         "row_count": len(rows),
         "open_row_count": len(open_rows),
+        "open_trade_interpretation_allowed": False,
     }
 
 
@@ -311,8 +319,12 @@ def write_journal_truth_unification(
     payload = {
         "generated_at": _timestamp_ist(),
         "canonical_active_trade_file": str(ACTIVE_TRADES_CSV.relative_to(PROJECT_ROOT)).replace("\\", "/"),
-        "canonical_active_trade_count": len(canonical_rows),
+        "canonical_active_trade_count": len(canonical_open_rows),
+        "canonical_active_trade_row_count": len(canonical_rows),
         "canonical_open_trade_count": len(canonical_open_rows),
+        "legacy_journal_row_count": sum(record["row_count"] for record in legacy_found),
+        "legacy_open_trade_interpretation_allowed": False,
+        "journal_truth_status": "CANONICAL_ACTIVE_TRADES_OPEN" if canonical_open_rows else "CANONICAL_ACTIVE_TRADES_ZERO_OPEN",
         "legacy_files_found": legacy_found,
         "legacy_quarantined_file_count": len(legacy_found),
         "legacy_open_rows_by_file": legacy_open_rows,

@@ -19,8 +19,8 @@ def _write_json(path, payload):
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
 
-def _sample_titles(news_items, limit=5):
-    sample_titles = []
+def _observed_titles(news_items, limit=5):
+    observed_titles = []
     seen_titles = set()
     for item in news_items:
         if not isinstance(item, dict):
@@ -28,11 +28,11 @@ def _sample_titles(news_items, limit=5):
         title = str(item.get("title", "")).strip()
         if not title or title in seen_titles:
             continue
-        sample_titles.append(title)
+        observed_titles.append(title)
         seen_titles.add(title)
-        if len(sample_titles) == limit:
+        if len(observed_titles) == limit:
             break
-    return sample_titles
+    return observed_titles
 
 
 def run_news_pulse(path=NEWS_PULSE_STATUS_PATH):
@@ -47,7 +47,7 @@ def run_news_pulse(path=NEWS_PULSE_STATUS_PATH):
             "status": "NEWS_PULSE_FETCHED",
             "item_count": len(news_items),
             "latest_news_timestamp_ist": now_ist.isoformat(),
-            "sample_titles": _sample_titles(news_items),
+            "observed_titles": _observed_titles(news_items),
             "storage": "local_news_memory_and_runtime_status",
             "supabase_write": True,
             "trading_effect": False,
@@ -59,6 +59,7 @@ def run_news_pulse(path=NEWS_PULSE_STATUS_PATH):
             "timestamp_ist": now_ist.isoformat(),
             "mode": mode,
             "status": "NEWS_PULSE_ERROR",
+            "item_count": None,
             "error_type": type(exc).__name__,
             "error_message": str(exc),
             "storage": "runtime_status_only",
@@ -99,7 +100,7 @@ def run_news_intelligence(path=NEWS_INTELLIGENCE_STATUS_PATH):
             "item_count": len(news_items),
             "latest_news_timestamp_ist": now_ist.isoformat(),
             "report_path": str(NEWS_INTELLIGENCE_REPORT_PATH).replace("\\", "/"),
-            "sample_titles": _sample_titles(news_items),
+            "observed_titles": _observed_titles(news_items),
             "trading_effect": False,
             "telegram_alerts": False,
             "trade_creation": False,
@@ -109,6 +110,7 @@ def run_news_intelligence(path=NEWS_INTELLIGENCE_STATUS_PATH):
             "timestamp_ist": now_ist.isoformat(),
             "mode": mode,
             "status": "NEWS_INTELLIGENCE_ERROR",
+            "item_count": None,
             "error_type": type(exc).__name__,
             "error_message": str(exc),
             "trading_effect": False,

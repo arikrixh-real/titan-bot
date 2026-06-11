@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -68,6 +69,14 @@ def _write_lock(path, name):
             temp_path.unlink()
 
 
+def _current_process_owns_lock(path):
+    try:
+        payload = _read_lock(path)
+        return int(payload.get("pid")) == os.getpid()
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return False
+
+
 def acquire_lock(name, stale_after_seconds=300):
     path = _lock_path(name)
     LOCK_DIR.mkdir(parents=True, exist_ok=True)
@@ -87,7 +96,17 @@ def acquire_lock(name, stale_after_seconds=300):
 
 def refresh_lock(name):
     path = _lock_path(name)
-    _write_lock(path, name)
+    last_error = None
+    for _ in range(3):
+        try:
+            _write_lock(path, name)
+            return True
+        except PermissionError as exc:
+            last_error = exc
+            time.sleep(0.05)
+    if _current_process_owns_lock(path):
+        return False
+    raise last_error
 
 
 def release_lock(name):

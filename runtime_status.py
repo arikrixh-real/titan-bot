@@ -8,7 +8,7 @@ from market_data_health import run_market_data_health_check
 from runtime_engine_health import build_master_brain_runtime_health, build_setup_engine_runtime_health
 from runtime_fallback_resolver import run_runtime_fallback_resolution
 from runtime_health import run_authoritative_runtime_health_check
-from runtime_truth import build_authoritative_runtime_truth
+from runtime_truth import RUNTIME_OWNER_TRANSITION_PATH, build_authoritative_runtime_truth
 from runtime_mode_resolver import build_canonical_runtime_mode, build_runtime_warning_resolution_status
 from runtime_mode_router import runtime_mode_snapshot
 from scanner_publication_health import run_scanner_publication_health_check
@@ -1062,7 +1062,13 @@ def _historical_replay_status_summary():
 def _authoritative_runtime_health_summary():
     try:
         payload = run_authoritative_runtime_health_check()
-        payload["authoritative_runtime_truth"] = build_authoritative_runtime_truth(write=True)
+        truth = build_authoritative_runtime_truth(write=True)
+        daemon_truth = ((truth.get("components") or {}).get("daemon") or {})
+        owner_transition = _read_json_safe(RUNTIME_OWNER_TRANSITION_PATH)
+        payload["authoritative_runtime_truth"] = truth
+        payload["runtime_owner"] = daemon_truth.get("runtime_owner")
+        payload["runtime_owner_transition"] = owner_transition
+        payload["runtime_owner_transition_reason"] = daemon_truth.get("transition_reason")
         return payload
     except Exception as exc:
         return {

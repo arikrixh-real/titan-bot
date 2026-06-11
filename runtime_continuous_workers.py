@@ -39,6 +39,7 @@ TASK_TIMEOUT_SECONDS = {
     "scanner": 300,
     "news_pulse": 45,
     "light_news_pulse": 45,
+    "live_price_cache_refresh": 60,
     "outcome_tracker": 45,
     "evolution_engine": 60,
     "consciousness_core": 900,
@@ -55,6 +56,9 @@ TASK_TERMINATE_GRACE_SECONDS = {
 TASK_LOCK_STALE_SECONDS = {
     "master_brain": 720,
     "scanner": 420,
+    "upstox_account": 30,
+    "mode_scanner_status": 30,
+    "live_price_cache_refresh": 30,
 }
 MAX_RETRY_BACKOFF_SECONDS = 300
 
@@ -101,12 +105,15 @@ WORKER_TASKS = {
     "risk_watchdog": 60,
     "pnl_refresh": 60,
     "broker_health_check": 10,
+    "upstox_account": 30,
     "volatility_check": 10,
     "news_pulse": 15,
     "news_intelligence": 15,
+    "live_price_cache_refresh": 5,
     "experience_memory": 1800,
     "daily_review": 1800,
     "runtime_snapshot_logger": 30,
+    "infrastructure_status": 300,
     "sector_strength": 300,
     "learning_engine": 1800,
     "report_aggregator": HEAVY_WORKER_INTERVAL_SECONDS.get("report_aggregator", 900),
@@ -131,6 +138,7 @@ WORKER_TASKS = {
     "ohlc_refresh": 300,
     "journal": 180,
     "paper_engine": 240,
+    "mode_scanner_status": 30,
 }
 
 IMPORTANT_INTELLIGENCE_TASKS = {

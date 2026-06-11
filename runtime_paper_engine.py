@@ -11,8 +11,10 @@ MASTER_BRAIN_STATUS_PATH = Path("data") / "runtime" / "master_brain_status.json"
 LIVE_PRICE_CACHE_PATH = Path("data") / "live_price_cache.json"
 PAPER_ENGINE_STATUS_PATH = Path("data") / "runtime" / "paper_engine_status.json"
 PAPER_TRADE_REGISTRY_PATH = Path("data") / "runtime" / "paper_trade_registry.json"
+PAPER_ACCOUNT_PATH = Path("data") / "paper_trading" / "paper_account.json"
 MAX_NEW_POSITIONS_PER_RUN = 5
 MAX_PRICE_AGE_SECONDS = 120
+PAPER_STARTING_CAPITAL = 1000.0
 PRICE_TIMESTAMP_FIELDS = (
     "timestamp",
     "timestamp_ist",
@@ -27,9 +29,9 @@ PRICE_TIMESTAMP_FIELDS = (
 )
 PRICE_VALUE_FIELDS = ("price", "ltp", "last_price", "close")
 DEFAULT_PAPER_ACCOUNT = {
-    "starting_balance": 100000.0,
-    "current_balance": 100000.0,
-    "equity": 100000.0,
+    "starting_balance": PAPER_STARTING_CAPITAL,
+    "current_balance": PAPER_STARTING_CAPITAL,
+    "equity": PAPER_STARTING_CAPITAL,
     "realized_pnl": 0.0,
     "unrealized_pnl": 0.0,
 }
@@ -103,6 +105,9 @@ def _default_registry():
 def _normalize_account(account):
     normalized = dict(DEFAULT_PAPER_ACCOUNT)
     if isinstance(account, dict):
+        starting_balance = _safe_float(account.get("starting_balance"))
+        if starting_balance is not None and round(starting_balance, 4) != PAPER_STARTING_CAPITAL:
+            return normalized
         for key in DEFAULT_PAPER_ACCOUNT:
             value = _safe_float(account.get(key))
             if value is not None:
@@ -118,6 +123,10 @@ def _load_registry():
 
     registry = _read_json(PAPER_TRADE_REGISTRY_PATH)
     if not isinstance(registry, dict):
+        return _default_registry()
+    raw_account = registry.get("paper_account") if isinstance(registry.get("paper_account"), dict) else {}
+    raw_starting_balance = _safe_float(raw_account.get("starting_balance"))
+    if raw_starting_balance is not None and round(raw_starting_balance, 4) != PAPER_STARTING_CAPITAL:
         return _default_registry()
 
     return {
@@ -207,6 +216,10 @@ def _base_payload(
     setup_symbols = setup_symbols or []
     paper_performance_summary = paper_performance_summary or _paper_performance_summary(_default_registry())
     paper_account_summary = paper_account_summary or _paper_account_summary(_default_registry())
+    current_balance = paper_account_summary.get("current_balance")
+    open_pnl = paper_account_summary.get("unrealized_pnl")
+    daily_pnl = paper_performance_summary.get("total_realized_pnl", paper_account_summary.get("realized_pnl"))
+    equity = paper_account_summary.get("equity")
     return {
         "timestamp_ist": _timestamp_ist(),
         "status": status,
@@ -224,6 +237,12 @@ def _base_payload(
         "max_price_age_seconds": MAX_PRICE_AGE_SECONDS,
         "paper_performance_summary": paper_performance_summary,
         "paper_account_summary": paper_account_summary,
+        "account_status": "ACTIVE",
+        "current_balance": current_balance,
+        "current_pnl": open_pnl,
+        "open_pnl": open_pnl,
+        "daily_pnl": daily_pnl,
+        "equity": equity,
         "setup_symbols": setup_symbols,
         "reason": reason,
         "error_type": error_type,
@@ -237,6 +256,33 @@ def _base_payload(
 
 def _write_status(payload, path=PAPER_ENGINE_STATUS_PATH):
     _write_json(path, payload)
+
+
+def _write_paper_account_snapshot(registry, status):
+    account = _paper_account_summary(registry)
+    performance = _paper_performance_summary(registry)
+    payload = {
+        "timestamp_ist": _timestamp_ist(),
+        "status": "ACTIVE",
+        "engine_status": status,
+        "current_balance": account.get("current_balance"),
+        "current_pnl": account.get("unrealized_pnl"),
+        "open_pnl": account.get("unrealized_pnl"),
+        "unrealized_pnl": account.get("unrealized_pnl"),
+        "daily_pnl": performance.get("total_realized_pnl"),
+        "realized_pnl": account.get("realized_pnl"),
+        "equity": account.get("equity"),
+        "open_positions_count": performance.get("open_positions_count"),
+        "closed_positions_count": performance.get("closed_positions_count"),
+        "source": "runtime_paper_engine",
+    }
+    _write_json(PAPER_ACCOUNT_PATH, payload)
+    return payload
+
+
+def _write_runtime_status(payload, registry):
+    _write_paper_account_snapshot(registry, payload.get("status") or "PAPER_ENGINE_UPDATED")
+    _write_status(payload)
 
 
 def _gate_failure(master_brain_status):
@@ -584,7 +630,7 @@ def run_paper_engine():
                 new_entries_allowed=new_entries_allowed,
                 paper_trade_creation=False,
             )
-            _write_status(payload)
+            _write_runtime_status(payload, registry)
             return payload
 
         failure_reason = _gate_failure(master_brain_status)
@@ -604,7 +650,7 @@ def run_paper_engine():
                 trade_window=trade_window_open,
                 new_entries_allowed=new_entries_allowed,
             )
-            _write_status(payload)
+            _write_runtime_status(payload, registry)
             return payload
 
         new_entries_allowed = True
@@ -629,7 +675,7 @@ def run_paper_engine():
             trade_window=trade_window_open,
             new_entries_allowed=new_entries_allowed,
         )
-        _write_status(payload)
+        _write_runtime_status(payload, registry)
         return payload
 
     except Exception as exc:
@@ -647,7 +693,7 @@ def run_paper_engine():
             error_type=type(exc).__name__,
             error_message=str(exc),
         )
-        _write_status(payload)
+        _write_runtime_status(payload, registry)
         return payload
 
 

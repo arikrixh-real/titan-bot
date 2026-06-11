@@ -54,6 +54,7 @@ JOURNAL_FIELDS = [
     "reason",
     "alert_sent",
     "market_status",
+    "mode",
 ]
 
 ACTIVE_FIELDS = [
@@ -86,6 +87,7 @@ ACTIVE_FIELDS = [
     "source",
     "alert_sent",
     "market_status",
+    "mode",
     "status",
     "outcome",
     "result",
@@ -384,6 +386,9 @@ def _build_rows(setup, scan_id, alert_sent, market_status):
 
     alert_text = "YES" if alert_sent else "NO"
     market_text = _text(market_status)
+    mode_text = _text(_safe_get(setup, "mode", "execution_mode", "trading_mode", "active_mode", default="CLASSIC")).upper()
+    if mode_text not in {"CLASSIC", "HFT"}:
+        mode_text = ""
 
     journal_row = {
         "timestamp": timestamp,
@@ -407,6 +412,7 @@ def _build_rows(setup, scan_id, alert_sent, market_status):
         "reason": reason,
         "alert_sent": alert_text,
         "market_status": market_text,
+        "mode": mode_text,
     }
 
     active_row = {
@@ -437,6 +443,7 @@ def _build_rows(setup, scan_id, alert_sent, market_status):
         "is_paper_trade": "true",
         "alert_sent": alert_text,
         "market_status": market_text,
+        "mode": mode_text,
         "status": "OPEN",
         "outcome": "",
         "result": "",

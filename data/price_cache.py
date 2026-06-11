@@ -91,6 +91,11 @@ def _parse_cache_timestamp(value):
 
 
 def _safe_float(value):
+    if isinstance(value, dict):
+        for key in ("ltp", "price", "last_price", "last_traded_price"):
+            if value.get(key) not in [None, ""]:
+                value = value.get(key)
+                break
     try:
         if value is None or value == "":
             return None
@@ -101,7 +106,12 @@ def _safe_float(value):
 
 def get_cached_price(symbol):
     cache = load_cache()
-    return cache.get(symbol)
+    value = cache.get(symbol)
+    if isinstance(value, dict):
+        for key in ("ltp", "price", "last_price", "last_traded_price"):
+            if value.get(key) not in [None, ""]:
+                return value.get(key)
+    return value
 
 
 def get_cached_price_debug(symbol, max_age_seconds=120):
@@ -155,6 +165,21 @@ def update_cached_price(symbol, price, source="upstox_or_runtime"):
         return
 
     cache = load_cache()
-    cache[symbol] = price
+    current = cache.get(symbol)
+    if isinstance(current, dict):
+        current.update(
+            {
+                "symbol": symbol,
+                "ltp": price,
+                "price": price,
+                "timestamp": datetime.now(IST).isoformat(),
+                "timestamp_ist": datetime.now(IST).isoformat(),
+                "source": source,
+                "status": "UPDATED",
+            }
+        )
+        cache[symbol] = current
+    else:
+        cache[symbol] = price
     save_cache(cache)
     update_cached_price_meta(symbol, price, source=source)

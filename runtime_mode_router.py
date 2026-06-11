@@ -1,6 +1,8 @@
 import json
 import os
 import tempfile
+import threading
+import time as time_module
 from datetime import datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -16,6 +18,7 @@ MARKET_CLOSE_TIME = time(15, 20)
 ALLOW_RESEARCH_DURING_MARKET_ENV = "TITAN_ALLOW_RESEARCH_DURING_MARKET"
 MASTER_BRAIN_MODE_ENV = "TITAN_RUNTIME_MASTER_BRAIN_MODE"
 SAFE_MASTER_BRAIN_MODES = {"READ_ONLY", "HEALTH"}
+_RUNTIME_MODE_WRITE_LOCK = threading.Lock()
 
 ALWAYS_ON_TASKS = {
     "heartbeat",
@@ -23,10 +26,22 @@ ALWAYS_ON_TASKS = {
     "broker_health_check",
     "risk_watchdog",
     "live_price_monitor",
+    "live_price_cache_refresh",
+    "upstox_account",
+    "mode_scanner_status",
     "consciousness_core",
     "report_aggregator",
     "runtime_snapshot_logger",
     "dashboard_sync",
+    "infrastructure_status",
+    "journal",
+    "market_pressure_check",
+    "market_regime_update",
+    "ohlc_refresh",
+    "outcome_tracker",
+    "pnl_refresh",
+    "sector_strength",
+    "volatility_check",
     "worker_health_monitor",
 }
 
@@ -132,25 +147,34 @@ def _safe_master_brain_advisory_mode_enabled():
 
 def _atomic_write_json(path, payload):
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = None
+    with _RUNTIME_MODE_WRITE_LOCK:
+        for attempt in range(5):
+            temp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    "w",
+                    encoding="utf-8",
+                    dir=path.parent,
+                    delete=False,
+                    prefix=f".{path.name}.",
+                    suffix=".tmp",
+                ) as temp_file:
+                    json.dump(payload, temp_file, indent=2, sort_keys=True)
+                    temp_file.write("\n")
+                    temp_path = Path(temp_file.name)
 
-    try:
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=path.parent,
-            delete=False,
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-        ) as temp_file:
-            json.dump(payload, temp_file, indent=2, sort_keys=True)
-            temp_file.write("\n")
-            temp_path = Path(temp_file.name)
-
-        os.replace(temp_path, path)
-    finally:
-        if temp_path and temp_path.exists():
-            temp_path.unlink()
+                os.replace(temp_path, path)
+                return
+            except OSError:
+                if attempt == 4:
+                    raise
+                time_module.sleep(0.05 * (attempt + 1))
+            finally:
+                if temp_path and temp_path.exists():
+                    try:
+                        temp_path.unlink()
+                    except OSError:
+                        pass
 
 
 def is_market_open_now():

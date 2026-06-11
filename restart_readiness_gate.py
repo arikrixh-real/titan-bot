@@ -225,6 +225,9 @@ def build_restart_readiness_gate(
     safe_to_clear_locks = bool(stale_locks and not active_locks and not unknown_locks)
 
     daemon_status = _component_status(runtime_truth, "daemon")
+    daemon_record = _component_record(runtime_truth, "daemon")
+    runtime_owner = daemon_record.get("runtime_owner")
+    runtime_owner_transition_reason = daemon_record.get("transition_reason")
     worker_status = _component_status(runtime_truth, "workers")
     scheduler_status = _component_status(runtime_truth, "scheduler")
     scanner_status = _scanner_setup_truth(scanner_truth, "scanner_status") or _component_status(runtime_truth, "scanner")
@@ -314,6 +317,8 @@ def build_restart_readiness_gate(
         "generated_at": _now_ist(),
         "overall_restart_allowed": overall_restart_allowed,
         "daemon_status": daemon_status,
+        "runtime_owner": runtime_owner,
+        "runtime_owner_transition_reason": runtime_owner_transition_reason,
         "worker_status": worker_status,
         "scheduler_status": scheduler_status,
         "scanner_status": scanner_status,
