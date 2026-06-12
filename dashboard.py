@@ -85,6 +85,7 @@ PATHS = {
     "hft_mode_scanner_status": RUNTIME / "hft_mode_scanner_status.json",
     "hft_scanner_filter_truth": ROOT / "data" / "hft_mode" / "hft_scanner_filter_truth_status.json",
     "worker_health": RUNTIME / "worker_health.json",
+    "titan_runtime_supervisor_status": RUNTIME / "titan_runtime_supervisor_status.json",
     "active_runtime_snapshot": RUNTIME / "active_runtime_snapshot.json",
     "paper_engine_status": RUNTIME / "paper_engine_status.json",
     "paper_account": ROOT / "data" / "paper_trading" / "paper_account.json",
@@ -182,6 +183,7 @@ def payload_time(payload):
         return None
     for key in (
         "timestamp_ist",
+        "heartbeat_ist",
         "generated_at_ist",
         "updated_at_ist",
         "last_updated_ist",
@@ -1146,7 +1148,7 @@ def total_stocks_scanned(payloads):
 
 def worker_engines(worker_health, source_path=None):
     if not isinstance(worker_health, dict):
-        return []
+        worker_health = {}
     source_fresh = is_fresh({}, source_path, FRESH_SECONDS["worker"]) if source_path else False
     rows = []
     for key, payload in worker_health.items():
@@ -1168,6 +1170,94 @@ def worker_engines(worker_health, source_path=None):
         reason = engine_reason(payload, raw)
         rows.append({"name": name, "state": state, "reason": reason})
     return sorted(rows, key=lambda item: (0 if item["state"] == "ACTIVE" else 1, item["name"]))
+
+
+SUPERVISOR_ENGINE_ALIASES = {
+    "runtime_continuous_core": {"runtime_continuous_core", "RUNTIME_STATUS"},
+    "runtime_paper_engine": {"runtime_paper_engine", "PAPER_ENGINE"},
+    "runtime_dashboard_sync": {"runtime_dashboard_sync", "DASHBOARD_SYNC"},
+    "runtime_snapshot_logger": {"runtime_snapshot_logger", "RUNTIME_SNAPSHOT_LOGGER"},
+    "runtime_truth": {"runtime_truth", "TRUTH_ENGINE", "truth engine"},
+}
+
+
+SUPERVISOR_ENGINE_LABELS = {
+    "runtime_continuous_core": "RUNTIME_STATUS",
+    "runtime_paper_engine": "PAPER_ENGINE",
+    "runtime_dashboard_sync": "DASHBOARD_SYNC",
+    "runtime_snapshot_logger": "RUNTIME_SNAPSHOT_LOGGER",
+    "runtime_truth": "TRUTH_ENGINE",
+}
+
+
+def _engine_name_key(value):
+    return str(value or "").strip().lower().replace(" ", "_").replace("-", "_")
+
+
+def supervisor_live_tasks(supervisor_status):
+    if not isinstance(supervisor_status, dict):
+        return {}
+    if str(supervisor_status.get("status") or "").upper() != "RUNNING":
+        return {}
+    if not is_fresh(supervisor_status, PATHS["titan_runtime_supervisor_status"], FRESH_SECONDS["worker"]):
+        return {}
+    tasks = supervisor_status.get("tasks")
+    if not isinstance(tasks, dict):
+        return {}
+    live = {}
+    for task_name in SUPERVISOR_ENGINE_ALIASES:
+        task = tasks.get(task_name)
+        if isinstance(task, dict) and str(task.get("status") or "").upper() == "OK":
+            live[task_name] = task
+    return live
+
+
+def worker_engines_with_supervisor(worker_health, supervisor_status, source_path=None):
+    rows = worker_engines(worker_health, source_path)
+    live_tasks = supervisor_live_tasks(supervisor_status)
+    if not live_tasks:
+        return rows
+
+    alias_to_task = {}
+    for task_name, aliases in SUPERVISOR_ENGINE_ALIASES.items():
+        for alias in aliases:
+            alias_to_task[_engine_name_key(alias)] = task_name
+
+    seen_tasks = set()
+    for row in rows:
+        task_name = alias_to_task.get(_engine_name_key(row.get("name")))
+        if task_name in live_tasks:
+            row["state"] = "LIVE"
+            row["reason"] = "titan_runtime_supervisor_status:OK"
+            seen_tasks.add(task_name)
+
+    for task_name in live_tasks:
+        if task_name not in seen_tasks:
+            rows.append(
+                {
+                    "name": SUPERVISOR_ENGINE_LABELS.get(task_name, task_name),
+                    "state": "LIVE",
+                    "reason": "titan_runtime_supervisor_status:OK",
+                }
+            )
+
+    return sorted(rows, key=lambda item: (0 if item["state"] in {"ACTIVE", "LIVE"} else 1, item["name"]))
+
+
+def supervisor_engine_evidence(payloads):
+    payload = payloads.get("titan_runtime_supervisor_status") if isinstance(payloads, dict) else None
+    path = PATHS["titan_runtime_supervisor_status"]
+    evidence = source_evidence(payloads, "titan_runtime_supervisor_status", FRESH_SECONDS["worker"])
+    task_count = len(payload.get("tasks") or {}) if isinstance(payload, dict) and isinstance(payload.get("tasks"), dict) else 0
+    pid = payload.get("pid") if isinstance(payload, dict) else "UNKNOWN"
+    if evidence["health"] == "LIVE" and isinstance(payload, dict) and str(payload.get("status") or "").upper() == "RUNNING":
+        evidence["health"] = "LIVE"
+        evidence["name"] = "titan_runtime_supervisor_status"
+        evidence["reason"] = f"pid {pid}; heartbeat_age {fmt_age(evidence.get('age'))}; task_count {task_count}"
+    elif isinstance(payload, dict):
+        evidence["reason"] = f"status {payload.get('status') or 'UNKNOWN'}; pid {pid}; heartbeat_age {fmt_age(evidence.get('age'))}; task_count {task_count}"
+    evidence["path"] = path
+    return evidence
 
 
 def engine_reason(payload, raw_status):
@@ -1466,9 +1556,9 @@ def render_dashboard():
         with hft_scanner_col:
             st.markdown(hft_scanner, unsafe_allow_html=True)
 
-    engines = worker_engines(worker_health, PATHS["worker_health"])
-    active_engines = [engine for engine in engines if engine["state"] == "ACTIVE"]
-    inactive_engines = [engine for engine in engines if engine["state"] != "ACTIVE"]
+    engines = worker_engines_with_supervisor(worker_health, payloads.get("titan_runtime_supervisor_status"), PATHS["worker_health"])
+    active_engines = [engine for engine in engines if engine["state"] in {"ACTIVE", "LIVE"}]
+    inactive_engines = [engine for engine in engines if engine["state"] not in {"ACTIVE", "LIVE"}]
     active_count = len(active_engines)
     if engines:
         if st.session_state.get("engines_state_tab") not in {"ACTIVE", "INACTIVE"}:
@@ -1501,7 +1591,15 @@ def render_dashboard():
             selected_engines = active_engines if st.session_state.engines_state_tab == "ACTIVE" else inactive_engines
             engine_html = "".join(engine_tile_html(engine) for engine in selected_engines)
             st.markdown(f"<div class='engine-grid'>{engine_html}</div>", unsafe_allow_html=True)
-            st.markdown(source_meta_html(source_evidence(payloads, "worker_health", FRESH_SECONDS["worker"])), unsafe_allow_html=True)
+            st.markdown(
+                source_meta_html(
+                    [
+                        supervisor_engine_evidence(payloads),
+                        source_evidence(payloads, "worker_health", FRESH_SECONDS["worker"]),
+                    ]
+                ),
+                unsafe_allow_html=True,
+            )
     else:
         render_metric_grid_card("ENGINES STATE", [("Engines Active", "UNKNOWN", "muted")], columns=1, extra_class="engine-card")
 
