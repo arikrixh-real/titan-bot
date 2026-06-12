@@ -16,7 +16,7 @@ from runtime_intelligence_state import (
     state_hash,
     state_path_for_task,
 )
-from runtime_lock import acquire_lock, release_lock
+from runtime_lock import acquire_lock, lock_info, pid_exists, release_lock
 from runtime_load_control import HEAVY_TASK_RULES, record_task_result, should_skip_task
 from runtime_mode_router import runtime_mode_snapshot, should_run_task
 from runtime_timeout import run_with_timeout
@@ -198,8 +198,84 @@ def _atomic_write_json(path, payload):
     safe_atomic_write_json(path, payload)
 
 
+def _read_worker_health_file():
+    payload = _read_json_safe(WORKER_HEALTH_PATH)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _release_dead_pid_task_lock(task):
+    stale_after_seconds = _task_lock_stale_seconds(task)
+    info = lock_info(f"task_{task}", stale_after_seconds=stale_after_seconds)
+    released = False
+    if info.get("locked") and info.get("reason") == "worker_pid_not_found":
+        try:
+            release_lock(f"task_{task}")
+            released = True
+        except OSError:
+            released = False
+    return info, released
+
+
+def _reconcile_dead_pid_entry(task, current):
+    if not isinstance(current, dict):
+        return current, False
+    status = str(current.get("status") or "").upper()
+    if status != "RUNNING":
+        return current, False
+    active_pid = current.get("active_pid")
+    if pid_exists(active_pid):
+        return current, False
+
+    lock_state, lock_released = _release_dead_pid_task_lock(task)
+    recovered = lock_released or not lock_state.get("locked")
+    updated = dict(current)
+    updated["previous_status"] = "RUNNING"
+    updated["dead_pid"] = active_pid
+    updated["active_pid"] = None
+    updated["active_run_started_at"] = None
+    updated["status"] = "STALE_DEAD_PID"
+    updated["last_status"] = updated["status"]
+    updated["last_finished_at"] = _now_ist()
+    updated["last_error"] = "worker_pid_not_found"
+    updated["reason"] = "worker_pid_not_found"
+    updated["recovered"] = recovered
+    updated["lock_state"] = lock_state
+    updated["recovery_action"] = (
+        "released_dead_pid_lock"
+        if lock_released
+        else "marked_dead_pid_not_running"
+    )
+    updated["last_good_output_path"] = updated.get("last_good_output_path") or _last_good_output_path(task)
+    return updated, True
+
+
+def refresh_worker_health():
+    with _health_lock:
+        current_health = _read_worker_health_file()
+        changed = False
+        for task, current in list(current_health.items()):
+            updated, task_changed = _reconcile_dead_pid_entry(task, current)
+            if task_changed:
+                current_health[task] = updated
+                changed = True
+        _health.clear()
+        _health.update(current_health)
+        if changed:
+            try:
+                _atomic_write_json(WORKER_HEALTH_PATH, _health)
+            except OSError:
+                pass
+        return {
+            "status": "UPDATED" if changed else "UNCHANGED",
+            "changed": changed,
+            "worker_count": len(_health),
+        }
+
+
 def _write_worker_health(task, **updates):
     with _health_lock:
+        if not _health:
+            _health.update(_read_worker_health_file())
         current = _health.setdefault(
             task,
             {
@@ -225,6 +301,8 @@ def _write_worker_health(task, **updates):
             },
         )
         current.update(updates)
+        current, _ = _reconcile_dead_pid_entry(task, current)
+        _health[task] = current
         try:
             _atomic_write_json(WORKER_HEALTH_PATH, _health)
         except OSError:
@@ -890,6 +968,7 @@ def start_continuous_workers(intent=None):
         if _workers_started:
             return False
 
+        refresh_worker_health()
         for task, sleep_seconds in WORKER_TASKS.items():
             thread = threading.Thread(
                 target=_run_worker,
@@ -913,3 +992,7 @@ def _cadence_tier_for_task(task):
         if task in tasks:
             return tier
     return "runtime_support"
+
+
+if __name__ == "__main__":
+    print(json.dumps(refresh_worker_health(), indent=2, sort_keys=True))

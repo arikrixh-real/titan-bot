@@ -39,6 +39,7 @@ PAPER_REGISTRY_PATH = RUNTIME_DIR / "paper_trade_registry.json"
 OUTCOME_TRACKER_STATUS_PATH = RUNTIME_DIR / "outcome_tracker_status.json"
 
 IST = timezone(timedelta(hours=5, minutes=30))
+PAPER_STATUS_TTL_SECONDS = 600
 
 
 def now_ist() -> datetime:
@@ -149,6 +150,32 @@ def _count_open_trades(mode: str) -> int:
         if str(item.get("status") or "OPEN").upper() == "OPEN" and normalize_mode(item.get("mode")) == mode:
             count += 1
     return count
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        text = str(value).strip()
+        if text.endswith("Z"):
+            text = f"{text[:-1]}+00:00"
+        parsed = datetime.fromisoformat(text)
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=IST)
+    return parsed.astimezone(IST)
+
+
+def _paper_status_age_seconds(paper: dict[str, Any], now: datetime) -> float | None:
+    timestamp = None
+    for key in ("timestamp_ist", "timestamp", "last_updated", "updated_at"):
+        timestamp = _parse_timestamp(paper.get(key))
+        if timestamp is not None:
+            break
+    if timestamp is None:
+        return None
+    return max(0.0, (now - timestamp).total_seconds())
 
 
 def _inactive_payload(mode: str, reason: str) -> dict[str, Any]:
@@ -468,11 +495,24 @@ def _evaluate_classic(market_state: dict[str, Any], switch_status: dict[str, Any
 def _active_snapshot(mode: str, scanner_payload: dict[str, Any], market_state: dict[str, Any], switch_status: dict[str, Any]) -> dict[str, Any]:
     paper = read_json(PAPER_ENGINE_STATUS_PATH, {})
     outcome = read_json(OUTCOME_TRACKER_STATUS_PATH, {})
-    timestamp = now_ist().isoformat()
+    now = now_ist()
+    timestamp = now.isoformat()
     paper_mode = normalize_mode(paper.get("active_execution_mode") or paper.get("mode")) if isinstance(paper, dict) and paper else mode
     paper_status = paper.get("status") if isinstance(paper, dict) else None
+    paper_status_original = paper_status
+    paper_status_age_seconds = _paper_status_age_seconds(paper, now) if isinstance(paper, dict) else None
+    paper_status_stale = False
+    paper_status_reason = None
     if paper_mode != mode:
         paper_status = f"PAPER_ENGINE_RESTING_PREVIOUS_{paper_mode}"
+    elif paper_status_age_seconds is None and paper_status:
+        paper_status = "PAPER_ENGINE_STATUS_STALE"
+        paper_status_stale = True
+        paper_status_reason = "paper_engine_status_timestamp_missing"
+    elif paper_status_age_seconds is not None and paper_status_age_seconds > PAPER_STATUS_TTL_SECONDS:
+        paper_status = "PAPER_ENGINE_STATUS_STALE"
+        paper_status_stale = True
+        paper_status_reason = "paper_engine_status_age_exceeded"
     filter_counts = {
         key: scanner_payload.get(key)
         for key in (
@@ -527,6 +567,11 @@ def _active_snapshot(mode: str, scanner_payload: dict[str, Any], market_state: d
         "live_order_placement": False,
         "paper_status": paper_status or "UNKNOWN",
         "paper_status_mode": paper_mode,
+        "paper_status_stale": paper_status_stale,
+        "paper_status_age_seconds": paper_status_age_seconds,
+        "paper_status_original": paper_status_original,
+        "paper_status_reason": paper_status_reason,
+        "paper_status_ttl_seconds": PAPER_STATUS_TTL_SECONDS,
         "timestamp_ist": timestamp,
     }
     return payload
