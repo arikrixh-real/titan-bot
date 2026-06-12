@@ -254,7 +254,7 @@ def is_fresh(payload, path=None, max_age=300):
     return age is not None and age <= max_age
 
 
-def fresh_active_snapshot(payloads, mode=None, max_age=None):
+def get_fresh_active_snapshot(payloads, mode=None, max_age=None):
     snapshot = payloads.get("active_runtime_snapshot") if isinstance(payloads, dict) else None
     if not isinstance(snapshot, dict):
         return None
@@ -262,6 +262,23 @@ def fresh_active_snapshot(payloads, mode=None, max_age=None):
         return None
     ttl = FRESH_SECONDS["scanner"] if max_age is None else max_age
     if not is_fresh(snapshot, PATHS["active_runtime_snapshot"], ttl):
+        return None
+    return snapshot
+
+
+def fresh_active_snapshot(payloads, mode=None, max_age=None):
+    return get_fresh_active_snapshot(payloads, mode, max_age) is not None
+
+
+def get_active_hft_snapshot(payloads):
+    snapshot = payloads.get("active_runtime_snapshot") if isinstance(payloads, dict) else None
+    if not isinstance(snapshot, dict):
+        return None
+    if normalize_mode(snapshot.get("active_mode")) != "HFT":
+        return None
+    if snapshot.get("final_candidate_count") is None:
+        return None
+    if "paper_only" not in snapshot:
         return None
     return snapshot
 
@@ -572,7 +589,7 @@ def github_status(git):
 
 
 def ltp_status(payloads):
-    snapshot = fresh_active_snapshot(payloads, "HFT")
+    snapshot = get_active_hft_snapshot(payloads)
     if snapshot is not None:
         feed_status = str(snapshot.get("feed_status") or "").upper()
         if feed_status == "DEGRADED":
@@ -600,7 +617,7 @@ def ltp_status(payloads):
 
 
 def ltp_evidence(payloads):
-    snapshot = fresh_active_snapshot(payloads, "HFT")
+    snapshot = get_active_hft_snapshot(payloads)
     if snapshot is not None:
         feed_status = str(snapshot.get("feed_status") or "").upper()
         if feed_status in {"DEGRADED", "STALE", "ACTIVE", "OK", "LIVE"}:
@@ -632,8 +649,8 @@ def freshest_account(payloads):
     if isinstance(engine, dict):
         engine_dt = source_time(engine, PATHS["paper_engine_status"])
         engine_fresh = age_seconds(engine_dt) is not None and age_seconds(engine_dt) <= FRESH_SECONDS["account"]
-        if engine_fresh and isinstance(engine.get("paper_account_summary"), dict):
-            return ("paper_engine_status", engine, PATHS["paper_engine_status"], "PAPER"), "ACTIVE"
+        if isinstance(engine.get("paper_account_summary"), dict):
+            return ("paper_engine_status", engine, PATHS["paper_engine_status"], "PAPER"), "ACTIVE" if engine_fresh else "STALE"
         paper_candidates.append(("paper_engine_status", engine, engine_dt, PATHS["paper_engine_status"], "PAPER"))
     paper = payloads.get("paper_account")
     if isinstance(paper, dict):
@@ -682,7 +699,7 @@ def freshest_account(payloads):
 
 def account_metrics(payloads):
     source, status = freshest_account(payloads)
-    if status != "ACTIVE" or not source:
+    if status not in {"ACTIVE", "STALE"} or not source:
         return status, ("—", "—", "—", "—"), "UNKNOWN"
     _, payload, _, source_label = source
     summary = payload.get("paper_account_summary") if isinstance(payload.get("paper_account_summary"), dict) else payload.get("account_summary") if isinstance(payload.get("account_summary"), dict) else payload
@@ -713,7 +730,7 @@ def account_evidence(payloads):
 
 
 def account_display_label(account_status, account_source):
-    if account_status == "ACTIVE":
+    if account_status in {"ACTIVE", "STALE"}:
         return account_source if account_source in {"UPSTOX", "PAPER"} else "UNKNOWN"
     return account_status if account_status in {"STALE", "MISSING", "UNKNOWN", "AUTH_REQUIRED", "INACTIVE"} else "STALE"
 
@@ -752,7 +769,7 @@ def trade_performance(rows, mode=None):
 
 
 def active_hft_performance(payloads, fallback=None):
-    snapshot = fresh_active_snapshot(payloads, "HFT")
+    snapshot = get_active_hft_snapshot(payloads)
     if snapshot is None:
         return fallback
     if "open_trade_count" not in snapshot and not snapshot.get("paper_status"):
@@ -824,7 +841,7 @@ def news_evidence(payloads):
 def hft_truth_label(payloads, active_mode):
     if normalize_mode(active_mode) != "HFT":
         return "INACTIVE"
-    snapshot = fresh_active_snapshot(payloads, "HFT")
+    snapshot = get_active_hft_snapshot(payloads)
     if snapshot is not None:
         if snapshot.get("live_order_placement") is False and snapshot.get("broker_orders") is False:
             return "PAPER"
@@ -842,7 +859,7 @@ def hft_truth_label(payloads, active_mode):
 
 
 def truth_summary(payloads, active_mode):
-    if normalize_mode(active_mode) == "HFT" and fresh_active_snapshot(payloads, "HFT") is not None:
+    if normalize_mode(active_mode) == "HFT" and get_active_hft_snapshot(payloads) is not None:
         scanner_check = active_snapshot_evidence(payloads, "HFT")
     else:
         scanner_check = source_evidence(payloads, "scanner_status", FRESH_SECONDS["scanner"])
@@ -1014,13 +1031,18 @@ def scanner_source_for_mode(mode, generic_scanner=None, generic_truth=None, payl
         snapshot_payloads = payloads if isinstance(payloads, dict) else {
             "active_runtime_snapshot": read_json(PATHS["active_runtime_snapshot"], None)
         }
-        snapshot = fresh_active_snapshot(snapshot_payloads, "HFT")
+        snapshot = get_active_hft_snapshot(snapshot_payloads)
         if snapshot is not None:
             payload = prepared_scanner_payload(active_snapshot_scanner_payload(snapshot), mode)
             fields = scanner_field_candidates(payload, mode)
             truth_counts = payload.get("filter_pass_counts") if isinstance(payload.get("filter_pass_counts"), dict) else {}
             feed_status = str(payload.get("feed_status") or "").upper()
-            health = "STALE" if feed_status == "STALE" else "DEGRADED" if feed_status == "DEGRADED" else "LIVE"
+            if not is_fresh(payload, PATHS["active_runtime_snapshot"], FRESH_SECONDS["scanner"]) or feed_status == "STALE":
+                health = "STALE"
+            elif feed_status == "DEGRADED":
+                health = "DEGRADED"
+            else:
+                health = "LIVE"
             return {
                 "health": health,
                 "payload": payload,
@@ -1091,7 +1113,7 @@ def scanner_total_part(payloads, source_name, keys):
 
 def total_stocks_scanned(payloads):
     classic = scanner_total_part(payloads, "classic_scanner_status", ("stocks_scanned", "stocks_checked"))
-    snapshot = fresh_active_snapshot(payloads, "HFT")
+    snapshot = get_active_hft_snapshot(payloads)
     if snapshot is not None:
         raw_count = first_number(snapshot, ("universe_count", "live_feed_count"))
         feed_status = str(snapshot.get("feed_status") or "LIVE").upper()
@@ -1235,8 +1257,9 @@ def dashboard_source_diagnostic(payloads, hft_counts, account_source_name):
         "<div class='source-meta'>"
         f"Dashboard: {html_escape(dashboard_git_hash())} | "
         f"active_runtime_snapshot timestamp: {html_escape(fmt_dt(snapshot_dt))} | "
-        f"final_candidate_count: {html_escape(snapshot.get('final_candidate_count', 'UNKNOWN'))} | "
-        f"open_trade_count: {html_escape(snapshot.get('open_trade_count', 'UNKNOWN'))} | "
+        f"active_snapshot_age: {html_escape(fmt_age(age_seconds(snapshot_dt)))} | "
+        f"active_snapshot_final: {html_escape(snapshot.get('final_candidate_count', 'UNKNOWN'))} | "
+        f"active_snapshot_open_trades: {html_escape(snapshot.get('open_trade_count', 'UNKNOWN'))} | "
         f"selected_hft_source: {html_escape(hft_source or 'UNKNOWN')} | "
         f"selected_account_source: {html_escape(account_source_name or 'UNKNOWN')}"
         "</div>"
@@ -1394,7 +1417,7 @@ def render_dashboard():
     hft_perf = active_hft_performance(payloads, hft_perf) if normalize_mode(active_mode) == "HFT" else hft_perf
     hft_perf_meta = trade_meta
     if normalize_mode(active_mode) == "HFT":
-        if fresh_active_snapshot(payloads, "HFT") is not None:
+        if get_active_hft_snapshot(payloads) is not None:
             hft_perf_meta = source_meta_html(
                 [
                     active_snapshot_evidence(payloads, "HFT"),
