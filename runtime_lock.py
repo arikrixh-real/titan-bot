@@ -31,6 +31,70 @@ def _read_lock(path):
         return json.load(lock_file)
 
 
+def pid_exists(pid):
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def lock_info(name, stale_after_seconds=300):
+    path = _lock_path(name)
+    if not path.exists():
+        return {
+            "name": name,
+            "path": str(path).replace("\\", "/"),
+            "locked": False,
+            "stale": False,
+            "reason": "lock_missing",
+        }
+    try:
+        payload = _read_lock(path)
+        acquired_at = datetime.fromisoformat(payload["acquired_at_ist"])
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return {
+            "name": name,
+            "path": str(path).replace("\\", "/"),
+            "locked": True,
+            "stale": True,
+            "reason": "lock_unreadable",
+        }
+
+    if acquired_at.tzinfo is None:
+        acquired_at = acquired_at.replace(tzinfo=IST)
+
+    age_seconds = (_now_ist() - acquired_at.astimezone(IST)).total_seconds()
+    pid = payload.get("pid")
+    pid_alive = pid_exists(pid)
+    stale_by_age = age_seconds >= stale_after_seconds
+    stale = stale_by_age or not pid_alive
+    if not pid_alive:
+        reason = "worker_pid_not_found"
+    elif stale_by_age:
+        reason = "lock_age_exceeded"
+    else:
+        reason = "lock_active"
+    return {
+        "name": name,
+        "path": str(path).replace("\\", "/"),
+        "locked": True,
+        "stale": stale,
+        "reason": reason,
+        "pid": pid,
+        "pid_alive": pid_alive,
+        "age_seconds": max(0.0, age_seconds),
+        "stale_after_seconds": stale_after_seconds,
+        "acquired_at_ist": payload.get("acquired_at_ist"),
+    }
+
+
 def _is_stale(path, stale_after_seconds):
     try:
         payload = _read_lock(path)
@@ -42,7 +106,7 @@ def _is_stale(path, stale_after_seconds):
         acquired_at = acquired_at.replace(tzinfo=IST)
 
     age = _now_ist() - acquired_at.astimezone(IST)
-    return age.total_seconds() >= stale_after_seconds
+    return age.total_seconds() >= stale_after_seconds or not pid_exists(payload.get("pid"))
 
 
 def _write_lock(path, name):
