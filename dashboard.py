@@ -86,6 +86,9 @@ PATHS = {
     "hft_scanner_filter_truth": ROOT / "data" / "hft_mode" / "hft_scanner_filter_truth_status.json",
     "worker_health": RUNTIME / "worker_health.json",
     "titan_runtime_supervisor_status": RUNTIME / "titan_runtime_supervisor_status.json",
+    "runtime_resilience_status": RUNTIME / "runtime_resilience_status.json",
+    "authoritative_runtime_truth": RUNTIME / "authoritative_runtime_truth.json",
+    "titan_authoritative_runtime_health": RUNTIME / "titan_authoritative_runtime_health.json",
     "active_runtime_snapshot": RUNTIME / "active_runtime_snapshot.json",
     "paper_engine_status": RUNTIME / "paper_engine_status.json",
     "paper_account": ROOT / "data" / "paper_trading" / "paper_account.json",
@@ -549,28 +552,54 @@ def market_status():
         return "UNKNOWN"
 
 
-def titan_state(daemon):
-    if not isinstance(daemon, dict):
-        return "UNKNOWN"
-    if not is_fresh(daemon, PATHS["daemon_health"], FRESH_SECONDS["daemon"]):
-        return "INACTIVE"
-    return "ACTIVE" if status_text(daemon.get("status")) == "ACTIVE" else "INACTIVE"
+def runtime_authority_state(payloads):
+    payloads = payloads if isinstance(payloads, dict) else {}
+
+    supervisor = payloads.get("titan_runtime_supervisor_status")
+    if isinstance(supervisor, dict) and is_fresh(supervisor, PATHS["titan_runtime_supervisor_status"], FRESH_SECONDS["worker"]):
+        if str(supervisor.get("status") or "").upper() == "RUNNING":
+            return "ACTIVE"
+
+    resilience = payloads.get("runtime_resilience_status")
+    daemon = resilience.get("daemon") if isinstance(resilience, dict) else None
+    if isinstance(daemon, dict) and is_fresh(daemon, PATHS["runtime_resilience_status"], FRESH_SECONDS["daemon"]):
+        if status_text(daemon.get("status")) == "ACTIVE":
+            return "ACTIVE"
+
+    truth = payloads.get("authoritative_runtime_truth")
+    components = truth.get("components") if isinstance(truth, dict) else {}
+    truth_daemon = components.get("daemon") if isinstance(components, dict) else None
+    if isinstance(truth_daemon, dict) and is_fresh(truth, PATHS["authoritative_runtime_truth"], FRESH_SECONDS["worker"]):
+        if str(truth_daemon.get("status") or "").upper() == "LIVE":
+            return "ACTIVE"
+
+    health = payloads.get("titan_authoritative_runtime_health")
+    if isinstance(health, dict) and is_fresh(health, PATHS["titan_authoritative_runtime_health"], FRESH_SECONDS["worker"]):
+        overall = str(health.get("overall_status") or "").upper()
+        if overall in {"OK", "PASS", "ACTIVE", "LIVE", "WARNING"}:
+            return "ACTIVE"
+
+    legacy = payloads.get("daemon_health")
+    if isinstance(legacy, dict) and is_fresh(legacy, PATHS["daemon_health"], FRESH_SECONDS["daemon"]):
+        return "ACTIVE" if status_text(legacy.get("status")) == "ACTIVE" else "INACTIVE"
+    return "UNKNOWN"
+
+
+def titan_state(payloads):
+    return runtime_authority_state(payloads)
 
 
 def echo_state(echo):
     if not isinstance(echo, dict):
         return "UNKNOWN"
     if not is_fresh(echo, PATHS["echo_activity"], FRESH_SECONDS["echo"]):
-        return "INACTIVE"
+        return "STALE"
     return "ACTIVE" if status_text(echo.get("status")) == "ACTIVE" else "INACTIVE"
 
 
-def vps_status(daemon):
-    if not isinstance(daemon, dict):
-        return "UNKNOWN"
-    if not is_fresh(daemon, PATHS["daemon_health"], FRESH_SECONDS["daemon"]):
-        return "STALE"
-    return "ACTIVE" if status_text(daemon.get("status")) == "ACTIVE" else "INACTIVE"
+def vps_status(payloads):
+    state = runtime_authority_state(payloads)
+    return "STALE" if state == "UNKNOWN" else state
 
 
 def github_status(git):
@@ -1404,9 +1433,9 @@ def render_dashboard():
     storage_value = storage_used(storage, supabase)
     storage_class = "cyan" if storage_value not in {"—", "STALE", "UNKNOWN"} else "warn" if storage_value == "STALE" else "muted"
     row1 = [
-        ("TITAN STATE", titan_state(daemon)),
+        ("TITAN STATE", titan_state(payloads)),
         ("ECHO STATE", echo_state(echo)),
-        ("VPS STATUS", vps_status(daemon)),
+        ("VPS STATUS", vps_status(payloads)),
         ("GITHUB STATUS", github_status(git)),
         ("UPSTOX LTP STATE", ltp_status(payloads)),
         ("DATABASE STORAGE", storage_value, storage_class),
@@ -1418,6 +1447,10 @@ def render_dashboard():
         columns=7,
         meta_html=source_meta_html(
             [
+                source_evidence(payloads, "titan_runtime_supervisor_status", FRESH_SECONDS["worker"]),
+                source_evidence(payloads, "runtime_resilience_status", FRESH_SECONDS["daemon"]),
+                source_evidence(payloads, "authoritative_runtime_truth", FRESH_SECONDS["worker"]),
+                source_evidence(payloads, "titan_authoritative_runtime_health", FRESH_SECONDS["worker"]),
                 source_evidence(payloads, "daemon_health", FRESH_SECONDS["daemon"]),
                 source_evidence(payloads, "echo_activity", FRESH_SECONDS["echo"]),
                 source_evidence(payloads, "git_cleanliness", FRESH_SECONDS["daemon"]),
