@@ -88,6 +88,14 @@ def _valid_hft_microstructure(signal: dict[str, Any]) -> bool:
     return True
 
 
+def _reason_counts(rejected: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in rejected:
+        reason = str(item.get("reason") or "unknown")
+        counts[reason] = counts.get(reason, 0) + 1
+    return counts
+
+
 def _classic_reject_reason(signal: dict[str, Any]) -> str | None:
     engine = str(signal.get("engine") or "").strip().upper()
     source = str(signal.get("source") or "").strip()
@@ -128,10 +136,12 @@ def approve_signals(
     timestamp = now_ist().isoformat()
 
     if not signal_allowed:
+        upstream_reason = "|".join(str(item) for item in blockers if item) or "signal_not_allowed"
         for candidate in candidates or []:
             rejected.append({
                 "symbol": candidate.get("symbol") if isinstance(candidate, dict) else None,
                 "reason": "signal_not_allowed",
+                "upstream_blocker": upstream_reason,
             })
     else:
         for candidate in candidates or []:
@@ -186,6 +196,7 @@ def approve_signals(
             "active_signal_count": len(active_signals[-200:]),
             "rejected_count": len(rejected),
             "rejected": rejected[:200],
+            "reject_reason_counts": _reason_counts(rejected),
             "blockers": blockers,
             "paper_only": True,
             "broker_orders": False,

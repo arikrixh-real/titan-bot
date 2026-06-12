@@ -166,6 +166,14 @@ def _inactive_payload(mode: str, reason: str) -> dict[str, Any]:
     }
 
 
+def _reason_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        reason = str(row.get("reason") or "unknown")
+        counts[reason] = counts.get(reason, 0) + 1
+    return counts
+
+
 def _evaluate_hft(market_state: dict[str, Any], switch_status: dict[str, Any]) -> dict[str, Any]:
     symbols = _symbols_from_market_state(market_state)
     universe = _universe_symbols(HFT_UNIVERSE_PATH)
@@ -182,6 +190,7 @@ def _evaluate_hft(market_state: dict[str, Any], switch_status: dict[str, Any]) -
     candidates: list[dict[str, Any]] = []
     rejected = []
     blockers: list[str] = []
+    health_warnings: list[str] = []
     for item in universe:
         state = _state_for_symbol(symbols, item)
         symbol = str(item.get("symbol") or "").upper()
@@ -283,12 +292,20 @@ def _evaluate_hft(market_state: dict[str, Any], switch_status: dict[str, Any]) -
         active_feed_status = "STALE"
     elif live_feed_count < len(universe) or missing_bid_ask_count > 0 or spread_passed < live_feed_count:
         active_feed_status = "DEGRADED"
-    if active_feed_status in {"STALE", "DEGRADED"}:
-        blockers.append(f"feed_status_{active_feed_status}")
+    if active_feed_status == "STALE":
+        blockers.append("feed_status_STALE")
+    elif active_feed_status == "DEGRADED":
+        health_warnings.append("feed_status_DEGRADED")
     if spread_passed == 0:
         blockers.append("missing_real_hft_microstructure")
-    signal_ok = bool(candidates) and not blockers and mode_signal_allowed() and not switch_in_progress()
+    if switch_in_progress():
+        blockers.append(f"mode_switch_{switch_status.get('state') or 'LOCKED'}")
+    elif not mode_signal_allowed():
+        blockers.append("mode_signal_not_allowed")
+    signal_ok = bool(candidates) and not blockers
     approved = approve_signals(candidates, mode="HFT", signal_allowed=signal_ok, blockers=blockers)
+    approved_count = int(approved.get("approved_count") or 0)
+    approval_rejected = approved.get("rejected") if isinstance(approved.get("rejected"), list) else []
     timestamp = now_ist().isoformat()
     payload = {
         "mode": "HFT",
@@ -312,14 +329,20 @@ def _evaluate_hft(market_state: dict[str, Any], switch_status: dict[str, Any]) -
         "shortlist_count": len(shortlist),
         "hft_shortlist": shortlist[:200],
         "microstructure_candidate_count": len(candidates),
-        "final_candidate_count": int(approved.get("approved_count") or 0),
-        "eligible_signals": int(approved.get("approved_count") or 0),
-        "final_passed": int(approved.get("approved_count") or 0),
+        "final_candidate_count": approved_count,
+        "eligible_signals": approved_count,
+        "final_passed": approved_count,
         "stocks_scanned": len(universe),
         "paper_trade_candidates": approved.get("approved_signals") or [],
-        "signal_allowed": signal_ok,
+        "signal_allowed": bool(approved_count) and signal_ok,
+        "approval_status": approved.get("status") or ("ACTIVE" if signal_ok else "BLOCKED"),
+        "approval_blockers": blockers,
+        "approval_rejected_count": int(approved.get("rejected_count") or 0),
+        "approval_reject_reason_counts": approved.get("reject_reason_counts") or _reason_counts(approval_rejected),
+        "preapproval_reject_reason_counts": _reason_counts(rejected),
         "trade_placement_allowed": False,
         "blockers": blockers,
+        "health_warnings": health_warnings,
         "rejected": rejected[:200],
         "source_owner": "runtime_continuous_core",
         "switch_status": switch_status,
