@@ -42,7 +42,7 @@ CLASSIC_SCANNER_COUNTER_FIELDS = [
     ("Structure Passed", ("structure_passed", "structure_passed_count")),
     ("Raw Breakout Ready", ("raw_breakout_ready_count", "raw_breakout_ready")),
     ("Qualified Breakout Ready", ("qualified_breakout_ready_count", "qualified_breakout_ready", "breakout_ready_count")),
-    ("Final Passed", ("final_passed", "final_passed_count")),
+    ("Final Passed", ("final_passed", "final_passed_count", "final_candidate_count")),
 ]
 
 CLASSIC_TOIF_COUNTER_FIELDS = [
@@ -65,7 +65,7 @@ HFT_SCANNER_COUNTER_FIELDS = [
     ("Relative Strength Burst", ("relative_strength_burst",)),
     ("Intraday Range Escape", ("intraday_range_escape",)),
     ("Eligible Signals", ("eligible_signals",)),
-    ("Final Passed", ("final_passed", "final_passed_count")),
+    ("Final Passed", ("final_passed", "final_passed_count", "final_candidate_count")),
 ]
 
 
@@ -84,6 +84,7 @@ PATHS = {
     "hft_mode_scanner_status": RUNTIME / "hft_mode_scanner_status.json",
     "hft_scanner_filter_truth": ROOT / "data" / "hft_mode" / "hft_scanner_filter_truth_status.json",
     "worker_health": RUNTIME / "worker_health.json",
+    "active_runtime_snapshot": RUNTIME / "active_runtime_snapshot.json",
     "paper_engine_status": RUNTIME / "paper_engine_status.json",
     "paper_account": ROOT / "data" / "paper_trading" / "paper_account.json",
     "upstox_funds": RUNTIME / "upstox" / "account" / "funds.json",
@@ -243,6 +244,27 @@ def is_fresh(payload, path=None, max_age=300):
     return age is not None and age <= max_age
 
 
+def fresh_active_snapshot(payloads, mode=None, max_age=None):
+    snapshot = payloads.get("active_runtime_snapshot") if isinstance(payloads, dict) else None
+    if not isinstance(snapshot, dict):
+        return None
+    if mode is not None and normalize_mode(snapshot.get("active_mode")) != normalize_mode(mode):
+        return None
+    ttl = FRESH_SECONDS["scanner"] if max_age is None else max_age
+    if not is_fresh(snapshot, PATHS["active_runtime_snapshot"], ttl):
+        return None
+    return snapshot
+
+
+def active_snapshot_evidence(payloads, mode=None, max_age=None):
+    snapshot = payloads.get("active_runtime_snapshot") if isinstance(payloads, dict) else None
+    evidence = source_evidence(payloads, "active_runtime_snapshot", FRESH_SECONDS["scanner"] if max_age is None else max_age)
+    if mode is not None and isinstance(snapshot, dict) and normalize_mode(snapshot.get("active_mode")) != normalize_mode(mode):
+        evidence["health"] = "INACTIVE"
+        evidence["reason"] = f"active_mode_{snapshot.get('active_mode') or 'UNKNOWN'}"
+    return evidence
+
+
 def status_text(value):
     text = str(value or "").strip().upper()
     if text in {"RUNNING", "OK", "PASS", "CONNECTED", "READY", "ACTIVE", "CLEAN", "HEALTHY"}:
@@ -302,9 +324,9 @@ def first_number(payload, keys):
 
 def css_class(value):
     text = str(value or "").upper()
-    if text in {"ACTIVE", "CLEAN", "LIVE", "UPSTOX"}:
+    if text in {"ACTIVE", "CLEAN", "LIVE", "UPSTOX", "PAPER"}:
         return "good"
-    if text in {"DIRTY", "STALE", "CLOSED", "WAITING", "WAITING_FOR_MODE", "SCHEDULED", "PARTIAL"}:
+    if text in {"DIRTY", "STALE", "DEGRADED", "CLOSED", "WAITING", "WAITING_FOR_MODE", "SCHEDULED", "PARTIAL"}:
         return "warn"
     if text in {"INACTIVE", "DISABLED", "MISSING", "DISCONNECTED"}:
         return "bad"
@@ -339,7 +361,10 @@ def source_evidence(payloads, name, max_age=None):
     elif max_age is not None and not fresh:
         health = "STALE"
         reason = f"age {fmt_age(age)} > ttl {fmt_age(max_age)}"
-    elif feed_status.upper() in {"STALE", "DEGRADED"}:
+    elif feed_status.upper() == "DEGRADED":
+        health = "DEGRADED"
+        reason = "feed_status_DEGRADED"
+    elif feed_status.upper() == "STALE":
         health = "STALE"
         reason = f"feed_status_{feed_status.upper()}"
     else:
@@ -508,6 +533,15 @@ def github_status(git):
 
 
 def ltp_status(payloads):
+    snapshot = fresh_active_snapshot(payloads, "HFT")
+    if snapshot is not None:
+        feed_status = str(snapshot.get("feed_status") or "").upper()
+        if feed_status == "DEGRADED":
+            return "DEGRADED"
+        if feed_status == "STALE":
+            return "STALE"
+        if feed_status in {"ACTIVE", "OK", "LIVE"}:
+            return "ACTIVE"
     for name in ("live_price_status", "live_price_cache_meta_runtime", "live_price_cache_meta", "live_price_cache"):
         payload = payloads.get(name)
         path = PATHS[name]
@@ -527,6 +561,11 @@ def ltp_status(payloads):
 
 
 def ltp_evidence(payloads):
+    snapshot = fresh_active_snapshot(payloads, "HFT")
+    if snapshot is not None:
+        feed_status = str(snapshot.get("feed_status") or "").upper()
+        if feed_status in {"DEGRADED", "STALE", "ACTIVE", "OK", "LIVE"}:
+            return active_snapshot_evidence(payloads, "HFT")
     for name in ("live_price_status", "live_price_cache_meta_runtime", "live_price_cache_meta", "live_price_cache"):
         evidence = source_evidence(payloads, name, FRESH_SECONDS["ltp"])
         if evidence["health"] == "LIVE":
@@ -669,6 +708,31 @@ def trade_performance(rows, mode=None):
     return {"total": total, "wins": wins, "losses": losses, "accuracy": accuracy, "has_mode_column": has_mode_column}
 
 
+def active_hft_performance(payloads, fallback=None):
+    snapshot = fresh_active_snapshot(payloads, "HFT")
+    if snapshot is None:
+        return fallback
+    if "open_trade_count" not in snapshot and not snapshot.get("paper_status"):
+        return fallback
+
+    paper = payloads.get("paper_engine_status")
+    paper_fresh = isinstance(paper, dict) and is_fresh(paper, PATHS["paper_engine_status"], FRESH_SECONDS["account"])
+    paper_summary = paper.get("paper_performance_summary") if paper_fresh and isinstance(paper.get("paper_performance_summary"), dict) else {}
+    wins = first_number(paper_summary, ("winning_trades", "wins"))
+    losses = first_number(paper_summary, ("losing_trades", "losses"))
+    accuracy = first_number(paper_summary, ("win_rate", "accuracy"))
+    total = first_number(snapshot, ("open_trade_count",))
+    return {
+        "total": total,
+        "wins": wins,
+        "losses": losses,
+        "accuracy": accuracy,
+        "has_mode_column": True,
+        "source_name": "active_runtime_snapshot",
+        "paper_status": snapshot.get("paper_status"),
+    }
+
+
 def news_count(payloads):
     candidates = []
     for name in ("news_pulse", "news_intelligence"):
@@ -717,6 +781,12 @@ def news_evidence(payloads):
 def hft_truth_label(payloads, active_mode):
     if normalize_mode(active_mode) != "HFT":
         return "INACTIVE"
+    snapshot = fresh_active_snapshot(payloads, "HFT")
+    if snapshot is not None:
+        if snapshot.get("live_order_placement") is False and snapshot.get("broker_orders") is False:
+            return "PAPER"
+        feed_status = str(snapshot.get("feed_status") or "").upper()
+        return "DEGRADED" if feed_status == "DEGRADED" else "LIVE"
     health = payloads.get("hft_health")
     if not isinstance(health, dict):
         return "MISSING"
@@ -724,7 +794,7 @@ def hft_truth_label(payloads, active_mode):
         return "SIMULATION_ONLY"
     if health.get("connected_to_titan_runtime") is False:
         return "DISCONNECTED"
-    scanner = scanner_counts(payloads.get("scanner_status"), payloads.get("scanner_filter_truth"), active_mode, "HFT")
+    scanner = scanner_counts(payloads.get("scanner_status"), payloads.get("scanner_filter_truth"), active_mode, "HFT", payloads)
     return "LIVE" if isinstance(scanner, dict) and scanner.get("health") == "LIVE" else "INACTIVE"
 
 
@@ -763,10 +833,10 @@ def truth_summary(payloads, active_mode):
     return overall, {state: states.count(state) for state in ("LIVE", "PARTIAL", "STALE", "SIMULATION", "MISSING")}, checks
 
 
-def scanner_counts(scanner, truth, active_mode, target_mode):
-    source = scanner_source_for_mode(target_mode, scanner, truth)
+def scanner_counts(scanner, truth, active_mode, target_mode, payloads=None):
+    source = scanner_source_for_mode(target_mode, scanner, truth, payloads)
     source = {**source, "mode": normalize_mode(target_mode)}
-    if source["health"] != "LIVE":
+    if source["health"] not in {"LIVE", "DEGRADED"}:
         return source
     payload = source["payload"]
     truth_counts = source.get("truth_counts") or {}
@@ -891,8 +961,26 @@ def prepared_scanner_payload(payload, mode):
     return prepared
 
 
-def scanner_source_for_mode(mode, generic_scanner=None, generic_truth=None):
+def scanner_source_for_mode(mode, generic_scanner=None, generic_truth=None, payloads=None):
     mode = normalize_mode(mode)
+    if mode == "HFT":
+        snapshot_payloads = payloads if isinstance(payloads, dict) else {
+            "active_runtime_snapshot": read_json(PATHS["active_runtime_snapshot"], None)
+        }
+        snapshot = fresh_active_snapshot(snapshot_payloads, "HFT")
+        if snapshot is not None:
+            payload = prepared_scanner_payload(snapshot, mode)
+            fields = scanner_field_candidates(payload, mode)
+            truth_counts = payload.get("filter_pass_counts") if isinstance(payload.get("filter_pass_counts"), dict) else {}
+            feed_status = str(payload.get("feed_status") or "").upper()
+            health = "DEGRADED" if feed_status == "DEGRADED" else "LIVE"
+            return {
+                "health": health,
+                "payload": payload,
+                "fields": fields,
+                "source_name": "active_runtime_snapshot",
+                "truth_counts": truth_counts,
+            }
     if mode == "CLASSIC":
         candidates = [
             ("classic_scanner_status", "classic_scanner_filter_truth"),
@@ -918,8 +1006,10 @@ def scanner_source_for_mode(mode, generic_scanner=None, generic_truth=None):
             return {"health": "MISSING", "payload": payload, "fields": fields, "source_name": payload_name, "truth_counts": truth_counts}
         if not fields:
             return {"health": "MISSING", "payload": payload, "fields": [], "source_name": payload_name, "truth_counts": truth_counts}
-        if payload_status == "STALE" or feed_status in {"STALE", "DEGRADED"} or not is_fresh(payload, path, FRESH_SECONDS["scanner"]):
+        if payload_status == "STALE" or feed_status == "STALE" or not is_fresh(payload, path, FRESH_SECONDS["scanner"]):
             return {"health": "STALE", "payload": payload, "fields": fields, "source_name": payload_name, "truth_counts": truth_counts}
+        if feed_status == "DEGRADED":
+            return {"health": "DEGRADED", "payload": payload, "fields": fields, "source_name": payload_name, "truth_counts": truth_counts}
         return {"health": "LIVE", "payload": payload, "fields": fields, "source_name": payload_name, "truth_counts": truth_counts}
 
     return {"health": "MISSING", "payload": None, "fields": [], "source_name": None, "truth_counts": {}}
@@ -1045,13 +1135,15 @@ def scanner_card_html(title, counts, meta_html=""):
     if not isinstance(counts, dict):
         counts = {"health": "MISSING", "metrics": []}
     health = str(counts.get("health") or "MISSING").upper()
-    health_class = "good" if health == "LIVE" else "warn" if health == "STALE" else "bad" if health == "INACTIVE" else "muted"
+    health_class = "good" if health == "LIVE" else "warn" if health in {"STALE", "DEGRADED"} else "bad" if health == "INACTIVE" else "muted"
     metrics = counts.get("metrics") if isinstance(counts.get("metrics"), list) else []
     metric_values = {label: value for label, value in metrics}
     payload = counts.get("payload") if isinstance(counts.get("payload"), dict) else {}
     labels = [label for label, _ in scanner_field_definitions_for_payload(counts.get("mode"), payload)]
     if health == "LIVE":
         tiles = [(label, fmt_number(metric_values.get(label)), "text" if metric_values.get(label) is not None else "muted") for label in labels]
+    elif health == "DEGRADED":
+        tiles = [(label, fmt_number(metric_values.get(label)) if metric_values.get(label) is not None else "—", "warn") for label in labels]
     elif health == "STALE":
         tiles = [(label, fmt_number(metric_values.get(label)) if metric_values.get(label) is not None else "STALE", "warn") for label in labels]
     else:
@@ -1198,8 +1290,8 @@ def render_dashboard():
         with news_col:
             st.markdown(news_scan_card, unsafe_allow_html=True)
 
-    classic_counts = scanner_counts(scanner, truth, active_mode, "CLASSIC")
-    hft_counts = scanner_counts(scanner, truth, active_mode, "HFT")
+    classic_counts = scanner_counts(scanner, truth, active_mode, "CLASSIC", payloads)
+    hft_counts = scanner_counts(scanner, truth, active_mode, "HFT", payloads)
     with st.container(key="source_health_row"):
         st.markdown(
             source_health_html(
@@ -1217,9 +1309,18 @@ def render_dashboard():
     mode_has_column = overall.get("has_mode_column") if isinstance(overall, dict) else False
     classic_perf = trade_performance(rows, "CLASSIC") if mode_has_column else None
     hft_perf = trade_performance(rows, "HFT") if mode_has_column else None
+    hft_perf = active_hft_performance(payloads, hft_perf) if normalize_mode(active_mode) == "HFT" else hft_perf
     hft_perf_meta = trade_meta
     if normalize_mode(active_mode) == "HFT":
-        hft_perf_meta += source_meta_html(source_evidence(payloads, "hft_health", FRESH_SECONDS["scanner"]))
+        if fresh_active_snapshot(payloads, "HFT") is not None:
+            hft_perf_meta = source_meta_html(
+                [
+                    active_snapshot_evidence(payloads, "HFT"),
+                    source_evidence(payloads, "paper_engine_status", FRESH_SECONDS["account"]),
+                ]
+            )
+        else:
+            hft_perf_meta += source_meta_html(source_evidence(payloads, "hft_health", FRESH_SECONDS["scanner"]))
     with st.container(key="performance_row"):
         perf_col, hft_perf_col = st.columns(2)
         with perf_col:
@@ -1247,7 +1348,11 @@ def render_dashboard():
     hft_scanner = scanner_card_html(
         "HFT MODE SCANNER FILTERS",
         hft_counts,
-        source_meta_html([source_evidence(payloads, hft_source_name, FRESH_SECONDS["scanner"]), source_evidence(payloads, "hft_health", FRESH_SECONDS["scanner"])]),
+        source_meta_html(
+            [source_evidence(payloads, hft_source_name, FRESH_SECONDS["scanner"])]
+            if hft_source_name == "active_runtime_snapshot"
+            else [source_evidence(payloads, hft_source_name, FRESH_SECONDS["scanner"]), source_evidence(payloads, "hft_health", FRESH_SECONDS["scanner"])]
+        ),
     )
     with st.container(key="scanner_row"):
         scanner_col, hft_scanner_col = st.columns(2)
