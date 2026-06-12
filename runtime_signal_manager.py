@@ -211,10 +211,22 @@ def approve_signals(
 def approved_signals_for_mode(mode: str) -> list[dict[str, Any]]:
     mode = normalize_mode(mode)
     payload = _load_signal_state()
-    return [
-        dict(item) for item in payload.get("approved_signals") or []
-        if isinstance(item, dict) and normalize_mode(item.get("mode")) == mode and item.get("status") == "APPROVED"
-    ]
+    deduped: dict[str, dict[str, Any]] = {}
+    for item in payload.get("approved_signals") or []:
+        if not isinstance(item, dict):
+            continue
+        if normalize_mode(item.get("mode")) != mode or item.get("status") != "APPROVED":
+            continue
+        key = "|".join(
+            [
+                mode,
+                str(item.get("symbol") or "").strip().upper().replace(".NS", ""),
+                str(item.get("side") or "").strip().upper(),
+            ]
+        )
+        if key not in deduped:
+            deduped[key] = dict(item)
+    return list(deduped.values())
 
 
 def clear_signals_for_mode(mode: str, *, reason: str = "cleared") -> dict[str, Any]:

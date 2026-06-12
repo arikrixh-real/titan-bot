@@ -1,0 +1,19 @@
+[Unit]
+Description=TITAN Runtime Supervisor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/TITAN
+ExecStart=/usr/bin/python3 /opt/TITAN/titan_runtime_supervisor.py
+Restart=on-failure
+RestartSec=10
+User=titan
+Group=titan
+Environment=PYTHONUNBUFFERED=1
+
+# The supervisor is paper-only. Do not add broker/live-order environment here.
+
+[Install]
+WantedBy=multi-user.target

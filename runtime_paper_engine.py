@@ -17,6 +17,7 @@ PAPER_ENGINE_STATUS_PATH = Path("data") / "runtime" / "paper_engine_status.json"
 PAPER_TRADE_REGISTRY_PATH = Path("data") / "runtime" / "paper_trade_registry.json"
 PAPER_ACCOUNT_PATH = Path("data") / "paper_trading" / "paper_account.json"
 MAX_NEW_POSITIONS_PER_RUN = 5
+MAX_OPEN_POSITIONS = 5
 MAX_PRICE_AGE_SECONDS = 120
 PAPER_STARTING_CAPITAL = 1000.0
 PRICE_TIMESTAMP_FIELDS = (
@@ -90,9 +91,6 @@ def _paper_key(setup):
         [
             _normalize_symbol(setup.get("symbol")),
             _normalize_side(setup.get("side")),
-            _format_price(setup.get("entry")),
-            _format_price(setup.get("sl")),
-            _format_price(setup.get("target")),
             str(setup.get("mode") or ""),
         ]
     )
@@ -669,6 +667,8 @@ def _open_new_positions(registry, setups):
     opened_setups = []
     for setup in setups:
         if opened >= MAX_NEW_POSITIONS_PER_RUN:
+            break
+        if len(registry.get("open_positions", [])) >= MAX_OPEN_POSITIONS:
             break
 
         key = _paper_key(setup)
