@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -208,6 +209,17 @@ def file_time(path):
         return None
 
 
+def source_time(payload, path=None):
+    times = []
+    payload_dt = payload_time(payload)
+    if payload_dt is not None:
+        times.append(payload_dt)
+    file_dt = file_time(path) if path is not None else None
+    if file_dt is not None:
+        times.append(file_dt)
+    return max(times) if times else None
+
+
 def age_seconds(dt):
     if not dt:
         return None
@@ -237,9 +249,7 @@ def fmt_dt(value):
 
 
 def is_fresh(payload, path=None, max_age=300):
-    dt = payload_time(payload)
-    if dt is None and path is not None:
-        dt = file_time(path)
+    dt = source_time(payload, path)
     age = age_seconds(dt)
     return age is not None and age <= max_age
 
@@ -360,7 +370,7 @@ def source_evidence(payloads, name, max_age=None):
     path = PATHS.get(name)
     payload = payloads.get(name) if isinstance(payloads, dict) else None
     exists = bool(path and path.exists())
-    dt = payload_time(payload if isinstance(payload, dict) else {}) or (file_time(path) if path else None)
+    dt = source_time(payload if isinstance(payload, dict) else {}, path)
     age = age_seconds(dt)
     status = str(payload.get("status") or payload.get("paper_trading_status") or "") if isinstance(payload, dict) else ""
     feed_status = str(payload.get("feed_status") or "") if isinstance(payload, dict) else ""
@@ -470,6 +480,22 @@ def read_mode():
 
 def write_mode(mode):
     return write_execution_mode(normalize_mode(mode), transactional=True)
+
+
+def dashboard_git_hash():
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except Exception:
+        return "UNKNOWN"
+    value = result.stdout.strip()
+    return value or "UNKNOWN"
 
 
 def render_mode_control(active_mode, meta_html=""):
@@ -604,14 +630,14 @@ def freshest_account(payloads):
     paper_candidates = []
     engine = payloads.get("paper_engine_status")
     if isinstance(engine, dict):
-        engine_dt = payload_time(engine)
+        engine_dt = source_time(engine, PATHS["paper_engine_status"])
         engine_fresh = age_seconds(engine_dt) is not None and age_seconds(engine_dt) <= FRESH_SECONDS["account"]
         if engine_fresh and isinstance(engine.get("paper_account_summary"), dict):
             return ("paper_engine_status", engine, PATHS["paper_engine_status"], "PAPER"), "ACTIVE"
         paper_candidates.append(("paper_engine_status", engine, engine_dt, PATHS["paper_engine_status"], "PAPER"))
     paper = payloads.get("paper_account")
     if isinstance(paper, dict):
-        dt = payload_time(paper) or parse_dt(paper.get("daily_start_date"))
+        dt = source_time(paper, PATHS["paper_account"]) or parse_dt(paper.get("daily_start_date"))
         paper_candidates.append(("paper_account", paper, dt, PATHS["paper_account"], "PAPER"))
     valid_paper = [item for item in paper_candidates if item[2] is not None]
     fresh_paper = [
@@ -624,7 +650,7 @@ def freshest_account(payloads):
     for name in ("upstox_funds", "upstox_positions"):
         payload = payloads.get(name)
         if isinstance(payload, dict):
-            dt = payload_time(payload)
+            dt = source_time(payload, PATHS[name])
             status = str(payload.get("status") or "").upper()
             upstox_candidates.append((name, payload, dt, PATHS[name], status, "UPSTOX"))
     fresh_upstox = [
@@ -1200,6 +1226,23 @@ def load_payloads():
     return {name: read_json(path, None) for name, path in PATHS.items() if path.suffix == ".json"}
 
 
+def dashboard_source_diagnostic(payloads, hft_counts, account_source_name):
+    snapshot = payloads.get("active_runtime_snapshot") if isinstance(payloads, dict) else None
+    snapshot = snapshot if isinstance(snapshot, dict) else {}
+    snapshot_dt = source_time(snapshot, PATHS["active_runtime_snapshot"])
+    hft_source = hft_counts.get("source_name") if isinstance(hft_counts, dict) else "UNKNOWN"
+    return (
+        "<div class='source-meta'>"
+        f"Dashboard: {html_escape(dashboard_git_hash())} | "
+        f"active_runtime_snapshot timestamp: {html_escape(fmt_dt(snapshot_dt))} | "
+        f"final_candidate_count: {html_escape(snapshot.get('final_candidate_count', 'UNKNOWN'))} | "
+        f"open_trade_count: {html_escape(snapshot.get('open_trade_count', 'UNKNOWN'))} | "
+        f"selected_hft_source: {html_escape(hft_source or 'UNKNOWN')} | "
+        f"selected_account_source: {html_escape(account_source_name or 'UNKNOWN')}"
+        "</div>"
+    )
+
+
 def render_dashboard():
     refresh_now = now_ist()
     print(f"dashboard_rerun_at={refresh_now.isoformat()}")
@@ -1338,6 +1381,10 @@ def render_dashboard():
                     ("LTP Source", ltp_status(payloads)),
                 ]
             ),
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            dashboard_source_diagnostic(payloads, hft_counts, account_truth.get("name") if isinstance(account_truth, dict) else account_source),
             unsafe_allow_html=True,
         )
 
