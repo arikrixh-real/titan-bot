@@ -58,7 +58,7 @@ CLASSIC_TOIF_COUNTER_FIELDS = [
 ]
 
 HFT_SCANNER_COUNTER_FIELDS = [
-    ("Stocks Scanned", ("stocks_scanned", "stocks_checked", "symbols_scanned", "candidates_scanned", "ticks_processed")),
+    ("Stocks Scanned", ("stocks_scanned", "stocks_checked", "symbols_scanned", "candidates_scanned", "ticks_processed", "universe_count", "live_feed_count")),
     ("Momentum Continuation", ("momentum_continuation",)),
     ("Pullback Continuation", ("pullback_continuation",)),
     ("Volatility Expansion", ("volatility_expansion",)),
@@ -263,6 +263,19 @@ def active_snapshot_evidence(payloads, mode=None, max_age=None):
         evidence["health"] = "INACTIVE"
         evidence["reason"] = f"active_mode_{snapshot.get('active_mode') or 'UNKNOWN'}"
     return evidence
+
+
+def active_snapshot_scanner_payload(snapshot):
+    payload = dict(snapshot)
+    scanned = first_number(payload, ("universe_count", "live_feed_count"))
+    final_count = first_number(payload, ("final_candidate_count",))
+    signal_allowed = payload.get("signal_allowed") is True
+    if scanned is not None:
+        payload["stocks_scanned"] = scanned
+    if final_count is not None:
+        payload["final_passed"] = final_count
+        payload["eligible_signals"] = final_count if signal_allowed else 0
+    return payload
 
 
 def status_text(value):
@@ -589,13 +602,17 @@ def storage_used(storage, supabase):
 
 def freshest_account(payloads):
     paper_candidates = []
+    engine = payloads.get("paper_engine_status")
+    if isinstance(engine, dict):
+        engine_dt = payload_time(engine)
+        engine_fresh = age_seconds(engine_dt) is not None and age_seconds(engine_dt) <= FRESH_SECONDS["account"]
+        if engine_fresh and isinstance(engine.get("paper_account_summary"), dict):
+            return ("paper_engine_status", engine, PATHS["paper_engine_status"], "PAPER"), "ACTIVE"
+        paper_candidates.append(("paper_engine_status", engine, engine_dt, PATHS["paper_engine_status"], "PAPER"))
     paper = payloads.get("paper_account")
     if isinstance(paper, dict):
         dt = payload_time(paper) or parse_dt(paper.get("daily_start_date"))
         paper_candidates.append(("paper_account", paper, dt, PATHS["paper_account"], "PAPER"))
-    engine = payloads.get("paper_engine_status")
-    if isinstance(engine, dict):
-        paper_candidates.append(("paper_engine_status", engine, payload_time(engine), PATHS["paper_engine_status"], "PAPER"))
     valid_paper = [item for item in paper_candidates if item[2] is not None]
     fresh_paper = [
         item for item in valid_paper
@@ -799,10 +816,14 @@ def hft_truth_label(payloads, active_mode):
 
 
 def truth_summary(payloads, active_mode):
+    if normalize_mode(active_mode) == "HFT" and fresh_active_snapshot(payloads, "HFT") is not None:
+        scanner_check = active_snapshot_evidence(payloads, "HFT")
+    else:
+        scanner_check = source_evidence(payloads, "scanner_status", FRESH_SECONDS["scanner"])
     checks = [
         source_evidence(payloads, "daemon_health", FRESH_SECONDS["daemon"]),
         source_evidence(payloads, "worker_health", FRESH_SECONDS["worker"]),
-        source_evidence(payloads, "scanner_status", FRESH_SECONDS["scanner"]),
+        scanner_check,
         ltp_evidence(payloads),
         account_evidence(payloads),
         news_evidence(payloads),
@@ -969,11 +990,11 @@ def scanner_source_for_mode(mode, generic_scanner=None, generic_truth=None, payl
         }
         snapshot = fresh_active_snapshot(snapshot_payloads, "HFT")
         if snapshot is not None:
-            payload = prepared_scanner_payload(snapshot, mode)
+            payload = prepared_scanner_payload(active_snapshot_scanner_payload(snapshot), mode)
             fields = scanner_field_candidates(payload, mode)
             truth_counts = payload.get("filter_pass_counts") if isinstance(payload.get("filter_pass_counts"), dict) else {}
             feed_status = str(payload.get("feed_status") or "").upper()
-            health = "DEGRADED" if feed_status == "DEGRADED" else "LIVE"
+            health = "STALE" if feed_status == "STALE" else "DEGRADED" if feed_status == "DEGRADED" else "LIVE"
             return {
                 "health": health,
                 "payload": payload,
@@ -1044,7 +1065,21 @@ def scanner_total_part(payloads, source_name, keys):
 
 def total_stocks_scanned(payloads):
     classic = scanner_total_part(payloads, "classic_scanner_status", ("stocks_scanned", "stocks_checked"))
-    hft = scanner_total_part(payloads, "hft_mode_scanner_status", ("stocks_scanned", "stocks_checked"))
+    snapshot = fresh_active_snapshot(payloads, "HFT")
+    if snapshot is not None:
+        raw_count = first_number(snapshot, ("universe_count", "live_feed_count"))
+        feed_status = str(snapshot.get("feed_status") or "LIVE").upper()
+        hft = {
+            "label": "active_runtime_snapshot",
+            "count": raw_count,
+            "raw": raw_count,
+            "status": feed_status,
+            "fresh": True,
+            "display": fmt_number(raw_count) if raw_count is not None else "MISSING",
+            "excluded_reason": "" if raw_count is not None else "MISSING_COUNT",
+        }
+    else:
+        hft = scanner_total_part(payloads, "hft_mode_scanner_status", ("stocks_scanned", "stocks_checked"))
     valid = [item for item in (classic, hft) if item["count"] is not None]
     if valid:
         value = fmt_number(sum(item["count"] for item in valid))
