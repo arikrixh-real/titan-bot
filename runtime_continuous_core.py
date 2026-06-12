@@ -469,6 +469,10 @@ def _active_snapshot(mode: str, scanner_payload: dict[str, Any], market_state: d
     paper = read_json(PAPER_ENGINE_STATUS_PATH, {})
     outcome = read_json(OUTCOME_TRACKER_STATUS_PATH, {})
     timestamp = now_ist().isoformat()
+    paper_mode = normalize_mode(paper.get("active_execution_mode") or paper.get("mode")) if isinstance(paper, dict) and paper else mode
+    paper_status = paper.get("status") if isinstance(paper, dict) else None
+    if paper_mode != mode:
+        paper_status = f"PAPER_ENGINE_RESTING_PREVIOUS_{paper_mode}"
     filter_counts = {
         key: scanner_payload.get(key)
         for key in (
@@ -521,7 +525,8 @@ def _active_snapshot(mode: str, scanner_payload: dict[str, Any], market_state: d
         "paper_only": True,
         "broker_orders": False,
         "live_order_placement": False,
-        "paper_status": paper.get("status") or "UNKNOWN",
+        "paper_status": paper_status or "UNKNOWN",
+        "paper_status_mode": paper_mode,
         "timestamp_ist": timestamp,
     }
     return payload

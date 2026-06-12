@@ -297,22 +297,43 @@ def clear_pending_signals(mode: str) -> dict[str, Any]:
     cleared = []
     if mode == "HFT":
         for path in (HFT_SCANNER_STATUS_PATH, HFT_MODE_SCANNER_STATUS_PATH):
-            payload = read_json(path, {})
-            if isinstance(payload, dict) and payload:
-                payload["paper_trade_candidates"] = []
-                payload["candidate_generation"] = "cleared_by_mode_switch"
-                payload["signal_allowed"] = False
-                payload["cleared_at_ist"] = timestamp
-                atomic_write_json(path, payload)
-                cleared.append(str(path.relative_to(ROOT)))
+            payload = {
+                "mode": "HFT",
+                "status": "INACTIVE",
+                "inactive_reason": "classic_active_hft_scanner_resting",
+                "paper_trade_candidates": [],
+                "candidate_generation": "cleared_by_mode_switch",
+                "signal_allowed": False,
+                "trade_placement_allowed": False,
+                "paper_only": True,
+                "broker_orders": False,
+                "live_order_placement": False,
+                "timestamp": timestamp,
+                "timestamp_ist": timestamp,
+                "cleared_at_ist": timestamp,
+                "source_owner": "runtime_mode_switch",
+            }
+            atomic_write_json(path, payload)
+            cleared.append(str(path.relative_to(ROOT)))
     else:
         for path in (CLASSIC_SCANNER_STATUS_PATH, CLASSIC_MODE_SCANNER_STATUS_PATH):
-            payload = read_json(path, {})
-            if isinstance(payload, dict) and payload:
-                payload["signal_allowed"] = False
-                payload["cleared_at_ist"] = timestamp
-                atomic_write_json(path, payload)
-                cleared.append(str(path.relative_to(ROOT)))
+            payload = {
+                "mode": "CLASSIC",
+                "status": "INACTIVE",
+                "inactive_reason": "hft_active_classic_scanner_resting",
+                "paper_trade_candidates": [],
+                "signal_allowed": False,
+                "trade_placement_allowed": False,
+                "paper_only": True,
+                "broker_orders": False,
+                "live_order_placement": False,
+                "timestamp": timestamp,
+                "timestamp_ist": timestamp,
+                "cleared_at_ist": timestamp,
+                "source_owner": "runtime_mode_switch",
+            }
+            atomic_write_json(path, payload)
+            cleared.append(str(path.relative_to(ROOT)))
     result = {"status": "COMPLETE", "mode": mode, "cleared": cleared, "timestamp_ist": timestamp}
     atomic_write_json(MODE_SIGNAL_CLEAR_PATH, result)
     return result

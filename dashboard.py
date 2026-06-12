@@ -333,15 +333,15 @@ def source_evidence(payloads, name, max_age=None):
     if not exists or payload is None:
         health = "MISSING"
         reason = "source missing"
+    elif status.upper() in {"INACTIVE", "STOPPED", "OFFLINE", "FAILED", "ERROR", "NETWORK_BLOCKED"}:
+        health = "INACTIVE"
+        reason = status.upper()
     elif max_age is not None and not fresh:
         health = "STALE"
         reason = f"age {fmt_age(age)} > ttl {fmt_age(max_age)}"
     elif feed_status.upper() in {"STALE", "DEGRADED"}:
         health = "STALE"
         reason = f"feed_status_{feed_status.upper()}"
-    elif status.upper() in {"INACTIVE", "STOPPED", "OFFLINE", "FAILED", "ERROR", "NETWORK_BLOCKED"}:
-        health = "INACTIVE"
-        reason = status.upper()
     else:
         health = "LIVE"
         reason = ""
@@ -1217,6 +1217,9 @@ def render_dashboard():
     mode_has_column = overall.get("has_mode_column") if isinstance(overall, dict) else False
     classic_perf = trade_performance(rows, "CLASSIC") if mode_has_column else None
     hft_perf = trade_performance(rows, "HFT") if mode_has_column else None
+    hft_perf_meta = trade_meta
+    if normalize_mode(active_mode) == "HFT":
+        hft_perf_meta += source_meta_html(source_evidence(payloads, "hft_health", FRESH_SECONDS["scanner"]))
     with st.container(key="performance_row"):
         perf_col, hft_perf_col = st.columns(2)
         with perf_col:
@@ -1229,7 +1232,7 @@ def render_dashboard():
                 performance_card_html(
                     "HFT MODE PERFORMANCE",
                     hft_perf,
-                    meta_html=trade_meta + source_meta_html(source_evidence(payloads, "hft_health", FRESH_SECONDS["scanner"])),
+                    meta_html=hft_perf_meta,
                 ),
                 unsafe_allow_html=True,
             )
