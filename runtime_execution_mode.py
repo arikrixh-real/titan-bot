@@ -11,6 +11,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent
 RUNTIME_DIR = ROOT / "data" / "runtime"
 EXECUTION_MODE_PATH = RUNTIME_DIR / "execution_mode.json"
+RUNTIME_MODE_STATUS_PATH = RUNTIME_DIR / "runtime_mode_status.json"
 LEGACY_MODE_PATH = RUNTIME_DIR / "trading" / "mode.json"
 HFT_DIR = ROOT / "data" / "hft_mode"
 HFT_RUNTIME_STATE_PATH = HFT_DIR / "hft_runtime_state.json"
@@ -75,7 +76,10 @@ def _execution_mode_payload(mode: str) -> dict[str, Any]:
     normalized = normalize_mode(mode)
     return {
         "active_execution_mode": normalized,
+        "canonical_active_mode": normalized,
         "mode": normalized,
+        "mode_consistency": "OK",
+        "source_of_truth": "execution_mode",
         "timestamp": timestamp,
         "timestamp_ist": timestamp,
         "switch_in_progress": False,
@@ -83,6 +87,27 @@ def _execution_mode_payload(mode: str) -> dict[str, Any]:
         "owner": "runtime_execution_mode",
         "source": "runtime_execution_mode",
     }
+
+
+def _write_runtime_mode_status_from_execution_mode(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = normalize_mode(payload.get("active_execution_mode") or payload.get("mode"))
+    timestamp = payload.get("timestamp_ist") or now_ist().isoformat()
+    previous = read_json(RUNTIME_MODE_STATUS_PATH, {})
+    status = dict(previous) if isinstance(previous, dict) else {}
+    status.update(
+        {
+            "active_execution_mode": normalized,
+            "canonical_active_mode": normalized,
+            "execution_mode_source": "data/runtime/execution_mode.json",
+            "mode_consistency": "OK",
+            "source_of_truth": "execution_mode",
+            "timestamp_ist": timestamp,
+            "updated_at_ist": timestamp,
+        }
+    )
+    status.setdefault("current_mode", "UNKNOWN")
+    atomic_write_json(RUNTIME_MODE_STATUS_PATH, status)
+    return status
 
 
 def write_hft_runtime_state(mode: str) -> dict[str, Any]:
@@ -105,12 +130,16 @@ def _write_execution_mode_direct(mode: Any, *, mirror_legacy: bool = True) -> di
         normalized = "CLASSIC"
     payload = _execution_mode_payload(normalized)
     atomic_write_json(EXECUTION_MODE_PATH, payload)
+    _write_runtime_mode_status_from_execution_mode(payload)
     if mirror_legacy:
         atomic_write_json(
             LEGACY_MODE_PATH,
             {
                 "active_execution_mode": normalized,
+                "canonical_active_mode": normalized,
                 "mode": normalized,
+                "mode_consistency": "OK",
+                "source_of_truth": "execution_mode",
                 "timestamp": payload["timestamp"],
                 "timestamp_ist": payload["timestamp_ist"],
                 "updated_at_ist": payload["updated_at_ist"],

@@ -57,6 +57,17 @@ def run_dispatcher_safe_scanner_handler():
     return result
 
 
+def run_scanner_compatibility_alias():
+    return {
+        "status": "SKIPPED_ALIAS",
+        "task": "scanner",
+        "canonical_task": "mode_scanner_status",
+        "executed": False,
+        "writes_snapshots": False,
+        "reason": "scanner_compatibility_alias_mode_scanner_status_is_canonical",
+    }
+
+
 def run_knowledge_vault_runner_handler(state=None, state_path=None, intelligence_state=None):
     try:
         from knowledge_vault_runner.runner import run_knowledge_vault_runner
@@ -226,7 +237,7 @@ def get_engine_registry():
         "weekly_report": run_weekly_report,
         "dashboard_sync": run_dashboard_sync,
         "ohlc_refresh": run_ohlc_refresh,
-        "scanner": run_dispatcher_safe_scanner_handler,
+        "scanner": run_scanner_compatibility_alias,
         "journal": run_journal,
         "master_brain": run_master_brain,
         "volatility_check": run_volatility_check,
